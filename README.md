@@ -36,6 +36,8 @@ explicitly marked held by the operator.
 - Windows desktop/start-menu launcher bundle
 - Shareholder HTML index at `surfaces/shareholder-index/index.html`
 - Tony Garage operator cockpit at `surfaces/tony-garage/index.html`
+- Arc Reactor confidence skill at `skills/arc-reactor-confidence/SKILL.md`
+- Arc Reactor status at `data/arc-reactor/status.json`
 - Store release lanes at `manifests/STORE-RELEASE-LANES.md`
 - v1 readiness test at `reports/V1-READINESS-TEST-2026-05-26.md`
 - Old workstreams/repo map at `manifests/OLD-WORKSTREAMS-AND-REPOS.md`

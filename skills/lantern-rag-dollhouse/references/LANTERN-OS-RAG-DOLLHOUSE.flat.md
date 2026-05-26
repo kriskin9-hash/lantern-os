@@ -302,6 +302,9 @@ The latest convergence pass moved scattered work into these durable surfaces:
 | ADS architecture review | `reports/ADS-ARCHITECTURE-REVIEW-v0.1.md` | `local_inspected` | architecture decision-system review |
 | Blocker fix pass | `manifests/BLOCKER-FIX-2026-05-26.md` | `local_inspected` | dual-boot prep, cash send, orchestrator dirty fix, rights gate |
 | Tony Garage cockpit | `surfaces/tony-garage/index.html` | `local_inspected` | Movie 1 operator workbench surface |
+| Arc Reactor confidence | `skills/arc-reactor-confidence/SKILL.md` | `local_inspected` | Movie 1/2/3 readiness scoring and power-state model |
+| Arc Reactor status | `data/arc-reactor/status.json` | `local_inspected` | current confidence state |
+| Arc Reactor 12-step model | `reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md` | `local_inspected` | past/present/future/actual-results convergence table |
 | Store release lanes | `manifests/STORE-RELEASE-LANES.md` | `local_inspected` | local store now, Steam candidate later |
 | Free SDK lane | `manifests/FREE-SDKS-ONLINE.md` | `local_inspected` | free online SDK/tool choices for store-flexible builds |
 | v1 readiness test | `reports/V1-READINESS-TEST-2026-05-26.md` | `local_inspected` | gate test and Movie confidence |
@@ -331,6 +334,28 @@ manifests/TONY-GARAGE-UPGRADE.md
 It centralizes whitepaper, ADS, RAG house, wallet, dual-boot prep, cash sprint,
 and next actions into one first-screen workbench. It remains bounded: no v1.0.0
 claim, no fake revenue, no automatic disk mutation, no automatic media download.
+
+## 19A. Arc Reactor Confidence
+
+The Arc Reactor is the confidence/power-state module:
+
+```text
+skills/arc-reactor-confidence/SKILL.md
+data/arc-reactor/status.json
+reports/ARC-REACTOR-CONFIDENCE-READ.md
+```
+
+Current read:
+
+```text
+Movie 1 Garage:          88
+Movie 2 Public Platform: 54
+Movie 3 Distributed:     22
+Avengers:                held
+```
+
+Scores rise only with evidence: outreach sends, paid pilots, install proof,
+store pages/builds, users, devices, uptime, or recovery evidence.
 
 ## 20. Store And Old Workstream Surfaces
 

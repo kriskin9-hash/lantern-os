@@ -149,6 +149,35 @@ dt {
 
 .signal.pass { background: var(--arc); }
 .signal.warn { background: var(--amber); }
+.signal.reactor {
+  background: #12a99a;
+  box-shadow: 0 0 0 4px rgba(18, 169, 154, 0.16);
+}
+
+.reactor-panel {
+  border-color: rgba(15, 118, 110, 0.65);
+}
+
+.reactor-core {
+  display: grid;
+  width: 124px;
+  height: 124px;
+  place-items: center;
+  margin: 18px auto 8px;
+  border: 10px solid #d7f7f3;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #ffffff 0 28%, #b8fff5 29% 44%, #0f766e 45% 48%, #ffffff 49% 58%, #d7f7f3 59% 100%);
+  box-shadow:
+    0 0 24px rgba(18, 169, 154, 0.42),
+    inset 0 0 18px rgba(15, 118, 110, 0.28);
+}
+
+.reactor-core span {
+  color: #0b5f59;
+  font-size: 2rem;
+  font-weight: 900;
+}
 
 dl { margin: 14px 0 18px; }
 
@@ -164,8 +193,11 @@ dd {
 }
 
 a {
+  display: inline-block;
   color: var(--arc);
   font-weight: 700;
+  margin-right: 10px;
+  margin-bottom: 8px;
 }
 
 .workbench {

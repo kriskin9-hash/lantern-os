@@ -49,6 +49,44 @@ Read these before changing the report:
     manifest.
 12. Commit and push when validation passes.
 
+## Arc Reactor 12-Step Model
+
+When the operator asks for past work, present pitch, future outcomes, actual
+results, Tony confidence, or Arc Reactor state, update:
+
+```text
+reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md
+reports/ARC-REACTOR-CONFIDENCE-READ.md
+data/arc-reactor/status.json
+```
+
+Use this 12-step shape:
+
+1. Past control-plane work.
+2. Past COMET LEAP/PDF/art work.
+3. Past RAG/memory work.
+4. Present dual-boot/device state.
+5. Present wallet/cash state.
+6. Present offer/pitch state.
+7. Present cockpit/surface state.
+8. Present confidence/power-state.
+9. Store/distribution lane.
+10. Old repo/workstream intake.
+11. Archive/commons/media rights lane.
+12. Future fleet/server/device outcomes.
+
+Each step must include:
+
+- past work;
+- present pitch;
+- expected future outcome;
+- actual result so far;
+- confidence.
+
+Do not raise confidence from ambition alone. Raise it only with local files,
+commits, validation output, wallet events, store pages, users, cash, installs,
+or runtime evidence.
+
 ## Master PDF Rules
 
 The master PDF is generated from Markdown. Do not hand-edit the PDF.
@@ -83,6 +121,7 @@ Every next-agile update should include:
 - Matrix RAG/dollhouse changes;
 - dual-boot and phone edge-node boundaries;
 - 12 confidence frames when projections are involved;
+- Arc Reactor 12-step table when past/present/future/result framing is needed;
 - next sprint backlog with validation steps.
 
 ## Held Boundaries

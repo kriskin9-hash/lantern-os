@@ -22,8 +22,10 @@ Use this as the top-level router from `C:\tmp\lantern-os`.
    public-domain, Creative Commons, free music, movies, software, and games.
 9. Use `skills/one-world-leader-app/SKILL.md` when compressing the product
    atlas into the leadership/learning app.
-10. Fix the first 2-4 concrete issues before expanding.
-11. Validate, commit, and push.
+10. Use `skills/arc-reactor-confidence/SKILL.md` when scoring Tony
+    Movie 1/2/3 readiness or updating the garage power state.
+11. Fix the first 2-4 concrete issues before expanding.
+12. Validate, commit, and push.
 
 ## Operating Posture
 

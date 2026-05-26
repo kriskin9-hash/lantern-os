@@ -15,6 +15,10 @@ master PDF.
 | `b822a2c` | Matrix RAG dollhouse | local/server-farm RAG architecture |
 | `0d3befe` | GitHub repo surface | external repo presentation |
 | `8a7a349` | latest workflow adds converged | CI/release boundary |
+| `ed227ce` | Lantern whitepaper added to RAG house | canonical thesis |
+| `1c58dd5` | ADS architecture review | architecture decision system |
+| `1883026` | ADS blocker action paths | dual boot prep, cash send, rights gate |
+| `2b709d9` | Tony Garage and store lanes | operator cockpit and store order |
 
 ## Stable Decisions
 
@@ -40,3 +44,6 @@ When updating the master PDF, check whether it still reflects:
 - latest CI/release-provenance convergence;
 - no fake SLSA artifacts;
 - no premature v1.0.0 release claim.
+- Arc Reactor confidence model and 12-step convergence table;
+- Itch-first store lane before Steam/GOG;
+- old workstreams and repo map.

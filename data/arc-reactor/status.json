@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-05-26T07:12:00-04:00",
+  "name": "Lantern Arc Reactor",
+  "meaning": "Confidence and power-state scorecard for moving from garage prototype to public platform.",
+  "movie1GarageConfidence": 88,
+  "movie2PublicPlatformConfidence": 54,
+  "movie3DistributedFleetConfidence": 22,
+  "avengersState": "held_until_v1_users_cash_devices_recovery",
+  "currentPhase": "Movie 1 garage with early Movie 2 systems forming",
+  "raisesMovie2": [
+    "5 outreach sends recorded in the wallet ledger",
+    "1 paid pilot or hard rejection batch",
+    "D: shrunk and dual boot readyForInstall=true",
+    "Itch prototype page/build created",
+    "one workflow used by someone other than the operator"
+  ],
+  "boundaries": [
+    "No fake revenue",
+    "No unattended disk mutation",
+    "No v1.0.0 tag without operator approval",
+    "No store fee until product target is chosen"
+  ]
+}
