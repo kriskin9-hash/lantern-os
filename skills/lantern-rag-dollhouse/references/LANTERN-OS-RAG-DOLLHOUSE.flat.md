@@ -306,6 +306,7 @@ The latest convergence pass moved scattered work into these durable surfaces:
 | Arc Reactor status | `data/arc-reactor/status.json` | `local_inspected` | current confidence state |
 | Arc Reactor 12-step model | `reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md` | `local_inspected` | past/present/future/actual-results convergence table |
 | Local Controls / AccessX bridge | `manifests/LOCAL-CONTROLS-ACCESSX.md` | `local_inspected` | Windows local-control bridge until in-house apps |
+| External LLM / Web RAG cache | `manifests/EXTERNAL-LLM-WEB-RAG-CACHE.md` | `local_inspected` | filtered compressed cache for other-LLM/search research |
 | Store release lanes | `manifests/STORE-RELEASE-LANES.md` | `local_inspected` | local store now, Steam candidate later |
 | Free SDK lane | `manifests/FREE-SDKS-ONLINE.md` | `local_inspected` | free online SDK/tool choices for store-flexible builds |
 | v1 readiness test | `reports/V1-READINESS-TEST-2026-05-26.md` | `local_inspected` | gate test and Movie confidence |
@@ -482,3 +483,26 @@ use:     programmable ledger and wallet state-machine design
 
 Boundary: these are architecture and evidence anchors only. They do not create
 investment advice, custody, token issuance, or payment-provider integration.
+
+## 21. External LLM / Web Cache Lane
+
+Googled information from other LLMs can enter the RAG house only through the
+filtered cache:
+
+```text
+data/rag-intake/external-llm-web-cache/inbox.md
+data/rag-intake/external-llm-web-cache/cache.jsonl
+scripts/Add-ExternalRagCacheItem.ps1
+manifests/EXTERNAL-LLM-WEB-RAG-CACHE.md
+```
+
+Allowed states:
+
+- `external_llm_summary`;
+- `external_search_snippet`;
+- `official_source_summary`;
+- `operator_asserted`;
+- `needs_verification`;
+- `rejected`.
+
+Rule: cache compressed claims and citations, not raw web dumps.

@@ -24,6 +24,8 @@ Separate every source into one of these states:
 - `local_asset_copied`: literal artifact copied into this skill.
 - `github_metadata_only`: repo exists on GitHub but has not been cloned into
   the local dollhouse yet.
+- `external_llm_summary`: compressed research from another LLM, not raw source.
+- `external_search_snippet`: search result snippet or brief web finding.
 - `not_yet_cloned`: named repo absent from local disk.
 - `held`: needs operator approval, credentials, hardware, or destructive action.
 
@@ -39,6 +41,18 @@ evidence classes, posteriors, and promote/hold/reject decisions.
 5. Update `references/LANTERN-OS-RAG-DOLLHOUSE.flat.md`.
 6. Validate skill and artifact counts.
 7. Commit and push.
+
+## External LLM / Web Cache
+
+When caching Googled information from another LLM, use:
+
+```text
+data/rag-intake/external-llm-web-cache/
+scripts/Add-ExternalRagCacheItem.ps1
+```
+
+Store compressed claims, source URLs, dates, rights state, evidence class, and
+confidence. Do not store raw article dumps or long copyrighted passages.
 
 ## Boundaries
 

@@ -29,6 +29,8 @@ dollhouse.
 | `source_repo_dirty` | exists but dirty or unreviewed | medium |
 | `operator_asserted` | user statement not yet verified | medium |
 | `web_secondary` | secondary web source | medium-low |
+| `external_llm_summary` | summarized by another LLM; source not yet verified | low |
+| `external_search_snippet` | search snippet or brief cached web result | low |
 | `projection` | forecast or business estimate | low |
 | `unknown` | unclassified | hold |
 
