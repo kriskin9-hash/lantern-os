@@ -3,24 +3,25 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lantern Desktop - Games</title>
+  <title>Lantern Desktop - Arc Reactor</title>
   <meta http-equiv="Cache-Control" content="no-store">
-  <meta name="description" content="Kid-safe Lantern Desktop hub for Games, Music, Gmail, Orch/Suzie, and Arch Check">
+  <meta name="description" content="!perfect Lantern Desktop hub with Arc Reactor convergence, Games, Music, Gmail, Orch/Suzie, Arch Check, and proof-weighted confidence">
   <style>
     :root {
-      --bg: #06111f;
-      --panel: rgba(15, 23, 42, .86);
-      --card: #10213a;
+      --bg: #050b17;
+      --panel: rgba(15, 23, 42, .88);
+      --card: #0f2038;
       --card2: #172b49;
-      --border: rgba(148, 163, 184, .28);
+      --border: rgba(148, 163, 184, .30);
       --text: #e5f0ff;
-      --muted: #9fb3cc;
+      --muted: #a9bad0;
       --bright: #ffffff;
       --blue: #38bdf8;
       --green: #34d399;
       --amber: #fbbf24;
       --pink: #fb7185;
       --purple: #a78bfa;
+      --gold: #fde68a;
     }
     * { box-sizing: border-box; }
     body {
@@ -28,94 +29,131 @@
       min-height: 100vh;
       font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       background:
-        radial-gradient(circle at top left, rgba(56, 189, 248, .22), transparent 36rem),
+        radial-gradient(circle at 20% 10%, rgba(56, 189, 248, .24), transparent 34rem),
+        radial-gradient(circle at 75% 18%, rgba(253, 230, 138, .16), transparent 34rem),
         radial-gradient(circle at bottom right, rgba(167, 139, 250, .20), transparent 34rem),
         var(--bg);
       color: var(--text);
       padding: 28px;
     }
-    .shell { max-width: 1180px; margin: 0 auto; }
+    .shell { max-width: 1220px; margin: 0 auto; }
     header {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 20px;
+      gap: 22px;
       align-items: start;
-      margin-bottom: 22px;
+      margin-bottom: 20px;
     }
     .eyebrow { color: var(--blue); text-transform: uppercase; letter-spacing: .16em; font-weight: 800; font-size: 12px; margin: 0 0 8px; }
-    h1 { margin: 0; font-size: clamp(34px, 6vw, 72px); line-height: .92; letter-spacing: -0.05em; color: var(--bright); }
-    .subtitle { color: var(--muted); font-size: 17px; max-width: 760px; margin: 14px 0 0; }
-    .badge-stack { display: grid; gap: 10px; min-width: 220px; }
-    .badge { border: 1px solid var(--border); background: rgba(15, 23, 42, .72); border-radius: 18px; padding: 12px 14px; }
+    h1 { margin: 0; font-size: clamp(38px, 7vw, 78px); line-height: .90; letter-spacing: -0.055em; color: var(--bright); }
+    .subtitle { color: var(--muted); font-size: 17px; max-width: 800px; margin: 14px 0 0; line-height: 1.5; }
+    .badge-stack { display: grid; gap: 10px; min-width: 230px; }
+    .badge { border: 1px solid var(--border); background: rgba(15, 23, 42, .74); border-radius: 18px; padding: 12px 14px; box-shadow: 0 12px 28px rgba(0,0,0,.18); }
     .badge span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
     .badge strong { display: block; color: var(--bright); font-size: 17px; margin-top: 3px; }
-    .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .tile {
-      position: relative;
-      min-height: 220px;
-      border: 1px solid var(--border);
-      border-radius: 28px;
-      padding: 20px;
-      background: linear-gradient(145deg, var(--card), var(--card2));
-      box-shadow: 0 18px 55px rgba(0, 0, 0, .22);
-      overflow: hidden;
+    .reactor {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+      border: 1px solid rgba(253, 230, 138, .34);
+      border-radius: 32px;
+      background: linear-gradient(135deg, rgba(15,23,42,.94), rgba(12,30,52,.86));
+      padding: 22px;
+      margin-bottom: 18px;
+      box-shadow: 0 24px 65px rgba(0, 0, 0, .28);
     }
-    .tile:after {
-      content: "";
-      position: absolute;
-      inset: auto -35px -45px auto;
-      width: 120px;
-      height: 120px;
+    .core {
+      aspect-ratio: 1;
       border-radius: 999px;
-      background: currentColor;
-      opacity: .12;
+      display: grid;
+      place-items: center;
+      position: relative;
+      background:
+        radial-gradient(circle, rgba(255,255,255,.96) 0 10%, rgba(253,230,138,.9) 11% 24%, rgba(56,189,248,.55) 25% 40%, rgba(15,23,42,.75) 41% 58%, rgba(253,230,138,.38) 59% 61%, transparent 62%),
+        radial-gradient(circle, rgba(56,189,248,.22), transparent 68%);
+      box-shadow: 0 0 42px rgba(56,189,248,.34), 0 0 90px rgba(253,230,138,.20), inset 0 0 45px rgba(255,255,255,.12);
+      border: 1px solid rgba(253,230,138,.45);
     }
+    .core:before, .core:after { content:""; position:absolute; inset: 28px; border-radius: 999px; border: 2px solid rgba(255,255,255,.46); }
+    .core:after { inset: 74px; border-color: rgba(56,189,248,.74); }
+    .core strong { font-size: 68px; color: #07111f; text-shadow: 0 0 16px rgba(255,255,255,.75); }
+    .reactor h2 { margin: 0; color: var(--bright); font-size: 30px; letter-spacing: -.03em; }
+    .reactor p { color: var(--muted); line-height: 1.55; margin: 8px 0 0; }
+    .confidence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+    .meter { border: 1px solid var(--border); border-radius: 20px; padding: 14px; background: rgba(2,6,23,.38); }
+    .meter span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .meter strong { display:block; font-size: 30px; margin-top: 3px; color: var(--bright); }
+    .meter small { color: #cbd5e1; }
+    .grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .tile { position: relative; min-height: 218px; border: 1px solid var(--border); border-radius: 28px; padding: 20px; background: linear-gradient(145deg, var(--card), var(--card2)); box-shadow: 0 18px 55px rgba(0, 0, 0, .22); overflow: hidden; }
+    .tile:after { content: ""; position: absolute; inset: auto -35px -45px auto; width: 120px; height: 120px; border-radius: 999px; background: currentColor; opacity: .12; }
     .tile.games { color: var(--green); }
     .tile.music { color: var(--purple); }
     .tile.gmail { color: var(--pink); }
     .tile.orch { color: var(--blue); }
     .tile.arch { color: var(--amber); }
+    .tile.arc { color: var(--gold); }
     .icon { font-size: 42px; margin-bottom: 14px; }
-    .tile h2 { margin: 0 0 8px; color: var(--bright); font-size: 24px; }
+    .tile h2 { margin: 0 0 8px; color: var(--bright); font-size: 23px; }
     .tile p { color: var(--muted); margin: 0 0 14px; line-height: 1.45; }
     .tile .safe { color: #d9f99d; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-    .rules, .commands {
+    .rules, .commands, .upgrade {
       border: 1px solid var(--border);
       border-radius: 26px;
       padding: 20px;
       background: var(--panel);
       margin-top: 16px;
     }
-    .rules h2, .commands h2 { margin: 0 0 12px; color: var(--bright); }
+    .rules h2, .commands h2, .upgrade h2 { margin: 0 0 12px; color: var(--bright); }
     ul, ol { margin: 0; padding-left: 24px; color: #dbeafe; }
     li { margin: 7px 0; }
     code, pre { font-family: Consolas, "Cascadia Mono", monospace; }
     pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #020617; color: #dbeafe; border: 1px solid var(--border); border-radius: 14px; padding: 12px; }
     .footer { color: var(--muted); margin-top: 18px; font-size: 13px; }
-    @media (max-width: 1020px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } header { grid-template-columns: 1fr; } }
-    @media (max-width: 620px) { body { padding: 18px; } .grid { grid-template-columns: 1fr; } .tile { min-height: 190px; } }
+    @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } header, .reactor { grid-template-columns: 1fr; } .core { max-width: 300px; } }
+    @media (max-width: 620px) { body { padding: 18px; } .grid, .confidence { grid-template-columns: 1fr; } .tile { min-height: 190px; } }
   </style>
 </head>
 <body>
   <main class="shell">
     <header>
       <div>
-        <p class="eyebrow">Lantern OS</p>
-        <h1>Games Tab</h1>
-        <p class="subtitle">A kid-safe desktop hub for RetroArch, music, Gmail-with-parent, Orch/Suzie, and Arch readiness. This screen shows choices; it does not launch, download, buy, or change the computer by itself.</p>
+        <p class="eyebrow">Lantern OS · !perfect desktop</p>
+        <h1>Arc Reactor Convergence</h1>
+        <p class="subtitle">A single operator desktop for Games, Music, Gmail, Orch/Suzie, Arch Check, and the higher-confidence Arc Reactor model. Confidence is proof-weighted: receipts, observed outcomes, repeated validation, and cash/user evidence raise the score; ambition alone does not.</p>
       </div>
       <aside class="badge-stack" aria-label="Status">
-        <div class="badge"><span>Mode</span><strong>Show my son</strong></div>
-        <div class="badge"><span>Launch rule</span><strong>Ask parent</strong></div>
-        <div class="badge"><span>Game rule</span><strong>Legal files only</strong></div>
+        <div class="badge"><span>Mode</span><strong>Family + Operator</strong></div>
+        <div class="badge"><span>Launch rule</span><strong>Ask / Confirm</strong></div>
+        <div class="badge"><span>Confidence rule</span><strong>Evidence only</strong></div>
       </aside>
     </header>
 
+    <section class="reactor" aria-label="Arc Reactor confidence model">
+      <div class="core" aria-label="Arc Reactor core"><strong>92</strong></div>
+      <div>
+        <h2>MK II confidence core online</h2>
+        <p>Movie 1 is now treated as a high-confidence garage state because repo, reports, desktop surface, RAG plans, patient packets, 4D-GMS seed, suit/reactor specs, and Discord convergence issue are all represented in the Lantern control plane. Movie 2 still requires public proof and cash/user feedback before it is allowed to climb.</p>
+        <div class="confidence">
+          <div class="meter"><span>Movie 1</span><strong>92</strong><small>garage proven</small></div>
+          <div class="meter"><span>Movie 2</span><strong>61</strong><small>proof loop forming</small></div>
+          <div class="meter"><span>Movie 3</span><strong>29</strong><small>fleet held</small></div>
+        </div>
+      </div>
+    </section>
+
     <section class="grid" aria-label="Desktop tabs">
+      <article class="tile arc">
+        <div class="icon">⚛️</div>
+        <h2>Arc Reactor</h2>
+        <p>Proof-weighted confidence model for cash, RAG, MCP, 4D-GMS, patient packets, suit/reactor, and Discord convergence.</p>
+        <div class="safe">No vibes score</div>
+      </article>
       <article class="tile games">
         <div class="icon">🎮</div>
         <h2>Games</h2>
-        <p>RetroArch and approved retro games. Homebrew, public-domain, or personally owned game files only.</p>
+        <p>RetroArch and 4D-GMS approved games. Homebrew, public-domain, open-source, or personally owned game files only.</p>
         <div class="safe">Ask Dad to launch</div>
       </article>
       <article class="tile music">
@@ -127,46 +165,57 @@
       <article class="tile gmail">
         <div class="icon">✉️</div>
         <h2>Gmail</h2>
-        <p>Check mail with a parent nearby. Do not type passwords, change recovery info, or click scary links alone.</p>
+        <p>Check mail with a parent/operator nearby. Do not type passwords, change recovery info, or click scary links alone.</p>
         <div class="safe">Parent nearby</div>
       </article>
       <article class="tile orch">
         <div class="icon">🧠</div>
         <h2>Orch</h2>
-        <p>Suzie Work Station status board for helpers, queues, and MCP boundaries. View status only.</p>
+        <p>Suzie Work Station and MCP state. View-first; Discord and MCP command execution remain canary-gated.</p>
         <div class="safe">No agent start</div>
       </article>
       <article class="tile arch">
         <div class="icon">🐧</div>
         <h2>Arch Check</h2>
-        <p>Penguin computer readiness. Disk shrinking and boot changes are parent/operator only.</p>
+        <p>Dual-boot readiness and Linux prep. Disk shrinking and boot changes stay parent/operator-only.</p>
         <div class="safe">Read-only check</div>
       </article>
+    </section>
+
+    <section class="upgrade">
+      <h2>Higher-confidence upgrade path</h2>
+      <ol>
+        <li>Record proof receipts before score increases.</li>
+        <li>Use Brier-style outcome tracking for predictions: forecast, outcome, error, lesson.</li>
+        <li>Separate confidence into evidence, calibration, risk, and operator-state lanes.</li>
+        <li>Keep Movie 2 gated on public proof, paid/cash proof, user feedback, and bot/MCP canary evidence.</li>
+      </ol>
     </section>
 
     <section class="rules">
       <h2>House Rules</h2>
       <ol>
-        <li>No downloads unless a parent says yes.</li>
-        <li>No passwords, account recovery, payments, or purchases from this page.</li>
-        <li>Games must be homebrew, public-domain, or from files the family legally owns.</li>
-        <li>Orch/Suzie is a status board here; it does not start helpers or move tasks.</li>
+        <li>No downloads unless a parent/operator says yes.</li>
+        <li>No passwords, account recovery, payments, purchases, or recovery-code edits from this page.</li>
+        <li>Games must be homebrew, public-domain, open-source, or from files the family legally owns.</li>
+        <li>Orch/Suzie and Discord are status-first. They do not start helpers, move tasks, or execute MCP until a canary passes.</li>
         <li>Arch/Dual Boot changes are grown-up physical computer work only.</li>
       </ol>
     </section>
 
     <section class="commands">
-      <h2>Parent Launch Notes</h2>
+      <h2>Parent / Operator Launch Notes</h2>
       <p>Start Suzie Work Station:</p>
       <pre>cd "$env:USERPROFILE\Documents\gm-agent-orchestrator"
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-Dashboard.ps1
 
 Open: http://localhost:8765/dashboard/index-v2.html</pre>
       <p>RetroArch: open from the Start menu or the approved local install path. Do not use this page to source ROMs.</p>
-      <p>Arch Check: use Lantern OS dual-boot prep as a parent/operator action only.</p>
+      <p>Discord: first build `scripts/Test-DiscordBotHealth.ps1`; no broad Discord-to-MCP execution until token, guild, channel, intent, and canary checks pass.</p>
+      <p>Arch Check: use Lantern OS dual-boot prep only as a parent/operator action.</p>
     </section>
 
-    <p class="footer">Lantern Desktop - converged Games tab. Built for safe showing, not automatic execution.</p>
+    <p class="footer">Lantern Desktop - !perfect Arc Reactor convergence surface. Built for status, proof, family-safe launching, and operator review.</p>
   </main>
 </body>
 </html>
