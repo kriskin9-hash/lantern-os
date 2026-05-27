@@ -1,0 +1,20 @@
+{
+  "status": "built_and_tested",
+  "pdf": "/mnt/data/LANTERN-CUSTOM-REPORT-LIB-TEST-v0.1.pdf",
+  "zip": "/mnt/data/LANTERN-CUSTOM-REPORT-LIB-v0.1.zip",
+  "rag_jsonl": "/mnt/data/LANTERN-CUSTOM-REPORT-LIB-RAG-HANDOFF-v0.1.jsonl",
+  "style_profile": "/mnt/data/preferred_art_style_profile_v0.1.json",
+  "test_results_summary": "Ran 9 tests in 0.449s: OK. One Python datetime.utcnow deprecation warning observed; non-blocking.",
+  "files_in_zip": 27,
+  "repo_binary_artifacts": "held",
+  "linux_sandbox_confirmed": true,
+  "linux_sandbox_probe": {
+    "kernel": "Linux",
+    "release": "4.4.0",
+    "arch": "x86_64",
+    "pwd": "/",
+    "python": "Python 3.13.5",
+    "sandbox_path": "/mnt/data",
+    "whoami": "root"
+  }
+}
