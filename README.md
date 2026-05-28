@@ -43,12 +43,18 @@ MCP work is split by `manifests/MCP-WORK-SPLIT.md`. Remote docs can validate
 contracts and receipts, but local-only MCP health, dirty worktrees, private
 folders, and live worker counts still require operator-machine evidence.
 
+Agent first-contact loading uses
+`manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md`. Each agent should
+start by declaring observed tools/connectors, held local-only evidence, safest
+next objective, validation path, issues, and rollback.
+
 ## Initial Surfaces
 
 - Windows desktop/start-menu launcher bundle
 - Shareholder HTML index at `surfaces/shareholder-index/index.html`
 - Tony Garage operator cockpit at `surfaces/tony-garage/index.html`
 - Lantern Garage full-stack app at `apps/lantern-garage/`
+- Agent initial-contact surface at `manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md`
 - Arc Reactor confidence skill at `skills/arc-reactor-confidence/SKILL.md`
 - Arc Reactor status at `data/arc-reactor/status.json`
 - Store release lanes at `manifests/STORE-RELEASE-LANES.md`
