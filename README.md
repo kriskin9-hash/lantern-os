@@ -31,6 +31,15 @@ Before adding new surfaces, run the loop and fix the first 2-4 open issues it
 finds. Expansion is allowed only after the leading blockers are handled or
 explicitly marked held by the operator.
 
+Fleet execution uses the 12x3 convergence-ring contract in
+`manifests/CONVERGENCE-LOOP-AGENT-FLEET.md`: 12 loop steps, 3 agent roles per
+step, 36 designed ring slots, and a 64-worker elastic pool target. This is a
+design and receipt contract, not live-worker proof.
+
+MCP work is split by `manifests/MCP-WORK-SPLIT.md`. Remote docs can validate
+contracts and receipts, but local-only MCP health, dirty worktrees, private
+folders, and live worker counts still require operator-machine evidence.
+
 ## Initial Surfaces
 
 - Windows desktop/start-menu launcher bundle
@@ -57,6 +66,12 @@ explicitly marked held by the operator.
 - COMET LEAP 30-day model artifact manifest
 - Buffett/COMET LEAP planning document references
 - Lantern app/runtime surface references
+
+## Receptionist Routing
+
+Use `docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md` for public-safe call routing.
+It uses organization switchboards and public program contacts only; do not add
+personal phone numbers, scraped direct dials, or unverified private numbers.
 
 ## Printable Report
 
@@ -88,6 +103,12 @@ Run the convergence loop:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-LanternConvergenceLoop.ps1
+```
+
+Validate the convergence fleet count contract:
+
+```powershell
+python .\scripts\Test-ConvergenceAgentFleet.py --write-json .\manifests\validation\CONVERGENCE-FLEET-LATEST.json
 ```
 
 ## Garage Command
