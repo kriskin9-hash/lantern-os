@@ -1,108 +1,104 @@
-# Mom Mind Body Spirit Aid Note
+# Mary Place - Mind Body Spirit Aid Perfect Report
 
-Status: private redacted aid note
+Status: private redacted aid report
 Date: 2026-05-28
 Dollhouse lane: `operator_private_context`
 Decision: `internal_only_hold_until_explicit_release`
-Subject label: operator's mother
-Raw source: operator-provided Facebook profile/page text pasted into chat
-Raw source handling: do not commit raw Facebook dump, friend list, comment dump, or screenshots
+Subject label: Mary Place / mom of Patient A founder
+Report mode: four-loop gentle support plan
+Raw source handling: no raw Facebook dump, no raw friend list, no raw post dump, no handwritten-image copy in Git
 
 ## Purpose
 
-Preserve a small, privacy-gated support report for mind/body/spirit aid without turning private family/social context into a public dossier.
+This report turns the operator-provided Facebook context and handwritten support notes into a calm, practical mind/body/spirit aid plan for Mary.
 
-This note is for compassionate family support, memory routing, and practical next actions. It is not a diagnosis, medical assessment, legal assessment, public biography, or identity-verification file.
+This is not a diagnosis, medical instruction, public biography, or permission to pressure her. It is a simple support map: one warm path at a time, centered on reconnection, ordinary work rhythm, family, and safe old interests.
 
-## Evidence Boundary
+## Four Completed Loops
 
-| Item | Evidence class | Confidence | Use |
+| Loop | What was checked | One best result |
+|---|---|---|
+| Loop 1 - Privacy | Keep raw social and handwritten source material out of Git. | Save only this redacted support summary in Dollhouse. |
+| Loop 2 - Comfort | Convert rough notes into non-shaming preferences. | Use calm, clean, plain language and one small invitation. |
+| Loop 3 - Path | Avoid forcing choices or labels. | Offer one best next step, not a menu. |
+| Loop 4 - PDF | Make the report printable and gentle. | Keep it practical, positive, and family-centered. |
+
+## Private Evidence Map
+
+| Support signal | Evidence class | Confidence | Gentle use |
 |---|---|---:|---|
-| Facebook profile text was supplied by the operator | `operator_private_context` | 0.85 | Internal support context only |
-| Subject appears connected to Spring Valley, Ohio and Swords Creek, Virginia roots | `operator_private_context` | 0.70 | Use only as relational/geographic context |
-| School anchors include Honaker High, class of 1987, and Lebanon High School in Virginia | `operator_private_context` | 0.75 | Use for memory/context, not public claims |
-| Profile shows a broad social graph with many friends and mutual connections | `operator_private_context` | 0.75 | Indicates possible support network; do not expose names |
-| Recent posts/comments appear social/light/humor-oriented, but text extraction is noisy | `operator_private_context` | 0.45 | Do not quote or over-interpret |
-| Profile metadata appears recently updated | `operator_private_context` | 0.65 | Candidate freshness signal only |
+| Operator identifies Mary as his mother and wants support aid. | `operator_private_context` | 0.90 | Treat as family-support context only. |
+| Facebook/profile context points to Spring Valley, Ohio, Swords Creek, Virginia, Honaker High, and Lebanon High School roots. | `operator_private_context` | 0.72 | Use only as memory and reconnection context. |
+| Handwritten note points to Dot's Market / cashier work in Bellbrook as a familiar work anchor. | `operator_private_context` | 0.70 | Reignite familiar work confidence through simple routine. |
+| Handwritten note says she likes new work but can feel unsure when too many choices are present. | `operator_private_context` | 0.76 | Present one kind next step at a time. |
+| Handwritten note says she values her two adult sons, family, normal work, and ordinary life. | `operator_private_context` | 0.80 | Put family, ordinary rhythm, and dignity at the center. |
+| Handwritten note says she prefers no profanity and can feel overwhelmed by confusion. | `operator_private_context` | 0.75 | Use clean words, slower pacing, and clear next actions. |
 
-## Redaction Rules
+## One Best Path Tables
 
-- Do not commit raw friend names from the pasted Facebook view.
-- Do not commit scraped post text, comments, screenshots, or private interaction history.
-- Do not infer health, mental health, finances, legal status, family conflict, or safety state from profile data.
-- Do not publish this note outside the private Lantern/Dollhouse context without explicit operator approval.
-- If future evidence includes photos, messages, grief, health, or household details, store raw material only in a local encrypted vault and keep committed notes summarized.
+### Mind - Calm Clarity
 
-## Mind / Body / Spirit Aid Frame
+| Area | One best path | Words to use |
+|---|---|---|
+| Mind | Ask one simple question, then pause. | "I wanted to check in and say I love you. Would a short call this week feel good?" |
 
-### Mind
+### Body - Ordinary Routine
 
-Observed support anchors:
+| Area | One best path | Small action |
+|---|---|---|
+| Body | Rebuild confidence through one normal, familiar routine. | Offer a short errand, coffee, grocery stop, or simple task together. |
 
-- Familiar history anchors: Virginia school/community roots.
-- A visible social graph suggests memory/context cues may matter.
-- Recent profile activity suggests current social contact may be possible, but the extracted text is too noisy for exact interpretation.
+### Spirit - Reconnection
 
-Aid posture:
+| Area | One best path | Small action |
+|---|---|---|
+| Spirit | Reconnect through family warmth, not pressure. | Send one kind photo, memory, or thanks with no demand attached. |
 
-- Use plain, concrete communication.
-- Avoid arguments about profile content or old family narratives.
-- Ask one clear question at a time.
-- Preserve names, dates, and memories only when they are useful and consented.
+### Work - Safe New Start
 
-### Body
+| Area | One best path | Small action |
+|---|---|---|
+| Work | Use familiar cashier/customer-service confidence as the bridge to new work. | Mention one nearby, low-pressure, routine-based job idea only after a friendly reconnect. |
 
-Observed support anchors:
+### Old Interests - Safe Alternative
 
-- No body/health condition is evidenced by the supplied text.
-- Do not treat Facebook activity or profile metadata as a health signal.
+| Area | One best path | Small action |
+|---|---|---|
+| Old interests | Restart one old ordinary interest before pushing anything new. | Ask about a favorite food, old song, local place, family memory, or simple hobby and let her choose later. |
 
-Aid posture:
+### Communication - No Choice Overload
 
-- Offer practical help before abstract advice.
-- Ask about immediate needs: food, ride, appointment, paperwork, house task, device help, or a short call.
-- Keep help small enough to complete.
-- Record completed support actions separately from assumptions.
+| Area | One best path | Small action |
+|---|---|---|
+| Communication | Offer one next step, not several. | "Would Tuesday afternoon be a good time for a short call?" |
 
-### Spirit
+## Gentle Script
 
-Observed support anchors:
+Hi Mom, I was thinking about you and wanted to reconnect in a simple way. I love you. No big plan and no pressure. Would a short call this week feel good? I can also stop by for coffee or help with one small errand. One step at a time is enough.
 
-- Social replies appear warm/light in tone, but exact post content is noisy.
-- Hometown/school/friend-network context may be useful for belonging and memory cues.
+## Weekly Aid Rhythm
 
-Aid posture:
+| Day | One best path |
+|---|---|
+| Week 1 | Send one warm check-in with no demand. |
+| Week 2 | Invite one short call or coffee. |
+| Week 3 | Ask about one old interest, memory, food, song, local place, or family story. |
+| Week 4 | Offer one practical help item connected to ordinary routine. |
 
-- Lead with dignity and affection.
-- Use gratitude, remembrance, humor, and ordinary check-ins.
-- Avoid making the report a surveillance file.
-- Treat her as a person to support, not a data source.
+## Support Rules
 
-## Current Aid Hypothesis
+- Use clean, calm language.
+- Keep each ask small.
+- Do not turn support into a test.
+- Do not use labels, pressure, or a long list of options.
+- Do not make public claims from private social context.
+- Let Mary keep dignity and pace.
+- Repeat warmth more than instructions.
 
-The safest current hypothesis is: the operator wants a gentle, family-centered support memory for his mother, grounded in basic profile context and protected from overreach.
+## Best Current Recommendation
 
-Confidence: 0.72
-Decision: promote as private aid context, hold for any public or diagnostic use.
-
-## Suggested Next Actions
-
-1. Send one low-pressure check-in message.
-2. Ask one concrete support question: "Is there anything small I can help with this week?"
-3. If she responds, record only the support need and consented context.
-4. If adding future Facebook evidence, summarize it into evidence classes instead of copying raw posts.
-5. If a real health, safety, or money issue appears, move it to a separate privacy-gated support note with explicit source and consent boundaries.
-
-## Local Vault Recommendation
-
-Raw source material belongs only in a local encrypted vault, not in Git:
-
-```text
-C:\tmp\lantern-os\data\private\piid-vault\mom-facebook-source-2026-05-28.txt
-```
-
-Committed Dollhouse note should remain this redacted summary only.
+The best current path is a gentle reconnection loop: one clean message, one short call, one ordinary routine, then one old-interest spark. That gives Mary a safe alternative to pressure while opening a path back to family, work confidence, and familiar joy.
 
 ## Retrieval Tags
 
-`mom`, `mind-body-spirit-aid`, `operator_private_context`, `family-support`, `redacted-facebook-summary`, `internal-only`, `no-diagnosis`, `no-raw-social-dump`
+`mom`, `Mary Place`, `mind-body-spirit-aid`, `four-loop-report`, `operator_private_context`, `family-support`, `reconnecting`, `old-interests`, `no-choice-overload`, `private-redacted-report`, `internal-only`
