@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: static-surface-ci-${{ github.ref }}
+  group: static-surface-ci
   cancel-in-progress: true
 
 permissions:
@@ -90,6 +90,18 @@ jobs:
       - name: Run tests
         run: python -m pytest tests -q
 
+  convergence-cloud:
+    name: Cloud virtualization convergence
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run convergence loop without local-only assumptions
+        shell: pwsh
+        run: |
+          ./scripts/Invoke-LanternConvergenceLoop.ps1 -CloudVirtualization
+
   workflow-shape:
     name: CI parallel shape guard
     runs-on: ubuntu-latest
@@ -107,26 +119,23 @@ jobs:
               "manifests:",
               "html-links:",
               "python-tests:",
+              "convergence-cloud:",
               "workflow-shape:",
               "summary:",
           ]
           missing = [job for job in required_jobs if job not in text]
           if missing:
               raise SystemExit(f"Missing jobs: {missing}")
-          if "needs: [repo-surface, manifests, html-links, python-tests, workflow-shape]" not in text:
+          if "needs: [repo-surface, manifests, html-links, python-tests, convergence-cloud, workflow-shape]" not in text:
               raise SystemExit("summary job must depend on every parallel lane")
 
   summary:
     name: CI summary gate
     runs-on: ubuntu-latest
-    needs: [repo-surface, manifests, html-links, python-tests, workflow-shape]
+    needs: [repo-surface, manifests, html-links, python-tests, convergence-cloud, workflow-shape]
 
     steps:
       - name: Summarize passed lanes
         run: |
           echo "All static-surface CI lanes passed."
-          echo "repo-surface=${{ needs.repo-surface.result }}"
-          echo "manifests=${{ needs.manifests.result }}"
-          echo "html-links=${{ needs.html-links.result }}"
-          echo "python-tests=${{ needs.python-tests.result }}"
-          echo "workflow-shape=${{ needs.workflow-shape.result }}"
+          echo "convergence-cloud completed"
