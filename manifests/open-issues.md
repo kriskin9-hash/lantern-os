@@ -258,3 +258,9 @@ The convergence loop fixes the first 2-4 actionable issues before expansion.
 4. `LANTERN-OS-CALL-LIST-001`: Receptionist outreach lacked a public-safe call sheet.
    - Fix: added `docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md` with public organization routing numbers and call receipts.
    - Status: fixed; numbers must be rechecked against official pages before call campaigns.
+
+## Fixed in Codex Remote Troubleshooting Pass
+
+1. `LANTERN-OS-CODEX-REMOTE-001`: Codex mobile "Waiting for desktop" failures were not captured as a diagnostic split.
+   - Fix: added `docs/CODEX-WAITING-FOR-DESKTOP-TROUBLESHOOTING.md` and linked it from `docs/MCP-CONNECTOR.md`.
+   - Status: fixed as a documentation/diagnostic pass; local app patching remains held pending operator-machine evidence and approval.
