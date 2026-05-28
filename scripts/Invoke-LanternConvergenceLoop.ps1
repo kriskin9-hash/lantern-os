@@ -38,11 +38,16 @@ $required = @(
     "docs/CONVERGENCE-LOOP.md",
     "docs/INNOVATOR-EVIDENCE-METHOD.md",
     "docs/V1-READINESS-GATES.md",
+    "docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md",
     "manifests/comet-leap-30day-artifacts.md",
     "manifests/windows-surfaces.md",
     "manifests/dual-boot.md",
     "manifests/open-issues.md",
-    "manifests/retired-surfaces.md"
+    "manifests/retired-surfaces.md",
+    "manifests/CONVERGENCE-LOOP-AGENT-FLEET.md",
+    "manifests/MCP-WORK-SPLIT.md",
+    "manifests/validation/CONVERGENCE-FLEET-LATEST.json",
+    "scripts/Test-ConvergenceAgentFleet.py"
 )
 
 foreach ($path in $required) {
@@ -57,6 +62,36 @@ if (Test-Path $loopDoc) {
     foreach ($phrase in @("Retire old stuff", "fix the first 2-4", "12 Steps", "Promote, hold, or reject")) {
         if ($loopText -notlike "*$phrase*") {
             Add-Issue $issues "LOOP-MISSING-$($phrase.Replace(' ', '-'))" "medium" "Convergence loop missing phrase: $phrase" "Update docs/CONVERGENCE-LOOP.md."
+        }
+    }
+}
+
+$fleetDoc = Join-Path $Root "manifests/CONVERGENCE-LOOP-AGENT-FLEET.md"
+if (Test-Path $fleetDoc) {
+    $fleetText = Get-Content -LiteralPath $fleetDoc -Raw
+    foreach ($phrase in @("12 convergence-loop steps x 3 agents per step = 36 ring agents", "Always-Waiting Ring Contract", "poolTarget = 64", "design_contract_not_live_worker_proof")) {
+        if ($fleetText -notlike "*$phrase*") {
+            Add-Issue $issues "FLEET-MISSING-$($phrase.Replace(' ', '-'))" "high" "Convergence fleet contract missing phrase: $phrase" "Update manifests/CONVERGENCE-LOOP-AGENT-FLEET.md."
+        }
+    }
+}
+
+$mcpSplitDoc = Join-Path $Root "manifests/MCP-WORK-SPLIT.md"
+if (Test-Path $mcpSplitDoc) {
+    $mcpSplitText = Get-Content -LiteralPath $mcpSplitDoc -Raw
+    foreach ($phrase in @("Split Lanes", "Private Dependency Boundary", "OS Review Gate", "No Bulk Remote Push Without Gate")) {
+        if ($mcpSplitText -notlike "*$phrase*") {
+            Add-Issue $issues "MCP-SPLIT-MISSING-$($phrase.Replace(' ', '-'))" "high" "MCP work split missing phrase: $phrase" "Update manifests/MCP-WORK-SPLIT.md."
+        }
+    }
+}
+
+$callListDoc = Join-Path $Root "docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md"
+if (Test-Path $callListDoc) {
+    $callListText = Get-Content -LiteralPath $callListDoc -Raw
+    foreach ($phrase in @("organization switchboards", "Do not add personal phone numbers", "Call Receipt", "Evidence class: operator_call_receipt")) {
+        if ($callListText -notlike "*$phrase*") {
+            Add-Issue $issues "CALL-LIST-MISSING-$($phrase.Replace(' ', '-'))" "medium" "Receptionist call list missing phrase: $phrase" "Update docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md."
         }
     }
 }
@@ -131,6 +166,9 @@ $result = [pscustomobject]@{
     root = $Root
     mode = if ($CloudVirtualization) { "cloud_virtualization" } else { "local" }
     method = "Lantern OS 12-step convergence loop"
+    designedRingSlots = 36
+    elasticPoolTarget = 64
+    fleetClaimBoundary = "design contract only; live worker counts require local orchestrator evidence"
     fixWindow = $FixWindow
     issueCount = $issues.Count
     leadingIssues = @($issues | Select-Object -First $FixWindow)
