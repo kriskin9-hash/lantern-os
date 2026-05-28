@@ -21,6 +21,9 @@ Remote control plane: `https://github.com/alex-place/lantern-os`
 Shareholder/repo consolidation map:
 `manifests/foundry-shareholder-repos.md`
 
+Public-safe operator wiki page:
+`docs/wiki/ALEX-PLACE.md`
+
 ## Release Rule
 
 Nothing becomes v1.0.0 here merely because it exists elsewhere. Promotion
