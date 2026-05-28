@@ -4,18 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
-  <title>Lantern Garage App</title>
-  <link rel="stylesheet" href="styles.css?v=20260526-0725">
-  <script defer src="app.js?v=20260526-0725"></script>
+  <title>Lantern OS</title>
+  <link rel="stylesheet" href="styles.css?v=20260526-2018">
+  <script defer src="app.js?v=20260526-2018"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to controls</a>
   <main id="main" class="shell" tabindex="-1">
-    <header class="hero">
+    <header class="hero os-hero">
       <div>
-        <p class="eyebrow">Lantern OS Full Stack</p>
-        <h1>Garage App</h1>
-        <p class="subtitle">Live local APIs for Arc Reactor, wallet, dual boot, RAG cache, local controls, and v1 readiness.</p>
+        <p class="eyebrow">Super Jarvis Local Control Plane</p>
+        <h1>Lantern OS</h1>
+        <p class="subtitle">One local cockpit for RAG memory, cash loop, dual-boot readiness, local controls, field notes, and launch gates.</p>
       </div>
       <section class="reactor" aria-label="Arc Reactor status">
         <div class="reactor-core"><span id="movie1">--</span></div>
@@ -25,10 +25,14 @@
 
     <section class="actions" aria-label="Primary controls">
       <button id="refresh" type="button">Refresh Status</button>
-      <button id="runLoop" type="button">Run Loop</button>
+      <button id="runLoop" type="button">Converge Loop</button>
+      <button id="flatRagIngest" type="button">Ingest Repos</button>
+      <button id="autoUpdate" type="button" aria-pressed="false">Auto Update</button>
       <button id="localControls" type="button">Local Controls</button>
       <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/LANTERN-OS-WHITEPAPER-v0.1.pdf">Whitepaper</a>
       <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ADS-ARCHITECTURE-REVIEW-v0.1.pdf">ADS</a>
+      <a target="_blank" rel="noopener noreferrer" href="/repo/reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Model</a>
+      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.pdf">MK II PDF</a>
     </section>
 
     <section class="grid" aria-label="System panels">
@@ -52,7 +56,7 @@
       </article>
 
       <article class="panel">
-        <h2>Dual Boot</h2>
+        <h2>Boot Gate</h2>
         <dl>
           <div><dt>Prep</dt><dd id="prep">--</dd></div>
           <div><dt>Install</dt><dd id="install">--</dd></div>
@@ -70,10 +74,105 @@
       </article>
     </section>
 
+    <section class="os-strip" aria-label="Lantern OS launch gates">
+      <article class="gate-card">
+        <h2>Launch Rule</h2>
+        <p id="launchRule">Local app first. Disk, bootloader, firmware, and default-boot changes remain operator-held.</p>
+      </article>
+      <article class="gate-card">
+        <h2>Next Boot</h2>
+        <p id="nextBoot">Windows remains the host until the dual-boot checklist is physically completed and validated.</p>
+      </article>
+      <article class="gate-card">
+        <h2>Memory</h2>
+        <p id="memoryRule">RAG cache and local conversations are source-labeled. Private notes stay local.</p>
+      </article>
+    </section>
+
     <section class="wide">
+      <article class="panel flat-rag-panel">
+        <h2>Flat RAG House</h2>
+        <dl>
+          <div><dt>Sources</dt><dd id="flatSources">--</dd></div>
+          <div><dt>Records</dt><dd id="flatRecords">--</dd></div>
+          <div><dt>Archive Mode</dt><dd id="archiveMode">manifest only</dd></div>
+        </dl>
+        <ul id="flatSourceList" class="compact-list"></ul>
+      </article>
+      <article class="panel forms-panel">
+        <h2>RAG Intake Form</h2>
+        <form id="ragForm" class="rag-form">
+          <label for="ragTopic">Topic</label>
+          <input id="ragTopic" name="topic" maxlength="160" placeholder="repo, form, window, chat, file">
+          <label for="ragClaim">Claim</label>
+          <textarea id="ragClaim" name="claim" rows="3" maxlength="500" placeholder="Compressed claim to add to RAG..."></textarea>
+          <label for="ragDecision">Decision</label>
+          <select id="ragDecision" name="decision">
+            <option value="candidate">candidate</option>
+            <option value="promote">promote</option>
+            <option value="hold">hold</option>
+            <option value="reject">reject</option>
+          </select>
+          <button type="submit">Add RAG Item</button>
+        </form>
+      </article>
+      <article class="panel windows-panel">
+        <h2>Windows Surface</h2>
+        <dl>
+          <div><dt>Host</dt><dd id="windowsHost">Windows host, Lantern OS app</dd></div>
+          <div><dt>Boot Mutation</dt><dd id="bootMutation">blocked</dd></div>
+          <div><dt>Auto Update</dt><dd id="autoUpdateState">off</dd></div>
+        </dl>
+      </article>
+      <article class="panel pages-panel">
+        <h2>Pages</h2>
+        <ul class="page-list">
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Reactor 12-Step Model</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.pdf">Arc Reactor PDF</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/reports/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.md">Arc Reactor MK II Report</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.pdf">Arc Reactor MK II PDF</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/DISCORD-COMMUNITY-OPERATOR-PACKET.pdf">Discord Operator PDF</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/DISCORD-COMMUNITY-PUBLIC-GUIDE.pdf">Discord Public PDF</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/reports/DISCORD-COMMUNITY-PUBLIC-GUIDE.md">Normies Handout</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/LANTERN-DAY-ONE-NORMIE-PACKET.pdf">Day One Normie PDF</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/surfaces/tony-garage/index.html">Tony Garage Page</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/manifests/STORE-RELEASE-LANES.md">Store Release Lanes</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/repo/skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md">Flat RAG House</a></li>
+        </ul>
+      </article>
       <article class="panel">
-        <h2>RAG Cache</h2>
+        <h2>RAG Memory</h2>
         <ul id="ragCache"></ul>
+      </article>
+      <article class="panel operator-queue-panel">
+        <h2>Operator Lane</h2>
+        <form id="noteForm" class="note-form">
+          <input id="noteText" name="text" maxlength="500" placeholder="Quick note or P0 item...">
+          <select id="notePriority" name="priority">
+            <option value="P0">P0</option>
+            <option value="P1" selected>P1</option>
+            <option value="P2">P2</option>
+          </select>
+          <button type="submit">+ Note</button>
+        </form>
+        <ul id="operatorQueue" class="operator-queue"></ul>
+      </article>
+
+      <article class="panel conversation-panel">
+        <h2>Local Conversations</h2>
+        <form id="conversationForm" class="conversation-form">
+          <label for="conversationRole">Role</label>
+          <select id="conversationRole" name="role">
+            <option value="operator">Operator</option>
+            <option value="lantern">Lantern</option>
+            <option value="note">Note</option>
+            <option value="system">System</option>
+          </select>
+          <label for="conversationText">Message</label>
+          <textarea id="conversationText" name="text" rows="4" maxlength="4000" placeholder="Store a local conversation note..."></textarea>
+          <button type="submit">Store Locally</button>
+        </form>
+        <ul id="conversationList" class="conversation-list"></ul>
       </article>
       <article class="panel log-panel">
         <h2>Action Log</h2>
