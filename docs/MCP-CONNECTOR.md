@@ -16,6 +16,8 @@ MCP work is split in `manifests/MCP-WORK-SPLIT.md` across connector contract, co
 
 The 12x3 convergence ring in `manifests/CONVERGENCE-LOOP-AGENT-FLEET.md` may review these lanes, but live MCP tool and live worker claims remain held until current local evidence exists.
 
+Codex remote-control troubleshooting is captured in `docs/CODEX-WAITING-FOR-DESKTOP-TROUBLESHOOTING.md`. Treat Codex mobile "Waiting for desktop" as a diagnostic state with multiple possible causes, not proof that mobile, desktop, MCP, or the account is correctly paired.
+
 ## Commands
 
 Verify local MCP health and tool discovery candidates:
@@ -101,6 +103,7 @@ Unsafe meaning, not allowed by this connector:
 - Linux/NixOS primary boot is held until physical boot state and rollback are verified.
 - Removing Windows or mutating partitions remains blocked.
 - Live 36-agent or 64-worker claims are held until a current local orchestrator count report exists.
+- Codex Desktop/mobile pairing fixes remain diagnostic-only until official update, local evidence receipt, and operator approval exist.
 
 ## Promotion Gate
 
