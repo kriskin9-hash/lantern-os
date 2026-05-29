@@ -71,7 +71,7 @@ function Get-PollConfiguration {
 
 function Check-GitSource {
     param(
-        [hashtable]$Source,
+        [object]$Source,
         [ref]$LastStates
     )
     
@@ -116,7 +116,7 @@ function Check-GitSource {
 }
 
 function Trigger-Action {
-    param([hashtable]$Action)
+    param([object]$Action)
     
     if (-not $Action.enabled) {
         return $false

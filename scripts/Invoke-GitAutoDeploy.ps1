@@ -59,7 +59,7 @@ function Get-RepoChanges {
     
     Push-Location $Path
     try {
-        $logResult = git log --oneline HEAD@{1}..HEAD 2>$null
+        $logResult = git log --oneline -1 HEAD 2>$null
         if ($LASTEXITCODE -eq 0) {
             return $logResult
         }
