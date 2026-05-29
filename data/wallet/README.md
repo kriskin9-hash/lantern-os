@@ -44,3 +44,11 @@ Invoice drafts:
 ```text
 data/wallet/invoices/
 ```
+
+## Payment Integration Documentation
+
+For legal methods to load money into the Lantern OS wallet system, see:
+
+- [LEGITIMATE-WALLET-FUNDING-METHODS.md](./LEGITIMATE-WALLET-FUNDING-METHODS.md) - Overview of legal funding options
+- [PAYMENT-INTEGRATION-IMPLEMENTATION-GUIDE.md](./PAYMENT-INTEGRATION-IMPLEMENTATION-GUIDE.md) - Technical implementation guide
+- [WALLET-FUNDING-QUICK-START.md](./WALLET-FUNDING-QUICK-START.md) - Quick implementation checklist
