@@ -81,8 +81,8 @@ No dependency can skip local status, remote, branch, build/test, secrets/env, ar
 | 33 | `alex-place/statusmonitor` | private | main | 11 | yes | `business_service_dependency` | monitoring fallback candidate |
 | 34 | `alex-place/smartmealplanning` | private | main | 10 | yes | `business_service_dependency` | family/productivity candidate |
 | 35 | `alex-place/SmartBid` | private | master | 63 | yes | `business_service_dependency` | SMB cleanup candidate |
-| 36 | `alex-place/ChildOfLevistus` | private | master | 183750 | yes | `game_dependency` | GameMaker/game lane candidate |
-| 37 | `alex-place/gamemaker-room-editor` | private | main | 377 | yes | `execution_dependency` | GameMaker tooling adapter |
+| 36 | `alex-place/ChildOfLevistus` | private | master | 183750 | yes | `game_dependency` | GameMaker/game lane candidate, cloud-access enabled for users |
+| 37 | `alex-place/gamemaker-room-editor` | private | main | 377 | yes | `execution_dependency` | GameMaker tooling adapter, cloud-access enabled for users |
 | 38 | `alex-place/gm-agent-orchestrator` | private | master | 6126 | yes | `execution_dependency` | authoritative agent/MCP source |
 | 39 | `alex-place/place_co` | private | main | 143 | yes | `site_content_dependency` | company/public surface candidate |
 | 40 | `alex-place/lantern-symbolic-sandbox` | private | master | 16243 | yes | `rag_dependency` | symbolic/RAG/quarantine dependency |

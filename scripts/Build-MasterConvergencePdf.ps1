@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$sourcePath = Join-Path $Root $Source
+
 $outputPath = Join-Path $Root $Output
 $outputDir = Split-Path -Parent $outputPath
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null

@@ -1,0 +1,71 @@
+﻿{
+    "generatedAt":  "2026-05-28T19:23:36.1849950-04:00",
+    "baseUrl":  "http://127.0.0.1:8787",
+    "status":  "ready_health_only",
+    "boundaryStatus":  "local_loopback",
+    "probes":  [
+                   {
+                       "url":  "http://127.0.0.1:8787/health",
+                       "ok":  true,
+                       "statusCode":  200,
+                       "contentType":  "application/json; charset=utf-8",
+                       "json":  {
+                                    "ok":  true,
+                                    "service":  "gm-agent-orchestrator-mcp",
+                                    "root":  "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+                                    "noAuth":  true
+                                },
+                       "preview":  "{\"ok\":true,\"service\":\"gm-agent-orchestrator-mcp\",\"root\":\"C:\\\\Users\\\\alexp\\\\Documents\\\\gm-agent-orchestrator\",\"noAuth\":true}",
+                       "error":  null
+                   },
+                   {
+                       "url":  "http://127.0.0.1:8787/status",
+                       "ok":  false,
+                       "statusCode":  null,
+                       "contentType":  null,
+                       "json":  null,
+                       "preview":  null,
+                       "error":  "The remote server returned an error: (404) Not Found."
+                   },
+                   {
+                       "url":  "http://127.0.0.1:8787/capabilities",
+                       "ok":  false,
+                       "statusCode":  null,
+                       "contentType":  null,
+                       "json":  null,
+                       "preview":  null,
+                       "error":  "The remote server returned an error: (404) Not Found."
+                   },
+                   {
+                       "url":  "http://127.0.0.1:8787/tools",
+                       "ok":  false,
+                       "statusCode":  null,
+                       "contentType":  null,
+                       "json":  null,
+                       "preview":  null,
+                       "error":  "The remote server returned an error: (404) Not Found."
+                   },
+                   {
+                       "url":  "http://127.0.0.1:8787/mcp/tools",
+                       "ok":  false,
+                       "statusCode":  null,
+                       "contentType":  null,
+                       "json":  null,
+                       "preview":  null,
+                       "error":  "The remote server returned an error: (404) Not Found."
+                   }
+               ],
+    "conclusion":  {
+                       "mcpReachable":  true,
+                       "toolsEndpointVisible":  false,
+                       "connectorUse":  "candidate",
+                       "nextAction":  "Health is reachable, but no generic tools endpoint was confirmed. Verify the MCP client-specific discovery path before granting write tools."
+                   },
+    "safety":  {
+                   "loopbackOnlyDefault":  true,
+                   "remoteRequiresAllowRemote":  true,
+                   "destructiveOperations":  "not_performed",
+                   "toolDescriptorsTrusted":  false,
+                   "recommendedPolicy":  "list tools, inspect descriptors, verify parameters, invoke minimum safe tool"
+               }
+}

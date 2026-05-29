@@ -1,0 +1,36 @@
+{
+  "version": "1.0.0",
+  "default_option_id": "light_mono",
+  "options": [
+    {
+      "id": "light_mono",
+      "label": "Light Monochrome",
+      "renderer": "scripts/Build-PerfectArtPdf.founder-v4.ps1",
+      "description": "Clean light report style for general review."
+    },
+    {
+      "id": "dark_wcag",
+      "label": "Dark WCAG",
+      "renderer": "scripts/Build-PerfectArtPdf.founder-v4.dark.ps1",
+      "description": "Dark high-contrast readability profile."
+    },
+    {
+      "id": "dark_noopacity",
+      "label": "Dark No Opacity",
+      "renderer": "scripts/Build-PerfectArtPdf.founder-v4.dark.noopacity.ps1",
+      "description": "Dark style with no opacity blending."
+    },
+    {
+      "id": "print_bw_pretty",
+      "label": "Print B/W Pretty",
+      "renderer": "scripts/Build-PerfectArtPdf.print-bw-pretty.ps1",
+      "description": "Monochrome print-safe card-stock style."
+    },
+    {
+      "id": "founder_locked_v4",
+      "label": "Founder Locked v4",
+      "renderer": "scripts/Build-PerfectArtPdf.founder-v4.ps1",
+      "description": "Locked founder baseline style."
+    }
+  ]
+}
