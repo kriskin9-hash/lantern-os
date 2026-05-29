@@ -149,7 +149,7 @@ if (-not $config) {
 }
 
 $lastStates = @{}
-$pollResults = @()
+$pollResults = @{}
 
 foreach ($source in $config.sources) {
     if (-not $source.enabled) {
@@ -182,3 +182,4 @@ $results = @{
 $results | ConvertTo-Json -Depth 10 | Set-Content $resultsPath
 
 Write-Log "=== Auto-Poll Completed ==="
+
