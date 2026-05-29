@@ -1,0 +1,67 @@
+{
+  "components": [
+    {
+      "name": "git-auto-deploy",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-GitAutoDeploy.ps1",
+      "enabled": true,
+      "priority": 1,
+      "intervalMinutes": 5,
+      "parameters": {
+        "repoPath": "D:\\tmp\\lantern-os",
+        "branch": "master"
+      }
+    },
+    {
+      "name": "auto-poll",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-AutoPoll.ps1",
+      "enabled": true,
+      "priority": 2,
+      "intervalMinutes": 5,
+      "parameters": {
+        "configPath": "D:\\tmp\\lantern-os\\data\\automation\\poll-config.json"
+      }
+    },
+    {
+      "name": "hff-convergence",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-HFFConvergence.ps1",
+      "enabled": true,
+      "priority": 3,
+      "intervalMinutes": 10,
+      "parameters": {
+        "hffRepoPath": "C:\\tmp\\human-flourishing-frameworks-scan",
+        "lanternRepoPath": "D:\\tmp\\lantern-os"
+      }
+    },
+    {
+      "name": "lantern-convergence",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-LanternConvergenceLoop.ps1",
+      "enabled": true,
+      "priority": 4,
+      "intervalMinutes": 15,
+      "parameters": {
+        "root": "D:\\tmp\\lantern-os",
+        "fixWindow": 4
+      }
+    }
+  ],
+  "mainLoop": {
+    "enabled": true,
+    "intervalMinutes": 10,
+    "healthCheckInterval": 30
+  },
+  "notifications": {
+    "enabled": false,
+    "webhook": "",
+    "email": ""
+  },
+  "git": {
+    "autoPush": false,
+    "autoCommit": false,
+    "branchProtection": true
+  },
+  "hff": {
+    "autoPromote": true,
+    "convergenceOnChanges": true,
+    "dryRunByDefault": false
+  }
+}

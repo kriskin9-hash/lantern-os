@@ -1,0 +1,69 @@
+{
+  "sources": [
+    {
+      "name": "lantern-os-repo",
+      "type": "git",
+      "path": "D:\\tmp\\lantern-os",
+      "branch": "master",
+      "intervalMinutes": 5,
+      "enabled": true,
+      "triggerOnActions": true
+    },
+    {
+      "name": "hff-scan-repo",
+      "type": "git",
+      "path": "C:\\tmp\\human-flourishing-frameworks-scan",
+      "branch": "master",
+      "intervalMinutes": 10,
+      "enabled": true,
+      "triggerOnActions": true
+    },
+    {
+      "name": "orchestrator-repo",
+      "type": "git",
+      "path": "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+      "branch": "master",
+      "intervalMinutes": 15,
+      "enabled": true,
+      "triggerOnActions": false
+    }
+  ],
+  "actions": [
+    {
+      "name": "convergence-loop",
+      "type": "script",
+      "path": "D:\\tmp\\lantern-os\\scripts\\Invoke-LanternConvergenceLoop.ps1",
+      "triggerOnChanges": true,
+      "enabled": true,
+      "priority": 1
+    },
+    {
+      "name": "hff-convergence",
+      "type": "script",
+      "path": "D:\\tmp\\lantern-os\\scripts\\Invoke-HFFConvergence.ps1",
+      "triggerOnChanges": true,
+      "enabled": true,
+      "priority": 2
+    },
+    {
+      "name": "git-auto-deploy",
+      "type": "script",
+      "path": "D:\\tmp\\lantern-os\\scripts\\Invoke-GitAutoDeploy.ps1",
+      "triggerOnChanges": false,
+      "enabled": true,
+      "priority": 3
+    }
+  ],
+  "schedules": {
+    "convergence": {
+      "enabled": true,
+      "cron": "*/15 * * * *",
+      "timezone": "UTC"
+    },
+    "hff-sync": {
+      "enabled": true,
+      "cron": "*/30 * * * *",
+      "timezone": "UTC"
+    }
+  }
+}
