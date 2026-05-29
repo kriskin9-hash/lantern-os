@@ -1,0 +1,25 @@
+{
+  "schema": "lantern.cloud_mirrors.v1",
+  "deployProvider": "Render",
+  "deployBranch": "master",
+  "mirrorPolicy": "Local is primary; cloud URLs are mirrors and must not create separate dashboards.",
+  "lastChecked": "2026-05-29",
+  "cloudMirrors": [
+    {
+      "name": "Lantern OS Render",
+      "url": "https://lantern-os.onrender.com",
+      "role": "Canonical Render mirror for alex-place/lantern-os after master deploy.",
+      "status": "candidate_404_until_render_route_confirmed",
+      "healthPath": "/api/health",
+      "source": "master auto-deploy target"
+    },
+    {
+      "name": "HFF Render",
+      "url": "https://human-flourishing-frameworks.onrender.com",
+      "role": "Existing cloud mirror/status reference for the broader Lantern/HFF surface.",
+      "status": "verified_status_200_on_2026-05-29",
+      "healthPath": "/api/status",
+      "source": "direct HTTP check"
+    }
+  ]
+}

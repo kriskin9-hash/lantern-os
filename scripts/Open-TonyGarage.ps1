@@ -1,11 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-$garage = Join-Path $root "surfaces\tony-garage\index.html"
+$url = "http://127.0.0.1:4177/"
 
-if (-not (Test-Path $garage)) {
-    throw "Tony Garage surface not found at $garage"
-}
-
-Start-Process -FilePath $garage
-Write-Output $garage
+Start-Process -FilePath $url
+Write-Output $url

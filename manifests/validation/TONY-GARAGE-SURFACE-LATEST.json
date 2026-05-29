@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-05-26T07:26:56.9719895-04:00",
+    "generatedAt":  "2026-05-29T13:54:38.8473298-04:00",
     "ok":  true,
     "failed":  [
 
@@ -14,51 +14,23 @@
                        "ok":  true
                    },
                    {
-                       "name":  "skip-link",
+                       "name":  "canonical-url",
                        "ok":  true
                    },
                    {
-                       "name":  "main-target",
+                       "name":  "meta-refresh",
                        "ok":  true
                    },
                    {
-                       "name":  "cache-busted-css",
+                       "name":  "one-dashboard-copy",
                        "ok":  true
                    },
                    {
-                       "name":  "deferred-js",
+                       "name":  "shared-canonical-css",
                        "ok":  true
                    },
                    {
-                       "name":  "new-tab-class",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "image-alt",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "focus-visible",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "reduced-motion",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "mobile-media",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "noopener",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "target-blank",
-                       "ok":  true
-                   },
-                   {
-                       "name":  "cache-bust-js",
+                       "name":  "light-cockpit-style",
                        "ok":  true
                    }
                ]

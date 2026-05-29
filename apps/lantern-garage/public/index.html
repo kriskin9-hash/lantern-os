@@ -5,23 +5,52 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Lantern OS</title>
-  <link rel="stylesheet" href="styles.css?v=20260528-outreach">
-  <script defer src="app.js?v=20260528-1250"></script>
+  <link rel="stylesheet" href="styles.css?v=20260529-dashboard">
+  <script defer src="app.js?v=20260529-dashboard"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to controls</a>
   <main id="main" class="shell" tabindex="-1">
     <header class="hero os-hero">
       <div>
-        <p class="eyebrow">Super Jarvis Local Control Plane</p>
+        <p class="eyebrow">Lantern OS Local Dashboard</p>
         <h1>Lantern OS</h1>
-        <p class="subtitle">One local cockpit for RAG memory, cash loop, dual-boot readiness, local controls, field notes, outreach, and launch gates.</p>
+        <p class="subtitle">Chat first, then the real state: RAG memory, cash truth, mining lab, dual-boot readiness, local controls, field notes, outreach, launch gates, and cloud mirrors.</p>
+        <a class="local-url" href="http://127.0.0.1:4177">http://127.0.0.1:4177</a>
       </div>
       <section class="reactor" aria-label="Arc Reactor status">
         <div class="reactor-core"><span id="movie1">--</span></div>
         <p id="phase">Loading reactor...</p>
       </section>
     </header>
+
+    <article class="panel chat-panel chat-primary" id="chatPanel">
+      <div class="chat-header">
+        <div>
+          <span class="chat-title">Lantern OS Chat</span>
+          <p class="chat-subtitle">First-class local conversation with cloud mirror awareness.</p>
+        </div>
+        <div class="chat-status-row">
+          <span class="chat-status" id="chatStatus">local</span>
+          <span class="chat-status tunnel-status" id="tunnelStatus">cloud tunnel checking</span>
+        </div>
+      </div>
+      <div class="chat-mirror-bar">
+        <span id="chatMirrorSummary">Primary: http://127.0.0.1:4177</span>
+        <span id="chatMirrorLinks"></span>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-empty" id="chatEmpty">Start a conversation. Messages stay local and the cloud mirrors stay visible.</div>
+      </div>
+      <div class="chat-quick" id="chatQuick"></div>
+      <form id="conversationForm" class="chat-input-bar">
+        <input type="hidden" id="conversationRole" value="operator">
+        <textarea id="conversationText" name="text" rows="1" maxlength="4000" placeholder="Message Lantern OS..." class="chat-textarea"></textarea>
+        <button type="submit" class="chat-send" aria-label="Send">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+        </button>
+      </form>
+    </article>
 
     <section class="actions" aria-label="Primary controls">
       <button id="refresh" type="button">Refresh Status</button>
@@ -32,7 +61,7 @@
       <a target="_blank" rel="noopener noreferrer" href="/outreach.html">Outreach</a>
       <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/LANTERN-OS-WHITEPAPER-v0.1.pdf">Whitepaper</a>
       <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ADS-ARCHITECTURE-REVIEW-v0.1.pdf">ADS</a>
-      <a target="_blank" rel="noopener noreferrer" href="/repo/reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Model</a>
+      <a target="_blank" rel="noopener noreferrer" href="/view?path=reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Model</a>
       <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.pdf">MK II PDF</a>
     </section>
 
@@ -72,6 +101,27 @@
           <div><dt>MCP</dt><dd id="mcp">--</dd></div>
           <div><dt>AccessX</dt><dd id="accessx">--</dd></div>
         </dl>
+      </article>
+
+      <article class="panel mirror-panel">
+        <h2>Cloud Mirrors</h2>
+        <dl>
+          <div><dt>Primary</dt><dd id="mirrorPrimary">http://127.0.0.1:4177</dd></div>
+          <div><dt>Mirrors</dt><dd id="mirrorCount">--</dd></div>
+          <div><dt>Deploy</dt><dd id="mirrorDeploy">master -> Render</dd></div>
+        </dl>
+        <ul id="mirrorList" class="compact-list mirror-list"></ul>
+      </article>
+
+      <article class="panel mining-lab-panel" id="miningLabPanel" hidden>
+        <h2>Mining Lab</h2>
+        <dl>
+          <div><dt>Mode</dt><dd id="miningMode">--</dd></div>
+          <div><dt>CPU</dt><dd id="miningCpu">--</dd></div>
+          <div><dt>GPU</dt><dd id="miningGpu">--</dd></div>
+          <div><dt>ETH</dt><dd id="miningEth">--</dd></div>
+        </dl>
+        <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Open Mining Lab</a>
       </article>
     </section>
 
@@ -161,18 +211,19 @@
         <h2>Pages</h2>
         <ul class="page-list">
           <li><a target="_blank" rel="noopener noreferrer" href="/outreach.html">Outreach Program</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/skills/lantern-rag-dollhouse/references/LANTERN-OS-ALL-IN-ONE-CHURCH-FUNDRAISING-CALL-PACKET-2026-05-28.md">Outreach Source Note</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Reactor 12-Step Model</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=skills/lantern-rag-dollhouse/references/LANTERN-OS-ALL-IN-ONE-CHURCH-FUNDRAISING-CALL-PACKET-2026-05-28.md">Outreach Source Note</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Reactor 12-Step Model</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.pdf">Arc Reactor PDF</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/reports/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.md">Arc Reactor MK II Report</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=reports/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.md">Arc Reactor MK II Report</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Arc Reactor Mining Lab</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=skills/solo-mining/SKILL.md">Solo Mining Skill</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.pdf">Arc Reactor MK II PDF</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/DISCORD-COMMUNITY-OPERATOR-PACKET.pdf">Discord Operator PDF</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/DISCORD-COMMUNITY-PUBLIC-GUIDE.pdf">Discord Public PDF</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/reports/DISCORD-COMMUNITY-PUBLIC-GUIDE.md">Normies Handout</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=reports/DISCORD-COMMUNITY-PUBLIC-GUIDE.md">Normies Handout</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/LANTERN-DAY-ONE-NORMIE-PACKET.pdf">Day One Normie PDF</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/surfaces/tony-garage/index.html">Tony Garage Page</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/manifests/STORE-RELEASE-LANES.md">Store Release Lanes</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md">Flat RAG House</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=manifests/STORE-RELEASE-LANES.md">Store Release Lanes</a></li>
+          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md">Flat RAG House</a></li>
         </ul>
       </article>
       <article class="panel">
@@ -191,24 +242,6 @@
           <button type="submit">+ Note</button>
         </form>
         <ul id="operatorQueue" class="operator-queue"></ul>
-      </article>
-
-      <article class="panel chat-panel" id="chatPanel">
-        <div class="chat-header">
-          <span class="chat-title">Lantern OS</span>
-          <span class="chat-status" id="chatStatus">local</span>
-        </div>
-        <div class="chat-messages" id="chatMessages">
-          <div class="chat-empty" id="chatEmpty">Start a conversation. Messages stay local.</div>
-        </div>
-        <div class="chat-quick" id="chatQuick"></div>
-        <form id="conversationForm" class="chat-input-bar">
-          <input type="hidden" id="conversationRole" value="operator">
-          <textarea id="conversationText" name="text" rows="1" maxlength="4000" placeholder="Message Lantern OS..." class="chat-textarea"></textarea>
-          <button type="submit" class="chat-send" aria-label="Send">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-          </button>
-        </form>
       </article>
       <article class="panel log-panel">
         <h2>Action Log</h2>

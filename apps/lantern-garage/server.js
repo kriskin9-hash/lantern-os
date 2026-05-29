@@ -5,12 +5,14 @@ const { spawn, spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
-const port = Number(process.env.LANTERN_GARAGE_PORT || 4177);
+const port = Number(process.env.LANTERN_GARAGE_PORT || process.env.PORT || 4177);
+const host = process.env.LANTERN_GARAGE_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const conversationLogPath = path.join(repoRoot, "data", "conversations", "garage-conversations.jsonl");
 const flatRagHousePath = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 const flatRagHouseManifestPath = path.join(repoRoot, "manifests", "FLAT-RAG-HOUSE-LATEST.md");
 const orchestratorQueueDir = path.join("C:\\Users\\alexp\\Documents\\gm-agent-orchestrator", "tasks", "queue");
 const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.jsonl");
+const cloudMirrorsPath = path.join(repoRoot, "manifests", "cloud-mirrors.json");
 const maxConversationTextLength = 4000;
 const writeQueues = new Map();
 
@@ -383,11 +385,235 @@ function getReadiness() {
     || {};
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function inlineMarkdown(value) {
+  return escapeHtml(value)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => (
+      `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`
+    ));
+}
+
+function renderMarkdownDocument(markdown, sourcePath) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const body = [];
+  let inCode = false;
+  let inList = false;
+  let inTable = false;
+  let tableRows = [];
+  let title = path.basename(sourcePath);
+
+  const closeList = () => {
+    if (inList) {
+      body.push("</ul>");
+      inList = false;
+    }
+  };
+  const closeTable = () => {
+    if (inTable) {
+      const rows = tableRows.filter((row) => !/^\s*\|?\s*:?-{3,}:?\s*\|/.test(row));
+      body.push("<table>");
+      rows.forEach((row, index) => {
+        const cells = row.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+        body.push(index === 0 ? "<thead><tr>" : "<tbody><tr>");
+        cells.forEach((cell) => body.push(index === 0 ? `<th>${inlineMarkdown(cell)}</th>` : `<td>${inlineMarkdown(cell)}</td>`));
+        body.push(index === 0 ? "</tr></thead>" : "</tr></tbody>");
+      });
+      body.push("</table>");
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  lines.forEach((line) => {
+    if (/^```/.test(line.trim())) {
+      closeList();
+      closeTable();
+      body.push(inCode ? "</code></pre>" : "<pre><code>");
+      inCode = !inCode;
+      return;
+    }
+    if (inCode) {
+      body.push(`${escapeHtml(line)}\n`);
+      return;
+    }
+    if (/^\s*\|.+\|\s*$/.test(line)) {
+      closeList();
+      inTable = true;
+      tableRows.push(line);
+      return;
+    }
+    closeTable();
+    const heading = /^(#{1,4})\s+(.+)$/.exec(line);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      if (level === 1) title = heading[2].trim();
+      body.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      return;
+    }
+    const listItem = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (listItem) {
+      if (!inList) {
+        body.push("<ul>");
+        inList = true;
+      }
+      body.push(`<li>${inlineMarkdown(listItem[1])}</li>`);
+      return;
+    }
+    if (!line.trim()) {
+      closeList();
+      return;
+    }
+    closeList();
+    body.push(`<p>${inlineMarkdown(line)}</p>`);
+  });
+  closeList();
+  closeTable();
+  if (inCode) body.push("</code></pre>");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)} - Lantern OS</title>
+  <style>
+    :root { color-scheme: light; --ink:#11191f; --muted:#596874; --paper:#eef4ef; --line:#bdc9c9; --arc:#08756f; --blue:#1e5f89; }
+    * { box-sizing: border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font-family:"Segoe UI", Arial, sans-serif; }
+    main { width:min(980px, calc(100% - 28px)); margin:0 auto; padding:24px 0 48px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:22px; }
+    .source { color:var(--muted); font-size:0.86rem; overflow-wrap:anywhere; }
+    a { color:var(--blue); font-weight:800; }
+    .back { border:1px solid var(--line); padding:10px 12px; background:white; text-decoration:none; white-space:nowrap; }
+    h1 { font-size:2.1rem; line-height:1.05; margin:0 0 10px; letter-spacing:0; }
+    h2 { margin-top:28px; border-top:1px solid var(--line); padding-top:18px; }
+    p, li { line-height:1.58; }
+    code { background:white; border:1px solid var(--line); padding:1px 5px; }
+    pre { background:#11191f; color:white; overflow:auto; padding:14px; }
+    table { width:100%; border-collapse:collapse; background:white; margin:18px 0; }
+    th, td { border:1px solid var(--line); padding:9px; vertical-align:top; }
+    th { text-align:left; background:#f7faf8; color:var(--muted); text-transform:uppercase; font-size:0.78rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><strong>Lantern Reader</strong><div class="source">${escapeHtml(sourcePath)}</div></div>
+      <a class="back" href="/">Dashboard</a>
+    </header>
+    ${body.join("\n")}
+  </main>
+</body>
+</html>`;
+}
+
+function getMiningLabStatus() {
+  const files = [
+    "docs/ARC-REACTOR-MINING-LAB.md",
+    "docs/WALLET-MATRIX-TEMPLATE.md",
+    "skills/solo-mining/SKILL.md",
+    "templates/hardware-intake.csv",
+    "templates/wallet-matrix.csv",
+    "templates/coin-feasibility.csv",
+    "templates/mining-receipt.json",
+    "scripts/Get-HardwareInventory.ps1",
+    "scripts/Test-MiningProfitability.ps1",
+    "reports/ARC-REACTOR-MINING-LAB-2026-05-29.md",
+  ];
+  const present = files.map((relativePath) => ({
+    path: relativePath,
+    exists: fs.existsSync(path.join(repoRoot, relativePath)),
+  }));
+  const ready = present.every((item) => item.exists);
+  return {
+    ready,
+    mode: "manual_first_read_only",
+    shortcutRule: "single_lantern_shortcut",
+    routeSummary: {
+      cpu: "XMR learning lane",
+      gpu: "RVN / ETC experiment lane",
+      eth: "wallet / claim checks only",
+      asic: "BTC / LTC / DOGE / KAS only with owned or justified hardware",
+    },
+    blocked: [
+      "wallet_bruteforce",
+      "unauthorized_transfers",
+      "hidden_transaction_signing",
+      "mining_on_unowned_devices",
+      "fake_roi_claims",
+      "eth_mainnet_mining_claims",
+    ],
+    files: present,
+  };
+}
+
+function parseMirrorEnv() {
+  return String(process.env.LANTERN_CLOUD_MIRROR_URLS || "")
+    .split(/[,\s]+/)
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((url, index) => ({
+      name: `env-mirror-${index + 1}`,
+      url,
+      role: "environment configured mirror",
+      status: "configured",
+      healthPath: "/api/health",
+      source: "LANTERN_CLOUD_MIRROR_URLS",
+    }));
+}
+
+function getCloudMirrorStatus() {
+  const manifest = readJson(path.relative(repoRoot, cloudMirrorsPath), {});
+  const manifestMirrors = Array.isArray(manifest.cloudMirrors) ? manifest.cloudMirrors : [];
+  const envMirrors = parseMirrorEnv();
+  const seen = new Set();
+  const cloudMirrors = [...manifestMirrors, ...envMirrors]
+    .filter((mirror) => mirror && typeof mirror.url === "string" && mirror.url.startsWith("https://"))
+    .filter((mirror) => {
+      if (seen.has(mirror.url)) return false;
+      seen.add(mirror.url);
+      return true;
+    })
+    .map((mirror) => ({
+      name: String(mirror.name || "cloud mirror").slice(0, 80),
+      url: mirror.url,
+      role: String(mirror.role || "cloud mirror").slice(0, 160),
+      status: String(mirror.status || "configured").slice(0, 80),
+      healthPath: String(mirror.healthPath || "/api/health").slice(0, 120),
+      source: String(mirror.source || "manifests/cloud-mirrors.json").slice(0, 160),
+    }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    localPrimary: `http://127.0.0.1:${port}`,
+    activeHost: host,
+    activePort: port,
+    deployBranch: manifest.deployBranch || "master",
+    deployProvider: manifest.deployProvider || "Render",
+    mirrorPolicy: manifest.mirrorPolicy || "Local is primary; cloud URLs are mirrors and must not create separate dashboards.",
+    cloudMirrorCount: cloudMirrors.length,
+    cloudMirrors,
+  };
+}
+
 function sendJson(res, data, status = 200) {
   const body = JSON.stringify(data, null, 2);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(body);
 }
@@ -412,13 +638,34 @@ function sendFile(res, filePath) {
     res.writeHead(200, {
       "Content-Type": type,
       "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
     });
     res.end(data);
   });
 }
 
+function sendHtml(res, html, status = 200) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.end(html);
+}
+
 async function route(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Cache-Control": "no-store",
+    });
+    res.end();
+    return;
+  }
 
   if (url.pathname === "/api/health") {
     sendJson(res, { ok: true, service: "lantern-garage", generatedAt: new Date().toISOString() });
@@ -445,6 +692,16 @@ async function route(req, res) {
 
   if (url.pathname === "/api/readiness") {
     sendJson(res, getReadiness());
+    return;
+  }
+
+  if (url.pathname === "/api/mining-lab") {
+    sendJson(res, getMiningLabStatus());
+    return;
+  }
+
+  if (url.pathname === "/api/cloud-mirrors") {
+    sendJson(res, getCloudMirrorStatus());
     return;
   }
 
@@ -547,6 +804,25 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === "/view") {
+    const relative = decodeURIComponent(url.searchParams.get("path") || "");
+    const target = path.resolve(repoRoot, relative);
+    if (!relative || !target.startsWith(repoRoot)) {
+      sendJson(res, { error: "forbidden" }, 403);
+      return;
+    }
+    if (!fs.existsSync(target)) {
+      sendJson(res, { error: "not_found" }, 404);
+      return;
+    }
+    if (path.extname(target).toLowerCase() === ".md") {
+      sendHtml(res, renderMarkdownDocument(fs.readFileSync(target, "utf8"), relative));
+      return;
+    }
+    sendFile(res, target);
+    return;
+  }
+
   const staticPath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
   const target = path.resolve(publicRoot, staticPath);
   if (!target.startsWith(publicRoot)) {
@@ -569,6 +845,6 @@ server.on("error", (error) => {
   throw error;
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Lantern Garage app listening on http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`Lantern Garage app listening on ${host}:${port}`);
 });

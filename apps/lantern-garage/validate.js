@@ -11,6 +11,8 @@ const checks = [
   ["/api/arc-reactor", (x) => typeof x.movie1GarageConfidence === "number"],
   ["/api/wallet", (x) => Boolean(x.wallet) && Array.isArray(x.ledger)],
   ["/api/readiness", (x) => typeof x.readyForPrep === "boolean"],
+  ["/api/mining-lab", (x) => x.ready === true && x.shortcutRule === "single_lantern_shortcut"],
+  ["/api/cloud-mirrors", (x) => x.deployProvider === "Render" && x.cloudMirrorCount >= 2],
   ["/api/rag-cache", (x) => Array.isArray(x)],
 ];
 
@@ -30,6 +32,16 @@ function getJson(path) {
   });
 }
 
+function getText(path) {
+  return new Promise((resolve, reject) => {
+    http.get(`${base}${path}`, (res) => {
+      let data = "";
+      res.on("data", (chunk) => { data += chunk; });
+      res.on("end", () => resolve({ statusCode: res.statusCode, body: data, headers: res.headers }));
+    }).on("error", reject);
+  });
+}
+
 (async () => {
   const results = [];
   for (const [path, predicate] of checks) {
@@ -40,6 +52,16 @@ function getJson(path) {
       console.error(JSON.stringify(results, null, 2));
       process.exit(1);
     }
+  }
+  const reader = await getText("/view?path=README.md");
+  const readerOk = reader.statusCode === 200
+    && /^text\/html/.test(reader.headers["content-type"] || "")
+    && reader.body.includes("Lantern Reader")
+    && reader.body.includes("Brand Guidelines");
+  results.push({ path: "/view?path=README.md", ok: readerOk, statusCode: reader.statusCode });
+  if (!readerOk) {
+    console.error(JSON.stringify(results, null, 2));
+    process.exit(1);
   }
   const report = { generatedAt: new Date().toISOString(), ok: true, base, results };
   fs.mkdirSync(path.dirname(validationPath), { recursive: true });

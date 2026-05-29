@@ -7,6 +7,22 @@ Operator boundary: local MCP status, dirty worktrees, private folders, boot muta
 
 ---
 
+## Open Lantern
+
+Primary local dashboard:
+
+```text
+http://127.0.0.1:4177
+```
+
+This is the front door for interaction: first-class chat, RAG memory, wallet
+truth, local controls, outreach, reports, devices, diagnostics, cloud mirrors,
+and Arc Reactor Mining Lab converge here. No setup screen or secondary launcher
+is required when the dashboard is already running. No separate mining dashboard,
+no shortcut sprawl, no fake surfaces.
+
+---
+
 ## Simple Answer
 
 Lantern OS is the clean control plane for the Windows/local-first Lantern line.
@@ -72,13 +88,80 @@ Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires th
 
 | Surface | Path |
 |---|---|
-| Shareholder HTML index | `surfaces/shareholder-index/index.html` |
-| Tony Garage operator cockpit | `surfaces/tony-garage/index.html` |
+| Canonical Lantern dashboard | `http://127.0.0.1:4177` |
 | Lantern Garage app | `apps/lantern-garage/` |
+| Cloud mirror manifest | `manifests/cloud-mirrors.json` |
+| Redirected legacy surfaces | `surfaces/shareholder-index/index.html`, `surfaces/tony-garage/index.html`, `surfaces/lantern-desktop/index.html` |
 | Agent initial-contact surface | `manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md` |
 | Arc Reactor status | `data/arc-reactor/status.json` |
+| Arc Reactor Mining Lab | `docs/ARC-REACTOR-MINING-LAB.md` |
 | Flat Lantern RAG Dollhouse | `skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md` |
 | Orion / Mookman Report 4 style | `docs/ORION-MOOKMANREPORT4-STYLE.md` |
+
+---
+
+## One Dashboard
+
+Lantern OS uses one dashboard with internal cards and formatted document views.
+Do not add a new public dashboard for every product lane. Internal cards/routes
+should be backed by real files, validation receipts, or live APIs.
+
+The dashboard should always make chat first-class, keep cloud tunnel/mirror
+status visible, and route Markdown through the formatted Lantern reader instead
+of dropping operators into raw text docs.
+
+---
+
+## Cloud Mirrors
+
+`master` is the deploy branch for the Render mirror. Cloud URLs are mirrors of
+the same Lantern OS dashboard, not separate products or extra dashboards.
+
+Mirror policy:
+
+- Local primary: `http://127.0.0.1:4177`
+- Render/service mirrors live in `manifests/cloud-mirrors.json`
+- Render uses `apps/lantern-garage/render-server.js`
+- Local Windows uses `apps/lantern-garage/server.js`
+- A mirror can be listed as `candidate`, `configured`, or `verified`; the UI
+  must show that status plainly
+
+---
+
+## Brand Guidelines
+
+Lantern OS should feel like a local operator cockpit: calm, evidence-backed,
+warm, and usable under pressure.
+
+Brand rules:
+
+- One front door: use `http://127.0.0.1:4177` as the local interaction URL.
+- Local first: default to localhost, repo-backed files, and explicit operator
+  control before cloud or tunnels.
+- Truth first: cards appear only when backed by files, validation receipts, or
+  live APIs.
+- No fake dashboards: use one dashboard with internal cards/routes.
+- No secret collection: never ask for seed phrases, private keys, Apple ID
+  credentials, exchange passwords, or hidden signing permissions.
+- Plain language: say what is ready, held, blocked, or experimental.
+- Visual style: light cockpit surface, deep ink text, Lantern teal `#08756f`,
+  steel blue `#1e5f89`, amber warnings `#9f5a07`, and rose risk `#9a3d55`.
+
+---
+
+## Arc Reactor Mining Lab
+
+Mining Lab is a safe, legal, local-first package for inventorying owned
+hardware, routing hardware into viable lanes, validating wallets in read-only
+mode, and producing receipts.
+
+Mining boundaries:
+
+- CPU routes to Monero learning/P2Pool checks.
+- GPU routes stay experimental for RVN or ETC.
+- BTC/LTC/DOGE/KAS require owned or separately justified dedicated hardware.
+- ETH is wallet/claim/read-only only, not a mining lane.
+- No wallet cracking, brute force, hidden signing, or fake one-shot ROI claims.
 
 ---
 

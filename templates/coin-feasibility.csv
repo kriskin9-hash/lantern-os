@@ -1,0 +1,10 @@
+coin,network_status,practical_method,required_hardware,effective_hashrate,network_hashrate,block_reward,blocks_per_day,pool_fee,spot_price_usd,watts,hours_per_day,power_usd_per_kwh,verdict,source_url,notes
+BTC,PoW active,Pool or solo-lottery,SHA-256 ASIC,0,0,0,144,0.01,0,0,24,0.16,reject_for_desktop_fleet,https://bitcoin.org/bitcoin.pdf,Allow only with owned or separately justified ASIC/hosting
+ETH,Proof-of-stake,None,None,0,0,0,0,0,0,0,0,0.16,wallet_claim_only,https://ethereum.org/developers/docs/consensus-mechanisms/pos/,No ETH mainnet mining lane
+XMR,RandomX PoW,Pool or P2Pool,CPU,0,0,0.6,720,0.01,0,0,24,0.16,cpu_learning_lane,https://web.getmonero.org/resources/moneropedia/randomx.html,Fill benchmark and live network data before decision
+KAS,PoW blockDAG,Hardware-specific pool,Vendor-verified kHeavyHash ASIC,0,0,0,86400,0.01,0,0,24,0.16,asic_only,https://kaspa.org/,Reject unless owned hardware and power plan are validated
+LTC,Scrypt PoW,Pool mining,Scrypt ASIC,0,0,0,576,0.01,0,0,24,0.16,asic_only,https://litecoin.org/,Often evaluated with DOGE merged-mining economics
+DOGE,Scrypt PoW,Usually merged-mining lane,Scrypt ASIC,0,0,0,1440,0.01,0,0,24,0.16,do_not_route_desktops,https://dogecoin.com/,Use pool payout model; no desktop route
+RVN,KAWPOW PoW,Pool or hobby solo,GPU,0,0,2500,1440,0.01,0,0,24,0.16,gpu_experiment_only,https://ravencoin.org/about/,Not primary seed-cash engine
+ETC,ETChash PoW,Pool or hobby solo,GPU or ETChash ASIC,0,0,0,6646,0.01,0,0,24,0.16,sunk_cost_gpu_only,https://ethereumclassic.com/learn/mining/mining-hardware,Needs live calculator and VRAM check
+Other,Case by case,Official-doc review first,Match algorithm to owned hardware,0,0,0,0,0.01,0,0,24,0.16,reject_until_validated,,Add only after wallet/off-ramp review

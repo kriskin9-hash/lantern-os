@@ -1,4 +1,9 @@
 const $ = (id) => document.getElementById(id);
+const LOCAL_APP_ORIGIN = "http://127.0.0.1:4177";
+
+function appOrigin() {
+  return window.location.protocol === "file:" ? LOCAL_APP_ORIGIN : window.location.origin;
+}
 
 function yesNo(value) {
   return value ? "yes" : "no";
@@ -15,7 +20,7 @@ function log(message) {
 let autoUpdateTimer = null;
 
 async function api(path, options) {
-  const response = await fetch(path, {
+  const response = await fetch(`${appOrigin()}${path}`, {
     cache: "no-store",
     ...options,
     headers: {
@@ -28,6 +33,13 @@ async function api(path, options) {
     throw new Error(body.error || `Request failed: ${response.status}`);
   }
   return body;
+}
+
+function normalizeInternalLinks() {
+  if (window.location.protocol !== "file:") return;
+  document.querySelectorAll('a[href^="/"]').forEach((link) => {
+    link.href = `${LOCAL_APP_ORIGIN}${link.getAttribute("href")}`;
+  });
 }
 
 async function refreshOperatorQueue() {
@@ -74,12 +86,14 @@ async function storeNote(event) {
 }
 
 async function refresh() {
-  const [[status, rag, conversationState, flatHouse]] = await Promise.all([
+  const [[status, rag, conversationState, flatHouse, miningLab, mirrors]] = await Promise.all([
     Promise.all([
       api("/api/status"),
       api("/api/rag-cache"),
       api("/api/conversations?limit=8"),
       api("/api/flat-rag-house"),
+      api("/api/mining-lab"),
+      api("/api/cloud-mirrors"),
     ]),
     refreshOperatorQueue(),
   ]);
@@ -114,6 +128,8 @@ async function refresh() {
 
   renderConversations(conversationState.conversations || []);
   renderFlatHouse(flatHouse);
+  renderMiningLab(miningLab);
+  renderCloudMirrors(mirrors);
   log("Status refreshed.");
 }
 
@@ -143,6 +159,56 @@ function renderFlatHouse(house) {
   sources.forEach((source) => {
     const li = document.createElement("li");
     li.textContent = `${source.name}: ${source.dirty ? "dirty" : "clean"} @ ${source.branch || "unknown"} (${source.archiveDecision})`;
+    list.appendChild(li);
+  });
+}
+
+function renderMiningLab(lab) {
+  const panel = $("miningLabPanel");
+  if (!panel) return;
+  if (!lab || lab.ready !== true) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  $("miningMode").textContent = lab.mode || "manual-first";
+  $("miningCpu").textContent = lab.routeSummary?.cpu || "XMR learning lane";
+  $("miningGpu").textContent = lab.routeSummary?.gpu || "RVN / ETC experiment lane";
+  $("miningEth").textContent = lab.routeSummary?.eth || "wallet / claim checks only";
+}
+
+function renderCloudMirrors(mirrors) {
+  if (!mirrors) return;
+  $("mirrorPrimary").textContent = mirrors.localPrimary || "http://127.0.0.1:4177";
+  $("mirrorCount").textContent = String(mirrors.cloudMirrorCount || 0);
+  $("mirrorDeploy").textContent = `${mirrors.deployBranch || "master"} -> ${mirrors.deployProvider || "Render"}`;
+  $("chatStatus").textContent = window.location.protocol === "file:" ? "preview via local app" : "local";
+  $("tunnelStatus").textContent = (mirrors.cloudMirrorCount || 0) > 0 ? "cloud tunnel on" : "cloud tunnel pending";
+  $("chatMirrorSummary").textContent = `Primary: ${mirrors.localPrimary || "http://127.0.0.1:4177"} | ${mirrors.cloudMirrorCount || 0} mirrors`;
+  const chatLinks = $("chatMirrorLinks");
+  chatLinks.innerHTML = "";
+  (mirrors.cloudMirrors || []).slice(0, 3).forEach((mirror) => {
+    const link = document.createElement("a");
+    link.href = mirror.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = mirror.name || mirror.url;
+    chatLinks.appendChild(link);
+  });
+  const list = $("mirrorList");
+  if (!list) return;
+  list.innerHTML = "";
+  (mirrors.cloudMirrors || []).forEach((mirror) => {
+    const li = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = mirror.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = mirror.name || mirror.url;
+    const meta = document.createElement("span");
+    meta.textContent = ` ${mirror.status || "configured"} ${mirror.healthPath || ""}`;
+    li.appendChild(link);
+    li.appendChild(meta);
     list.appendChild(li);
   });
 }
@@ -180,7 +246,7 @@ const quickSets = {
   greeting: [
     { label: "Check fleet status", text: "What is the current agent fleet status?" },
     { label: "Show queue", text: "Show me the task queue summary." },
-    { label: "Run convergence loop", text: "Run the convergence loop now." },
+    { label: "Mining lab", text: "Rock and stone: show safe mining lanes for Monero, BTC, and GPU coins." },
   ],
   respond: [
     { label: "Approve", text: "Approved. Proceed." },
@@ -251,6 +317,8 @@ async function sendChat(text) {
 
 function generateLocalReply(input) {
   const lower = input.toLowerCase();
+  if (lower.includes("mine") || lower.includes("mining") || lower.includes("monero") || lower.includes("btc") || lower.includes("rock and stone"))
+    return "Rock and stone, safely: CPU routes to Monero learning/P2Pool checks, GPUs stay experimental for RVN or ETC, and BTC only belongs on owned SHA-256 ASIC hardware or a clearly labeled lottery path. No wallet cracking, no hidden signing, no fake one-shot ROI.";
   if (lower.includes("fleet") || lower.includes("agent") || lower.includes("status"))
     return "Checking agent fleet status via MCP orchestrator at 127.0.0.1:8787. Use Refresh Status to pull live data.";
   if (lower.includes("queue") || lower.includes("task"))
@@ -444,6 +512,7 @@ $("conversationText").addEventListener("keydown", function (e) {
   }
 });
 
+normalizeInternalLinks();
 refresh().catch((error) => log(error.message));
 refreshFleet().catch(() => {});
 refreshHff().catch(() => {});
