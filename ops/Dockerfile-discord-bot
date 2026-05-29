@@ -1,0 +1,32 @@
+# Discord Lounge Bot Dockerfile
+# Generated: 2026-05-28
+# Purpose: Containerize Discord bot for cloud deployment
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements-discord-bot.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements-discord-bot.txt
+
+# Copy bot source
+COPY ../src/discord_lounge_bot/bot.py .
+
+# Create non-root user
+RUN useradd -m discordbot && chown -R discordbot:discordbot /app
+USER discordbot
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import discord; print('discord package OK')"
+
+# Run the bot
+CMD ["python", "bot.py"]

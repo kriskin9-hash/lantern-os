@@ -1,0 +1,508 @@
+
+<style>
+  :root {
+    --gap: 16px;
+    --rad: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .page { padding: 1.5rem 0; font-family: var(--font-sans); }
+  h1 { font-size: 20px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 1.5rem; }
+
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .tab {
+    padding: 6px 14px; border-radius: 20px; font-size: 13px;
+    border: 0.5px solid var(--color-border-secondary);
+    background: transparent; color: var(--color-text-secondary);
+    cursor: pointer; transition: all .15s;
+  }
+  .tab:hover { background: var(--color-background-secondary); }
+  .tab.active {
+    background: var(--color-text-primary);
+    color: var(--color-background-primary);
+    border-color: transparent;
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Progress bar */
+  .progress-bar-wrap { margin-bottom: 1.5rem; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .progress-track { height: 6px; border-radius: 3px; background: var(--color-border-tertiary); overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; background: var(--color-text-primary); transition: width .4s ease; }
+
+  /* Cards */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--gap); }
+
+  .card {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: var(--rad); padding: 1rem;
+    cursor: pointer; transition: border-color .15s;
+    position: relative;
+  }
+  .card:hover { border-color: var(--color-border-secondary); }
+  .card.done { opacity: .65; }
+  .card.done::after {
+    content: '✓'; position: absolute; top: 10px; right: 12px;
+    font-size: 13px; color: var(--color-text-success); font-weight: 500;
+  }
+  .card-phase { font-size: 10px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; }
+  .card-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 4px; }
+  .card-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .tag {
+    font-size: 11px; padding: 2px 7px; border-radius: 4px;
+    background: var(--color-background-secondary);
+    color: var(--color-text-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+  }
+  .tag.hot { background: var(--color-background-warning); color: var(--color-text-warning); border-color: var(--color-border-warning); }
+  .tag.key { background: var(--color-background-info); color: var(--color-text-info); border-color: var(--color-border-info); }
+
+  .phase-1 { color: #B07010; }
+  .phase-2 { color: #0A5EA8; }
+  .phase-3 { color: #127A50; }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before {
+    content: ''; position: absolute; left: 8px; top: 8px; bottom: 8px; width: 1px;
+    background: var(--color-border-tertiary);
+  }
+  .tl-item { position: relative; margin-bottom: 1.25rem; }
+  .tl-dot {
+    position: absolute; left: -24px; top: 4px;
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-primary);
+  }
+  .tl-dot.done { background: var(--color-text-primary); border-color: var(--color-text-primary); }
+  .tl-week { font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 2px; }
+  .tl-title { font-size: 14px; font-weight: 500; color: var(--color-text-primary); margin-bottom: 2px; }
+  .tl-detail { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+
+  /* Checklist */
+  .checklist { list-style: none; }
+  .checklist li {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 13px; padding: 8px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    cursor: pointer; color: var(--color-text-primary);
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li.checked { color: var(--color-text-tertiary); text-decoration: line-through; }
+  .check-box {
+    width: 16px; height: 16px; min-width: 16px; border-radius: 4px;
+    border: 0.5px solid var(--color-border-secondary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; margin-top: 1px;
+  }
+  .checklist li.checked .check-box {
+    background: var(--color-text-primary); border-color: var(--color-text-primary); color: var(--color-background-primary);
+  }
+
+  /* Companies */
+  .company-row {
+    display: flex; align-items: center; gap: 12px; padding: 10px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+  .company-row:last-child { border-bottom: none; }
+  .co-rank { width: 22px; font-size: 13px; color: var(--color-text-tertiary); font-weight: 500; text-align: center; flex-shrink: 0; }
+  .co-info { flex: 1; }
+  .co-name { font-size: 14px; font-weight: 500; color: var(--color-text-primary); }
+  .co-why { font-size: 12px; color: var(--color-text-secondary); }
+  .co-fit { font-size: 11px; padding: 2px 8px; border-radius: 10px; flex-shrink: 0; }
+  .fit-strong { background: var(--color-background-success); color: var(--color-text-success); }
+  .fit-good { background: var(--color-background-info); color: var(--color-text-info); }
+  .fit-stretch { background: var(--color-background-warning); color: var(--color-text-warning); }
+
+  /* Section header */
+  .sec-head { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin: 1.5rem 0 .75rem; text-transform: uppercase; letter-spacing: .06em; }
+
+  /* Summary metrics */
+  .metric-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .metric { background: var(--color-background-secondary); border-radius: 8px; padding: 12px; }
+  .metric-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+  .metric-lbl { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+
+  .framing-box {
+    background: var(--color-background-secondary);
+    border-left: 2px solid var(--color-text-primary);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px; margin-bottom: 1.25rem;
+    font-size: 13px; color: var(--color-text-primary); line-height: 1.6;
+  }
+  .framing-box strong { font-weight: 500; }
+</style>
+
+<div class="page">
+  <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Staff AI Orchestrator Engineer — Readiness Roadmap for Alexander Place</h2>
+
+  <h1>Staff AI Orchestrator — Readiness Roadmap</h1>
+  <p class="subtitle">Alexander Place · Based on your resume, Suzie platform, and target roles</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" onclick="switchTab('timeline')">90-day plan</button>
+    <button class="tab" onclick="switchTab('repo')">Repo hardening</button>
+    <button class="tab" onclick="switchTab('skills')">Skills checklist</button>
+    <button class="tab" onclick="switchTab('targets')">Target companies</button>
+    <button class="tab" onclick="switchTab('framing')">Resume framing</button>
+  </div>
+
+  <!-- OVERVIEW -->
+  <div class="panel active" id="tab-overview">
+    <div class="metric-row">
+      <div class="metric"><div class="metric-val">90</div><div class="metric-lbl">days to interview-ready</div></div>
+      <div class="metric"><div class="metric-val">7+</div><div class="metric-lbl">years backend (real signal)</div></div>
+      <div class="metric"><div class="metric-val">10</div><div class="metric-lbl">target companies ranked</div></div>
+      <div class="metric"><div class="metric-val">$0</div><div class="metric-lbl">required spend</div></div>
+    </div>
+
+    <div class="framing-box">
+      <strong>Core thesis:</strong> You are a production enterprise backend engineer (7 yrs, US Bank) who pivoted into independent AI systems engineering and built a real, principled orchestration platform from scratch. That combination — regulated-systems discipline + agent-control credibility — is rare and differentiating. The story is <strong>not</strong> "I learned AI". It's "I applied production-system thinking to AI agent safety".
+    </div>
+
+    <p class="sec-head">Three-phase arc</p>
+    <div class="card-grid">
+      <div class="card" onclick="switchTab('repo')">
+        <div class="card-phase phase-1">Phase 1 · Weeks 1–4</div>
+        <div class="card-title">Platform credibility</div>
+        <div class="card-desc">Harden Suzie's core safety contracts so every PR tells a coherent story. Eval harness, idempotency doc, postcondition proof, threat model.</div>
+        <div class="card-tags"><span class="tag hot">highest leverage</span></div>
+      </div>
+      <div class="card" onclick="switchTab('skills')">
+        <div class="card-phase phase-2">Phase 2 · Weeks 5–8</div>
+        <div class="card-title">Concept depth</div>
+        <div class="card-desc">Learn Temporal/LangGraph well enough to write mapping docs, not just name-drop them. Add local trace/audit, durable workflow plan, agent graph sketch.</div>
+        <div class="card-tags"><span class="tag key">interview signal</span></div>
+      </div>
+      <div class="card" onclick="switchTab('targets')">
+        <div class="card-phase phase-3">Phase 3 · Weeks 9–12</div>
+        <div class="card-title">Narrative + outreach</div>
+        <div class="card-desc">Polish the demo walkthrough, tighten resume framing, and begin targeted outreach. PR history becomes portfolio evidence. Story becomes shareable.</div>
+        <div class="card-tags"><span class="tag">positioning</span></div>
+      </div>
+    </div>
+
+    <p class="sec-head" style="margin-top:1.75rem">What "Staff level" actually requires</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">System design thinking</div>
+        <div class="card-desc">You need an opinion on why your architecture makes certain tradeoffs. Why local-first? Why gate-before-execute? Why no paid vector DB?</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Safety posture</div>
+        <div class="card-desc">Not "I added safety checks." A written threat model, named threat categories, and mapped controls. Suzie's threat model PR does this.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Eval culture</div>
+        <div class="card-desc">Can you define "correct behavior" for your agent? Golden-case evals, regression runners, machine-readable results. This is your eval harness work.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Production instincts</div>
+        <div class="card-desc">Your US Bank background is the proof point here. Idempotency, audit trails, rollback-safe changes — you know these from real systems.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="panel" id="tab-timeline">
+    <p class="sec-head">Week-by-week</p>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-week">Foundation (done)</div>
+        <div class="tl-title">Repo + MCP tool safety scaffolding</div>
+        <div class="tl-detail">PR #266–275 already establish PR tools, guarded Git, queue scoring, stop hooks, research control plane. Strong foundation.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 1–2</div>
+        <div class="tl-title">PR: AI orchestration hardening roadmap</div>
+        <div class="tl-detail">Add docs/ai-orchestration-hardening-roadmap.md. Docs-only PR. No runtime changes. Link from README. This becomes your interview reference doc.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 2–3</div>
+        <div class="tl-title">PR: Eval scaffold (10 cases)</div>
+        <div class="tl-detail">evals/cases/*.json, Run-AgentControlEvals.ps1, latest-results.example.json. Cover dirty worktree, unknown slot, idempotency no-op, missing proof, and 6 more. Machine-readable output only.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 3–4</div>
+        <div class="tl-title">PR: Threat model + idempotency contract</div>
+        <div class="tl-detail">docs/threat-model.md mapping 11 threat categories to controls. docs/idempotency-contract.md with 7 key schemas. docs/postcondition-proof-contract.md. Docs-only.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 5–6</div>
+        <div class="tl-title">Learn: Temporal fundamentals</div>
+        <div class="tl-detail">Free tier or local Docker. Study Workflow vs Activity, event history, replay, signals, queries. Write docs/temporal-mapping.md showing how Suzie maps onto these concepts. Do NOT claim Suzie is Temporal.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 6–7</div>
+        <div class="tl-title">Learn: LangGraph fundamentals</div>
+        <div class="tl-detail">Free local install. Study graph state, nodes, edges, human-in-the-loop, checkpointers. Write docs/langgraph-mapping.md showing how Suzie's control plane wraps a LangGraph surface.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 7–8</div>
+        <div class="tl-title">PR: Local trace/audit JSONL</div>
+        <div class="tl-detail">Minimal JSONL emission: command_id, idempotency_key, trace_id, decision, blocked_reasons, evidence_paths, elapsed_ms. No paid telemetry. Dry-run by default.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 9–10</div>
+        <div class="tl-title">PR: Demo walkthrough doc</div>
+        <div class="tl-detail">docs/demo-walkthrough.md showing exact interviewer path: unsafe blocks → idempotency key → guarded execute → validation → proof → audit → eval capture. Commands dry-run by default.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-week">Week 10–12</div>
+        <div class="tl-title">Resume polish + targeted outreach</div>
+        <div class="tl-detail">Tighten resume framing. Draft 2–3 targeted cover stories per company tier. Begin LinkedIn outreach to Temporal, LangChain, Docker, Sonatype engineering teams.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPO HARDENING -->
+  <div class="panel" id="tab-repo">
+    <p class="sec-head">Priority order</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-phase phase-1">#1 · Highest leverage</div>
+        <div class="card-title">Eval harness</div>
+        <div class="card-desc">Defines "correct behavior" in machine-readable form. Makes every other doc credible because you can prove the system behaves as described.</div>
+        <div class="card-tags"><span class="tag hot">10+ cases</span><span class="tag">JSONL output</span><span class="tag">PS1 runner</span></div>
+      </div>
+      <div class="card">
+        <div class="card-phase phase-1">#2 · Contracts</div>
+        <div class="card-title">Idempotency + postcondition proof</div>
+        <div class="card-desc">Design docs first, enforcement second. 7 idempotency key schemas. Proof model: no "agent said done" = success. Draws direct line to Temporal patterns.</div>
+        <div class="card-tags"><span class="tag key">interview gold</span></div>
+      </div>
+      <div class="card">
+        <div class="card-phase phase-1">#3 · Safety signal</div>
+        <div class="card-title">Threat model</div>
+        <div class="card-desc">11 named threats mapped to current controls, planned controls, and honest gaps. Shows you think about adversarial surfaces, not just happy paths.</div>
+        <div class="card-tags"><span class="tag">OWASP LLM aligned</span></div>
+      </div>
+      <div class="card">
+        <div class="card-phase phase-2">#4 · Concept mapping</div>
+        <div class="card-title">Temporal + LangGraph docs</div>
+        <div class="card-desc">Map Suzie's patterns onto industry frameworks. Honest framing: Suzie is Temporal-inspired, not a Temporal runtime. Shows you understand the landscape.</div>
+        <div class="card-tags"><span class="tag">local-first</span></div>
+      </div>
+      <div class="card">
+        <div class="card-phase phase-2">#5 · Observability</div>
+        <div class="card-title">Local trace / audit JSONL</div>
+        <div class="card-desc">Minimal: emit one JSONL record per control action. No paid telemetry. Makes agent behavior inspectable — a key differentiator from "vibe-coded" agent platforms.</div>
+        <div class="card-tags"><span class="tag">dry-run safe</span></div>
+      </div>
+      <div class="card">
+        <div class="card-phase phase-3">#6 · Portfolio</div>
+        <div class="card-title">Demo walkthrough</div>
+        <div class="card-desc">docs/demo-walkthrough.md — exact interview script. Unsafe block → idempotency key → guarded execution → validation → proof → audit → eval. Repo is the slide deck.</div>
+        <div class="card-tags"><span class="tag hot">close the interview</span></div>
+      </div>
+    </div>
+
+    <div class="framing-box" style="margin-top:1.5rem">
+      <strong>Operating rule for all PRs:</strong> Inspect state first. Docs and tests before enforcement hooks. Keep every change rollback-friendly. No private contact data, no tokens, no paid services assumed.
+    </div>
+  </div>
+
+  <!-- SKILLS CHECKLIST -->
+  <div class="panel" id="tab-skills">
+    <div id="skills-progress" class="progress-bar-wrap">
+      <div class="progress-label"><span>Skills checked off</span><span id="skill-pct">0%</span></div>
+      <div class="progress-track"><div class="progress-fill" id="skill-fill" style="width:0%"></div></div>
+    </div>
+
+    <p class="sec-head">Core concepts to study</p>
+    <ul class="checklist" id="skills-list">
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Temporal: Workflow vs Activity distinction, event history, replay semantics</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Temporal: signals, queries, idempotent activities, local vs cloud tradeoffs</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>LangGraph: graph state, nodes, edges, conditional routing</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>LangGraph: human-in-the-loop patterns, checkpointers, tool nodes</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Agent evals: golden task cases, expected decision format, regression scoring</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Agent evals: trace review, blocked-vs-allowed classification</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>AI security: OWASP LLM Top 10 — at minimum prompt injection, excessive agency, insecure output handling</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>AI security: tool-output injection, path traversal, secret leakage patterns</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Idempotency: key design, duplicate detection, "prior success proven" vs "incomplete"</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Postcondition proofs: define success without trusting the agent's self-report</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Observability: trace IDs, span structure, JSONL audit logs, latency basics</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>RAG/context: source authority, claim ledger, retrieval eval, avoiding hallucination amplification</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>API/SDK design: command/result schemas, error taxonomy, versioning, backwards compat</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Docker: container safety, volume isolation, local-first dev environment patterns</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>GitHub Actions / CI: workflow triggers, job isolation, secret handling, PR-gated deploys</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Supply chain / verification: Sonatype OSS Index, dependency trust, SBOM basics</li>
+    </ul>
+
+    <p class="sec-head" style="margin-top:1.25rem">Deliberately skip (for now)</p>
+    <ul class="checklist">
+      <li style="cursor:default; color: var(--color-text-tertiary)"><div class="check-box" style="opacity:.4">–</div>ML model runtime, GPU inference, CUDA, RLHF, fine-tuning research</li>
+      <li style="cursor:default; color: var(--color-text-tertiary)"><div class="check-box" style="opacity:.4">–</div>Generic prompt engineering certificates</li>
+      <li style="cursor:default; color: var(--color-text-tertiary)"><div class="check-box" style="opacity:.4">–</div>Senior C++ game engine, Unity netcode</li>
+      <li style="cursor:default; color: var(--color-text-tertiary)"><div class="check-box" style="opacity:.4">–</div>Paid eval SaaS, paid vector DBs, paid Temporal Cloud (unless explicitly approved)</li>
+    </ul>
+  </div>
+
+  <!-- TARGET COMPANIES -->
+  <div class="panel" id="tab-targets">
+    <div class="framing-box">
+      Strategy: don't spray-and-pray. Target companies where your specific combination — production backend discipline + agent safety control plane — is a real differentiator. Your background makes safety-first AI workflow roles a natural fit, not a stretch.
+    </div>
+    <p class="sec-head">Ranked by fit to current portfolio</p>
+    <div>
+      <div class="company-row">
+        <div class="co-rank">1</div>
+        <div class="co-info">
+          <div class="co-name">Temporal Technologies</div>
+          <div class="co-why">Idempotency, postcondition proof, and durable workflow mapping all speak directly to their core product. If your contracts doc is strong, this is a credible application.</div>
+        </div>
+        <div class="co-fit fit-strong">Strong fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">2</div>
+        <div class="co-info">
+          <div class="co-name">Sonatype</div>
+          <div class="co-why">Java + Spring Boot background + supply-chain / verification-first thinking + agent safety gates. Your US Bank regulated-systems experience maps directly.</div>
+        </div>
+        <div class="co-fit fit-strong">Strong fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">3</div>
+        <div class="co-info">
+          <div class="co-name">Docker</div>
+          <div class="co-why">Local-first, developer-tool-safety, container isolation — Suzie's architecture philosophy aligns with Docker's product values. AI dev environment angle is emerging.</div>
+        </div>
+        <div class="co-fit fit-strong">Strong fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">4</div>
+        <div class="co-info">
+          <div class="co-name">LangChain / LangGraph</div>
+          <div class="co-why">Strong fit after your LangGraph mapping doc exists. Agent graph pattern + evals + human-in-the-loop = their exact design space. Apply after Phase 2 work is done.</div>
+        </div>
+        <div class="co-fit fit-good">Good fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">5</div>
+        <div class="co-info">
+          <div class="co-name">GitHub / Microsoft Copilot</div>
+          <div class="co-why">Issue/PR control plane, worktree safety, guarded Git operations — your work mirrors Copilot's design problems. Strong if positioned as "developer workflow safety".</div>
+        </div>
+        <div class="co-fit fit-good">Good fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">6</div>
+        <div class="co-info">
+          <div class="co-name">Sourcegraph</div>
+          <div class="co-why">Context retrieval + claim ledger + source authority mapping from PR #272 shows retrieval-safety thinking. Apply after research ingestion hardening.</div>
+        </div>
+        <div class="co-fit fit-good">Good fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">7</div>
+        <div class="co-info">
+          <div class="co-name">ServiceNow / Writer / Glean</div>
+          <div class="co-why">Enterprise AI workflow + governance + retrieval. Your banking compliance background helps here. Position as "AI workflows in regulated environments".</div>
+        </div>
+        <div class="co-fit fit-good">Good fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">8</div>
+        <div class="co-info">
+          <div class="co-name">CareSource / Healthcare AI</div>
+          <div class="co-why">Regulated-environment discipline + local-first + governance-first AI. Meaningful mission fit. Lower competition than big tech AI roles.</div>
+        </div>
+        <div class="co-fit fit-good">Good fit</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">9</div>
+        <div class="co-info">
+          <div class="co-name">Anthropic — Claude Code</div>
+          <div class="co-why">Dream stretch. Needs the full portfolio: polished evals, deep tool-safety story, threat model, demonstrated design thinking. Apply at end of Phase 3 if everything is strong.</div>
+        </div>
+        <div class="co-fit fit-stretch">Stretch</div>
+      </div>
+      <div class="company-row">
+        <div class="co-rank">10</div>
+        <div class="co-info">
+          <div class="co-name">PlayStation — Agentic workflow roles</div>
+          <div class="co-why">Backend + AI workflow angle is real. GameMaker/GML interest is genuine signal. Worth watching; hard to target proactively without gaming portfolio.</div>
+        </div>
+        <div class="co-fit fit-stretch">Stretch</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FRAMING -->
+  <div class="panel" id="tab-framing">
+    <p class="sec-head">Resume headline</p>
+    <div class="framing-box">
+      <strong>Use:</strong> "AI Orchestration Systems Builder | Enterprise Software Engineer"<br><br>
+      <strong>Avoid anything that implies:</strong> production AI orchestration employment at a company, years of AI platform work at scale, or ML/model-training experience you don't have.
+    </div>
+
+    <p class="sec-head">How to describe Suzie</p>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">What to say</div>
+        <div class="card-desc">"Independent AI systems engineering build. Local-first agent control plane applying production backend discipline to agent safety: idempotency, postcondition proofs, eval harness, threat model."</div>
+        <div class="card-tags"><span class="tag key">use this</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">What not to say</div>
+        <div class="card-desc">"Built an AI orchestration platform" without qualification. "Led AI agent workflows at US Bank." "3 years of production AI." Anything that implies employment you didn't have.</div>
+        <div class="card-tags"><span class="tag hot">avoid</span></div>
+      </div>
+    </div>
+
+    <p class="sec-head">The story in one paragraph</p>
+    <div class="framing-box">
+      Seven-plus years shipping production systems in a regulated banking environment gave me deep instincts around idempotency, audit trails, and rollback-safe change. In 2023 I began applying those instincts to an independent AI agent control plane — Suzie — with a specific thesis: LLMs propose, deterministic gates confine, tools execute, evidence proves. The result is a local-first orchestration system with a written threat model, eval harness, postcondition proof contracts, and GitHub-native task state management. The portfolio is designed to be inspectable, not just described.
+    </div>
+
+    <p class="sec-head">Key differentiators to emphasize in interviews</p>
+    <ul class="checklist" id="diff-list">
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>You treat LLMs as proposal engines, not authority. You can articulate why, with examples.</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Your eval harness defines correct agent behavior in machine-readable form — not vibes.</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Your idempotency contracts come from production system experience, not AI hype.</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>You have a written threat model with honest gap acknowledgment — rare signal.</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Your platform is local-first and zero paid dependencies — you made deliberate tradeoff choices.</li>
+      <li onclick="toggleCheck(this)"><div class="check-box">✓</div>Your banking background means you've shipped in regulated environments under real constraints.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  const tabs = ['overview','timeline','repo','skills','targets','framing'];
+  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+}
+
+function toggleCheck(el) {
+  el.classList.toggle('checked');
+  updateSkillProgress();
+}
+
+function updateSkillProgress() {
+  const list = document.getElementById('skills-list');
+  if (!list) return;
+  const items = list.querySelectorAll('li');
+  const done = list.querySelectorAll('li.checked').length;
+  const pct = Math.round((done / items.length) * 100);
+  document.getElementById('skill-pct').textContent = pct + '%';
+  document.getElementById('skill-fill').style.width = pct + '%';
+}
+</script>

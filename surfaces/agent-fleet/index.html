@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Fleet Operations</title>
+  <meta http-equiv="Cache-Control" content="no-store">
+  <meta name="description" content="Lantern OS agent fleet operations surface with MCP work split, initial contact surfaces, and fleet contract status">
+  <link rel="stylesheet" href="styles.css?v=20260528-agent-fleet">
+  <script defer src="fleet.js?v=20260528-agent-fleet"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to fleet controls</a>
+  <main id="main" class="fleet-shell" tabindex="-1">
+    <header class="hero fleet-hero">
+      <div>
+        <p class="eyebrow">Lantern OS</p>
+        <h1>Agent Fleet Operations</h1>
+        <p class="subtitle">
+          Central control surface for agent fleet design, MCP work split, initial contact surfaces,
+          and convergence loop operations. Live worker counts and local MCP health require operator-machine evidence.
+        </p>
+        <div class="badge-row" aria-label="Surface badges">
+          <span class="badge pass">Design contract</span>
+          <span class="badge warn">Live state held</span>
+          <span class="badge cold">Pre-v1 staging</span>
+        </div>
+      </div>
+      <aside class="fleet-card" aria-label="Fleet design status">
+        <div class="fleet-matrix" aria-label="12x3 convergence ring design">
+          <span class="ring-stone primary">12</span>
+          <span class="ring-stone backup-a">4</span>
+          <span class="ring-stone backup-b">8</span>
+          <span class="fleet-core">36</span>
+        </div>
+        <dl class="compact-status">
+          <div><dt>Designed slots</dt><dd>36 primary ring slots</dd></div>
+          <div><dt>Elastic pool</dt><dd>64 target capacity</dd></div>
+          <div><dt>Live workers</dt><dd>requires local orchestrator evidence</dd></div>
+        </dl>
+      </aside>
+    </header>
+
+    <section class="command-band" aria-label="Primary actions">
+      <a class="command primary new-tab" href="../../docs/CONVERGENCE-LOOP.md"><span>Core contract</span><strong>Convergence Loop</strong><em>opens 12-step loop</em></a>
+      <a class="command new-tab" href="../../manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md"><span>Agent protocol</span><strong>Initial Contact</strong><em>opens agent intake</em></a>
+      <a class="command new-tab" href="../../manifests/MCP-WORK-SPLIT.md"><span>Work division</span><strong>MCP Split</strong><em>opens lane contracts</em></a>
+      <a class="command new-tab" href="../../manifests/CONVERGENCE-LOOP-AGENT-FLEET.md"><span>Fleet design</span><strong>Fleet Contract</strong><em>opens fleet receipt</em></a>
+      <button class="command held" type="button" disabled><span>Held local action</span><strong>Probe MCP Health</strong><em>requires local machine</em></button>
+      <button class="command held" type="button" disabled><span>Held local action</span><strong>Live Worker Count</strong><em>requires orchestrator evidence</em></button>
+    </section>
+
+    <section class="truth-grid" aria-label="Evidence boundary classification">
+      <article class="truth-panel real">
+        <h2>Remote evidence</h2>
+        <p>Design contracts, validators, manifests, public-safe receipts, and claim boundaries stored in the repository are observable remotely.</p>
+      </article>
+      <article class="truth-panel fake">
+        <h2>Advertised-only claims</h2>
+        <p>Tool lists, worker counts, and MCP health shown in docs without local probe output are display state, not live evidence.</p>
+      </article>
+      <article class="truth-panel held">
+        <h2>Local-only evidence</h2>
+        <p>Live MCP health, Windows process state, dirty worktrees, private folders, secrets, and physical boot state require operator-machine proof.</p>
+      </article>
+    </section>
+
+    <section class="systems" aria-label="Fleet systems">
+      <article class="system-panel reactor-panel">
+        <div class="panel-head"><span class="signal reactor"></span><h2>Convergence Ring</h2></div>
+        <div class="reactor-core" aria-label="12x3 ring design">
+          <span>36</span>
+        </div>
+        <dl>
+          <div><dt>Primary slots</dt><dd>12 designed positions</dd></div>
+          <div><dt>Backup A</dt><dd>12 evidence check slots</dd></div>
+          <div><dt>Backup B</dt><dd>12 boundary fallback slots</dd></div>
+          <div><dt>Elastic pool</dt><dd>64 target capacity</dd></div>
+        </dl>
+        <a class="new-tab" href="../../manifests/CONVERGENCE-LOOP-AGENT-FLEET.md">Open fleet contract</a>
+        <a class="new-tab" href="../../docs/CONVERGENCE-LOOP.md">Open 12-step loop</a>
+      </article>
+
+      <article class="system-panel orion-panel">
+        <div class="panel-head"><span class="signal pass"></span><h2>Initial Contact Protocol</h2></div>
+        <dl>
+          <div><dt>Required packet</dt><dd>identity, repo anchors, tool declaration, MCP boundary</dd></div>
+          <div><dt>First report</dt><dd>loaded surface, observed tools, held local checks</dd></div>
+          <div><dt>Tool states</dt><dd>ready, partial, held, missing, mismatch</dd></div>
+          <div><dt>Issue receipt</dt><dd>JSON format with impact and fallback</dd></div>
+        </dl>
+        <a class="new-tab" href="../../manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md">Open initial contact</a>
+        <a class="new-tab" href="../../README.md">Open surface list</a>
+      </article>
+
+      <article class="system-panel">
+        <div class="panel-head"><span class="signal pass"></span><h2>MCP Work Split</h2></div>
+        <dl>
+          <div><dt>Connector contract</dt><dd>document expected connection path</dd></div>
+          <div><dt>Connector probe</dt><dd>check actual visible MCP surface</dd></div>
+          <div><dt>Fleet validation</dt><dd>confirm designed counts and receipt shape</dd></div>
+          <div><dt>Runtime report</dt><dd>count real active workers (local only)</dd></div>
+        </dl>
+        <a class="new-tab" href="../../manifests/MCP-WORK-SPLIT.md">Open MCP work split</a>
+        <a class="new-tab" href="../../docs/MCP-CONNECTOR.md">Open connector doc</a>
+      </article>
+
+      <article class="system-panel">
+        <div class="panel-head"><span class="signal warn"></span><h2>Local MCP Health</h2></div>
+        <dl>
+          <div><dt>Health endpoint</dt><dd>http://127.0.0.1:8787/health (if local)</dd></div>
+          <div><dt>Tool descriptors</dt><dd>require actual probe, not advertised list</dd></div>
+          <div><dt>Auth mode</dt><dd>-NoAuth flag required for local use</dd></div>
+          <div><dt>Rule</dt><dd>do not claim health without local evidence</dd></div>
+        </dl>
+        <button class="command held" type="button" disabled>Held: probe local MCP</button>
+        <a class="new-tab" href="../../manifests/MCP-WORK-SPLIT.md">Open split contract</a>
+      </article>
+
+      <article class="system-panel">
+        <div class="panel-head"><span class="signal warn"></span><h2>Worktree State</h2></div>
+        <dl>
+          <div><dt>HFF scan repo</dt><dd>exists, dirty (3 changed)</dd></div>
+          <div><dt>Orchestrator repo</dt><dd>exists, dirty (4 changed)</dd></div>
+          <div><dt>Rule</dt><dd>treat as evidence, do not reset blindly</dd></div>
+          <div><dt>Import rule</dt><dd>no bulk import without operator approval</dd></div>
+        </dl>
+        <a class="new-tab" href="../../scripts/Invoke-LanternConvergenceLoop.ps1">Open convergence loop</a>
+        <a class="new-tab" href="../../AGENTS.md">Open operating rules</a>
+      </article>
+
+      <article class="system-panel">
+        <div class="panel-head"><span class="signal pass"></span><h2>Agent Lanes</h2></div>
+        <dl>
+          <div><dt>Repo agent</dt><dd>repo control surface, read/execute</dd></div>
+          <div><dt>MCP agent</dt><dd>local-first MCP surface, probe required</dd></div>
+          <div><dt>Dashboard agent</dt><dd>operator UI surface, current file check</dd></div>
+          <div><dt>RAG/memory agent</dt><dd>RAG receipt surface, durable pointer</dd></div>
+        </dl>
+        <a class="new-tab" href="../../manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md">Open lane table</a>
+        <a class="new-tab" href="../../manifests/MCP-WORK-SPLIT.md">Open OS review gate</a>
+      </article>
+    </section>
+
+    <section class="workbench" aria-label="Workbench">
+      <div class="sequence">
+        <h2>Next Fleet Run</h2>
+        <ol>
+          <li>Run the convergence loop to check for local issues.</li>
+          <li>Use this surface as a design contract reference, not a live worker monitor.</li>
+          <li>Probe local MCP health before claiming tool descriptors or worker counts.</li>
+          <li>Keep initial contact protocol loaded before any agent takes action.</li>
+          <li>Distinguish advertised-only tools from actual exposed tools.</li>
+        </ol>
+      </div>
+      <figure class="chart-frame fleet-preview">
+        <img src="../../artifacts/lantern-ring-audio-gate-mk1-diagram-2026-05-28.svg?v=20260528-agent-fleet" alt="Lantern convergence ring concept diagram">
+        <figcaption>12x3 convergence ring: primary review, backup evidence check, backup boundary fallback. Live worker counts require local orchestrator evidence.</figcaption>
+      </figure>
+    </section>
+
+    <footer class="fleet-footer">
+      <p>Lantern OS v1.0.0 staging — agent fleet operations surface</p>
+      <p class="footer-links">
+        <a class="new-tab" href="../../README.md">README</a> — 
+        <a class="new-tab" href="../../docs/CONVERGENCE-LOOP.md">Convergence Loop</a> — 
+        <a class="new-tab" href="../../AGENTS.md">Operating Rules</a>
+      </p>
+    </footer>
+  </main>
+</body>
+</html>

@@ -66,7 +66,7 @@ function Get-FileSha256 {
 }
 
 $allFiles = Get-ChildItem -LiteralPath $repoRoot -File -Recurse | ForEach-Object {
-    $relative = [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName).Replace("/", "\")
+    $relative = $_.FullName.Substring($repoRoot.Length).TrimStart("\").Replace("/", "\")
     if (Test-IncludedPath -RelativePath $relative) {
         [pscustomobject]@{
             path = $relative.Replace("\", "/")
