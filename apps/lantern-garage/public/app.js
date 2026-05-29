@@ -177,17 +177,47 @@ function renderMiningLab(lab) {
   $("miningEth").textContent = lab.routeSummary?.eth || "wallet / claim checks only";
 }
 
+function isLocalOnlyUrl(value) {
+  try {
+    const url = new URL(value || "", window.location.href);
+    const host = url.hostname.toLowerCase();
+    return (
+      url.protocol === "file:" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "0.0.0.0" ||
+      host === "::1" ||
+      host.startsWith("10.") ||
+      host.startsWith("192.168.") ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    );
+  } catch {
+    return true;
+  }
+}
+
+function isVerifiedCloudMirror(mirror) {
+  if (!mirror || isLocalOnlyUrl(mirror.url)) return false;
+  const status = String(mirror.status || "").toLowerCase();
+  return status.includes("verified") && status.includes("200");
+}
+
 function renderCloudMirrors(mirrors) {
   if (!mirrors) return;
-  $("mirrorPrimary").textContent = mirrors.localPrimary || "http://127.0.0.1:4177";
-  $("mirrorCount").textContent = String(mirrors.cloudMirrorCount || 0);
+  const localPrimary = mirrors.localPrimary || "http://127.0.0.1:4177";
+  const cloudMirrors = mirrors.cloudMirrors || [];
+  const verifiedCloudMirrors = cloudMirrors.filter(isVerifiedCloudMirror);
+  const publicProofCount = verifiedCloudMirrors.length;
+
+  $("mirrorPrimary").textContent = localPrimary;
+  $("mirrorCount").textContent = String(publicProofCount);
   $("mirrorDeploy").textContent = `${mirrors.deployBranch || "master"} -> ${mirrors.deployProvider || "Render"}`;
   $("chatStatus").textContent = window.location.protocol === "file:" ? "preview via local app" : "local";
-  $("tunnelStatus").textContent = (mirrors.cloudMirrorCount || 0) > 0 ? "cloud tunnel on" : "cloud tunnel pending";
-  $("chatMirrorSummary").textContent = `Primary: ${mirrors.localPrimary || "http://127.0.0.1:4177"} | ${mirrors.cloudMirrorCount || 0} mirrors`;
+  $("tunnelStatus").textContent = publicProofCount > 0 ? "cloud verified" : "cloud unverified";
+  $("chatMirrorSummary").textContent = `Local primary: ${localPrimary} | verified public mirrors: ${publicProofCount}`;
   const chatLinks = $("chatMirrorLinks");
   chatLinks.innerHTML = "";
-  (mirrors.cloudMirrors || []).slice(0, 3).forEach((mirror) => {
+  cloudMirrors.slice(0, 3).forEach((mirror) => {
     const link = document.createElement("a");
     link.href = mirror.url;
     link.target = "_blank";
@@ -198,7 +228,7 @@ function renderCloudMirrors(mirrors) {
   const list = $("mirrorList");
   if (!list) return;
   list.innerHTML = "";
-  (mirrors.cloudMirrors || []).forEach((mirror) => {
+  cloudMirrors.forEach((mirror) => {
     const li = document.createElement("li");
     const link = document.createElement("a");
     link.href = mirror.url;
@@ -206,7 +236,8 @@ function renderCloudMirrors(mirrors) {
     link.rel = "noopener noreferrer";
     link.textContent = mirror.name || mirror.url;
     const meta = document.createElement("span");
-    meta.textContent = ` ${mirror.status || "configured"} ${mirror.healthPath || ""}`;
+    const proof = isVerifiedCloudMirror(mirror) ? "public proof verified" : "public proof missing";
+    meta.textContent = ` ${mirror.status || "configured"} ${mirror.healthPath || ""} — ${proof}`;
     li.appendChild(link);
     li.appendChild(meta);
     list.appendChild(li);
@@ -320,26 +351,20 @@ function generateLocalReply(input) {
   if (lower.includes("mine") || lower.includes("mining") || lower.includes("monero") || lower.includes("btc") || lower.includes("rock and stone"))
     return "Rock and stone, safely: CPU routes to Monero learning/P2Pool checks, GPUs stay experimental for RVN or ETC, and BTC only belongs on owned SHA-256 ASIC hardware or a clearly labeled lottery path. No wallet cracking, no hidden signing, no fake one-shot ROI.";
   if (lower.includes("fleet") || lower.includes("agent") || lower.includes("status"))
-    return "Checking agent fleet status via MCP orchestrator at 127.0.0.1:8787. Use Refresh Status to pull live data.";
-  if (lower.includes("queue") || lower.includes("task"))
+    return "Checking agent fleet status via MCP orchestrator at 127.0.0.1:8787. Use Refresh Status to pull live queue and slot evidence.";
+  if (lower.includes("next task") || lower.includes("queue"))
     return "Queue is managed by the orchestrator. Use the operator queue panel above or hit Refresh to see current state.";
-  if (lower.includes("converge") || lower.includes("loop"))
-    return "Running convergence loop. This executes the Lantern convergence script and updates RAG + status.";
-  if (lower.includes("dispatch"))
-    return "To dispatch agents, use start_agent MCP tool for each slot: gemini-flash, gemini-main, codex-main, gpt-web.";
+  if (lower.includes("hold"))
+    return "Holding. Current action paused for operator review.";
   if (lower.includes("approve") || lower.includes("proceed"))
     return "Acknowledged. Proceeding with current action path.";
-  if (lower.includes("hold") || lower.includes("review"))
-    return "Holding. Current action paused for operator review.";
-  if (lower.includes("p0") || lower.includes("flag") || lower.includes("urgent"))
-    return "Use the Operator Lane note form above to add a P0 item. It will appear at the top of the queue.";
   return "Message stored locally. Use quick-reply buttons or type for more context.";
 }
 
 function appendBubble(role, text) {
   const container = $("chatMessages");
   const empty = $("chatEmpty");
-  if (empty) empty.style.display = "none";
+  empty.style.display = "none";
   const div = document.createElement("div");
   div.className = `chat-bubble ${role}`;
   const span = document.createElement("span");
@@ -355,164 +380,73 @@ function appendBubble(role, text) {
 
 function autoGrow(el) {
   el.style.height = "auto";
-  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
 }
 
-async function storeConversation(event) {
-  event.preventDefault();
-  const text = $("conversationText").value.trim();
-  if (!text) return;
-  await sendChat(text);
-}
-
-async function storeRagItem(event) {
-  event.preventDefault();
-  const claim = $("ragClaim").value.trim();
-  if (!claim) {
-    log("RAG claim required.");
-    return;
-  }
-  await api("/api/rag-cache", {
-    method: "POST",
-    body: JSON.stringify({
-      topic: $("ragTopic").value || "Lantern OS form intake",
-      claim,
-      decision: $("ragDecision").value,
-      compressedSummary: claim,
-      sourceTitle: "Lantern OS Garage form",
-      sourceType: "operator_asserted",
-      confidence: 0.66,
-    }),
+function sparkline(canvasId, values) {
+  const canvas = $(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    const x = (index / Math.max(values.length - 1, 1)) * width;
+    const y = height - (value / 100) * height;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
   });
-  $("ragClaim").value = "";
-  log("RAG item stored.");
-  await refresh();
+  ctx.stroke();
 }
 
-function toggleAutoUpdate() {
-  if (autoUpdateTimer) {
-    clearInterval(autoUpdateTimer);
-    autoUpdateTimer = null;
-    $("autoUpdate").setAttribute("aria-pressed", "false");
-    $("autoUpdateState").textContent = "off";
-    log("Auto update off.");
-    return;
-  }
-  autoUpdateTimer = setInterval(() => refresh().catch((error) => log(error.message)), 30000);
-  $("autoUpdate").setAttribute("aria-pressed", "true");
-  $("autoUpdateState").textContent = "30s refresh";
-  log("Auto update on: 30s refresh only.");
+function renderScores(scores) {
+  $("hffHumans").textContent = `${scores.humans}%`;
+  $("hffAnimals").textContent = `${scores.animals}%`;
+  $("hffEcosystems").textContent = `${scores.ecosystems}%`;
+  $("hffUniverse").textContent = `${scores.universe}%`;
+  sparkline("scoreChart", [scores.humans, scores.animals, scores.ecosystems, scores.universe]);
 }
 
-async function refreshFleet() {
-  try {
-    const ctrl = new AbortController();
-    setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch("http://127.0.0.1:8787/mcp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "get_agent_status", arguments: {} } }),
-      signal: ctrl.signal,
+async function init() {
+  normalizeInternalLinks();
+  document.querySelectorAll("[data-action]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await postAction(`/api/actions/${button.dataset.action}`, button.textContent.trim());
+      } catch (err) {
+        log(`Error: ${err.message}`);
+      }
     });
-    const data = await res.json();
-    const parsed = typeof data.result?.content?.[0]?.text === "string"
-      ? JSON.parse(data.result.content[0].text)
-      : null;
-    if (!parsed) throw new Error("No fleet data");
-    renderFleet(parsed);
-  } catch {
-    $("fleetBadge").textContent = "OFFLINE";
-    $("fleetBadge").className = "badge badge-blocked";
-  }
-}
-
-function renderFleet(data) {
-  const body = $("fleetBody");
-  body.innerHTML = "";
-  const agents = data.agents || [];
-  const activeCount = agents.filter(a => a.currentTask).length;
-  $("fleetBadge").textContent = activeCount > 0 ? `${activeCount} ACTIVE` : "IDLE";
-  $("fleetBadge").className = activeCount > 0 ? "badge badge-live" : "badge badge-medium";
-  agents.forEach((a) => {
-    if (a.slot === "operator-intake") return;
-    const tr = document.createElement("tr");
-    const stateClass = a.currentTask ? "active" : a.available ? "idle" : "blocked";
-    const taskText = a.currentTask ? a.currentTask.replace(/__/g, " ").replace(/\.md$/, "") : "--";
-    const conf = a.currentTask ? "running" : a.available ? "ready" : a.reason;
-    tr.innerHTML = `<td><strong>${a.slot}</strong></td>`
-      + `<td><span class="slot-state ${stateClass}">${stateClass}</span></td>`
-      + `<td style="font-size:0.82rem">${taskText}</td>`
-      + `<td><span class="badge badge-${stateClass === "active" ? "live" : stateClass === "idle" ? "high" : "blocked"}">${conf.toUpperCase()}</span></td>`;
-    body.appendChild(tr);
   });
-  const c = data.counts || {};
-  $("fleetCounts").textContent = `Q:${c.queue ?? "--"} A:${c.active ?? "--"} D:${c.done ?? "--"} F:${c.failed ?? "--"}`;
-}
-
-async function refreshHff() {
-  try {
-    const hffCtrl = new AbortController();
-    setTimeout(() => hffCtrl.abort(), 5000);
-    const res = await fetch("https://human-flourishing-frameworks.onrender.com/api/status", { signal: hffCtrl.signal });
-    const data = await res.json();
-    $("hffBadge").textContent = "LIVE";
-    $("hffBadge").className = "badge badge-live";
-    // Try to pull scores from beliefs or use defaults
-    $("hffHumans").textContent = "54%";
-    $("hffAnimals").textContent = "43%";
-    $("hffEco").textContent = "52%";
-    $("hffUniverse").textContent = "50%";
-    $("hffMeta").textContent = "62 beliefs | 9 sensors | 8 domains";
-  } catch {
-    $("hffBadge").textContent = "LOCAL";
-    $("hffBadge").className = "badge badge-candidate";
-    $("hffHumans").textContent = "54%";
-    $("hffAnimals").textContent = "43%";
-    $("hffEco").textContent = "52%";
-    $("hffUniverse").textContent = "50%";
-    $("hffMeta").textContent = "62 beliefs | 9 sensors | 8 domains (cached)";
-  }
-}
-
-$("dispatchAll").addEventListener("click", async () => {
-  log("Dispatching all available agents...");
-  const slots = ["gemini-flash", "gemini-main", "codex-main", "gpt-web"];
-  for (const slot of slots) {
+  $("ingestFlatRag").addEventListener("click", async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8787/mcp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "start_agent", arguments: { slot } } }),
-      });
-      const data = await res.json();
-      const parsed = JSON.parse(data.result?.content?.[0]?.text || "{}");
-      log(`${slot}: ${parsed.ok ? "DISPATCHED" : parsed.error || "failed"}`);
+      await ingestFlatRagHouse();
     } catch (err) {
-      log(`${slot}: ${err.message}`);
+      log(`Error: ${err.message}`);
     }
-  }
-  await refreshFleet();
-});
+  });
+  $("refresh").addEventListener("click", () => refresh().catch((err) => log(`Error: ${err.message}`)));
+  $("autoUpdate").addEventListener("click", () => {
+    if (autoUpdateTimer) {
+      clearInterval(autoUpdateTimer);
+      autoUpdateTimer = null;
+      log("Auto update off.");
+    } else {
+      autoUpdateTimer = setInterval(() => refresh().catch((err) => log(`Error: ${err.message}`)), 30000);
+      log("Auto update on: refreshing every 30s.");
+    }
+  });
+  $("noteForm").addEventListener("submit", (event) => storeNote(event).catch((err) => log(`Error: ${err.message}`)));
+  $("conversationForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendChat($("conversationText").value);
+  });
+  $("conversationText").addEventListener("input", (event) => autoGrow(event.target));
+  renderScores({ humans: 43, animals: 52, ecosystems: 50, universe: 54 });
+  showQuickReplies("greeting");
+  refresh().catch((err) => log(`Error: ${err.message}`));
+}
 
-$("refresh").addEventListener("click", () => { refresh(); refreshFleet(); refreshHff(); });
-$("runLoop").addEventListener("click", () => postAction("/api/actions/run-loop", "Loop").catch((error) => log(error.message)));
-$("localControls").addEventListener("click", () => postAction("/api/actions/local-controls", "Local controls").catch((error) => log(error.message)));
-$("flatRagIngest").addEventListener("click", () => ingestFlatRagHouse().catch((error) => log(error.message)));
-$("autoUpdate").addEventListener("click", toggleAutoUpdate);
-$("conversationForm").addEventListener("submit", (event) => storeConversation(event).catch((error) => log(error.message)));
-$("ragForm").addEventListener("submit", (event) => storeRagItem(event).catch((error) => log(error.message)));
-$("noteForm").addEventListener("submit", (event) => storeNote(event).catch((error) => log(error.message)));
-
-// Chat: Enter sends, Shift+Enter newline, auto-grow
-$("conversationText").addEventListener("input", function () { autoGrow(this); });
-$("conversationText").addEventListener("keydown", function (e) {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    $("conversationForm").dispatchEvent(new Event("submit", { cancelable: true }));
-  }
-});
-
-normalizeInternalLinks();
-refresh().catch((error) => log(error.message));
-refreshFleet().catch(() => {});
-refreshHff().catch(() => {});
+init();
