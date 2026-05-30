@@ -166,12 +166,30 @@ async function refresh() {
   log("Status refreshed.");
 }
 
-async function postAction(path, label) {
+async function postAction(path, label, trigger) {
+  const originalText = trigger?.textContent;
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.textContent = "Working...";
+    trigger.setAttribute("aria-busy", "true");
+  }
   log(`${label} started...`);
-  const result = await api(path, { method: "POST", body: "{}" });
-  log(`${label} finished with code ${result.code}.`);
-  if (result.receiptPath) log(`${label} receipt: ${result.receiptPath}`);
-  if (result.paperOrderCount !== undefined) log(`${label} paper orders: ${result.paperOrderCount}; real spend $${result.realMoneyUsd || 0}.`);
+  try {
+    const result = await api(path, { method: "POST", body: "{}" });
+    log(`${label} finished with code ${result.code}.`);
+    if (result.receiptPath) log(`${label} receipt: ${result.receiptPath}`);
+    if (result.paperOrderCount !== undefined) {
+      const realSpend = Number(result.realMoneyUsd || 0).toFixed(2);
+      log(`${label} paper orders: ${result.paperOrderCount}; real spend $${realSpend}; live trading ${result.liveTradingStatus || "blocked"}.`);
+    }
+    return result;
+  } finally {
+    if (trigger) {
+      trigger.disabled = false;
+      trigger.textContent = originalText;
+      trigger.removeAttribute("aria-busy");
+    }
+  }
 }
 
 async function ingestFlatRagHouse() {
@@ -721,7 +739,7 @@ async function init() {
   });
   $("refresh").addEventListener("click", () => { refresh(); refreshFleet(); refreshHff(); });
   $("runLoop").addEventListener("click", () => postCommand("!converge", "Loop").catch((error) => log(error.message)));
-  $("nearTermKalshiBlock").addEventListener("click", () => postAction("/api/actions/kalshi-near-term-paper-block", "Near 20m Kalshi paper block").catch((error) => log(error.message)));
+  $("nearTermKalshiBlock").addEventListener("click", (event) => postAction("/api/actions/kalshi-near-term-paper-block", "Near 20m Kalshi paper block", event.currentTarget).catch((error) => log(error.message)));
   $("localControls").addEventListener("click", () => postAction("/api/actions/local-controls", "Local controls").catch((error) => log(error.message)));
   $("flatRagIngest").addEventListener("click", () => ingestFlatRagHouse().catch((error) => log(error.message)));
   $("autoUpdate").addEventListener("click", toggleAutoUpdate);
