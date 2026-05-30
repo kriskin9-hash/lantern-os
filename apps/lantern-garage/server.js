@@ -270,6 +270,9 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 8000) {
     if (!response.ok) {
       throw new Error(body?.error || body?.raw || `HTTP ${response.status}`);
     }
+    if (body?.error) {
+      throw new Error(body.error.message || body.error.code || "mcp_json_rpc_error");
+    }
     return body;
   } finally {
     clearTimeout(timer);
@@ -850,6 +853,12 @@ const commandSpecs = {
     args: ["-Passes", "1"],
     mode: "local_diagnostic",
   },
+  "!near20": {
+    label: "Kalshi near-term paper block",
+    script: "scripts/New-KalshiNearTermPaperBlock.ps1",
+    args: ["-WindowMinutes", "20", "-BudgetUsd", "50", "-MaxOrders", "10"],
+    mode: "paper_trade_no_live_execution",
+  },
 };
 
 function normalizeLanternCommand(value) {
@@ -1395,6 +1404,25 @@ async function route(req, res) {
   if (url.pathname === "/api/actions/run-loop" && req.method === "POST") {
     const result = await runLanternCommand("!converge");
     sendJson(res, result, result.code === 0 ? 200 : 500);
+    return;
+  }
+
+  if (url.pathname === "/api/actions/kalshi-near-term-paper-block" && req.method === "POST") {
+    const result = await runLanternCommand("!near20");
+    let payload = null;
+    try {
+      payload = readJson("data/kalshi/kalshi-near-term-paper-block-latest.json", null);
+    } catch {
+      payload = null;
+    }
+    sendJson(res, {
+      ...result,
+      receiptPath: "manifests/evidence/kalshi-near-term-paper-block-receipt-2026-05-30.md",
+      dataPath: "data/kalshi/kalshi-near-term-paper-block-latest.json",
+      paperOrderCount: payload?.paperOrderCount ?? null,
+      realMoneyUsd: payload?.realMoneyUsd ?? 0,
+      liveTradingStatus: payload?.liveTradingStatus || "blocked",
+    }, result.code === 0 ? 200 : 500);
     return;
   }
 

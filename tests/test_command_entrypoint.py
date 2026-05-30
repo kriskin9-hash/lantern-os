@@ -15,13 +15,17 @@ def test_local_server_has_one_command_entrypoint() -> None:
         '"!one"',
         '"!converge"',
         '"!superjarvis"',
+        '"!near20"',
         'entrypoint: "/api/command"',
         "scripts/Get-OneIdeStatus.ps1",
         "scripts/Invoke-LanternConvergenceLoop.ps1",
         "scripts/Invoke-SuperJarvisPerfectLoop.ps1",
+        "scripts/New-KalshiNearTermPaperBlock.ps1",
         'args: ["-Passes", "1"]',
+        'args: ["-WindowMinutes", "20", "-BudgetUsd", "50", "-MaxOrders", "10"]',
         'url.pathname === "/api/command" && req.method === "POST"',
         'runLanternCommand("!converge")',
+        'url.pathname === "/api/actions/kalshi-near-term-paper-block"',
     ]
     missing = [phrase for phrase in required if phrase not in text]
     assert missing == []
@@ -49,6 +53,8 @@ def test_dashboard_uses_command_chips_and_endpoint() -> None:
         "async function postCommand(command, label = command)",
         'api("/api/command"',
         'postCommand("!converge", "Loop")',
+        "nearTermKalshiBlock",
+        "/api/actions/kalshi-near-term-paper-block",
     ]
     missing = [phrase for phrase in required if phrase not in text]
     assert missing == []
