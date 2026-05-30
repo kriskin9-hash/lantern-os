@@ -80,6 +80,7 @@ Copy-PackageFile "scripts\Test-DiscordBotHealth.ps1"
 
 Copy-PackageFile "docs\LANTERN-DESKTOP-TESTER.md"
 Copy-PackageFile "docs\wiki\WINDOWS-TESTER-INSTALL.md"
+Copy-PackageFile "docs\releases\LANTERN-OS-TESTER-2026-05-30.md"
 Copy-PackageFile "docs\LANTERN-COMMAND-ENTRYPOINT.md"
 Copy-PackageFile "docs\ONE-HOUR-1000-DEMO.md"
 Copy-PackageFile "docs\ARC-REACTOR-MINING-LAB.md"
@@ -102,7 +103,13 @@ Download page:
 https://github.com/alex-place/lantern-os/releases/latest
 ```
 
-Preferred Windows release assets, when attached:
+Current Windows tester asset:
+
+```text
+lantern-desktop-tester-latest.zip
+```
+
+Future installer assets only when attached to a release:
 
 ```text
 Lantern-OS-Free-Setup.exe
@@ -128,7 +135,7 @@ Test: dashboard, chat, demo deck, cloud/local URL map, and command lane.
 Do not enter secrets, private keys, seed phrases, payment credentials, or Discord
 tokens. This is a tester build, not v1.0.0. The `$20` support tester is not
 equity, not a token, not ownership, not admin access, and not an investment
-return.
+return. Do not claim an `.exe` exists unless it is attached to the release.
 '@ | Set-Content -LiteralPath (Join-Path $staging "README-FIRST.md") -Encoding UTF8
 
 @'

@@ -27,11 +27,11 @@ Windows tester download path:
 https://github.com/alex-place/lantern-os/releases/latest
 ```
 
-Use `Lantern-OS-Free-Setup.exe` for the free tester lane or
-`Lantern-OS-Founder-20-Setup.exe` for the $20 founder tester lane. The install
+Use `lantern-desktop-tester-latest.zip` for the current tester lane. The install
 wiki is `docs/wiki/WINDOWS-TESTER-INSTALL.md`. Do not claim an `.exe` is ready
-unless that release asset exists on GitHub; use the ZIP tester packet as the
-fallback until the release build is actually attached.
+unless that release asset exists on GitHub. `Lantern-OS-Free-Setup.exe` and
+`Lantern-OS-Founder-20-Setup.exe` are future installer asset names only until
+they are attached to a release.
 
 ---
 
