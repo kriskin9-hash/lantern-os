@@ -202,6 +202,8 @@ function renderKalshiBlock(result) {
   setText("kalshiBlockSpend", `$${Number(result.realMoneyUsd || 0).toFixed(2)}`);
   const receipt = $("kalshiBlockReceipt");
   if (receipt && result.receiptPath) receipt.href = `/view?path=${encodeURIComponent(result.receiptPath)}`;
+  const packet = $("kalshiBlockPacket");
+  if (packet) packet.value = buildKalshiManualPacket(result, orders);
 
   const list = $("kalshiBlockList");
   if (!list) return;
@@ -220,6 +222,42 @@ function renderKalshiBlock(result) {
     li.textContent = `${order.ticker}: ${limit}c limit, $${loss} max loss, ${minutes}m, ${order.status || "paper"}`;
     list.appendChild(li);
   });
+}
+
+function buildKalshiManualPacket(result, orders) {
+  const lines = [
+    "Lantern Kalshi manual review packet",
+    `mode: ${result.liveTradingStatus || "blocked"} / paper-only`,
+    `real spend: $${Number(result.realMoneyUsd || 0).toFixed(2)}`,
+    `paper orders: ${result.paperOrderCount ?? orders.length}`,
+    "boundary: operator must place any real trade manually in Kalshi; Lantern did not submit orders",
+    "",
+  ];
+  orders.forEach((order, index) => {
+    const limit = Number(order.limitCents || 0);
+    const loss = Number(order.maxLossUsd || 0).toFixed(2);
+    const minutes = Number(order.minutesToKnown || 0).toFixed(1);
+    lines.push(`${index + 1}. ${order.ticker} | YES limit ${limit}c | max loss $${loss} | ${minutes}m | ${order.title}`);
+  });
+  return lines.join("\n");
+}
+
+async function copyKalshiBlockPacket() {
+  const packet = $("kalshiBlockPacket");
+  if (!packet) return;
+  const text = packet.value || "";
+  if (!text.trim()) {
+    log("No Kalshi packet to copy yet.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    log("Kalshi manual packet copied.");
+  } catch {
+    packet.select();
+    document.execCommand("copy");
+    log("Kalshi manual packet selected/copied with fallback.");
+  }
 }
 
 async function ingestFlatRagHouse() {
@@ -770,6 +808,7 @@ async function init() {
   $("refresh").addEventListener("click", () => { refresh(); refreshFleet(); refreshHff(); });
   $("runLoop").addEventListener("click", () => postCommand("!converge", "Loop").catch((error) => log(error.message)));
   $("nearTermKalshiBlock").addEventListener("click", (event) => postAction("/api/actions/kalshi-near-term-paper-block", "Near 20m Kalshi paper block", event.currentTarget).catch((error) => log(error.message)));
+  $("copyKalshiBlockPacket").addEventListener("click", () => copyKalshiBlockPacket().catch((error) => log(error.message)));
   $("localControls").addEventListener("click", () => postAction("/api/actions/local-controls", "Local controls").catch((error) => log(error.message)));
   $("flatRagIngest").addEventListener("click", () => ingestFlatRagHouse().catch((error) => log(error.message)));
   $("autoUpdate").addEventListener("click", toggleAutoUpdate);

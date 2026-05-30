@@ -57,6 +57,9 @@ def test_dashboard_uses_command_chips_and_endpoint() -> None:
         'postCommand("!converge", "Loop")',
         "nearTermKalshiBlock",
         "kalshiBlockList",
+        "kalshiBlockPacket",
+        "copyKalshiBlockPacket",
+        "function buildKalshiManualPacket(result, orders)",
         "function renderKalshiBlock(result)",
         "/api/actions/kalshi-near-term-paper-block",
     ]
