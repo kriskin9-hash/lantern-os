@@ -1,6 +1,6 @@
 # Kalshi + Ko-fi Watchlist Revenue Report
 
-Generated: 2026-05-29T21:37:30.2048148-04:00
+Generated: 2026-05-29T21:53:43.6805924-04:00
 
 Status: current public-data manual-review candidates and outreach packet; no trades executed.
 
@@ -23,12 +23,15 @@ Status: current public-data manual-review candidates and outreach packet; no tra
 
 | Metric | Value |
 |---|---:|
-| Open markets pulled | 1000 |
+| Open markets pulled | 5000 |
+| Public pages pulled | 5 / 5 |
 | Cursor present | True |
-| Empty/no-activity markets | 659 |
-| Wide-spread research-only markets | 63 |
-| Excluded below 20-cent midpoint | 418 |
+| Empty/no-activity markets | 2794 |
+| Wide-spread research-only markets | 711 |
+| Excluded below 20-cent midpoint | 1393 |
+| Excluded below $5.00 visible activity | 3156 |
 | Watchlist rows emitted | 20 |
+| Manual-approval queue rows | 3 |
 | Executable trade recommendations | 0 |
 | Trade readiness | research only; not actionable-trade ready |
 | Manual review budget requested | $19 |
@@ -39,9 +42,13 @@ Executable trades to make right now: **0**.
 
 Best current use of this data: manually review the top watchlist rows, open the market rules in Kalshi, and build an independent probability note before any trade decision. Tight spread and activity make a market worth reading first; they do not prove edge.
 
-Filter applied: do not include market values below 20 cents of YES midpoint.
+Filters applied: do not include market values below 20 cents of YES midpoint, and do not include markets below $5.00 visible public activity.
 
 Profit range is gross per contract if buying YES at the displayed ask: maximum loss is the ask paid; maximum gross profit is $1.00 minus the ask, before fees and slippage. Confidence is data-quality confidence only, not outcome probability.
+
+After loading more data: Lantern can emit a manual-approval queue, but it still cannot place live trades. A human must approve any account action after independent probability, rule, fee, slippage, and max-loss checks.
+
+Spread course: custom HFT/spread-capture research is preserved. Wider spreads can be desirable for a maker strategy, but only after orderbook depth, queue position, fees, latency, and cancel/fill risk are modeled.
 
 ## `$19` Manual Review Gate
 
@@ -55,30 +62,52 @@ The $19 lane is a manual-review budget marker only:
 - no claim of edge until independent probability, fees, spread, and max-loss notes exist;
 - final trading decisions remain outside Lantern.
 
+## Manual-Approval Queue
+
+These rows are the closest thing to a trade queue after the deeper public-data load. They are not orders.
+
+| Rank | Ticker | Mid | Gross P/L | Data Conf. | Required Before Trade |
+|---:|---|---:|---|---:|---|
+| 1 | KXLOWTCHI-26MAY30-T58 | 0.585 | -0.59 to +0.41 | 70% | independent probability + human approval + max-loss budget |
+| 2 | KXHIGHTSEA-26MAY30-B64.5 | 0.225 | -0.23 to +0.77 | 70% | independent probability + human approval + max-loss budget |
+| 3 | KXMLBTOTAL-26MAY301610MILHOU-9 | 0.515 | -0.52 to +0.48 | 70% | independent probability + human approval + max-loss budget |
+
+## Custom HFT / Spread-Capture Research Queue
+
+This is the custom HFT direction: spread-aware, maker-style research. It is not live trading and it does not use account credentials.
+
+| Rank | Ticker | Mid | Spread | Activity | Gross P/L | Required Before Live |
+|---:|---|---:|---:|---:|---|---|
+| 1 | KXWNBA1HSPREAD-26MAY29ATLPDX-ATL5 | 0.500 | 0.020 | 7424.61 | -0.51 to +0.49 | orderbook depth + fee model + latency sim + human approval |
+| 2 | KXMLBTOTAL-26MAY301605KCTEX-8 | 0.540 | 0.020 | 6810.38 | -0.55 to +0.45 | orderbook depth + fee model + latency sim + human approval |
+| 3 | KXAAAGASD-26MAY30-4.340 | 0.970 | 0.020 | 4800.61 | -0.98 to +0.02 | orderbook depth + fee model + latency sim + human approval |
+| 4 | KXHIGHLAX-26MAY30-B68.5 | 0.240 | 0.020 | 4336.09 | -0.25 to +0.75 | orderbook depth + fee model + latency sim + human approval |
+| 5 | KXHIGHTDAL-26MAY30-B92.5 | 0.580 | 0.020 | 1931.49 | -0.59 to +0.41 | orderbook depth + fee model + latency sim + human approval |
+
 ## Top Watchlist
 
-| Rank | Ticker | Title | Mid | Spread | Gross P/L | Data Conf. | 24h Vol | OI | Close | Gate |
-|---:|---|---|---:|---:|---|---:|---:|---:|---|---|
-| 1 | KXMLBHR-26MAY292140NYYATH-ATHSLANGELIERS23-1 | Shea Langeliers: 1+ home runs? | 0.205 | 0.010 | -0.21 to +0.79 | 70% | 1576.57 | 2663.15 | 2026-06-02T01:40:00Z | no execution |
-| 2 | KXMLBSPREAD-26MAY292005KCTEX-TEX6 | Rangers wins by over 5.5 runs? | 0.655 | 0.010 | -0.66 to +0.34 | 70% | 1254.95 | 3295.92 | 2026-06-02T00:05:00Z | no execution |
-| 3 | KXMLBTOTAL-26MAY291910MIANYM-13 | Miami vs New York M Total Runs? | 0.565 | 0.010 | -0.57 to +0.43 | 70% | 21669.71 | 17945.2 | 2026-06-01T23:10:00Z | no execution |
-| 4 | KXMLBHRR-26MAY292140NYYATH-ATHCTHOMAS32-2 | Colby Thomas: 2+ hits + runs + RBIs? | 0.485 | 0.010 | -0.49 to +0.51 | 70% | 753 | 753 | 2026-06-02T01:40:00Z | no execution |
-| 5 | KXMLBHRR-26MAY292140NYYATH-NYYJCHISHOLM13-2 | Jazz Chisholm Jr.: 2+ hits + runs + RBIs? | 0.530 | 0.020 | -0.54 to +0.46 | 70% | 1334.91 | 2234.07 | 2026-06-02T01:40:00Z | no execution |
-| 6 | KXMLBTOTAL-26MAY291910MIANYM-14 | Miami vs New York M Total Runs? | 0.350 | 0.020 | -0.36 to +0.64 | 70% | 17842.12 | 14101.59 | 2026-06-01T23:10:00Z | no execution |
-| 7 | KXMLBTB-26MAY292140NYYATH-NYYJCHISHOLM13-2 | Jazz Chisholm Jr.: 2+ total bases? | 0.400 | 0.020 | -0.41 to +0.59 | 70% | 662.41 | 1053.66 | 2026-06-02T01:40:00Z | no execution |
-| 8 | KXMLBTB-26MAY292140NYYATH-NYYBRICE22-2 | Ben Rice: 2+ total bases? | 0.475 | 0.010 | -0.48 to +0.52 | 70% | 407.65 | 407.65 | 2026-06-02T01:40:00Z | no execution |
-| 9 | KXMLBTOTAL-26MAY291910MIANYM-15 | Miami vs New York M Total Runs? | 0.275 | 0.030 | -0.29 to +0.71 | 69% | 1840.72 | 1175.28 | 2026-06-01T23:10:00Z | no execution |
-| 10 | KXMLBSPREAD-26MAY292005KCTEX-TEX5 | Rangers wins by over 4.5 runs? | 0.795 | 0.030 | -0.81 to +0.19 | 69% | 1486.93 | 1268.08 | 2026-06-02T00:05:00Z | no execution |
-| 11 | KXMLBHRR-26MAY292210AZSEA-SEALRALEY20-2 | Luke Raley: 2+ hits + runs + RBIs? | 0.395 | 0.030 | -0.41 to +0.59 | 69% | 2377.21 | 2377.21 | 2026-06-02T02:10:00Z | no execution |
-| 12 | KXMLBTB-26MAY292140NYYATH-ATHSLANGELIERS23-2 | Shea Langeliers: 2+ total bases? | 0.460 | 0.040 | -0.48 to +0.52 | 68% | 907.19 | 1033.52 | 2026-06-02T01:40:00Z | no execution |
-| 13 | KXMLBHIT-26MAY292140NYYATH-NYYPGOLDSCHMIDT48-2 | Paul Goldschmidt: 2+ hits? | 0.240 | 0.040 | -0.26 to +0.74 | 68% | 1296 | 1296 | 2026-06-02T01:40:00Z | no execution |
-| 14 | KXMLBHRR-26MAY292140NYYATH-ATHSLANGELIERS23-2 | Shea Langeliers: 2+ hits + runs + RBIs? | 0.545 | 0.030 | -0.56 to +0.44 | 68% | 536.26 | 665.3 | 2026-06-02T01:40:00Z | no execution |
-| 15 | KXMLBHRR-26MAY292140NYYATH-ATHBROOKER25-2 | Brent Rooker: 2+ hits + runs + RBIs? | 0.480 | 0.020 | -0.49 to +0.51 | 68% | 319.2 | 319.2 | 2026-06-02T01:40:00Z | no execution |
-| 16 | KXATPCHALLENGERMATCH-26MAY30TSENEU-NEU | Will Lukas Neumayer win the Tseng vs Neumayer: Semifinal match? | 0.665 | 0.010 | -0.67 to +0.33 | 67% | 442.18 | 428 | 2026-06-13T12:00:00Z | no execution |
-| 17 | KXMLBHIT-26MAY292140NYYATH-NYYTGRISHAM12-2 | Trent Grisham: 2+ hits? | 0.230 | 0.060 | -0.26 to +0.74 | 66% | 733 | 733 | 2026-06-02T01:40:00Z | no execution |
-| 18 | KXATPCHALLENGERMATCH-26MAY30BLAFEL-BLA | Will Dali Blanch win the Blanch vs Feldbausch: Semifinal match? | 0.445 | 0.010 | -0.45 to +0.55 | 66% | 351 | 351 | 2026-06-13T11:10:00Z | no execution |
-| 19 | KXMLBHRR-26MAY292140NYYATH-NYYBRICE22-2 | Ben Rice: 2+ hits + runs + RBIs? | 0.585 | 0.030 | -0.60 to +0.40 | 66% | 353.12 | 582.79 | 2026-06-02T01:40:00Z | no execution |
-| 20 | KXMLBTB-26MAY292210AZSEA-SEACEMERSON85-2 | Colt Emerson: 2+ total bases? | 0.280 | 0.020 | -0.29 to +0.71 | 66% | 245.36 | 245.36 | 2026-06-02T02:10:00Z | no execution |
+| Rank | Ticker | Title | Mid | Spread | Gross P/L | Data Conf. | Activity | 24h Vol | OI | Close | Gate |
+|---:|---|---|---:|---:|---|---:|---:|---:|---:|---|---|
+| 1 | KXLOWTCHI-26MAY30-T58 | Will the minimum temperature be >58?? on May 30, 2026? | 0.585 | 0.010 | -0.59 to +0.41 | 70% | 2526.65 | 2526.65 | 1001.26 | 2026-05-31T06:00:00Z | no execution |
+| 2 | KXHIGHTSEA-26MAY30-B64.5 | Will the maximum temperature be 64-65?? on May 30, 2026? | 0.225 | 0.010 | -0.23 to +0.77 | 70% | 823.09 | 823.09 | 579.08 | 2026-05-31T08:00:00Z | no execution |
+| 3 | KXMLBTOTAL-26MAY301610MILHOU-9 | Milwaukee vs Houston Total Runs? | 0.515 | 0.010 | -0.52 to +0.48 | 70% | 1541 | 1541 | 907 | 2026-06-02T20:10:00Z | no execution |
+| 4 | KXMLBSPREAD-26MAY302205NYYATH-NYY2 | New York Y wins by over 1.5 runs? | 0.465 | 0.010 | -0.47 to +0.53 | 70% | 1522.71 | 1522.71 | 1317.56 | 2026-06-03T02:05:00Z | no execution |
+| 5 | KXSPOTIFYGLOBALD-26MAY29-HAT | Top Global Song on Spotify on May 29, 2026? | 0.975 | 0.010 | -0.98 to +0.02 | 70% | 3360.64 | 3360.64 | 3069.64 | 2026-05-30T03:59:00Z | no execution |
+| 6 | KXBRENTD-26JUN0117-T86.50 | Will the brent crude oil close price be above 86.50 USD/Bbl on June 01, 2026 at 5:00 PM EDT? | 0.845 | 0.010 | -0.85 to +0.15 | 70% | 1609 | 1609 | 1609 | 2026-06-01T21:00:00Z | no execution |
+| 7 | KXBRENTD-26JUN0117-T83.00 | Will the brent crude oil close price be above 83.00 USD/Bbl on June 01, 2026 at 5:00 PM EDT? | 0.945 | 0.010 | -0.95 to +0.05 | 70% | 777.71 | 777.71 | 768.71 | 2026-06-01T21:00:00Z | no execution |
+| 8 | KXHIGHTSFO-26MAY30-B67.5 | Will the maximum temperature be 67-68?? on May 30, 2026? | 0.345 | 0.010 | -0.35 to +0.65 | 70% | 2116.79 | 2116.79 | 1146.34 | 2026-05-31T08:00:00Z | no execution |
+| 9 | KXITFMATCH-26MAY29SHIKIM-KIM | Will Dong Ju Kim win the Shin vs Kim: M15 Gimcheon Semifinal match? | 0.215 | 0.010 | -0.22 to +0.78 | 70% | 616.6 | 603.67 | 616.6 | 2026-06-13T02:00:00Z | no execution |
+| 10 | KXMLBTOTAL-26MAY301410DETCWS-8 | Detroit vs Chicago WS Total Runs? | 0.535 | 0.010 | -0.54 to +0.46 | 70% | 582.4 | 582.4 | 582.4 | 2026-06-02T18:10:00Z | no execution |
+| 11 | KXSPOTIFYD-26MAY29-HAT | Top USA Song on Spotify on May 29, 2026? | 0.965 | 0.010 | -0.97 to +0.03 | 70% | 1328.59 | 1321.53 | 1321.53 | 2026-05-30T03:59:00Z | no execution |
+| 12 | KXHIGHLAX-26MAY30-B72.5 | Will the **high temp in LA** be 72-73?? on May 30, 2026? | 0.215 | 0.010 | -0.22 to +0.78 | 70% | 2876.31 | 2876.31 | 1757.75 | 2026-05-31T07:59:00Z | no execution |
+| 13 | KXHIGHLAX-26MAY30-B70.5 | Will the **high temp in LA** be 70-71?? on May 30, 2026? | 0.515 | 0.010 | -0.52 to +0.48 | 70% | 1646.98 | 1646.98 | 1201.78 | 2026-05-31T07:59:00Z | no execution |
+| 14 | KXVOTEHUBTRUMPUPDOWN-26JUN04 | Will Donald Trump's approval rating be above 39.3% for Jun 4, 2026? | 0.445 | 0.010 | -0.45 to +0.55 | 70% | 2996.46 | 2996.46 | 2767.76 | 2026-06-05T03:59:00Z | no execution |
+| 15 | KXHIGHTDAL-26MAY30-B94.5 | Will the maximum temperature be 94-95?? on May 30, 2026? | 0.225 | 0.010 | -0.23 to +0.77 | 70% | 591.36 | 591.36 | 573.78 | 2026-05-31T06:00:00Z | no execution |
+| 16 | KXMLBSPREAD-26MAY301915ATLCIN-ATL2 | Atlanta wins by over 1.5 runs? | 0.435 | 0.010 | -0.44 to +0.56 | 70% | 805.03 | 805.03 | 805.03 | 2026-06-02T23:15:00Z | no execution |
+| 17 | KXAPRPOTUS-26JUN05-39.4 | Will the President's approval rating be between 39.3 and 39.5 according to RealClearPolitics? | 0.225 | 0.010 | -0.23 to +0.77 | 70% | 654.42 | 654.42 | 623.42 | 2026-06-05T15:00:00Z | no execution |
+| 18 | KXHIGHTSATX-26MAY30-T89 | Will the maximum temperature be <89?? on May 30, 2026? | 0.475 | 0.010 | -0.48 to +0.52 | 70% | 1246.71 | 1246.71 | 565.55 | 2026-05-31T06:00:00Z | no execution |
+| 19 | KXAPRPOTUS-26JUN05-39.7 | Will the President's approval rating be between 39.6 and 39.8 according to RealClearPolitics? | 0.245 | 0.010 | -0.25 to +0.75 | 70% | 797.24 | 797.24 | 709.85 | 2026-06-05T15:00:00Z | no execution |
+| 20 | KXBRENTD-26JUN0117-T84.00 | Will the brent crude oil close price be above 84.00 USD/Bbl on June 01, 2026 at 5:00 PM EDT? | 0.925 | 0.010 | -0.93 to +0.07 | 70% | 615.09 | 615.09 | 577 | 2026-06-01T21:00:00Z | no execution |
 
 ## Stats Model
 
@@ -89,6 +118,7 @@ Inputs used:
 - YES bid / ask / midpoint.
 - Bid-ask spread.
 - 24h volume, total volume, liquidity, and open interest.
+- Visible activity floor and custom HFT spread-capture queue.
 - Days to close.
 - Title clarity and combo-market penalty.
 

@@ -35,9 +35,9 @@ Status: baseline updated; v1.0.0 promotion still held.
 
 | Receipt | Status |
 |---|---|
-| `data/kalshi/kalshi-watchlist-latest.json` | Public Kalshi snapshot refreshed from 1,000 open markets; 20 watchlist rows; values below 20 cents excluded. |
-| `reports/KALSHI-KOFI-WATCHLIST-REVENUE-REPORT.md` | Profit range and data-confidence fields added; executable trade recommendations remain 0. |
-| `artifacts/KALSHI-KOFI-WATCHLIST-REVENUE-REPORT-2026-05-29-v2.pdf` | Stats PDF receipt for the bounded Kalshi report. |
+| `data/kalshi/kalshi-watchlist-latest.json` | Public Kalshi snapshot refreshed from 5,000 open markets across 5 pages; 20 watchlist rows; values below 20 cents and markets below `$5.00` visible activity excluded. |
+| `reports/KALSHI-KOFI-WATCHLIST-REVENUE-REPORT.md` | Profit range, data-confidence fields, manual-approval queue, and custom HFT/spread-capture research queue added; executable trade recommendations remain 0. |
+| `artifacts/KALSHI-KOFI-WATCHLIST-REVENUE-REPORT-2026-05-29-v3.pdf` | Stats PDF receipt for the bounded Kalshi report. |
 | `manifests/validation/ONE-IDE-STATUS-LATEST.json` | `!one` read-only preflight receipt with repo, MCP, local service, cloud mirror, and agent worktree status. |
 | `artifacts/ONE-IDE-STATUS-LATEST.pdf` | One IDE status PDF receipt. |
 | `artifacts/LANTERN-BASELINE-MODEL-v1.pdf` | Baseline model PDF receipt. |

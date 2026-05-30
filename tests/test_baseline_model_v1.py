@@ -21,7 +21,11 @@ def test_baseline_model_v1_records_ingest_counts_and_aws_truth() -> None:
     assert model["truthBoundaries"]["clearedCashUsd"] == 0
     assert model["truthBoundaries"]["pendingInvoiceUsd"] == 199
     assert model["statsEvidence"]["kalshiPublicSnapshot"]["minMidCents"] == 20
+    assert model["statsEvidence"]["kalshiPublicSnapshot"]["minMarketActivityUsd"] == 5
+    assert model["statsEvidence"]["kalshiPublicSnapshot"]["pagesPulled"] == 5
+    assert model["statsEvidence"]["kalshiPublicSnapshot"]["marketsPulled"] >= 5000
     assert model["statsEvidence"]["kalshiPublicSnapshot"]["actionableTradeCount"] == 0
+    assert model["statsEvidence"]["kalshiPublicSnapshot"]["customHftSpreadQueueRows"] <= 5
     assert model["statsEvidence"]["oneIdeStatus"]["mode"] == "read_only_preflight"
     assert model["statsEvidence"]["oneIdeStatus"]["failedServiceCount"] == 0
 
@@ -49,7 +53,8 @@ def test_baseline_model_v1_markdown_links_receipt_and_blocks_promotion() -> None
         "v1.0.0 tag remains held",
         "data/baseline-model/v1.json",
         "Stats Receipts",
-        "values below 20 cents excluded",
+        "markets below `$5.00` visible activity excluded",
+        "custom HFT/spread-capture research queue",
         "artifacts/ONE-IDE-STATUS-LATEST.pdf",
     ]
     missing = [phrase for phrase in required if phrase not in text]

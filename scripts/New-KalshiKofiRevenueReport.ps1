@@ -1,7 +1,9 @@
 param(
     [int]$Limit = 1000,
     [int]$Top = 20,
+    [int]$MaxPages = 5,
     [int]$MinMidCents = 20,
+    [double]$MinMarketActivityUsd = 5.0,
     [string]$OutputDataPath = "",
     [string]$OutputReportPath = ""
 )
@@ -61,11 +63,31 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path, $Text, $utf8NoBom)
 }
 
+function Get-MarketEndpoint {
+    param([string]$Cursor)
+    if ([string]::IsNullOrWhiteSpace($Cursor)) { return $endpoint }
+    return ($endpoint + "&cursor=" + [System.Uri]::EscapeDataString($Cursor))
+}
+
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $OutputDataPath) | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $OutputReportPath) | Out-Null
 
-$response = Invoke-RestMethod -Uri $endpoint -Method Get -TimeoutSec 45
-$markets = @($response.markets)
+$allMarkets = New-Object System.Collections.Generic.List[object]
+$cursor = ""
+$pagesPulled = 0
+$cursorPresent = $false
+do {
+    $pageEndpoint = Get-MarketEndpoint -Cursor $cursor
+    $response = Invoke-RestMethod -Uri $pageEndpoint -Method Get -TimeoutSec 45
+    $pagesPulled += 1
+    foreach ($market in @($response.markets)) {
+        $allMarkets.Add($market) | Out-Null
+    }
+    $cursor = [string]$response.cursor
+    $cursorPresent = -not [string]::IsNullOrWhiteSpace($cursor)
+} while ($cursorPresent -and $pagesPulled -lt $MaxPages)
+
+$markets = @($allMarkets.ToArray())
 $minMid = [math]::Round($MinMidCents / 100.0, 4)
 
 $scored = foreach ($market in $markets) {
@@ -76,6 +98,7 @@ $scored = foreach ($market in $markets) {
     $volume = Convert-ToNumber $market.volume_fp
     $liquidity = Convert-ToNumber $market.liquidity_dollars
     $openInterest = Convert-ToNumber $market.open_interest_fp
+    $visibleActivityUsd = [math]::Round([math]::Max([math]::Max($volume24h, $volume), [math]::Max($liquidity, $openInterest)), 4)
     $spread = if ($ask -gt 0 -and $bid -gt 0 -and $ask -ge $bid) { [math]::Round($ask - $bid, 4) } else { $null }
     $mid = if ($ask -gt 0 -and $bid -gt 0 -and $ask -ge $bid) { [math]::Round(($ask + $bid) / 2, 4) } elseif ($last -gt 0) { $last } else { $null }
     $daysToClose = Get-DaysToClose $market.close_time
@@ -145,6 +168,7 @@ $scored = foreach ($market in $markets) {
         volume = $volume
         liquidity = $liquidity
         openInterest = $openInterest
+        visibleActivityUsd = $visibleActivityUsd
         maxLossPerContract = $maxLossPerContract
         grossProfitIfYes = $grossProfitIfYes
         grossProfitRange = $grossProfitRange
@@ -159,14 +183,28 @@ $scored = foreach ($market in $markets) {
 }
 
 $watchlist = @($scored |
-    Where-Object { $_.activityClass -ne "avoid_empty" -and $null -ne $_.yesMid -and $_.yesMid -ge $minMid } |
+    Where-Object { $_.activityClass -ne "avoid_empty" -and $null -ne $_.yesMid -and $_.yesMid -ge $minMid -and $_.visibleActivityUsd -ge $MinMarketActivityUsd } |
     Sort-Object @{ Expression = "score"; Descending = $true }, @{ Expression = "liquidity"; Descending = $true } |
     Select-Object -First $Top)
 
 $emptyCount = @($scored | Where-Object { $_.activityClass -eq "avoid_empty" }).Count
 $wideSpreadCount = @($scored | Where-Object { $_.activityClass -eq "research_only_wide_spread" }).Count
 $belowMinCount = @($scored | Where-Object { $null -ne $_.yesMid -and $_.yesMid -lt $minMid }).Count
+$belowMinActivityCount = @($scored | Where-Object { $_.visibleActivityUsd -lt $MinMarketActivityUsd }).Count
 $watchCount = @($watchlist | Where-Object { $_.activityClass -eq "watchlist" }).Count
+$manualApprovalQueue = @($watchlist | Where-Object { $_.dataConfidenceScore -ge 66 -and $_.spread -le 0.06 } | Select-Object -First 3)
+$customHftSpreadQueue = @($scored |
+    Where-Object {
+        $_.activityClass -ne "avoid_empty" -and
+        $null -ne $_.yesMid -and
+        $_.yesMid -ge $minMid -and
+        $_.visibleActivityUsd -ge $MinMarketActivityUsd -and
+        $null -ne $_.spread -and
+        $_.spread -ge 0.02 -and
+        $_.spread -le 0.10
+    } |
+    Sort-Object @{ Expression = "score"; Descending = $true }, @{ Expression = "spread"; Descending = $true }, @{ Expression = "visibleActivityUsd"; Descending = $true } |
+    Select-Object -First 5)
 
 $payload = [ordered]@{
     generatedAt = $generatedAt
@@ -181,15 +219,24 @@ $payload = [ordered]@{
     boundary = "Public market data only. No authenticated trading, no order placement, no pooled capital, no guaranteed profit, no investment advice."
     model = "liquidity_spread_watchlist_v0"
     tradeReadiness = "not_ready_for_actionable_trades_research_only"
+    tradeExecutionStatus = "blocked_no_authenticated_trade_execution_manual_approval_required"
     manualReviewBudgetUsd = 19
     minMidCents = $MinMidCents
+    minMarketActivityUsd = $MinMarketActivityUsd
+    pagesPulled = $pagesPulled
+    maxPages = $MaxPages
     totalOpenMarketsPulled = $markets.Count
-    cursorPresent = -not [string]::IsNullOrWhiteSpace([string]$response.cursor)
+    cursorPresent = $cursorPresent
     emptyOrNoActivityMarkets = $emptyCount
     wideSpreadResearchOnlyMarkets = $wideSpreadCount
     excludedBelowMinValueMarkets = $belowMinCount
+    excludedBelowMinActivityMarkets = $belowMinActivityCount
     watchlistCount = $watchlist.Count
     actionableTradeCount = 0
+    manualApprovalQueueCount = $manualApprovalQueue.Count
+    manualApprovalQueue = $manualApprovalQueue
+    customHftSpreadQueueCount = $customHftSpreadQueue.Count
+    customHftSpreadQueue = $customHftSpreadQueue
     watchlist = $watchlist
 }
 
@@ -222,11 +269,14 @@ $lines.Add("")
 $lines.Add("| Metric | Value |")
 $lines.Add("|---|---:|")
 $lines.Add("| Open markets pulled | $($markets.Count) |")
+$lines.Add("| Public pages pulled | $pagesPulled / $MaxPages |")
 $lines.Add("| Cursor present | $($payload.cursorPresent) |")
 $lines.Add("| Empty/no-activity markets | $emptyCount |")
 $lines.Add("| Wide-spread research-only markets | $wideSpreadCount |")
 $lines.Add("| Excluded below $MinMidCents-cent midpoint | $belowMinCount |")
+$lines.Add(("| Excluded below `${0:N2}` visible activity | {1} |" -f $MinMarketActivityUsd, $belowMinActivityCount))
 $lines.Add("| Watchlist rows emitted | $($watchlist.Count) |")
+$lines.Add("| Manual-approval queue rows | $($manualApprovalQueue.Count) |")
 $lines.Add("| Executable trade recommendations | 0 |")
 $lines.Add("| Trade readiness | research only; not actionable-trade ready |")
 $lines.Add("| Manual review budget requested | `$19` |")
@@ -237,9 +287,13 @@ $lines.Add("Executable trades to make right now: **0**.")
 $lines.Add("")
 $lines.Add("Best current use of this data: manually review the top watchlist rows, open the market rules in Kalshi, and build an independent probability note before any trade decision. Tight spread and activity make a market worth reading first; they do not prove edge.")
 $lines.Add("")
-$lines.Add("Filter applied: do not include market values below $MinMidCents cents of YES midpoint.")
+$lines.Add(("Filters applied: do not include market values below {0} cents of YES midpoint, and do not include markets below `${1:N2}` visible public activity." -f $MinMidCents, $MinMarketActivityUsd))
 $lines.Add("")
 $lines.Add("Profit range is gross per contract if buying YES at the displayed ask: maximum loss is the ask paid; maximum gross profit is `$1.00` minus the ask, before fees and slippage. Confidence is data-quality confidence only, not outcome probability.")
+$lines.Add("")
+$lines.Add("After loading more data: Lantern can emit a manual-approval queue, but it still cannot place live trades. A human must approve any account action after independent probability, rule, fee, slippage, and max-loss checks.")
+$lines.Add("")
+$lines.Add("Spread course: custom HFT/spread-capture research is preserved. Wider spreads can be desirable for a maker strategy, but only after orderbook depth, queue position, fees, latency, and cancel/fill risk are modeled.")
 $lines.Add("")
 $lines.Add('## `$19` Manual Review Gate')
 $lines.Add("")
@@ -253,10 +307,37 @@ $lines.Add("- no automated execution;")
 $lines.Add("- no claim of edge until independent probability, fees, spread, and max-loss notes exist;")
 $lines.Add("- final trading decisions remain outside Lantern.")
 $lines.Add("")
+$lines.Add("## Manual-Approval Queue")
+$lines.Add("")
+$lines.Add("These rows are the closest thing to a trade queue after the deeper public-data load. They are not orders.")
+$lines.Add("")
+$lines.Add("| Rank | Ticker | Mid | Gross P/L | Data Conf. | Required Before Trade |")
+$lines.Add("|---:|---|---:|---|---:|---|")
+$queueRank = 0
+foreach ($item in $manualApprovalQueue) {
+    $queueRank += 1
+    $mid = if ($null -eq $item.yesMid) { "--" } else { "{0:N3}" -f $item.yesMid }
+    $lines.Add(("| {0} | `{1}` | {2} | {3} | {4}% | independent probability + human approval + max-loss budget |" -f $queueRank, $item.ticker, $mid, $item.grossProfitRange, $item.dataConfidenceScore))
+}
+$lines.Add("")
+$lines.Add("## Custom HFT / Spread-Capture Research Queue")
+$lines.Add("")
+$lines.Add("This is the custom HFT direction: spread-aware, maker-style research. It is not live trading and it does not use account credentials.")
+$lines.Add("")
+$lines.Add("| Rank | Ticker | Mid | Spread | Activity | Gross P/L | Required Before Live |")
+$lines.Add("|---:|---|---:|---:|---:|---|---|")
+$hftRank = 0
+foreach ($item in $customHftSpreadQueue) {
+    $hftRank += 1
+    $mid = if ($null -eq $item.yesMid) { "--" } else { "{0:N3}" -f $item.yesMid }
+    $spread = if ($null -eq $item.spread) { "--" } else { "{0:N3}" -f $item.spread }
+    $lines.Add(("| {0} | `{1}` | {2} | {3} | {4} | {5} | orderbook depth + fee model + latency sim + human approval |" -f $hftRank, $item.ticker, $mid, $spread, $item.visibleActivityUsd, $item.grossProfitRange))
+}
+$lines.Add("")
 $lines.Add("## Top Watchlist")
 $lines.Add("")
-$lines.Add("| Rank | Ticker | Title | Mid | Spread | Gross P/L | Data Conf. | 24h Vol | OI | Close | Gate |")
-$lines.Add("|---:|---|---|---:|---:|---|---:|---:|---:|---|---|")
+$lines.Add("| Rank | Ticker | Title | Mid | Spread | Gross P/L | Data Conf. | Activity | 24h Vol | OI | Close | Gate |")
+$lines.Add("|---:|---|---|---:|---:|---|---:|---:|---:|---:|---|---|")
 $rank = 0
 foreach ($item in $watchlist) {
     $rank += 1
@@ -265,7 +346,7 @@ foreach ($item in $watchlist) {
     $title = $title.Replace("|", "/")
     $mid = if ($null -eq $item.yesMid) { "--" } else { "{0:N3}" -f $item.yesMid }
     $spread = if ($null -eq $item.spread) { "--" } else { "{0:N3}" -f $item.spread }
-    $lines.Add(("| {0} | `{1}` | {2} | {3} | {4} | {5} | {6}% | {7} | {8} | {9} | no execution |" -f $rank, $item.ticker, $title, $mid, $spread, $item.grossProfitRange, $item.dataConfidenceScore, $item.volume24h, $item.openInterest, $item.closeTime))
+    $lines.Add(("| {0} | `{1}` | {2} | {3} | {4} | {5} | {6}% | {7} | {8} | {9} | {10} | no execution |" -f $rank, $item.ticker, $title, $mid, $spread, $item.grossProfitRange, $item.dataConfidenceScore, $item.visibleActivityUsd, $item.volume24h, $item.openInterest, $item.closeTime))
 }
 $lines.Add("")
 $lines.Add("## Stats Model")
@@ -277,6 +358,7 @@ $lines.Add("")
 $lines.Add("- YES bid / ask / midpoint.")
 $lines.Add("- Bid-ask spread.")
 $lines.Add("- 24h volume, total volume, liquidity, and open interest.")
+$lines.Add("- Visible activity floor and custom HFT spread-capture queue.")
 $lines.Add("- Days to close.")
 $lines.Add("- Title clarity and combo-market penalty.")
 $lines.Add("")
@@ -328,8 +410,10 @@ Write-Utf8NoBom -Path $OutputReportPath -Text ($lines -join "`n")
     ok = $true
     generatedAt = $generatedAt
     marketsPulled = $markets.Count
+    pagesPulled = $pagesPulled
     watchlistCount = $watchlist.Count
     actionableTradeCount = 0
+    manualApprovalQueueCount = $manualApprovalQueue.Count
     dataPath = $OutputDataPath
     reportPath = $OutputReportPath
 } | ConvertTo-Json -Depth 4
