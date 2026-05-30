@@ -1,24 +1,16 @@
 {
-    "timestamp":  "2026-05-29T10:47:32.2584035-04:00",
+    "timestamp":  "2026-05-29T11:32:24.8018679-04:00",
     "components":  {
-                       "hff-convergence":  {
-                                               "timestamp":  "2026-05-29T10:47:32.2450716-04:00",
-                                               "success":  true
-                                           },
                        "git-auto-deploy":  {
-                                               "timestamp":  "2026-05-29T10:47:32.2207310-04:00",
+                                               "timestamp":  "2026-05-29T11:32:23.4546993-04:00",
                                                "success":  true
                                            },
                        "auto-poll":  {
-                                         "timestamp":  "2026-05-29T10:47:32.2351988-04:00",
-                                         "success":  true
-                                     },
-                       "lantern-convergence":  {
-                                                   "timestamp":  "2026-05-29T10:47:32.2574308-04:00",
-                                                   "success":  true
-                                               }
+                                         "timestamp":  "2026-05-29T11:32:24.7859029-04:00",
+                                         "success":  false
+                                     }
                    },
     "dryRun":  {
-                   "IsPresent":  true
+                   "IsPresent":  false
                }
 }
