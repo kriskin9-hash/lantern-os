@@ -14,11 +14,11 @@ Answer:
 Yes. I have a Windows desktop tester build of Lantern OS.
 
 Download: https://github.com/alex-place/lantern-os/releases/latest
-Free tester: Lantern-OS-Free-Setup.exe
-$20 founder/support tester: Lantern-OS-Founder-20-Setup.exe, only after payment/support receipt is confirmed
-Zip fallback today: artifacts/lantern-desktop-tester-latest.zip
-Zip fallback requirement: Node.js 20 or newer
-Zip fallback run: .\Start-LanternDesktopTester.ps1
+Tester download today: lantern-desktop-tester-latest.zip
+Requirement today: Node.js 20 or newer
+Run today: .\Start-LanternDesktopTester.ps1
+Free installer later: Lantern-OS-Free-Setup.exe, only when attached to a release
+$20 founder/support installer later: Lantern-OS-Founder-20-Setup.exe, only after payment/support receipt is confirmed and the asset exists
 Lantern front door: http://127.0.0.1:4177
 
 Test the dashboard, chat, demo deck, local/cloud URL map, and safe command lane.
@@ -28,13 +28,22 @@ tokens. This is a tester build, not v1.
 
 ## Gage Windows Install
 
-Preferred path:
+Working path today:
 
 1. Open `https://github.com/alex-place/lantern-os/releases/latest`.
-2. Download `Lantern-OS-Free-Setup.exe`.
-3. Run the installer.
-4. Open Lantern from the Start menu or desktop shortcut.
-5. If the browser does not open, go to `http://127.0.0.1:4177`.
+2. Download `lantern-desktop-tester-latest.zip`.
+3. Right-click the zip and choose `Extract All`.
+4. Open the extracted folder.
+5. Run `.\Start-LanternDesktopTester.ps1`.
+6. If the browser does not open, go to `http://127.0.0.1:4177`.
+
+Installer path later:
+
+1. Use `Lantern-OS-Free-Setup.exe` only when it is attached to the latest
+   GitHub Release.
+2. Run the installer.
+3. Open Lantern from the Start menu or desktop shortcut.
+4. If the browser does not open, go to `http://127.0.0.1:4177`.
 
 Paid/support path:
 
@@ -43,9 +52,9 @@ Paid/support path:
 2. Treat `$20` as founder/setup support only.
 3. After payment clears, use `Lantern-OS-Founder-20-Setup.exe` only if it is
    attached to the latest GitHub Release.
-4. If the founder `.exe` is not attached yet, use the free `.exe` or zip
-   fallback. The support receipt changes the support lane, not the security
-   boundary.
+4. If the founder `.exe` is not attached yet, use
+   `lantern-desktop-tester-latest.zip`. The support receipt changes the support
+   lane, not the security boundary.
 
 The `$20` version is not equity, not securities, not a token, not ownership, not
 admin access, not an investment return, and not a promise of profit.
@@ -119,10 +128,10 @@ artifacts/lantern-desktop-tester-latest.zip
 The package excludes `.git`, `node_modules`, secrets, conversation logs,
 credentials, and live tokens.
 
-Release asset names to use when the Windows installer lane exists:
+Release asset names:
 
 ```text
-Lantern-OS-Free-Setup.exe
-Lantern-OS-Founder-20-Setup.exe
 lantern-desktop-tester-latest.zip
+Lantern-OS-Free-Setup.exe (future installer asset only)
+Lantern-OS-Founder-20-Setup.exe (future paid/support installer asset only)
 ```
