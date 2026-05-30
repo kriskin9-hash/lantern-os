@@ -146,8 +146,29 @@ function Get-KalshiPrivateKey {
         throw "No private key. Set KALSHI_PRIVATE_KEY (PEM text) or KALSHI_PRIVATE_KEY_PATH."
     }
     $rsa = [System.Security.Cryptography.RSA]::Create()
-    $rsa.ImportFromPem($pem.ToCharArray())
-    return $rsa
+    # Accept well-formed PEM as-is; otherwise normalize a header-less / whitespace-flattened
+    # paste into DER and try PKCS#1 then PKCS#8 (Kalshi keys may be either).
+    try {
+        $rsa.ImportFromPem($pem.ToCharArray())
+        return $rsa
+    }
+    catch {
+        $b64 = ($pem -replace "-----[A-Z ]+-----", "") -replace "\s", ""
+        try { $der = [Convert]::FromBase64String($b64) }
+        catch { throw "KALSHI_PRIVATE_KEY is not valid PEM or base64." }
+        $bytesRead = 0
+        foreach ($fmt in @("pkcs1", "pkcs8")) {
+            try {
+                if ($fmt -eq "pkcs1") { $rsa.ImportRSAPrivateKey($der, [ref]$bytesRead) }
+                else { $rsa.ImportPkcs8PrivateKey($der, [ref]$bytesRead) }
+                return $rsa
+            }
+            catch {
+                Write-Verbose ("Key import as {0} failed: {1}" -f $fmt, $_.Exception.Message)
+            }
+        }
+        throw "KALSHI_PRIVATE_KEY could not be parsed as PKCS#1 or PKCS#8 RSA key."
+    }
 }
 
 function Get-KalshiSignature {
