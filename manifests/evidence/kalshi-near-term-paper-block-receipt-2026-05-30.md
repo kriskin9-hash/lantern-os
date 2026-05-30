@@ -8,9 +8,9 @@ Status: near-term paper block executed locally; live trading remains blocked.
 |---|---:|
 | Window minutes | 20 |
 | Markets pulled | 5000 |
-| Candidates within window | 8 |
-| Paper orders opened | 8 |
-| Paper risk allocated | $3.69 |
+| Candidates within window | 17 |
+| Paper orders opened | 9 |
+| Paper risk allocated | $4.79 |
 | Real money spent | $0.00 |
 
 ## Boundary
@@ -24,14 +24,15 @@ Status: near-term paper block executed locally; live trading remains blocked.
 
 | Rank | Ticker | Title | Limit | Max Loss | Minutes | Known Time | Status |
 |---:|---|---|---:|---:|---:|---|---|
-| 1 | KXETH15M-26MAY300030-30 | ETH price up in next 15 mins? | 44c | $0.44 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 2 | KXSOL15M-26MAY300030-30 | SOL price up in next 15 mins? | 44c | $0.44 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 3 | KXNCAASBGAME-26MAY292130UCLAARK-UCLA | Will UCLA win the Arkansas vs UCLA softball game? | 99c | $0.99 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 4 | KXBTC15M-26MAY300030-30 | BTC price up in next 15 mins? | 43c | $0.43 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 5 | KXDOGE15M-26MAY300030-30 | DOGE price up in next 15 mins? | 34c | $0.34 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 6 | KXHYPE15M-26MAY300030-30 | HYPE price up in next 15 mins? | 33c | $0.33 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 7 | KXXRP15M-26MAY300030-30 | XRP price up in next 15 mins? | 42c | $0.42 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
-| 8 | KXBNB15M-26MAY300030-30 | BNB price up in next 15 mins? | 30c | $0.30 | 14.42 | 2026-05-30T04:30:00.0000000Z | paper_open_unfilled |
+| 1 | KXHYPED-26MAY3002-T63.9999 | HYPE price on May 30, 2026? | 99c | $0.99 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 2 | KXXRPD-26MAY3002-T1.3599 | Ripple price at May 30, 2026 at 2am EDT? | 2c | $0.02 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 3 | KXBTC-26MAY3002-B73550 | Bitcoin price range on May 30, 2026? | 66c | $0.66 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 4 | KXBTC-26MAY3002-B73450 | Bitcoin price range on May 30, 2026? | 10c | $0.10 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 5 | KXETHD-26MAY3002-T1999.99 | Ethereum price at May 30, 2026 at 2am EDT? | 99c | $0.99 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 6 | KXETHD-26MAY3002-T1979.99 | Ethereum price at May 30, 2026 at 2am EDT? | 99c | $0.99 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 7 | KXSOLD-26MAY3002-T81.9999 | SOL price on May 30, 2026? | 98c | $0.98 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 8 | KXETHD-26MAY3002-T2019.99 | Ethereum price at May 30, 2026 at 2am EDT? | 2c | $0.02 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
+| 9 | KXBTC-26MAY3002-B73650 | Bitcoin price range on May 30, 2026? | 4c | $0.04 | 8.99 | 2026-05-30T06:00:00.0000000Z | paper_open_unfilled |
 
 ## Files
 

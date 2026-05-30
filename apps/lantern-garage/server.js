@@ -859,6 +859,12 @@ const commandSpecs = {
     args: ["-WindowMinutes", "20", "-BudgetUsd", "50", "-MaxOrders", "10"],
     mode: "paper_trade_no_live_execution",
   },
+  "!near20-pl": {
+    label: "Kalshi near-term paper P/L",
+    script: "scripts/Resolve-KalshiNearTermPaperBlock.ps1",
+    args: [],
+    mode: "paper_settlement_no_live_execution",
+  },
 };
 
 function normalizeLanternCommand(value) {
@@ -1436,6 +1442,25 @@ async function route(req, res) {
           status: order.orderStatus,
         })),
       } : null,
+    }, result.code === 0 ? 200 : 500);
+    return;
+  }
+
+  if (url.pathname === "/api/actions/kalshi-near-term-paper-pl" && req.method === "POST") {
+    const result = await runLanternCommand("!near20-pl");
+    let payload = null;
+    try {
+      payload = readJson("data/kalshi/kalshi-near-term-paper-block-pl-latest.json", null);
+    } catch {
+      payload = null;
+    }
+    sendJson(res, {
+      ...result,
+      receiptPath: "manifests/evidence/kalshi-near-term-paper-block-pl-receipt-2026-05-30.md",
+      dataPath: "data/kalshi/kalshi-near-term-paper-block-pl-latest.json",
+      paperPl: payload,
+      realMoneyUsd: payload?.realMoneyUsd ?? 0,
+      liveTradingStatus: payload?.liveTradingStatus || "blocked",
     }, result.code === 0 ? 200 : 500);
     return;
   }

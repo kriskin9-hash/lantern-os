@@ -183,6 +183,7 @@ async function postAction(path, label, trigger) {
       log(`${label} paper orders: ${result.paperOrderCount}; real spend $${realSpend}; live trading ${result.liveTradingStatus || "blocked"}.`);
     }
     if (result.paperBlock) renderKalshiBlock(result);
+    if (result.paperPl) renderKalshiPaperPl(result);
     return result;
   } finally {
     if (trigger) {
@@ -190,6 +191,21 @@ async function postAction(path, label, trigger) {
       trigger.textContent = originalText;
       trigger.removeAttribute("aria-busy");
     }
+  }
+}
+
+function renderKalshiPaperPl(result) {
+  const pl = result.paperPl || {};
+  const pnl = Number(pl.totalPaperPnlUsd || 0).toFixed(2);
+  const cost = Number(pl.totalPaperCostUsd || 0).toFixed(2);
+  const payout = Number(pl.totalPaperPayoutUsd || 0).toFixed(2);
+  setText(
+    "kalshiPaperPlSummary",
+    `Paper P/L $${pnl} on $${cost} paper cost; payout $${payout}; settled ${pl.settledCount || 0}, open ${pl.openCount || 0}, unknown ${pl.unknownCount || 0}; real spend $${Number(pl.realMoneyUsd || 0).toFixed(2)}.`
+  );
+  if (result.receiptPath) {
+    const receipt = $("kalshiBlockReceipt");
+    if (receipt) receipt.href = `/view?path=${encodeURIComponent(result.receiptPath)}`;
   }
 }
 
@@ -809,6 +825,7 @@ async function init() {
   $("runLoop").addEventListener("click", () => postCommand("!converge", "Loop").catch((error) => log(error.message)));
   $("nearTermKalshiBlock").addEventListener("click", (event) => postAction("/api/actions/kalshi-near-term-paper-block", "Near 20m Kalshi paper block", event.currentTarget).catch((error) => log(error.message)));
   $("copyKalshiBlockPacket").addEventListener("click", () => copyKalshiBlockPacket().catch((error) => log(error.message)));
+  $("checkKalshiPaperPl").addEventListener("click", (event) => postAction("/api/actions/kalshi-near-term-paper-pl", "Near 20m Kalshi paper P/L", event.currentTarget).catch((error) => log(error.message)));
   $("localControls").addEventListener("click", () => postAction("/api/actions/local-controls", "Local controls").catch((error) => log(error.message)));
   $("flatRagIngest").addEventListener("click", () => ingestFlatRagHouse().catch((error) => log(error.message)));
   $("autoUpdate").addEventListener("click", toggleAutoUpdate);
