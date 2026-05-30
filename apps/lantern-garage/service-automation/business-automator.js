@@ -127,7 +127,12 @@ class BusinessAutomator {
     };
 
     const businessPlanPath = path.join(this.dataPath, 'business-plan.json');
-    fs.writeFileSync(businessPlanPath, JSON.stringify(businessPlan, null, 2));
+    try {
+      fs.writeFileSync(businessPlanPath, JSON.stringify(businessPlan, null, 2));
+    } catch (error) {
+      console.error('Failed to write business plan:', error.message);
+      return { success: false, error: error.message };
+    }
 
     return { success: true, path: businessPlanPath };
   }
@@ -283,7 +288,12 @@ Alexander`
     };
 
     const templatesPath = path.join(this.templatesPath, 'email-templates.json');
-    fs.writeFileSync(templatesPath, JSON.stringify(templates, null, 2));
+    try {
+      fs.writeFileSync(templatesPath, JSON.stringify(templates, null, 2));
+    } catch (error) {
+      console.error('Failed to write email templates:', error.message);
+      return { success: false, error: error.message };
+    }
 
     return { success: true, count: Object.keys(templates).length, path: templatesPath };
   }
@@ -320,7 +330,12 @@ Alexander`
     ];
 
     const outreachPath = path.join(this.outreachPath, 'investor-targets.json');
-    fs.writeFileSync(outreachPath, JSON.stringify(investorTargets, null, 2));
+    try {
+      fs.writeFileSync(outreachPath, JSON.stringify(investorTargets, null, 2));
+    } catch (error) {
+      console.error('Failed to write investor targets:', error.message);
+      return { success: false, error: error.message };
+    }
 
     return { success: true, count: investorTargets.length, path: outreachPath };
   }
@@ -358,7 +373,12 @@ Alexander`
     ];
 
     const checklistPath = path.join(this.dataPath, 'daily-automation-checklist.json');
-    fs.writeFileSync(checklistPath, JSON.stringify(dailyTasks, null, 2));
+    try {
+      fs.writeFileSync(checklistPath, JSON.stringify(dailyTasks, null, 2));
+    } catch (error) {
+      console.error('Failed to write daily checklist:', error.message);
+      return { success: false, error: error.message };
+    }
 
     return { success: true, count: dailyTasks.length, path: checklistPath };
   }
@@ -458,7 +478,12 @@ Alexander`
     };
 
     const reportPath = path.join(this.dataPath, 'automation-setup-report.json');
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    try {
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    } catch (error) {
+      console.error('Failed to write setup report:', error.message);
+      return { success: false, error: error.message };
+    }
 
     return { success: true, report: report, path: reportPath };
   }
