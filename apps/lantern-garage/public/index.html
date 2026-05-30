@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Lantern OS</title>
-  <link rel="stylesheet" href="styles.css?v=20260529-plain-console">
-  <script defer src="app.js?v=20260529-plain-console"></script>
+  <link rel="stylesheet" href="styles.css?v=20260530-kalshi-packet">
+  <script defer src="app.js?v=20260530-kalshi-packet"></script>
 </head>
 <body data-style="plain-dashboard">
   <a class="skip-link" href="#main">Skip to controls</a>
@@ -56,6 +56,7 @@
     <section class="actions" aria-label="Primary controls">
       <button id="refresh" type="button" title="Pull live status from local files and APIs">Refresh</button>
       <button id="runLoop" type="button" title="Run the Lantern convergence check">Run Check</button>
+      <button id="nearTermKalshiBlock" type="button" title="Run paper-only Kalshi block for markets closing within 20 minutes">Near 20m Paper Block</button>
       <button id="flatRagIngest" type="button" title="Rebuild the evidence/RAG source list">Sync Evidence</button>
       <button id="autoUpdate" type="button" aria-pressed="false" title="Toggle 30 second read-only refresh">Live Refresh</button>
       <button id="localControls" type="button" title="Open the Windows local controls bridge">Open Controls</button>
@@ -90,6 +91,24 @@
           <div><dt>Pending</dt><dd id="pending">--</dd></div>
           <div><dt>Invoices</dt><dd id="invoices">--</dd></div>
         </dl>
+      </article>
+
+      <article class="panel">
+        <h2>Near-Term Kalshi Ticket</h2>
+        <dl>
+          <div><dt>Mode</dt><dd id="kalshiBlockMode">paper only</dd></div>
+          <div><dt>Orders</dt><dd id="kalshiBlockOrders">--</dd></div>
+          <div><dt>Risk</dt><dd id="kalshiBlockRisk">--</dd></div>
+          <div><dt>Real spend</dt><dd id="kalshiBlockSpend">$0.00</dd></div>
+        </dl>
+        <ul id="kalshiBlockList" class="compact-list">
+          <li>Press Near 20m Paper Block to load current tickets.</li>
+        </ul>
+        <textarea id="kalshiBlockPacket" rows="6" readonly aria-label="Near-term Kalshi manual order packet">Run the paper block to generate a manual review packet.</textarea>
+        <button id="copyKalshiBlockPacket" type="button">Copy packet</button>
+        <button id="checkKalshiPaperPl" type="button">Check paper P/L</button>
+        <p id="kalshiPaperPlSummary">Paper P/L not checked yet.</p>
+        <a id="kalshiBlockReceipt" target="_blank" rel="noopener noreferrer" href="/view?path=manifests/evidence/kalshi-near-term-paper-block-receipt-2026-05-30.md">Open receipt</a>
       </article>
 
       <article class="panel">

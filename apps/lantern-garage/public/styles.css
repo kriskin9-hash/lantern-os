@@ -424,6 +424,17 @@ pre {
   resize: vertical;
 }
 
+#kalshiBlockPacket {
+  width: 100%;
+  min-height: 130px;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  background: #fffdf2;
+  color: var(--ink);
+  font: 0.85rem/1.45 "Courier New", monospace;
+  resize: vertical;
+}
+
 .conversation-form button,
 .rag-form button {
   min-height: 92px;

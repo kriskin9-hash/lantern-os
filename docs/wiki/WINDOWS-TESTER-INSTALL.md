@@ -13,32 +13,38 @@ Download from the latest Lantern OS GitHub Release:
 https://github.com/alex-place/lantern-os/releases/latest
 ```
 
-Use this first when it exists:
-
-```text
-Lantern-OS-Free-Setup.exe
-```
-
-Use this only for a paid/support tester after Alex confirms the `$20` support
-receipt:
-
-```text
-Lantern-OS-Founder-20-Setup.exe
-```
-
-Fallback if no `.exe` is attached to the release yet:
+Use this today:
 
 ```text
 lantern-desktop-tester-latest.zip
 ```
 
+Future free installer asset, only when attached to the release:
+
+```text
+Lantern-OS-Free-Setup.exe
+```
+
+Future paid/support installer asset, only after Alex confirms the `$20` support
+receipt and the file is attached to the release:
+
+```text
+Lantern-OS-Founder-20-Setup.exe
+```
+
 ## Free Tester
 
 1. Open `https://github.com/alex-place/lantern-os/releases/latest`.
-2. Download `Lantern-OS-Free-Setup.exe`.
-3. Run the installer.
-4. Open Lantern from the Start menu or desktop shortcut.
-5. If the browser does not open automatically, go to:
+2. Download `lantern-desktop-tester-latest.zip`.
+3. Right-click the zip and choose `Extract All`.
+4. Open the extracted folder.
+5. Run:
+
+```powershell
+.\Start-LanternDesktopTester.ps1
+```
+
+6. If the browser does not open automatically, go to:
 
 ```text
 http://127.0.0.1:4177
@@ -67,19 +73,21 @@ Install path:
 
 1. Open `https://github.com/alex-place/lantern-os/releases/latest`.
 2. Download `Lantern-OS-Founder-20-Setup.exe` only if it is attached there.
-3. Run the installer.
-4. Open Lantern and test the same front door:
+3. If it is not attached, download `lantern-desktop-tester-latest.zip`.
+4. Run the installer or extract the zip and run
+   `.\Start-LanternDesktopTester.ps1`.
+5. Open Lantern and test the same front door:
 
 ```text
 http://127.0.0.1:4177
 ```
 
-If the founder `.exe` is not attached yet, use the free `.exe` or zip fallback.
-The support receipt changes the support lane, not the security boundary.
+If the founder `.exe` is not attached yet, use the zip. The support receipt
+changes the support lane, not the security boundary.
 
-## Zip Fallback
+## Zip Install
 
-Use this when no release `.exe` exists yet:
+Use this current release asset:
 
 ```text
 lantern-desktop-tester-latest.zip
