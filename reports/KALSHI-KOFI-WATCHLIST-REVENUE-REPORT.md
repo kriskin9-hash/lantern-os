@@ -1,6 +1,6 @@
 # Kalshi + Ko-fi Watchlist Revenue Report
 
-Generated: 2026-05-29T22:48:30.1420236-04:00
+Generated: 2026-05-30T14:16:36.5597249-04:00
 
 Status: current public-data manual-review candidates and outreach packet; no trades executed.
 
@@ -26,10 +26,10 @@ Status: current public-data manual-review candidates and outreach packet; no tra
 | Open markets pulled | 5000 |
 | Public pages pulled | 5 / 5 |
 | Cursor present | True |
-| Empty/no-activity markets | 3061 |
-| Wide-spread research-only markets | 599 |
-| Excluded below 20-cent midpoint | 1232 |
-| Excluded below $5.00 visible activity | 3426 |
+| Empty/no-activity markets | 2651 |
+| Wide-spread research-only markets | 268 |
+| Excluded below 20-cent midpoint | 1445 |
+| Excluded below $5.00 visible activity | 2905 |
 | Watchlist rows emitted | 20 |
 | Manual-approval queue rows | 3 |
 | Executable trade recommendations | 0 |
@@ -70,9 +70,9 @@ These rows are the closest thing to a trade queue after the deeper public-data l
 
 | Rank | Ticker | Mid | Gross P/L | Data Conf. | Required Before Trade |
 |---:|---|---:|---|---:|---|
-| 1 | KXHIGHTBOS-26MAY30-B56.5 | 0.225 | -0.23 to +0.77 | 70% | independent probability + human approval + max-loss budget |
-| 2 | KXMLBTOTAL-26MAY302205NYYATH-10 | 0.505 | -0.51 to +0.49 | 70% | independent probability + human approval + max-loss budget |
-| 3 | KXAAAGASW-26JUN01-4.290 | 0.975 | -0.98 to +0.02 | 70% | independent probability + human approval + max-loss budget |
+| 1 | KXMLBTOTAL-26MAY301610LAATB-9 | 0.365 | -0.37 to +0.63 | 70% | independent probability + human approval + max-loss budget |
+| 2 | KXMLBF5-26MAY301610LAATB-TB | 0.485 | -0.49 to +0.51 | 70% | independent probability + human approval + max-loss budget |
+| 3 | KXMLBTOTAL-26MAY301610LAATB-8 | 0.445 | -0.45 to +0.55 | 70% | independent probability + human approval + max-loss budget |
 
 ## Custom HFT / Spread-Capture Research Queue
 
@@ -80,36 +80,36 @@ This is the custom HFT direction: spread-aware, maker-style research. It is not 
 
 | Rank | Ticker | Mid | Spread | Activity | Gross P/L | Required Before Live |
 |---:|---|---:|---:|---:|---|---|
-| 1 | KXITFMATCH-26MAY29MAGDEL-DEL | 0.740 | 0.020 | 67115.46 | -0.75 to +0.25 | orderbook depth + fee model + latency sim + human approval |
-| 2 | KXMLBTOTAL-26MAY301605KCTEX-8 | 0.530 | 0.020 | 13100.14 | -0.54 to +0.46 | orderbook depth + fee model + latency sim + human approval |
-| 3 | KXWNBA1HWINNER-26MAY29ATLPDX-ATL | 0.780 | 0.020 | 11993.5 | -0.79 to +0.21 | orderbook depth + fee model + latency sim + human approval |
-| 4 | KXHIGHLAX-26MAY30-B72.5 | 0.220 | 0.020 | 2989.32 | -0.23 to +0.77 | orderbook depth + fee model + latency sim + human approval |
-| 5 | KXHIGHLAX-26MAY30-B70.5 | 0.550 | 0.020 | 2233.39 | -0.56 to +0.44 | orderbook depth + fee model + latency sim + human approval |
+| 1 | KXCS2GAME-26MAY300700100TNEM-100T | 0.250 | 0.020 | 67127.77 | -0.26 to +0.74 | orderbook depth + fee model + latency sim + human approval |
+| 2 | KXITFMATCH-26MAY30KLOTHA-KLO | 0.380 | 0.020 | 39807.76 | -0.39 to +0.61 | orderbook depth + fee model + latency sim + human approval |
+| 3 | KXCS2GAME-26MAY300700100TNEM-NEM | 0.740 | 0.020 | 33621.11 | -0.75 to +0.25 | orderbook depth + fee model + latency sim + human approval |
+| 4 | KXITFMATCH-26MAY30KLOTHA-THA | 0.620 | 0.020 | 18471.5 | -0.63 to +0.37 | orderbook depth + fee model + latency sim + human approval |
+| 5 | KXMLBF5SPREAD-26MAY301915ATLCIN-ATL3 | 0.230 | 0.020 | 14495.22 | -0.24 to +0.76 | orderbook depth + fee model + latency sim + human approval |
 
 ## Top Watchlist
 
 | Rank | Ticker | Title | Mid | Spread | Gross P/L | Data Conf. | Activity | 24h Vol | OI | Close | Gate |
 |---:|---|---|---:|---:|---|---:|---:|---:|---:|---|---|
-| 1 | KXHIGHTBOS-26MAY30-B56.5 | Will the maximum temperature be 56-57?? on May 30, 2026? | 0.225 | 0.010 | -0.23 to +0.77 | 70% | 700.98 | 696.98 | 563.87 | 2026-05-31T05:00:00Z | no execution |
-| 2 | KXMLBTOTAL-26MAY302205NYYATH-10 | New York Y vs A's Total Runs? | 0.505 | 0.010 | -0.51 to +0.49 | 70% | 3129 | 3127 | 3076 | 2026-06-03T02:05:00Z | no execution |
-| 3 | KXAAAGASW-26JUN01-4.290 | Will average **gas prices** be above $4.290? | 0.975 | 0.010 | -0.98 to +0.02 | 70% | 6557.6 | 6557.6 | 6511.6 | 2026-06-01T03:59:00Z | no execution |
-| 4 | KXSPOTIFYD-26MAY29-HAT | Top USA Song on Spotify on May 29, 2026? | 0.965 | 0.010 | -0.97 to +0.03 | 70% | 2693.03 | 2384.11 | 2384.5 | 2026-05-30T03:59:00Z | no execution |
-| 5 | KXMLBSPREAD-26MAY301915ATLCIN-ATL2 | Atlanta wins by over 1.5 runs? | 0.445 | 0.010 | -0.45 to +0.55 | 70% | 2410.85 | 2378.76 | 2405.85 | 2026-06-02T23:15:00Z | no execution |
-| 6 | KXHIGHTSEA-26MAY30-B64.5 | Will the maximum temperature be 64-65?? on May 30, 2026? | 0.235 | 0.010 | -0.24 to +0.76 | 70% | 869.09 | 858.09 | 621.08 | 2026-05-31T08:00:00Z | no execution |
-| 7 | KXHIGHTATL-26MAY30-T85 | Will the maximum temperature be >85?? on May 30, 2026? | 0.315 | 0.010 | -0.32 to +0.68 | 70% | 3178.23 | 3169.23 | 1485.88 | 2026-05-31T05:00:00Z | no execution |
-| 8 | KXVOTEHUBTRUMPUPDOWN-26JUN04 | Will Donald Trump's approval rating be above 39.3% for Jun 4, 2026? | 0.445 | 0.010 | -0.45 to +0.55 | 70% | 3005.12 | 3005.12 | 2776.42 | 2026-06-05T03:59:00Z | no execution |
-| 9 | KXLOWTDEN-26MAY30-T48 | Will the minimum temperature be <48?? on May 30, 2026? | 0.295 | 0.010 | -0.30 to +0.70 | 70% | 1229.19 | 1229.19 | 476.17 | 2026-05-31T07:00:00Z | no execution |
-| 10 | KXHIGHTBOS-26MAY30-B60.5 | Will the maximum temperature be 60-61?? on May 30, 2026? | 0.245 | 0.010 | -0.25 to +0.75 | 70% | 1658.61 | 1656.04 | 1590.08 | 2026-05-31T05:00:00Z | no execution |
-| 11 | KXHIGHTPHX-26MAY30-B92.5 | Will the maximum temperature be 92-93?? on May 30, 2026? | 0.445 | 0.010 | -0.45 to +0.55 | 70% | 1151.51 | 1150.51 | 861.81 | 2026-05-31T07:00:00Z | no execution |
-| 12 | KXMLBSPREAD-26MAY302205NYYATH-NYY2 | New York Y wins by over 1.5 runs? | 0.475 | 0.010 | -0.48 to +0.52 | 70% | 1944.11 | 1944.11 | 1738.96 | 2026-06-03T02:05:00Z | no execution |
-| 13 | KXMLBSPREAD-26MAY301610LAATB-LAA2 | Los Angeles A wins by over 1.5 runs? | 0.265 | 0.010 | -0.27 to +0.73 | 70% | 41515.67 | 41515.67 | 41493 | 2026-06-02T20:10:00Z | no execution |
-| 14 | KXMLBSPREAD-26MAY301610LAATB-TB2 | Tampa Bay wins by over 1.5 runs? | 0.395 | 0.010 | -0.40 to +0.60 | 70% | 2153.37 | 2153.37 | 2153.37 | 2026-06-02T20:10:00Z | no execution |
-| 15 | KXMLBSPREAD-26MAY301610MILHOU-MIL2 | Milwaukee wins by over 1.5 runs? | 0.385 | 0.010 | -0.39 to +0.61 | 70% | 1189.03 | 1189.03 | 1005.03 | 2026-06-02T20:10:00Z | no execution |
-| 16 | KXHIGHAUS-26MAY30-T90 | Will the **high temp in Austin** be <90?? on May 30, 2026? | 0.315 | 0.010 | -0.32 to +0.68 | 70% | 2850.12 | 2850.12 | 1613.64 | 2026-05-31T05:59:00Z | no execution |
-| 17 | KXMLBTOTAL-26MAY301610MILHOU-9 | Milwaukee vs Houston Total Runs? | 0.515 | 0.010 | -0.52 to +0.48 | 70% | 1898 | 1898 | 1130 | 2026-06-02T20:10:00Z | no execution |
-| 18 | KXHIGHMIA-26MAY30-B89.5 | Will the **high temp in Miami** be 89-90?? on May 30, 2026? | 0.405 | 0.010 | -0.41 to +0.59 | 70% | 2481.94 | 2465.99 | 1787.24 | 2026-05-31T04:59:00Z | no execution |
-| 19 | KXHIGHPHIL-26MAY30-B70.5 | Will the **high temp in Philadelphia** be 70-71?? on May 30, 2026? | 0.525 | 0.010 | -0.53 to +0.47 | 70% | 716.67 | 715.67 | 655.55 | 2026-05-31T04:59:00Z | no execution |
-| 20 | KXSPOTIFYGLOBALD-26MAY29-HAT | Top Global Song on Spotify on May 29, 2026? | 0.975 | 0.010 | -0.98 to +0.02 | 70% | 3360.64 | 3360.64 | 3069.64 | 2026-05-30T03:59:00Z | no execution |
+| 1 | KXMLBTOTAL-26MAY301610LAATB-9 | Los Angeles A vs Tampa Bay Total Runs? | 0.365 | 0.010 | -0.37 to +0.63 | 70% | 1289.71 | 1289.71 | 1289.71 | 2026-06-02T20:10:00Z | no execution |
+| 2 | KXMLBF5-26MAY301610LAATB-TB | Los Angeles A vs Tampa Bay first 5 innings winner? | 0.485 | 0.010 | -0.49 to +0.51 | 70% | 14546.12 | 14526.42 | 14545.12 | 2026-06-02T20:10:00Z | no execution |
+| 3 | KXMLBTOTAL-26MAY301610LAATB-8 | Los Angeles A vs Tampa Bay Total Runs? | 0.445 | 0.010 | -0.45 to +0.55 | 70% | 11165.12 | 10891.18 | 9873.04 | 2026-06-02T20:10:00Z | no execution |
+| 4 | KXMLBTOTAL-26MAY301610LAATB-6 | Los Angeles A vs Tampa Bay Total Runs? | 0.655 | 0.010 | -0.66 to +0.34 | 70% | 1866.27 | 1755.28 | 1866.27 | 2026-06-02T20:10:00Z | no execution |
+| 5 | KXMLBTOTAL-26MAY301610LAATB-7 | Los Angeles A vs Tampa Bay Total Runs? | 0.575 | 0.010 | -0.58 to +0.42 | 70% | 883.47 | 883.47 | 808.57 | 2026-06-02T20:10:00Z | no execution |
+| 6 | KXMLBF5SPREAD-26MAY301610LAATB-TB2 | Tampa Bay wins first 5 innings by over 1.5 runs? | 0.335 | 0.010 | -0.34 to +0.66 | 70% | 10448.53 | 10448.53 | 10448.53 | 2026-06-02T20:10:00Z | no execution |
+| 7 | KXMLBSPREAD-26MAY301610BOSCLE-CLE2 | Cleveland wins by over 1.5 runs? | 0.345 | 0.010 | -0.35 to +0.65 | 70% | 18333.17 | 18219.18 | 18204.17 | 2026-06-02T20:10:00Z | no execution |
+| 8 | KXHIGHLAX-26MAY31-B74.5 | Will the **high temp in LA** be 74-75?? on May 31, 2026? | 0.335 | 0.010 | -0.34 to +0.66 | 70% | 1108.72 | 1104.72 | 745.84 | 2026-06-01T07:59:00Z | no execution |
+| 9 | KXHIGHTSFO-26MAY31-B72.5 | Will the maximum temperature be 72-73?? on May 31, 2026? | 0.285 | 0.010 | -0.29 to +0.71 | 70% | 599 | 599 | 363 | 2026-06-01T08:00:00Z | no execution |
+| 10 | KXMLBF5TOTAL-26MAY301610LAATB-4 | Los Angeles A vs Tampa Bay first 5 innings runs? | 0.505 | 0.010 | -0.51 to +0.49 | 70% | 2496.53 | 2496.53 | 2168.46 | 2026-06-02T20:10:00Z | no execution |
+| 11 | KXMLBSPREAD-26MAY301610BOSCLE-BOS2 | Boston wins by over 1.5 runs? | 0.325 | 0.010 | -0.33 to +0.67 | 70% | 869.16 | 869.16 | 869.16 | 2026-06-02T20:10:00Z | no execution |
+| 12 | KXMLBTOTAL-26MAY301610MIANYM-8 | Miami vs New York M Total Runs? | 0.455 | 0.010 | -0.46 to +0.54 | 70% | 12777.56 | 12730.39 | 11597.14 | 2026-06-02T20:10:00Z | no execution |
+| 13 | KXMLBF5-26MAY301610MIANYM-MIA | Miami vs New York M first 5 innings winner? | 0.375 | 0.010 | -0.38 to +0.62 | 70% | 972.71 | 972.71 | 972.71 | 2026-06-02T20:10:00Z | no execution |
+| 14 | KXMLBTOTAL-26MAY301610MIANYM-7 | Miami vs New York M Total Runs? | 0.575 | 0.010 | -0.58 to +0.42 | 70% | 3773.17 | 3773.17 | 3614.02 | 2026-06-02T20:10:00Z | no execution |
+| 15 | KXMLBSPREAD-26MAY301610MIANYM-MIA2 | Miami wins by over 1.5 runs? | 0.325 | 0.010 | -0.33 to +0.67 | 70% | 929.14 | 929.14 | 929.14 | 2026-06-02T20:10:00Z | no execution |
+| 16 | KXMLBSPREAD-26MAY301610MIANYM-NYM2 | New York M wins by over 1.5 runs? | 0.355 | 0.010 | -0.36 to +0.64 | 70% | 8183.14 | 8183.14 | 7963.29 | 2026-06-02T20:10:00Z | no execution |
+| 17 | KXMLBSPREAD-26MAY301610LAATB-LAA2 | Los Angeles A wins by over 1.5 runs? | 0.265 | 0.010 | -0.27 to +0.73 | 70% | 59091.32 | 59091.32 | 57627.94 | 2026-06-02T20:10:00Z | no execution |
+| 18 | KXHIGHTHOU-26MAY31-B89.5 | Will the maximum temperature be 89-90?? on May 31, 2026? | 0.235 | 0.010 | -0.24 to +0.76 | 70% | 638.4 | 632.4 | 378.88 | 2026-06-01T06:00:00Z | no execution |
+| 19 | KXHIGHTSATX-26MAY31-B88.5 | Will the maximum temperature be 88-89?? on May 31, 2026? | 0.305 | 0.010 | -0.31 to +0.69 | 70% | 794.4 | 794.4 | 455.14 | 2026-06-01T06:00:00Z | no execution |
+| 20 | KXMLBTOTAL-26MAY301610LAATB-2 | Los Angeles A vs Tampa Bay Total Runs? | 0.975 | 0.010 | -0.98 to +0.02 | 70% | 1081.26 | 1081.26 | 1076.26 | 2026-06-02T20:10:00Z | no execution |
 
 ## Stats Model
 
