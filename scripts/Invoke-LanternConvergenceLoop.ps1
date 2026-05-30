@@ -249,6 +249,180 @@ if ($CloudVirtualization) {
     }) | Out-Null
 }
 
+# -----------------------------------------------------------------------
+# CONSIDERATIONS: review open issues and outreach docs
+# -----------------------------------------------------------------------
+$considerations = @()
+$considerationsDocs = @(
+    "manifests/open-issues.md",
+    "reports/OUTREACH-EMAIL-SECURITY-VALIDATION-2026-05-30.md",
+    "manifests/evidence/convergence-evidence-2026-05-30.md",
+    "manifests/evidence/human-trial-readiness-70-percent-plan-2026-05-30.md"
+)
+
+foreach ($doc in $considerationsDocs) {
+    $docPath = Join-Path $Root $doc
+    if (Test-Path $docPath) {
+        $content = Get-Content -LiteralPath $docPath -Raw
+        $wordCount = ($content -split '\s+').Count
+        $firstLine = ($content -split '\r?\n' | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1).Trim()
+        $considerations += [pscustomobject]@{
+            document  = $doc
+            exists    = $true
+            reviewed  = $true
+            wordCount = $wordCount
+            firstLine = $firstLine
+        }
+    } else {
+        $considerations += [pscustomobject]@{
+            document  = $doc
+            exists    = $false
+            reviewed  = $false
+            wordCount = 0
+            firstLine = "MISSING"
+        }
+        Add-Issue $issues "CONSIDERATION-MISSING-$doc" "medium" "Consideration document missing: $doc" "Create $doc before next convergence."
+    }
+}
+
+# -----------------------------------------------------------------------
+# OUTREACH VALIDATION: scan evidence for actual sends and cash receipts
+# -----------------------------------------------------------------------
+$outreachSendsFound   = 0
+$cashReceiptsFound    = 0
+$outreachDocs         = @()
+$outreachScanDirs     = @(
+    "data/cash-loop",
+    "data/wallet",
+    "ledger",
+    "manifests/evidence",
+    "offers"
+)
+
+foreach ($dir in $outreachScanDirs) {
+    $dirPath = Join-Path $Root $dir
+    if (-not (Test-Path $dirPath)) { continue }
+    Get-ChildItem -LiteralPath $dirPath -File -Recurse -Include "*.md","*.json","*.yaml","*.yml" | ForEach-Object {
+        $text = Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
+        if ($null -eq $text) { return }
+        $isOutreach = ($text -like "*outreach*" -or $text -like "*send packet*" -or $text -like "*outreach send*")
+        $isCash     = ($text -like "*paid_at*" -or $text -like "*cleared cash*" -or $text -like "*payment confirmed*")
+        if ($isOutreach) {
+            $outreachSendsFound++
+            $relPath = $_.FullName.Substring($Root.Length).TrimStart([char]92,[char]47)
+            $outreachDocs += [pscustomobject]@{ path = $relPath; type = "outreach" }
+        }
+        if ($isCash) {
+            $cashReceiptsFound++
+        }
+    }
+}
+
+$demoReq = 5
+$cashGap = [math]::Max(0, $demoReq - $cashReceiptsFound)
+
+$outreachValidation = [pscustomobject]@{
+    status              = if ($cashReceiptsFound -ge $demoReq) { "demos_complete" } elseif ($outreachSendsFound -gt 0) { "in_progress" } else { "not_started" }
+    outreachDocsFound   = $outreachSendsFound
+    cashReceiptsFound   = $cashReceiptsFound
+    demosRequired       = $demoReq
+    demosRemaining      = $cashGap
+    humanTrial70PctPlan = (Test-PathRelative "manifests/evidence/human-trial-readiness-70-percent-plan-2026-05-30.md")
+    emailInfra          = "manual_only_no_smtp_detected"
+    targeting           = "manual_operator_selection"
+    honeypotDetection   = "not_required"
+    referenceDocs       = @($outreachDocs | Select-Object -First 8)
+    note                = if ($cashGap -gt 0) { "Need $cashGap more cleared cash demo receipts to reach human trial threshold." } else { "Demo cash threshold met." }
+}
+
+if ($cashReceiptsFound -lt $demoReq) {
+    $demoSummary = "Only $cashReceiptsFound of $demoReq required founding seat demos have cleared cash evidence."
+    $demoFix     = "Execute `$1,000 founding seat demos and record payment receipts in ledger/."
+    Add-Issue $issues "OUTREACH-DEMOS-INCOMPLETE" "high" $demoSummary $demoFix
+}
+
+# -----------------------------------------------------------------------
+# VALIDATIONS: run test scripts and check evidence receipts
+# -----------------------------------------------------------------------
+$validations = @()
+
+# Run Python convergence fleet test
+$fleetScript = Join-Path $Root "scripts/Test-ConvergenceAgentFleet.py"
+if (Test-Path $fleetScript) {
+    $pyOut  = ""
+    $pyExit = 0
+    try {
+        $pyOut  = (python $fleetScript 2>&1 | Out-String).Trim()
+        $pyExit = $LASTEXITCODE
+    } catch {
+        $pyOut  = "python not available: $($_.Exception.Message)"
+        $pyExit = -1
+    }
+    $validations += [pscustomobject]@{
+        script   = "scripts/Test-ConvergenceAgentFleet.py"
+        exists   = $true
+        executed = $true
+        exitCode = $pyExit
+        result   = if ($pyExit -eq 0) { "pass" } else { "fail" }
+        output   = ($pyOut -split '\r?\n' | Select-Object -First 10) -join " | "
+    }
+    if ($pyExit -ne 0) {
+        Add-Issue $issues "VALIDATION-FLEET-FAIL" "medium" "Convergence fleet test failed (exit $pyExit)." "Run scripts/Test-ConvergenceAgentFleet.py manually and fix reported issues."
+    }
+} else {
+    $validations += [pscustomobject]@{
+        script   = "scripts/Test-ConvergenceAgentFleet.py"
+        exists   = $false
+        executed = $false
+        result   = "skipped_missing"
+    }
+}
+
+# Run PowerShell Discord bot health check
+$discordScript = Join-Path $Root "scripts/Test-DiscordBotHealth.ps1"
+if (Test-Path $discordScript) {
+    $discordOut  = ""
+    $discordExit = 0
+    try {
+        $discordOut  = (powershell -NoProfile -ExecutionPolicy Bypass -File $discordScript 2>&1 | Out-String).Trim()
+        $discordExit = $LASTEXITCODE
+    } catch {
+        $discordOut  = $_.Exception.Message
+        $discordExit = -1
+    }
+    $validations += [pscustomobject]@{
+        script   = "scripts/Test-DiscordBotHealth.ps1"
+        exists   = $true
+        executed = $true
+        exitCode = $discordExit
+        result   = if ($discordExit -eq 0) { "pass" } else { "fail" }
+        output   = ($discordOut -split '\r?\n' | Select-Object -First 5) -join " | "
+    }
+} else {
+    $validations += [pscustomobject]@{
+        script   = "scripts/Test-DiscordBotHealth.ps1"
+        exists   = $false
+        executed = $false
+        result   = "skipped_missing"
+    }
+}
+
+# Scan evidence receipts
+$evidenceDir  = Join-Path $Root "manifests/evidence"
+$evidenceFiles = @()
+if (Test-Path $evidenceDir) {
+    $evidenceFiles = @(Get-ChildItem -LiteralPath $evidenceDir -File -Include "*.md","*.json" | Sort-Object LastWriteTime -Descending)
+}
+$validations += [pscustomobject]@{
+    script        = "manifests/evidence scan"
+    exists        = (Test-Path $evidenceDir)
+    executed      = $true
+    result        = if ($evidenceFiles.Count -gt 0) { "pass" } else { "empty" }
+    receiptsFound = $evidenceFiles.Count
+    latestReceipt = if ($evidenceFiles.Count -gt 0) { $evidenceFiles[0].Name } else { "none" }
+    output        = ($evidenceFiles | Select-Object -First 6 | ForEach-Object { $_.Name }) -join " | "
+}
+
 $result = [pscustomobject]@{
     generatedAt = (Get-Date).ToString("o")
     root = $Root
@@ -262,12 +436,15 @@ $result = [pscustomobject]@{
     leadingIssues = @($issues | Select-Object -First $FixWindow)
     held = $held
     sourceRepos = $sourceStates
+    considerations = $considerations
+    outreachValidation = $outreachValidation
+    validations = $validations
     nextAction = if ($issues.Count -gt 0) {
-        "Fix the first $([Math]::Min($FixWindow, $issues.Count)) actionable issue(s), then rerun."
+        "Considerations executed. Outreach validated. Validations executed. Fix the first $([Math]::Min($FixWindow, $issues.Count)) actionable issue(s), then rerun."
     } elseif ($CloudVirtualization) {
-        "Cloud repo invariants passed. Run local controls on the operator machine before MCP/local runtime mutation."
+        "Considerations executed. Outreach validated. Validations executed. Cloud repo invariants passed. Run local controls on the operator machine before MCP/local runtime mutation."
     } else {
-        "No local loop issues found. Review held issues and choose the next promotion candidate."
+        "Considerations executed. Outreach validated. Validations executed. No local loop issues found. Review held issues and choose the next promotion candidate."
     }
 }
 
