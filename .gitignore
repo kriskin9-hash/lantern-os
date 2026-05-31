@@ -32,6 +32,8 @@ private/**
 # Large promoted artifacts should be added intentionally with manifest updates.
 artifacts/*
 !artifacts/.gitkeep
+!artifacts/Lantern-OS-Courtney-Setup.exe
+!artifacts/lantern-os-courtney-installer-2026-05-30.zip
 # Node modules
 node_modules/
 **/node_modules/

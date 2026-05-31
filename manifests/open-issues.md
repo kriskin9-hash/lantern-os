@@ -145,6 +145,36 @@ The convergence loop fixes the first 2-4 actionable issues before expansion.
    - Fix: added `manifests/CLEAN-STORM-AGILE-METHOD.md`.
    - Status: fixed.
 
+## Active Consolidation Loop (2026-05-31)
+
+**Single-Surface Consolidation**: All surfaces converge to unified Dashboard at https://lantern-os-cloud.netlify.app/
+
+1. `LANTERN-DASHBOARD-001`: Remove legacy Jupyter notebooks from active implementation.
+   - Status: in progress. Archive location: `artifacts/deprecated-notebooks/`
+   - Owner: Operator
+   
+2. `LANTERN-DASHBOARD-002`: Remove static HTML reports and Jekyll builds.
+   - Status: in progress. Archive location: `artifacts/deprecated-reports/`
+   - Owner: Operator
+   
+3. `LANTERN-DASHBOARD-003`: Consolidate repo status pages into System/Health Check section.
+   - Status: in progress.
+   - Owner: Operator
+   
+4. `LANTERN-DASHBOARD-004`: Archive COMET LEAP surface PDFs to Evidence/Run Receipts.
+   - Status: in progress. Archive location: `artifacts/deprecated-pdfs/`
+   - Owner: Operator
+   
+5. `LANTERN-DASHBOARD-005`: Remove email-based asynchronous report delivery.
+   - Status: in progress. Dashboard is pull-based, operator-gated.
+   - Owner: Operator
+   
+6. `LANTERN-DASHBOARD-006`: Deploy Dashboard to production Netlify.
+   - Status: pending. netlify.toml exists, awaiting operator approval.
+   - Blocker: Operator confirmation of DNS routing.
+
+Documentation: See `docs/DASHBOARD-CONSOLIDATION.md`
+
 ## Fixed in Bayesian World Model Loop
 
 1. `BAYES-WORLD-001`: The dollhouse lacked an explicit real-time polled
