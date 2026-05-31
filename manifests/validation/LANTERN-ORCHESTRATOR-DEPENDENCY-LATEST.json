@@ -1,7 +1,7 @@
 ﻿{
-    "generatedAt":  "2026-05-29T20:26:49.1274077-04:00",
-    "manifestPath":  "C:\\tmp\\lantern-os\\manifests\\orchestrator-dependency.json",
-    "outputPath":  "C:\\tmp\\lantern-os\\manifests\\validation\\LANTERN-ORCHESTRATOR-DEPENDENCY-LATEST.json",
+    "generatedAt":  "2026-05-31T14:06:37.9605197-04:00",
+    "manifestPath":  "D:\\tmp\\lantern-os\\manifests\\orchestrator-dependency.json",
+    "outputPath":  "D:\\tmp\\lantern-os\\manifests\\validation\\LANTERN-ORCHESTRATOR-DEPENDENCY-LATEST.json",
     "dependencyId":  "gm-agent-orchestrator-local",
     "repoPath":  "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
     "repoExists":  true,
@@ -9,7 +9,7 @@
                 "healthUrl":  "http://127.0.0.1:8787/health",
                 "rpcUrl":  "http://127.0.0.1:8787/mcp",
                 "healthOk":  true,
-                "toolCount":  38,
+                "toolCount":  54,
                 "missingReadTools":  [
 
                                      ],
@@ -23,17 +23,17 @@
                                              ]
             },
     "fleet":  {
-                  "status":  "mcp_ready_fleet_rebuild_required",
-                  "configuredAgentCount":  7,
-                  "availableAgentCount":  0,
+                  "status":  "mcp_ready_fleet_partially_runnable",
+                  "configuredAgentCount":  1,
+                  "availableAgentCount":  1,
                   "activeAgentCount":  0,
-                  "staleAgentCount":  6,
-                  "queue":  9,
-                  "active":  0,
-                  "done":  1,
-                  "failed":  2,
-                  "headline":  "Inspect failed task converge-founder-needs-ordered-worklist.md before claiming new queue work.",
-                  "nextHumanAction":  "Failed task exists and no active work is present; inspect failure evidence before retrying to avoid repeated token burn."
+                  "staleAgentCount":  0,
+                  "queue":  null,
+                  "active":  null,
+                  "done":  null,
+                  "failed":  null,
+                  "headline":  null,
+                  "nextHumanAction":  null
               },
     "targetLanternSlots":  [
                                {
@@ -65,6 +65,7 @@
                      "reason":  "Agent dispatch requires fresh slot preflight, clean worktree evidence, and explicit human approval."
                  },
     "errors":  [
-
+                   "agent_status_failed: The operation has timed out",
+                   "queue_summary_failed: The request was aborted: The operation has timed out."
                ]
 }

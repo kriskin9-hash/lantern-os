@@ -744,9 +744,11 @@ async function refreshHff() {
 }
 
 function startVoiceInput() {
+  console.log("[Lantern] Voice input triggered");
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     log("Mic input is not available in this browser.");
+    console.warn("[Lantern] SpeechRecognition API not supported");
     return;
   }
   const recognition = new SpeechRecognition();
@@ -833,11 +835,35 @@ async function init() {
   $("ragForm").addEventListener("submit", (event) => storeRagItem(event).catch((error) => log(error.message)));
   $("noteForm").addEventListener("submit", (event) => storeNote(event).catch((error) => log(error.message)));
   $("voiceInput").addEventListener("click", startVoiceInput);
+  const chatHistory = [];
+  let historyIndex = -1;
   $("conversationText").addEventListener("input", function () { autoGrow(this); });
   $("conversationText").addEventListener("keydown", function (event) {
+    if (event.isComposing) return;
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      $("conversationForm").dispatchEvent(new Event("submit", { cancelable: true }));
+      const text = $("conversationText").value.trim();
+      if (text) {
+        chatHistory.push(text);
+        historyIndex = chatHistory.length;
+      }
+      const submitEvent = new SubmitEvent("submit", { bubbles: true, cancelable: true });
+      $("conversationForm").dispatchEvent(submitEvent);
+      return;
+    }
+    if (event.key === "ArrowUp" && $("conversationText").value === "" && chatHistory.length > 0) {
+      event.preventDefault();
+      historyIndex = Math.max(0, historyIndex - 1);
+      $("conversationText").value = chatHistory[historyIndex];
+      autoGrow($("conversationText"));
+      return;
+    }
+    if (event.key === "ArrowDown" && historyIndex >= 0 && historyIndex < chatHistory.length - 1) {
+      event.preventDefault();
+      historyIndex = Math.min(chatHistory.length - 1, historyIndex + 1);
+      $("conversationText").value = chatHistory[historyIndex];
+      autoGrow($("conversationText"));
+      return;
     }
   });
   renderScores({ humans: 43, animals: 52, ecosystems: 50, universe: 54 });
@@ -847,4 +873,10 @@ async function init() {
   refreshHff().catch(() => {});
 }
 
-init();
+try {
+  init();
+  console.log("[Lantern] init() completed successfully");
+} catch (err) {
+  console.error("[Lantern] init() failed:", err);
+  log("UI init failed: " + err.message);
+}

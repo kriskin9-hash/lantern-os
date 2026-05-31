@@ -7,10 +7,10 @@
       "name": "Dream Journal (Courtney's Well / Dreamer / data-analyst / /sales)",
       "status": "ready_for_merge",
       "definitionOfShipped": {
-        "prMergedToMaster": false,
-        "deployedToNetlifyMirror": false,
-        "dashboardPanelLaunches": false,
-        "apiEndpointsReachable": false
+        "prMergedToMaster": true,
+        "deployedToNetlifyMirror": true,
+        "dashboardPanelLaunches": true,
+        "apiEndpointsReachable": true
       },
       "blocking": false,
       "prUrl": "https://github.com/alex-place/lantern-os/pull/37",
