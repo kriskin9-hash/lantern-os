@@ -525,6 +525,20 @@
                       "tokenBudget":  0,
                       "maxConcurrentJobs":  1,
                       "state":  "ready"
+                  },
+                  {
+                      "name":  "gemini-elastic-37",
+                      "slot":  37,
+                      "step":  "elastic",
+                      "agent":  "gemini-01",
+                      "role":  "Cheap inference worker (branches/PRs/issues convergence)",
+                      "enabled":  true,
+                      "runtime":  "free_tier_api_worker",
+                      "cli":  "gemini-1.5-flash",
+                      "spendPolicy":  "free_tier_only_no_credit_card",
+                      "tokenBudget":  50000,
+                      "maxConcurrentJobs":  1,
+                      "state":  "ready_pending_key"
                   }
               ]
 }
