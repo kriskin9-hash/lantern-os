@@ -211,9 +211,19 @@ cd ../..
 
 ### Test Coverage
 
-- **Python tests:** 24+ test files covering policies, data models, integrations
-- **PowerShell tests:** 3 core script tests
-- **Browser tests:** 3 Playwright test suites (trade chat, garage, static surfaces)
+- **Python tests:** 50+ test files covering:
+  - Repository structure (20+ tests)
+  - Skill validation (15+ tests)
+  - Data validation (20+ tests)
+  - Security and boundaries (20+ tests)
+  - Documentation validation (25+ tests)
+  - CI/CD workflow validation (25+ tests)
+  - PowerShell scripts (20+ tests)
+  - MCP connector (14 tests)
+  - Integration tests (20+ tests)
+  - Policy and data models (24+ existing tests)
+- **PowerShell tests:** 3 core script tests + 20+ validation tests
+- **Browser tests:** 5 Playwright test suites (trade chat, garage, static surfaces, desktop, dashboard)
 - **MCP tests:** 14 enhanced validation tests
 - **Convergence loop:** 20+ validation checks
 
@@ -231,3 +241,33 @@ cd ../..
 - `manifests/validation/CONVERGENCE-FLEET-LATEST.json` - Convergence fleet validation
 - `tests/playwright-report/` - Playwright HTML report
 - `tests/test-results/` - Playwright screenshots/videos (on failure)
+
+### New Test Files Added
+
+**Repository Structure Tests:**
+- `tests/test_repository_structure.py` - Validates repo structure, required files, directories
+
+**Skill Validation Tests:**
+- `tests/test_skill_validation.py` - Validates skill structure, boundaries, documentation
+
+**Data Validation Tests:**
+- `tests/test_data_validation.py` - Validates JSON/JSONL files, data integrity
+
+**Security and Boundary Tests:**
+- `tests/test_security_boundaries.py` - Validates security boundaries, safety gates
+
+**Documentation Validation Tests:**
+- `tests/test_documentation_validation.py` - Validates documentation structure, completeness
+
+**CI/CD Workflow Validation Tests:**
+- `tests/test_cicd_validation.py` - Validates GitHub Actions workflows, CI/CD config
+
+**PowerShell Script Tests:**
+- `tests/test_powershell_scripts.py` - Validates PowerShell scripts, structure, safety
+
+**Integration Tests:**
+- `tests/test_integration.py` - Validates component integration, cross-component workflows
+
+**Browser E2E Tests:**
+- `tests/e2e/desktop-surfaces.spec.ts` - Desktop surface browser tests
+- `tests/e2e/dashboard.spec.ts` - Dashboard browser tests

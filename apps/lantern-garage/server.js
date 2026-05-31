@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
+const salesMcp = require("./sales/sales-mcp-tools");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -1485,6 +1486,57 @@ async function route(req, res) {
       stderr: "",
       house,
     });
+    return;
+  }
+
+  if (url.pathname === "/api/sales/tools" && req.method === "GET") {
+    sendJson(res, { tools: salesMcp.listTools() });
+    return;
+  }
+
+  if (url.pathname === "/api/sales/invoke" && req.method === "POST") {
+    try {
+      const body = await collectRequestBody(req);
+      const input = JSON.parse(body || "{}");
+      const result = await salesMcp.invokeTool(input.tool, input.params || {});
+      sendJson(res, { ok: true, tool: input.tool, result }, 200);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/sales/pipeline" && req.method === "GET") {
+    try {
+      const result = await salesMcp.invokeTool("summarize_sales_pipeline", {});
+      sendJson(res, result);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 500);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/sales/leads" && req.method === "GET") {
+    try {
+      const ledger = require("./sales/sales-ledger");
+      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+      const leads = ledger.readJsonl(ledger.files.leads).slice(-limit);
+      sendJson(res, { leads, count: leads.length });
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 500);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/sales/opportunities" && req.method === "GET") {
+    try {
+      const ledger = require("./sales/sales-ledger");
+      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+      const opportunities = ledger.readJsonl(ledger.files.opportunities).slice(-limit);
+      sendJson(res, { opportunities, count: opportunities.length });
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 500);
+    }
     return;
   }
 
