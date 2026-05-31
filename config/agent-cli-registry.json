@@ -870,6 +870,28 @@
                        "maxRetries":  1,
                        "minSecondsBetweenRuns":  10,
                        "status":  "ready_pending_key"
+                   },
+                   {
+                       "name":  "ollama-local-38",
+                       "slot":  38,
+                       "agent":  "ollama-01",
+                       "role":  "Local inference worker (zero external cost, hardware only)",
+                       "cliName":  "ollama-mistral-cli",
+                       "command":  "powershell",
+                       "args":  [
+                                    "-NoProfile",
+                                    "-ExecutionPolicy",
+                                    "Bypass",
+                                    "-File",
+                                    "D:\\tmp\\lantern-os\\scripts\\Invoke-OllamaAgent.ps1"
+                                ],
+                       "dispatchMode":  "local_llm",
+                       "paidAccount":  false,
+                       "network":  false,
+                       "tokenBudget":  0,
+                       "maxRetries":  1,
+                       "minSecondsBetweenRuns":  5,
+                       "status":  "ready"
                    }
                ]
 }

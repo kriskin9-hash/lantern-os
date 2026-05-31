@@ -539,6 +539,20 @@
                       "tokenBudget":  50000,
                       "maxConcurrentJobs":  1,
                       "state":  "ready_pending_key"
+                  },
+                  {
+                      "name":  "ollama-local-38",
+                      "slot":  38,
+                      "step":  "elastic",
+                      "agent":  "ollama-01",
+                      "role":  "Local inference worker (zero external cost, hardware only)",
+                      "enabled":  true,
+                      "runtime":  "local_llm_worker",
+                      "cli":  "mistral",
+                      "spendPolicy":  "zero_external_cost_local_only",
+                      "tokenBudget":  0,
+                      "maxConcurrentJobs":  1,
+                      "state":  "ready"
                   }
               ]
 }
