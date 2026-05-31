@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-05-31T04:54:57.095173+00:00",
+  "repo_count": 1,
+  "workflow_count": 5,
+  "exact_duplicate_groups": [],
+  "governance_reuse_candidates": [
+    {
+      "repo": "lantern-os",
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\mcp-tunnel-canary.yml",
+      "governance_score": 1,
+      "step_names": [
+        "Validate tunnel URL shape",
+        "Probe health and tool-discovery endpoints only",
+        "Upload canary result"
+      ],
+      "actions_used": [
+        "actions/upload-artifact@v4"
+      ]
+    },
+    {
+      "repo": "lantern-os",
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\static-surface-ci.yml",
+      "governance_score": 1,
+      "step_names": [
+        "Verify shareholder index exists",
+        "Verify top-level operator files",
+        "Check required Lantern manifests",
+        "Verify HTML surface links",
+        "Install pytest",
+        "Run tests",
+        "Verify CI has parallel lanes and final summary gate",
+        "Summarize passed lanes"
+      ],
+      "actions_used": []
+    }
+  ],
+  "workflows": [
+    {
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\browser-testing-ci.yml",
+      "file_hash": "d0367fcd8a3020ef0c9dfd2542c9440af1353195a73643217b1c555d7ac59880",
+      "line_count": 113,
+      "step_names": [
+        "Setup Node.js",
+        "Install Playwright dependencies",
+        "Setup Node.js",
+        "Install dependencies",
+        "Install Playwright browsers",
+        "Start static server",
+        "Run Playwright tests",
+        "Upload test results",
+        "Upload test screenshots",
+        "Setup Python",
+        "Install dependencies",
+        "Run unit tests",
+        "Summarize results"
+      ],
+      "actions_used": [
+        "actions/setup-node@v4",
+        "actions/setup-python@v5",
+        "actions/upload-artifact@v4"
+      ],
+      "run_line_count": 8,
+      "classifications": {
+        "governance": 0
+      },
+      "governance_score": 0,
+      "candidate_for_reuse": false,
+      "repo": "lantern-os",
+      "repo_path": "D:\\tmp\\lantern-os"
+    },
+    {
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\mcp-tunnel-canary.yml",
+      "file_hash": "85cf48a26fb0c1c5701ebb239e82faafe6abedaaf1125de0e3c2c7462b2e470b",
+      "line_count": 53,
+      "step_names": [
+        "Validate tunnel URL shape",
+        "Probe health and tool-discovery endpoints only",
+        "Upload canary result"
+      ],
+      "actions_used": [
+        "actions/upload-artifact@v4"
+      ],
+      "run_line_count": 2,
+      "classifications": {
+        "governance": 1
+      },
+      "governance_score": 1,
+      "candidate_for_reuse": true,
+      "repo": "lantern-os",
+      "repo_path": "D:\\tmp\\lantern-os"
+    },
+    {
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\orchestration-challenge-ci.yml",
+      "file_hash": "d9eaae68bb10b86cddbdc1a483e02105d7e2ee64aa5f2a9c25d9420dcbd107b7",
+      "line_count": 135,
+      "step_names": [
+        "Verify workflow surfaces",
+        "Verify local-first MCP verifier contract",
+        "Verify action pooling and search trigger policy",
+        "Verify science-only report anchors",
+        "Install pytest",
+        "Run tests",
+        "Summarize challenge lanes"
+      ],
+      "actions_used": [],
+      "run_line_count": 7,
+      "classifications": {
+        "repo_specific_test_or_build": 3,
+        "governance": 0
+      },
+      "governance_score": 0,
+      "candidate_for_reuse": false,
+      "repo": "lantern-os",
+      "repo_path": "D:\\tmp\\lantern-os"
+    },
+    {
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\release-provenance.yml",
+      "file_hash": "05b38bdf67a605722908bbb4e35eddf3f3719390821c95e2609fcee911dcc889",
+      "line_count": 46,
+      "step_names": [
+        "Verify v1 release artifacts exist",
+        "Generate subject hashes"
+      ],
+      "actions_used": [
+        "slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.4.0"
+      ],
+      "run_line_count": 2,
+      "classifications": {
+        "governance": 0
+      },
+      "governance_score": 0,
+      "candidate_for_reuse": false,
+      "repo": "lantern-os",
+      "repo_path": "D:\\tmp\\lantern-os"
+    },
+    {
+      "path": "D:\\tmp\\lantern-os\\.github\\workflows\\static-surface-ci.yml",
+      "file_hash": "0b8d05d7161836edeaa0311ef3e86a174570fba8faa37ca815c7be55a0ef1f5b",
+      "line_count": 132,
+      "step_names": [
+        "Verify shareholder index exists",
+        "Verify top-level operator files",
+        "Check required Lantern manifests",
+        "Verify HTML surface links",
+        "Install pytest",
+        "Run tests",
+        "Verify CI has parallel lanes and final summary gate",
+        "Summarize passed lanes"
+      ],
+      "actions_used": [],
+      "run_line_count": 8,
+      "classifications": {
+        "governance": 1,
+        "repo_specific_test_or_build": 3
+      },
+      "governance_score": 1,
+      "candidate_for_reuse": true,
+      "repo": "lantern-os",
+      "repo_path": "D:\\tmp\\lantern-os"
+    }
+  ]
+}
