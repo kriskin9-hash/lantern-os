@@ -502,6 +502,28 @@ function computeDreamerStats(user) {
   };
 }
 
+function writeJson(relativePath, data) {
+  try {
+    const fullPath = path.join(repoRoot, relativePath);
+    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error(`Failed to write JSON to ${relativePath}:`, error.message);
+    return false;
+  }
+}
+
+function appendLine(relativePath, line) {
+  try {
+    const fullPath = path.join(repoRoot, relativePath);
+    fs.appendFileSync(fullPath, line + '\n', 'utf8');
+    return true;
+  } catch (error) {
+    console.error(`Failed to append to ${relativePath}:`, error.message);
+    return false;
+  }
+}
+
 function readConversationLog(limit = 50) {
   return readJsonl(path.relative(repoRoot, conversationLogPath), limit)
     .filter((entry) => !entry.parseError);
@@ -1573,6 +1595,77 @@ async function route(req, res) {
     sendJson(res, {
       wallet: readJson("data/wallet/local-cash-wallet.json", {}),
       ledger: readJsonl("data/wallet/ledger.jsonl", 30),
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/invoice/create" && req.method === "POST") {
+    const body = await collectRequestBody(req);
+    const { invoiceId, offer, amountUsd, customerEmail } = JSON.parse(body);
+
+    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
+    wallet.pendingInvoices = wallet.pendingInvoices || [];
+    wallet.pendingInvoices.push({
+      invoiceId,
+      offer,
+      amountUsd,
+      customerEmail: customerEmail || "",
+      status: "draft",
+      createdAt: new Date().toISOString()
+    });
+    wallet.draftInvoiceUsd = (wallet.draftInvoiceUsd || 0) + amountUsd;
+    wallet.pendingInvoiceUsd = wallet.draftInvoiceUsd;
+    writeJson("data/wallet/local-cash-wallet.json", wallet);
+
+    appendLine("data/wallet/ledger.jsonl", JSON.stringify({
+      event: "invoice_created",
+      invoiceId,
+      offer,
+      amountUsd,
+      timestamp: new Date().toISOString()
+    }));
+
+    sendJson(res, { success: true, invoiceId });
+    return;
+  }
+
+  if (url.pathname === "/api/invoice/send" && req.method === "POST") {
+    const body = await collectRequestBody(req);
+    const { invoiceId } = JSON.parse(body);
+
+    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
+    const invoice = wallet.pendingInvoices?.find(i => i.invoiceId === invoiceId);
+
+    if (!invoice) {
+      sendJson(res, { error: "Invoice not found" }, 404);
+      return;
+    }
+
+    invoice.status = "sent";
+    invoice.sentAt = new Date().toISOString();
+    writeJson("data/wallet/local-cash-wallet.json", wallet);
+
+    appendLine("data/wallet/ledger.jsonl", JSON.stringify({
+      event: "invoice_sent",
+      invoiceId,
+      amount: invoice.amountUsd,
+      customer: invoice.customerEmail,
+      timestamp: new Date().toISOString()
+    }));
+
+    sendJson(res, { success: true, invoiceId, status: "sent" });
+    return;
+  }
+
+  if (url.pathname === "/api/invoices" && req.method === "GET") {
+    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
+    sendJson(res, {
+      pending: wallet.pendingInvoices || [],
+      received: wallet.receivedPayments || [],
+      total: {
+        pending: wallet.pendingInvoiceUsd || 0,
+        cleared: wallet.clearedCashUsd || 0
+      }
     });
     return;
   }

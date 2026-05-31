@@ -7,7 +7,10 @@ const fs = require('fs');
 require('dotenv').config();
 
 // Load configuration
-const configPath = path.join(__dirname, 'config.example.json');
+let configPath = path.join(__dirname, 'config.json');
+if (!fs.existsSync(configPath)) {
+  configPath = path.join(__dirname, 'config.example.json');
+}
 let config = {};
 try {
   const configContent = fs.readFileSync(configPath, 'utf8');
