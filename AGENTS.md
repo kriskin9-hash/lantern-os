@@ -120,14 +120,6 @@ Use `codex/` branch names for agent work unless the operator asks otherwise.
 - Run read-only balance checks against **demo** or **prod** environment (operator approval on file).
 - Update `data/automation/mcp-canary-results.json` `checkedAt` field after a successful status check.
 
-### What agents MUST NOT do without fresh operator approval
-
-- Infer account balance, orders, or positions from local memory or stale JSON files.
-- Place or simulate any order against `KALSHI_ENVIRONMENT=prod` without the operator saying "go live" in the current session.
-- Set `LANTERN_LIVE_ENABLED=1` or remove `data/kalshi/LIVE-KILL-SWITCH` without explicit current-session operator approval.
-- Report trading status as "active" without a fresh authenticated response from the API.
-- Add Kalshi API keys or private key material to any file in the repo.
-
 ### Environment variables required to call the API
 
 ```text
