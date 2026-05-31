@@ -111,24 +111,28 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--paper);color:v
   <div class="panel-header">
     <div class="panel-eyebrow">AI Workspace</div>
     <div class="panel-title">Dream Journal</div>
-    <div class="panel-sub">Windsurf / GPT replacement &middot; local RAG-backed &middot; no external memory leak &middot; operator-gated</div>
+    <div class="panel-sub">Also known as: Dreamer / Courtney's Well &middot; local-first &middot; JSONL persistence &middot; ternary matrix</div>
   </div>
   <div class="panel-body">
-    <div class="held-banner">&#9208; <strong>Held:</strong> External LLM API calls are operator-gated. Chat runs against local RAG context until a cloud API key is confirmed and approved.</div>
-    <div class="chat-wrap">
-      <div class="chat-log" id="chatLog">
-        <div class="msg">
-          <div class="msg-avatar">L</div>
-          <div>
-            <div class="msg-label">Lantern OS &middot; Dream Journal</div>
-            <div class="msg-bubble">Welcome. I am your local AI workspace &mdash; a Windsurf/GPT replacement running against your RAG flat file and convergence context. No external memory. No API calls without your approval.<br><br>Ask about convergence, batch jobs, arc reactor, health, or the repo. Type /help for commands.</div>
-          </div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-title">Launch Dream Journal</div>
+        <p style="margin-bottom:14px;color:var(--muted);font-size:13px;line-height:1.5">The Dream Journal (also called Dreamer or Courtney's Well) is a private symbolic sandbox for reflection. It stores your entries locally as JSONL with full persistence, ternary matrix visualization, and task tracking.</p>
+        <div class="btn-row">
+          <a href="../apps/lantern-garage/public/courtney.html" target="_blank" class="btn btn-teal">Open Dream Journal</a>
+          <a href="../apps/lantern-garage/public/dreamer-dashboard.html" target="_blank" class="btn btn-ghost">Open Dashboard View</a>
         </div>
       </div>
-      <div class="chat-model-tag">Model: <span>local-context &middot; RAG-backed</span> &middot; no external call active</div>
-      <div class="chat-input-row">
-        <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask anything, or type /help"></textarea>
-        <button class="chat-send" onclick="sendChat()">Send</button>
+      <div class="card">
+        <div class="card-title">Quick Stats</div>
+        <div class="metric-row"><span class="metric-label">Storage</span><span class="metric-val teal">JSONL (local)</span></div>
+        <div class="metric-row"><span class="metric-label">Entry types</span><span class="metric-val">dream, note, place, character, event, lore, symbol, mirror</span></div>
+        <div class="metric-row"><span class="metric-label">Matrix</span><span class="metric-val">3^12 ternary constellation</span></div>
+        <div class="metric-row"><span class="metric-label">Tasks</span><span class="metric-val">integrated task tracking</span></div>
+      </div>
+      <div class="card full">
+        <div class="card-title">What this is</div>
+        <p style="color:var(--muted);font-size:13px;line-height:1.6">The Dream Journal is a local-first symbolic workspace for private reflection. It stores dreams, notes, places, characters, events, story-threads, symbols, and mirror entries on your machine only. No cloud sync. No external APIs. The ternary matrix visualizes patterns across 12 dimensions. Tasks help track next steps. All data persists as JSONL in <code>data/dreamer/</code>.</p>
       </div>
     </div>
   </div>
@@ -378,36 +382,7 @@ function showPanel(id,el){
   if(p)p.classList.add('active');
   if(el)el.classList.add('active');
 }
-var RESP={
-  '/help':'Commands:\n/status - convergence summary\n/jobs - batch job registry\n/arc - arc reactor scores\n/health - system health\n/held - held items list\n/deploy - deployment state',
-  '/status':'Convergence: 86%\nActive issues: 2  Held: 1\nLast loop: ~3 min ago\nGit: master Â· dirty Â· fa6e05e\nScripts: 6/6 present  Disk: 225 GB free',
-  '/jobs':'Batch registry (5 enabled, 1 held):\n[p0] health-check Â· 15 min\n[p1] convergence-loop Â· 30 min\n[p2] loop-receipt Â· 60 min\n[p3] asset-discovery Â· 120 min\n[p4] sync-rag-pdf Â· 240 min\n[held] style-convergence Â· manual only',
-  '/arc':'Arc Reactor (Brier-calibrated):\nPhase 1 Garage: 92% - proven local\nPhase 2 Public Platform: 61% - in progress\nPhase 3 Distributed Fleet: 29% - early\nHuman Trial Demo Readiness: 18% - gates not cleared',
-  '/health':'Health: ok\nGit: master Â· fa6e05e Â· dirty\nDisk: 225 GB free Â· 1.14 GB used\nNetwork: github reachable\nScripts: 6/6 present',
-  '/held':'Held items (6):\n1. Dual-boot NixOS - hardware access\n2. Live fleet runtime - cash + safety gates\n3. Style convergence batch - manual review\n4. AWS CLI/Bedrock MCP - no API calls without approval\n5. GitHub API auth token - scope not approved\n6. Netlify deploy - operator go-ahead needed',
-  '/deploy':'Deploy state:\nNetlify: netlify.toml created Â· NOT YET DEPLOYED\nRender: no render.yaml yet\nAWS: docs/planning only Â· no live infra\nFly.io: not in repo\nDocker MCP Gateway: installed Â· ai_coding profile available'
-};
-function addMsg(text,isUser){
-  var log=document.getElementById('chatLog');
-  var d=document.createElement('div');
-  d.className='msg'+(isUser?' user':'');
-  var av=document.createElement('div');av.className='msg-avatar';av.textContent=isUser?'You':'L';
-  var inner=document.createElement('div');
-  var label=document.createElement('div');label.className='msg-label';label.textContent=isUser?'Operator':'Lantern OS Â· Dream Journal';
-  var bubble=document.createElement('div');bubble.className='msg-bubble';bubble.style.whiteSpace='pre-wrap';bubble.textContent=text;
-  inner.appendChild(label);inner.appendChild(bubble);d.appendChild(av);d.appendChild(inner);log.appendChild(d);
-  log.scrollTop=log.scrollHeight;
-}
-function sendChat(){
-  var inp=document.getElementById('chatInput');var q=inp.value.trim();if(!q)return;
-  addMsg(q,true);inp.value='';
-  var key=q.toLowerCase().split(' ')[0];
-  setTimeout(function(){
-    var ans=RESP[key]||('No external LLM connected (held). I can answer commands: /help /status /jobs /arc /health /held /deploy\n\nYour question: '+q);
-    addMsg(ans,false);
-  },400);
-}
-document.getElementById('chatInput').addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}});
+
 function runLoop(){
   var btn=document.getElementById('loopBtn');btn.disabled=true;btn.textContent='Running...';
   setTimeout(function(){

@@ -135,3 +135,50 @@ Public coverage as of March 2026 flags regulatory/settlement disputes on Kalshi
 (Khamenei-related market payout). Before routing meaningful capital, check
 `settlementWarnings` in `/api/status` and review the Kalshi terms for the
 specific market. This is not investment advice.
+
+---
+
+## Dream Journal — Naming Convention
+
+**Feature:** Local-first symbolic journal for reflection and pattern tracking.
+
+### Names are equivalent
+
+The following names refer to the same feature:
+
+- **Dream Journal** — Dashboard panel name (`dashboard/index.html` → panel-journal)
+- **Dreamer** — Internal system name (`apps/lantern-garage/public/dreamer-dashboard.html`)
+- **Courtney's Well** — User-facing name (`apps/lantern-garage/public/courtney.html`)
+- **data-analyst** — MCP service alias (in some contexts)
+- **/sales** — MCP service route (in some contexts)
+
+### Implementation location
+
+- **Backend:** `apps/lantern-garage/server.js` — `/api/dreamer` endpoints
+- **Storage:** `data/dreamer/notebooks/{user}.jsonl` — JSONL persistence per user
+- **Tasks:** `data/dreamer/tasks/{user}.jsonl` — Task tracking
+- **UI surfaces:**
+  - `apps/lantern-garage/public/courtney.html` — Entry form and recall
+  - `apps/lantern-garage/public/dreamer-dashboard.html` — Stats, matrix, timeline
+  - `dashboard/index.html` — Launch panel with links
+
+### Capabilities (already implemented)
+
+- JSONL persistence for entries (dreams, notes, places, characters, events, lore, symbols, mirrors)
+- Ternary matrix visualization (3^12 constellation)
+- Task tracking with completion
+- Search/query across entries
+- Stats dashboard (counts, streak, heatmap, timeline)
+- Mirror entry generation (average of selected entries)
+- Local-only storage (no cloud sync)
+
+### API endpoints
+
+- `GET /api/dreamer?user={user}&limit={limit}&q={query}` — List entries
+- `POST /api/dreamer` — Create entry
+- `GET /api/dreamer/stats?user={user}` — Compute statistics
+- `GET /api/dreamer/matrix?user={user}` — Matrix nodes for visualization
+- `POST /api/dreamer/mirror` — Create mirror entry
+- `GET /api/dreamer/tasks?user={user}` — List tasks
+- `POST /api/dreamer/tasks` — Create task
+- `PATCH /api/dreamer/tasks/{id}?user={user}` — Complete task

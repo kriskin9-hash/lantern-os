@@ -1192,6 +1192,12 @@ const commandSpecs = {
     args: [],
     mode: "paper_settlement_no_live_execution",
   },
+  "!confidence": {
+    label: "Feature confidence report (trading, dreamer, imagniverse, payments)",
+    script: "scripts/Build-LanternConfidenceReport.ps1",
+    args: ["-WriteReceipt"],
+    mode: "read_only_confidence_assessment",
+  },
 };
 
 function normalizeLanternCommand(value) {
