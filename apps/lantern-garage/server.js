@@ -1200,9 +1200,14 @@ const commandSpecs = {
   },
 };
 
+const commandAliases = {
+  "!super-jarvis": "!superjarvis",
+};
+
 function normalizeLanternCommand(value) {
   const token = String(value || "").trim().split(/\s+/)[0].toLowerCase();
-  return commandSpecs[token] ? token : "";
+  const aliased = commandAliases[token] || token;
+  return commandSpecs[aliased] ? aliased : "";
 }
 
 function listLanternCommands() {
