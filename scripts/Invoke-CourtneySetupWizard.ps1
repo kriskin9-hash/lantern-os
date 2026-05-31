@@ -84,6 +84,18 @@ if (Test-Command "node") {
     $prereqsOk = $false
 }
 
+# Check Python
+if (Test-Command "python") {
+    $pythonVersion = python --version
+    Write-Success "Python installed: $pythonVersion"
+} else {
+    Write-Error "Python not found"
+    Write-Info "Please install Python from https://python.org/downloads/"
+    Write-Info "During installation, check 'Add Python to PATH'"
+    Write-Info "After installation, restart PowerShell and run this wizard again."
+    $prereqsOk = $false
+}
+
 # Check Git
 if (Test-Command "git") {
     $gitVersion = git --version

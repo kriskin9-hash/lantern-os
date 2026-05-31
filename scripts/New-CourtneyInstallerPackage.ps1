@@ -47,7 +47,7 @@ $readmeContent = @"
 
 ## What This Installer Does
 
-- Checks prerequisites (Node.js, Git, PowerShell)
+- Checks prerequisites (Node.js, Python, Git, PowerShell)
 - Clones the Lantern OS repository
 - Configures Git for your user
 - Creates a desktop shortcut
@@ -57,6 +57,7 @@ $readmeContent = @"
 
 Before running the installer, ensure you have:
 - **Node.js 20+** - Download from https://nodejs.org (LTS version)
+- **Python 3+** - Download from https://python.org/downloads/ (check "Add Python to PATH")
 - **Git** - Download from https://git-scm.com/download/win
 - **PowerShell** - Included with Windows (no installation needed)
 
