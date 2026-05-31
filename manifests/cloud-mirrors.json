@@ -1,25 +1,76 @@
 {
   "schema": "lantern.cloud_mirrors.v1",
+  "canonical": "Local Windows dashboard at http://127.0.0.1:4177",
+  "frontDoors": {
+    "local": {
+      "description": "Primary local front door for Windows",
+      "url": "http://127.0.0.1:4177",
+      "status": "verified",
+      "healthPath": "/api/health",
+      "verified": true,
+      "operator": "Local machine"
+    },
+    "netlify": {
+      "description": "Cloud mirror via Netlify",
+      "url": "https://lantern-os-cloud.netlify.app",
+      "status": "configured",
+      "healthPath": "/api/health",
+      "deployBranch": "master",
+      "deployId": "6a1c3fa0742f62c1b2fbe103",
+      "verified": false,
+      "notes": "Deploy configured, health endpoint requires public proof"
+    },
+    "aws": {
+      "description": "Cloud mirror via AWS ECS Fargate",
+      "provider": "AWS ECS Fargate",
+      "status": "candidate",
+      "containerPort": 8080,
+      "imageSource": "apps/lantern-garage/Dockerfile",
+      "startCommand": "npm run start:cloud",
+      "verified": false,
+      "notes": "Service URL pending operator deployment"
+    },
+    "render": {
+      "description": "Custom domain route via Render",
+      "status": "retired",
+      "retiredAt": "2026-05-29",
+      "reason": "Returned HTTP 404; operator requested removal"
+    },
+    "custom-domain": {
+      "description": "Custom domain (user-owned domain)",
+      "status": "candidate",
+      "verified": false,
+      "notes": "Available as deployment lane when user configures domain"
+    }
+  },
+  "mirrorPolicy": "Lantern OS has one canonical dashboard surface accessible through multiple front doors. Local is primary; cloud routes are mirrors and must not create separate dashboards. Cloud routes are verified only when /, /api/health, and /api/cloud-mirrors respond with expected payloads.",
+  "frontDoorValidation": {
+    "candidate": "Route is planned or architecturally possible; no operator evidence yet",
+    "configured": "Deployment settings, DNS, or TLS configuration exists but not fully proven live",
+    "verified": "Route responds to health checks and serves the canonical dashboard; operator has confirmed"
+  },
+  "lastChecked": "2026-05-31T18:45:00-04:00",
   "deployProvider": "Netlify",
   "deployBranch": "master",
-  "mirrorPolicy": "Local is primary; cloud URLs are mirrors and must not create separate dashboards. Cloud URLs verified when /, /api/health, and /api/cloud-mirrors pass.",
-  "lastChecked": "2026-05-31T10:35:00-04:00",
   "netlifyDeployId": "6a1c3fa0742f62c1b2fbe103",
   "awsRuntime": {
     "target": "ECS Fargate or compatible AWS container service",
     "imageSource": "apps/lantern-garage/Dockerfile",
     "containerPort": 8080,
     "startCommand": "npm run start:cloud",
-    "status": "aws_service_url_pending_operator_deploy"
+    "status": "candidate"
   },
   "cloudMirrors": [
     {
       "name": "Lantern OS Netlify Cloud",
       "url": "https://lantern-os-cloud.netlify.app",
       "role": "production cloud mirror",
-      "status": "live",
+      "status": "configured",
+      "frontDoorStatus": "configured",
       "healthPath": "/api/health",
-      "deployedAt": "2026-05-31"
+      "deployedAt": "2026-05-31",
+      "verified": false,
+      "notes": "Deploy active but public health check needs confirmation"
     }
   ],
   "retiredMirrors": [
