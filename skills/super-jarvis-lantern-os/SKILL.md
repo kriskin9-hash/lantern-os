@@ -1,6 +1,6 @@
 ---
 name: super-jarvis-lantern-os
-description: Single canonical Lantern OS skill. Use for all Lantern OS work: repo inspection, PDF/report generation, RAG dollhouse memory, COMET LEAP / COMETSHOT / Founder / Patient A updates, Bayesian confidence, Clean Storm sprints, Tony Garage, wallet/cash ledgers, archive/commons intake, shareholder packets, dual boot/device/server-farm boundaries, MCP/tool verification, per-user license wallet setup, and v1 readiness. Legacy subskill folders remain as references, but this file is the one operator entrypoint.
+description: "Single canonical Lantern OS skill. Use for all Lantern OS work: repo inspection, PDF/report generation, RAG dollhouse memory, COMET LEAP / COMETSHOT / Founder / Patient A updates, Bayesian confidence, Clean Storm sprints, Tony Garage, wallet/cash ledgers, archive/commons intake, shareholder packets, dual boot/device/server-farm boundaries, MCP/tool verification, per-user license wallet setup, and v1 readiness. Legacy subskill folders remain as references, but this file is the one operator entrypoint."
 ---
 
 # Super Jarvis Lantern OS - Unified Skill
@@ -83,11 +83,38 @@ This one skill owns all Lantern OS domains:
 | COMET LEAP / COMETSHOT | master report, token/revenue, founder/patient updates, agile sprint | `reports/COMET-*`, `manifests/` |
 | Founder / Patient A | privacy-safe operator/founder reports, patient-style evidence gates | `reports/`, `data/world-model/` |
 | Tony Garage / Arc Reactor | power score, cockpit, proof ladder, readiness | `surfaces/tony-garage/`, `reports/ARC-*`, `data/arc-reactor/` |
-| Bayesian world model | priors, evidence weights, promote/hold/reject | `data/world-model/belief-ledger.jsonl` |
+| Bayesian world model | priors, evidence weights, promote/hold/reject | `data/world-model/belief-ledger.jsonl`, `data/rag-world-model/FLEET-CONFIDENCE-STATE.json` |
 | Wallet/cash/license | cleared-cash ledger, license wallet schema, invoice states, no fake revenue | `data/wallet/` |
 | Archive/commons | metadata-first public-domain/CC/OSS intake | `data/archive-commons/`, `scripts/Invoke-ArchiveCommonsBatch.ps1` |
 | One World Leader app | product atlas, learning packets, ethical service app | `reports/LANTERN-PRODUCT-UNIVERSE-ATLAS.md` |
 | Devices/server farm | dual boot, phone edge nodes, local/offline capacity | `dual-boot/`, inventory docs |
+
+## 3A. Status Cube Matrix
+
+Use the Status Cube as the safe 4D routing matrix for Lantern OS state. It is an
+interface model, not exotic propulsion, time travel, or a physical drive.
+
+| Axis | Meaning | Route decisions through |
+|---|---|---|
+| `x` | body, device, repo, or product location | where the artifact lives and who touches it |
+| `y` | module lane | which domain owns the next action |
+| `z` | risk and safety depth | proven, candidate, held, or blocked |
+| `t` | timeline and proof state | current evidence, last validation, next receipt |
+
+When a request feels broad, compress it into one Status Cube row before acting:
+
+| Row | `x` location | `y` lane | `z` boundary | `t` proof action |
+|---|---|---|---|---|
+| Repo patch | file or folder path | repo control plane | avoid unrelated dirty work | diff, check, record |
+| Report/PDF | source Markdown path | report lane | no uncited claims | render or cite validation |
+| RAG memory | flat source path | dollhouse lane | no raw private context | hash, source, chunk |
+| Wallet/cash | ledger path | wallet lane | cleared cash only | receipt or invoice state |
+| Device/suit | module location | MK1/device lane | no unsafe physical mutation | held gate or test matrix |
+| App/product | user-facing slice | One World Leader lane | service over authority claims | user feedback or pilot |
+
+The Status Cube replaces old `tesseract drive` language in active operator
+instructions. Keep historic tesseract art/math references only when they are
+plain geometry, decorative style, or school-learning context.
 
 ## 4. PDF and Report Rules
 

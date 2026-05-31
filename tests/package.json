@@ -1,0 +1,15 @@
+{
+  "name": "lantern-os-browser-tests",
+  "version": "1.0.0",
+  "description": "Browser testing for Lantern OS surfaces using Playwright",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
+    "install:browsers": "playwright install --with-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0"
+  }
+}

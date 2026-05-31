@@ -1,0 +1,27 @@
+{
+  "statementCount": 1,
+  "statements": [
+    {
+      "statementPeriod": "Statement Period:\nApr 16, 2026",
+      "accountNumber": "2250",
+      "accountType": null,
+      "openingBalance": null,
+      "closingBalance": null
+    }
+  ],
+  "transactions": [],
+  "summary": {
+    "infrastructureCosts": {
+      "total": 0,
+      "transactionCount": 0,
+      "transactions": []
+    },
+    "allTransactions": {
+      "total": 0,
+      "totalSpending": 0,
+      "totalDeposits": 0
+    },
+    "categoryBreakdown": {},
+    "netCashFlow": 0
+  }
+}

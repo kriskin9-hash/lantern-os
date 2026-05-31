@@ -1,0 +1,26 @@
+﻿{
+    "generatedAt":  "2026-05-31T04:11:24.1107118-04:00",
+    "evidenceClass":  "health_check",
+    "root":  "D:\\tmp\\lantern-os",
+    "git":  {
+                "dirty":  true,
+                "branch":  "master",
+                "commit":  "fa6e05e"
+            },
+    "disk":  {
+                 "freeGB":  225.04,
+                 "usedGB":  1.14,
+                 "lowDisk":  false
+             },
+    "network":  {
+                    "githubReachable":  true
+                },
+    "scripts":  {
+                    "required":  6,
+                    "missing":  0,
+                    "missingList":  [
+
+                                    ]
+                },
+    "status":  "ok"
+}

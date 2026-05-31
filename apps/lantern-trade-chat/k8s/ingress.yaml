@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lantern-trade-chat
+  namespace: lantern
+  annotations:
+    # Terminate TLS via cert-manager (adjust issuer to your cluster).
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - trade.lantern.example.com
+      secretName: lantern-trade-chat-tls
+  rules:
+    - host: trade.lantern.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lantern-trade-chat
+                port:
+                  number: 80

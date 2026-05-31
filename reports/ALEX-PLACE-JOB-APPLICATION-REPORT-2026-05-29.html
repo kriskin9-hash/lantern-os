@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alex Place - Job Application Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2em;
+            color: #333;
+            background: #fff;
+        }
+        
+        h1 {
+            color: #0f8f8f;
+            border-bottom: 3px solid #0f8f8f;
+            padding-bottom: 0.5em;
+        }
+        
+        h2 {
+            color: #08706f;
+            margin-top: 2em;
+            border-bottom: 1px solid #b9c9d3;
+            padding-bottom: 0.3em;
+        }
+        
+        h3 {
+            color: #334155;
+            margin-top: 1.5em;
+        }
+        
+        .report-meta {
+            background: #f4f6f2;
+            padding: 1em;
+            border-radius: 8px;
+            margin: 1em 0;
+            border-left: 4px solid #0f8f8f;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+        }
+        
+        th, td {
+            border: 1px solid #b9c9d3;
+            padding: 0.75em;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #0f8f8f;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f4f6f2;
+        }
+        
+        .strengths, .capabilities {
+            background: #e8f5f3;
+            padding: 1em;
+            border-radius: 8px;
+            margin: 1em 0;
+        }
+        
+        ul, ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+        
+        li {
+            margin: 0.5em 0;
+        }
+        
+        code {
+            background: #f4f6f2;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .conclusion {
+            background: linear-gradient(135deg, #0e1b28, #1e2a33);
+            color: white;
+            padding: 2em;
+            border-radius: 12px;
+            margin: 2em 0;
+        }
+        
+        .conclusion h2 {
+            color: #8ee5df;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .recommendation {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #8ee5df;
+            margin-top: 1em;
+        }
+        
+        .appendix {
+            background: #edf2f4;
+            padding: 1.5em;
+            border-radius: 8px;
+            margin-top: 2em;
+            border-left: 4px solid #b48732;
+        }
+        
+        @media print {
+            body {
+                max-width: 100%;
+                padding: 0;
+            }
+            
+            .conclusion {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Alex Place - Job Application Report</h1>
+    
+    <div class="report-meta">
+        <p><strong>Report Date:</strong> 2026-05-29</p>
+        <p><strong>Report Type:</strong> Job Application Portfolio</p>
+        <p><strong>Evidence Class:</strong> github_metadata + source_repo_evidence</p>
+        <p><strong>Confidence:</strong> 0.85 (candidate - public GitHub evidence + repo documentation)</p>
+        <p><strong>Status:</strong> Ready for distribution</p>
+    </div>
+
+    <h2>Executive Summary</h2>
+    
+    <p>Alex Place is an Ohio-based solo software developer and open-source operator specializing in local-first AI orchestration, evidence-gated documentation systems, and human-centered project tooling. As the primary builder of Lantern OS, Alex demonstrates advanced capabilities in multi-agent orchestration, convergence loop validation, RAG memory systems, and operator interface design.</p>
+    
+    <div class="strengths">
+        <h3>Key Strengths:</h3>
+        <ul>
+            <li>Full-stack local-first development with Windows/PowerShell expertise</li>
+            <li>AI agent orchestration and multi-system integration</li>
+            <li>Evidence-driven development methodology with validation loops</li>
+            <li>Open-source project management and community building</li>
+            <li>Cross-domain integration (documentation, UI/UX, system architecture)</li>
+        </ul>
+    </div>
+    
+    <p><strong>Primary Project:</strong> Lantern OS - A local-first control plane for AI-assisted work, currently in pre-v1.0.0 staging phase.</p>
+
+    <h2>Professional Profile</h2>
+    
+    <h3>Core Identity</h3>
+    <ul>
+        <li><strong>Location:</strong> Ohio, USA</li>
+        <li><strong>Role:</strong> Solo Software Developer & Open-Source Operator</li>
+        <li><strong>Primary Focus:</strong> Local-first AI orchestration and documentation systems</li>
+        <li><strong>Work Style:</strong> Evidence-driven, validation-first development</li>
+        <li><strong>Public Presence:</strong> GitHub (@alex-place), Lantern OS maintainer</li>
+    </ul>
+
+    <h3>Technical Philosophy</h3>
+    <p>Alex's development approach emphasizes:</p>
+    <ol>
+        <li>Inspect before editing</li>
+        <li>Keep changes small and reviewable</li>
+        <li>Treat dirty worktrees as high risk</li>
+        <li>Do not claim readiness without validation</li>
+        <li>Separate concept, evidence, and private-IP material</li>
+        <li>Use public-safe summaries for sensitive content</li>
+        <li>Prefer rollback paths and explicit held states over unsupported claims</li>
+    </ol>
+
+    <h2>Technical Capabilities</h2>
+    
+    <h3>Development Stack</h3>
+    <ul>
+        <li><strong>Languages:</strong> JavaScript, TypeScript, Python, PowerShell, Markdown</li>
+        <li><strong>Platforms:</strong> Windows, NixOS, local-first architectures</li>
+        <li><strong>Version Control:</strong> Git/GitHub with advanced workflow management</li>
+        <li><strong>Documentation:</strong> Markdown, PDF generation, report automation</li>
+        <li><strong>AI/ML:</strong> RAG systems, agent orchestration, multi-model integration</li>
+    </ul>
+
+    <h3>Core Competencies</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Domain</th>
+                <th>Skill Level</th>
+                <th>Evidence</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Local-First Development</td>
+                <td>Expert</td>
+                <td>Lantern OS architecture, convergence loops</td>
+            </tr>
+            <tr>
+                <td>AI Agent Orchestration</td>
+                <td>Advanced</td>
+                <td>12x3 fleet contract, MCP work split</td>
+            </tr>
+            <tr>
+                <td>RAG Memory Systems</td>
+                <td>Advanced</td>
+                <td>Lantern RAG Dollhouse, flat-file memory</td>
+            </tr>
+            <tr>
+                <td>Documentation Systems</td>
+                <td>Expert</td>
+                <td>Evidence-gated documentation, validation loops</td>
+            </tr>
+            <tr>
+                <td>Windows/PowerShell</td>
+                <td>Advanced</td>
+                <td>Local controls, deployment scripts</td>
+            </tr>
+            <tr>
+                <td>GitHub Workflows</td>
+                <td>Expert</td>
+                <td>Issue/PR management, fleet coordination</td>
+            </tr>
+            <tr>
+                <td>System Architecture</td>
+                <td>Advanced</td>
+                <td>Multi-repo integration, convergence design</td>
+            </tr>
+            <tr>
+                <td>UI/UX Design</td>
+                <td>Intermediate</td>
+                <td>Dashboard surfaces, operator interfaces</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Recent Technical Work</h3>
+    
+    <h4>Windsurf Developer Integration (Latest commits):</h4>
+    <ul>
+        <li>AI-powered developer interface with cloud deployment</li>
+        <li>GameMaker integration for multi-agent access</li>
+        <li>Real-time Lantern OS system integration</li>
+        <li>GitHub Pages deployment automation</li>
+        <li>PDF report generation for validation</li>
+    </ul>
+
+    <h4>Lantern OS Core Systems:</h4>
+    <ul>
+        <li>12-step convergence loop for artifact validation</li>
+        <li>12x3 fleet contract with 36 designed slots</li>
+        <li>MCP work split for safe tool boundary management</li>
+        <li>RAG Dollhouse for structured memory intake</li>
+        <li>Dashboard surfaces for local status monitoring</li>
+    </ul>
+
+    <h2>Project Portfolio</h2>
+    
+    <h3>Primary Project: Lantern OS</h3>
+    <p><strong>Status:</strong> Pre-v1.0.0 staging</p>
+    <p><strong>Repository:</strong> https://github.com/alex-place/lantern-os</p>
+    <p><strong>Role:</strong> Lead Developer & Project Operator</p>
+
+    <h4>Key Components:</h4>
+    <ul>
+        <li><strong>Convergence Loop:</strong> 12-step validation process for artifact promotion</li>
+        <li><strong>Agent Fleet:</strong> 12x3 designed review ring with 64-worker elastic pool</li>
+        <li><strong>MCP Integration:</strong> Safe tool boundary management and local probe validation</li>
+        <li><strong>RAG Dollhouse:</strong> Flat-file memory system with evidence-labeled records</li>
+        <li><strong>Dashboard Surfaces:</strong> Local operator interfaces for project status</li>
+        <li><strong>Report Systems:</strong> Automated PDF generation and validation receipts</li>
+    </ul>
+
+    <h3>Supporting Skills & Systems</h3>
+    
+    <h4>Super Jarvis Lantern OS Skill:</h4>
+    <ul>
+        <li>Unified operator entrypoint for all Lantern OS work</li>
+        <li>12-step operating loop with comprehensive validation</li>
+        <li>Evidence class system with confidence scoring</li>
+        <li>Multi-domain integration capabilities</li>
+    </ul>
+
+    <h4>Windsurf Developer Experience:</h4>
+    <ul>
+        <li>AI-powered code editing with Lantern OS context</li>
+        <li>Real-time code assistance and debugging</li>
+        <li>RAG system integration for full project awareness</li>
+        <li>Deployment workflow automation</li>
+    </ul>
+
+    <h2>Working Style & Methodology</h2>
+    
+    <h3>Development Approach</h3>
+    <ol>
+        <li><strong>Status First:</strong> Always inspect actual repo/tool state before changes</li>
+        <li><strong>Evidence-Driven:</strong> Require validation before claiming readiness</li>
+        <li><strong>Small Changes:</strong> Keep changes reviewable and incremental</li>
+        <li><strong>Safety-First:</strong> Explicit boundaries for destructive operations</li>
+        <li><strong>Rollback Planning:</strong> Always maintain rollback paths and receipts</li>
+    </ol>
+
+    <h3>Collaboration Style</h3>
+    <ul>
+        <li><strong>Documentation-First:</strong> Clear documentation before implementation</li>
+        <li><strong>Validation Loops:</strong> Multi-step validation before promotion</li>
+        <li><strong>Public-Safe Communication:</strong> Appropriate boundaries for private material</li>
+        <li><strong>Evidence-Based:</strong> Claims supported by verifiable evidence</li>
+        <li><strong>Operator-Focused:</strong> Designed for operator control and review</li>
+    </ul>
+
+    <h2>Technical Achievements</h2>
+    
+    <h3>System Architecture</h3>
+    <ul>
+        <li><strong>Local-First Design:</strong> Windows-focused with local control plane</li>
+        <li><strong>Multi-Agent Orchestration:</strong> 12x3 fleet contract with elastic scaling</li>
+        <li><strong>Evidence Systems:</strong> Structured evidence classes with confidence scoring</li>
+        <li><strong>RAG Integration:</strong> Flat-file memory with asset hashing and validation</li>
+        <li><strong>Deployment Automation:</strong> PowerShell scripts for local controls and deployment</li>
+    </ul>
+
+    <h3>Innovation Areas</h3>
+    <ul>
+        <li><strong>Convergence Methodology:</strong> Novel 12-step validation loop for complex systems</li>
+        <li><strong>Evidence-Gated Documentation:</strong> New approach to documentation validation</li>
+        <li><strong>Local-First AI:</strong> AI orchestration with local control and remote validation</li>
+        <li><strong>Multi-Repo Fleet:</strong> Distributed agent coordination across repositories</li>
+        <li><strong>Operator Interfaces:</strong> Dashboard surfaces for local status and control</li>
+    </ul>
+
+    <h2>Job Readiness Assessment</h2>
+    
+    <h3>Strengths for Employment</h3>
+    <ol>
+        <li><strong>Full-Stack Capability:</strong> From system architecture to UI implementation</li>
+        <li><strong>Evidence-Driven:</strong> Validated approach with clear documentation</li>
+        <li><strong>Self-Directed:</strong> Solo developer with complete project ownership</li>
+        <li><strong>Safety-Focused:</strong> Explicit boundaries and validation procedures</li>
+        <li><strong>Documentation Skills:</strong> Comprehensive technical documentation abilities</li>
+        <li><strong>AI/ML Experience:</strong> Practical AI agent orchestration and RAG systems</li>
+        <li><strong>Windows Expertise:</strong> Advanced PowerShell and Windows development</li>
+        <li><strong>Open Source Experience:</strong> Public repository management and community engagement</li>
+    </ol>
+
+    <h3>Role Suitability</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Role</th>
+                <th>Suitability</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Full-Stack Developer</td>
+                <td>High</td>
+                <td>Complete system ownership, local-first expertise</td>
+            </tr>
+            <tr>
+                <td>AI/ML Engineer</td>
+                <td>Medium-High</td>
+                <td>Practical agent orchestration, RAG systems</td>
+            </tr>
+            <tr>
+                <td>Systems Architect</td>
+                <td>High</td>
+                <td>Complex system design, evidence-driven methodology</td>
+            </tr>
+            <tr>
+                <td>Technical Writer</td>
+                <td>High</td>
+                <td>Comprehensive documentation skills</td>
+            </tr>
+            <tr>
+                <td>DevOps Engineer</td>
+                <td>Medium</td>
+                <td>PowerShell/deployment skills, could expand cloud</td>
+            </tr>
+            <tr>
+                <td>Product Manager</td>
+                <td>Medium</td>
+                <td>Product vision, could expand market experience</td>
+            </tr>
+            <tr>
+                <td>Team Lead</td>
+                <td>Medium</td>
+                <td>Solo experience, leadership potential in larger settings</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>Contact & Portfolio</h2>
+    
+    <h3>Public Channels</h3>
+    <ul>
+        <li><strong>GitHub:</strong> https://github.com/alex-place</li>
+        <li><strong>Primary Repository:</strong> https://github.com/alex-place/lantern-os</li>
+        <li><strong>Project Wiki:</strong> docs/wiki/ALEX-PLACE.md in repository</li>
+        <li><strong>Support:</strong> Repository README for current contact methods</li>
+    </ul>
+
+    <h3>Portfolio Access</h3>
+    <ul>
+        <li><strong>Lantern OS:</strong> Complete project with documentation and skills</li>
+        <li><strong>Skills System:</strong> Reusable skill architecture with documentation</li>
+        <li><strong>Reports:</strong> Comprehensive project reports and validation receipts</li>
+        <li><strong>Surfaces:</strong> Operator interfaces and dashboard examples</li>
+    </ul>
+
+    <div class="conclusion">
+        <h2>Conclusion</h2>
+        
+        <p>Alex Place is a highly capable solo developer with advanced expertise in local-first AI orchestration, evidence-driven development, and complex system architecture. The Lantern OS project demonstrates sophisticated technical skills across multiple domains, from system architecture to UI design, with a strong emphasis on validation and safety.</p>
+        
+        <p>The evidence-driven methodology and comprehensive documentation approach make Alex particularly well-suited for roles requiring:</p>
+        <ul>
+            <li>Full-stack development with system architecture</li>
+            <li>AI/ML system integration with safety boundaries</li>
+            <li>Technical documentation and validation processes</li>
+            <li>Local-first development with remote validation</li>
+            <li>Open-source project management and community engagement</li>
+        </ul>
+        
+        <p class="recommendation">Recommendation: Strong candidate for full-stack development, AI/ML engineering, systems architecture, or technical writing roles, particularly in organizations valuing evidence-driven development and local-first computing approaches.</p>
+    </div>
+
+    <div class="appendix">
+        <h2>Appendix</h2>
+        
+        <h3>Evidence Sources</h3>
+        <ul>
+            <li>GitHub Repository: https://github.com/alex-place/lantern-os</li>
+            <li>Wiki Profile: docs/wiki/ALEX-PLACE.md</li>
+            <li>Skill Documentation: skills/super-jarvis-lantern-os/SKILL.md</li>
+            <li>Convergence Loop: docs/CONVERGENCE-LOOP.md</li>
+            <li>Fleet Contract: manifests/CONVERGENCE-LOOP-AGENT-FLEET.md</li>
+        </ul>
+
+        <h3>Report Metadata</h3>
+        <ul>
+            <li><strong>Generated:</strong> 2026-05-29</li>
+            <li><strong>Evidence Class:</strong> github_metadata + source_repo_evidence</li>
+            <li><strong>Confidence Score:</strong> 0.85</li>
+            <li><strong>Validation Status:</strong> Ready for distribution</li>
+            <li><strong>Next Review:</strong> Update with additional evidence or employer feedback</li>
+        </ul>
+
+        <h3>Boundaries & Limitations</h3>
+        <ul>
+            <li>This report is based on public GitHub evidence and repository documentation</li>
+            <li>Private work experience, education, and personal details are not included</li>
+            <li>Claims are based on observable code and documentation only</li>
+            <li>No medical, legal, or financial claims are made</li>
+            <li>Technical assessments are based on code quality and architecture review</li>
+        </ul>
+
+        <p><em>Report generated using Lantern OS Super Jarvis skill with evidence-driven methodology. For questions or additional information, refer to the public GitHub repository and documentation.</em></p>
+    </div>
+</body>
+</html>

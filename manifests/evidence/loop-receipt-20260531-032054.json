@@ -1,0 +1,44 @@
+﻿{
+    "receiptId":  "loop-receipt-20260531-032054",
+    "generatedAt":  "2026-05-31T03:20:54.3218308-04:00",
+    "evidenceClass":  "convergence_loop_run",
+    "exitCode":  0,
+    "passed":  true,
+    "issueCount":  0,
+    "nextAction":  "No local loop issues found. Review held issues and choose the next promotion candidate.",
+    "leadingIssues":  {
+
+                      },
+    "held":  {
+                 "id":  "LANTERN-OS-BOOT-001",
+                 "severity":  "blocked",
+                 "summary":  "Actual dual boot installation requires physical operator action.",
+                 "fix":  "Keep held; do not automate disk, BCD, firmware, or bootloader mutation."
+             },
+    "sourceRepos":  [
+                        {
+                            "repo":  "C:\\tmp\\human-flourishing-frameworks-scan",
+                            "exists":  true,
+                            "dirty":  true,
+                            "changedCount":  9,
+                            "state":  "local_dirty",
+                            "gitStatusError":  null,
+                            "gitStatusMode":  "normal"
+                        },
+                        {
+                            "repo":  "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+                            "exists":  true,
+                            "dirty":  true,
+                            "changedCount":  5,
+                            "state":  "local_dirty",
+                            "gitStatusError":  null,
+                            "gitStatusMode":  "normal"
+                        }
+                    ],
+    "rawOutputLines":  [
+                           "{\r\n    \"generatedAt\":  \"2026-05-31T03:20:54.1911132-04:00\",\r\n    \"root\":  \"D:\\\\tmp\\\\lantern-os\",\r\n    \"mode\":  \"local\",\r\n    \"method\":  \"Lantern OS 12-step convergence loop\",\r\n    \"designedRingSlots\":  36,\r\n    \"elasticPoolTarget\":  64,\r\n    \"fleetClaimBoundary\":  \"design contract only; live worker counts require local orchestrator evidence\",\r\n    \"fixWindow\":  4,\r\n    \"issueCount\":  0,\r\n    \"leadingIssues\":  [\r\n\r\n                      ],\r\n    \"held\":  [\r\n                 {\r\n                     \"id\":  \"LANTERN-OS-BOOT-001\",\r\n                     \"severity\":  \"blocked\",\r\n                     \"summary\":  \"Actual dual boot installation requires physical operator action.\",\r\n                     \"fix\":  \"Keep held; do not automate disk, BCD, firmware, or bootloader mutation.\"\r\n                 }\r\n             ],\r\n    \"sourceRepos\":  [\r\n                        {\r\n                            \"repo\":  \"C:\\\\tmp\\\\human-flourishing-frameworks-scan\",\r\n                            \"exists\":  true,\r\n                            \"dirty\":  true,\r\n                            \"changedCount\":  9,\r\n                            \"state\":  \"local_dirty\",\r\n                            \"gitStatusError\":  null,\r\n                            \"gitStatusMode\":  \"normal\"\r\n                        },\r\n                        {\r\n                            \"repo\":  \"C:\\\\Users\\\\alexp\\\\Documents\\\\gm-agent-orchestrator\",\r\n                            \"exists\":  true,\r\n                            \"dirty\":  true,\r\n                            \"changedCount\":  5,\r\n                            \"state\":  \"local_dirty\",\r\n                            \"gitStatusError\":  null,\r\n                            \"gitStatusMode\":  \"normal\"\r\n                        }\r\n                    ],\r\n    \"nextAction\":  \"No local loop issues found. Review held issues and choose the next promotion candidate.\"\r\n}"
+                       ],
+    "loopScript":  "scripts/Invoke-LanternConvergenceLoop.ps1",
+    "dryRun":  false,
+    "boundary":  "Receipt is evidence only. No score updates applied here. Use Update-ArcReactorStatus.ps1 for confidence changes."
+}

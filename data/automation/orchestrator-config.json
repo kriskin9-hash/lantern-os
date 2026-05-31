@@ -42,6 +42,118 @@
         "root": "D:\\tmp\\lantern-os",
         "fixWindow": 4
       }
+    },
+    {
+      "name": "asset-discovery",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-AssetDiscoveryEngine.ps1",
+      "enabled": true,
+      "priority": 5,
+      "intervalMinutes": 60,
+      "parameters": {
+        "scanPath": "D:\\tmp\\lantern-os",
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\asset-discovery-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "emergency-campaign",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-EmergencyFundingCampaign.ps1",
+      "enabled": true,
+      "priority": 6,
+      "intervalMinutes": 30,
+      "parameters": {
+        "resultsPath": "D:\\tmp\\lantern-os\\data\\automation\\emergency-campaign-results.json",
+        "runOnce": true,
+        "dryRun": true
+      }
+    },
+    {
+      "name": "git-hygiene",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-GitHygieneEngine.ps1",
+      "enabled": true,
+      "priority": 7,
+      "intervalMinutes": 15,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\git-hygiene-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "brier-calibration",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-BrierCalibrationEngine.ps1",
+      "enabled": true,
+      "priority": 8,
+      "intervalMinutes": 60,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\brier-calibration-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "evidence-validation",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-EvidenceValidationEngine.ps1",
+      "enabled": true,
+      "priority": 9,
+      "intervalMinutes": 30,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\evidence-validation-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "fleet-health",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-FleetHealthEngine.ps1",
+      "enabled": true,
+      "priority": 10,
+      "intervalMinutes": 10,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\fleet-health-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "fleet-confidence",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Compute-FleetConfidence.ps1",
+      "enabled": true,
+      "priority": 11,
+      "intervalMinutes": 60,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\rag-world-model\\FLEET-CONFIDENCE-STATE.json",
+        "runOnce": false
+      }
+    },
+    {
+      "name": "public-platform-readiness",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-Movie2ReadinessTracker.ps1",
+      "enabled": true,
+      "priority": 12,
+      "intervalMinutes": 30,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\public-platform-readiness-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "mcp-canary",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-McpCanaryTestEngine.ps1",
+      "enabled": true,
+      "priority": 13,
+      "intervalMinutes": 60,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\mcp-canary-results.json",
+        "runOnce": true
+      }
+    },
+    {
+      "name": "human-trial-gates",
+      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-HumanTrialGateMonitor.ps1",
+      "enabled": true,
+      "priority": 14,
+      "intervalMinutes": 30,
+      "parameters": {
+        "outputPath": "D:\\tmp\\lantern-os\\data\\automation\\human-trial-gate-results.json",
+        "runOnce": true
+      }
     }
   ],
   "mainLoop": {

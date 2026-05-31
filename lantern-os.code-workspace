@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"name": "lantern-os",
+			"path": "."
+		},
+		{
+			"name": "tmp",
+			"path": ".."
+		}
+	],
+	"settings": {},
+	"workbenchMode": "windsurf-agent-window"
+}

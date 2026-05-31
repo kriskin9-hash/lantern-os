@@ -1,0 +1,752 @@
+{
+  "generatedAt": "2026-05-31T11:05:00Z",
+  "version": "5",
+  "sources": [
+    {
+      "id": "gm-agent-orchestrator-github",
+      "label": "GM Agent Orchestrator (GitHub)",
+      "baseUrl": "https://github.com/alex-place/gm-agent-orchestrator",
+      "transport": "source_repo",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "github_metadata",
+        "repoPath": "alex-place/gm-agent-orchestrator",
+        "localClonePath": "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator"
+      },
+      "ioProfile": {
+        "inputMode": "source_repo_evidence",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Source repo for agent orchestrator. MCP tool claims are held until a local bridge or GitHub MCP server is verified."
+    },
+    {
+      "id": "gm-agent-orchestrator-local",
+      "label": "GM Agent Orchestrator Local",
+      "baseUrl": "http://127.0.0.1:8787",
+      "transport": "http_jsonrpc",
+      "enabled": false,
+      "localOnly": true,
+      "allowRemote": false,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "healthPath": "/health",
+        "rpcPath": "/mcp"
+      },
+      "ioProfile": {
+        "inputMode": "jsonrpc_tools",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Fallback local MCP source. Held until local service starts."
+    },
+    {
+      "id": "aws-cli-mcp",
+      "label": "AWS CLI MCP (Local)",
+      "baseUrl": "http://127.0.0.1:8765",
+      "transport": "http_jsonrpc",
+      "enabled": false,
+      "localOnly": true,
+      "allowRemote": false,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "aws_cli_bridge",
+        "healthPath": "/health",
+        "rpcPath": "/mcp",
+        "requiredEnv": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"]
+      },
+      "ioProfile": {
+        "inputMode": "jsonrpc_tools",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "AWS CLI MCP bridge. HELD until AWS credentials configured and canary test passes. Requires manual setup of AWS MCP server in Windsurf."
+    },
+    {
+      "id": "aws-bedrock-mcp",
+      "label": "AWS Bedrock MCP (Local)",
+      "baseUrl": "http://127.0.0.1:8766",
+      "transport": "http_jsonrpc",
+      "enabled": false,
+      "localOnly": true,
+      "allowRemote": false,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "aws_bedrock_bridge",
+        "healthPath": "/health",
+        "rpcPath": "/mcp",
+        "requiredEnv": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_DEFAULT_REGION"]
+      },
+      "ioProfile": {
+        "inputMode": "jsonrpc_tools",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "AWS Bedrock model access. HELD until AWS credentials configured and IAM permissions verified."
+    },
+    {
+      "id": "census-btos",
+      "label": "U.S. Census BTOS",
+      "baseUrl": "https://www.census.gov/data/experimental-data-products/business-trends-and-outlook-survey.html",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "business_survey",
+        "refreshInterval": "monthly"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Census Business Trends and Outlook Survey. Public government data. Used for SMB AI adoption claims (17-20% range). No authentication required."
+    },
+    {
+      "id": "uschamber-ai-report",
+      "label": "U.S. Chamber Small Business AI Report 2025",
+      "baseUrl": "https://www.uschamber.com/technology/empowering-small-business-the-impact-of-technology-on-u-s-small-business",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "industry_report",
+        "refreshInterval": "annual"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Chamber report: 60% SMB using AI for operations, 82% expecting future help. Used to support paid AI setup/training offers."
+    },
+    {
+      "id": "pew-homeschool",
+      "label": "Pew Research Homeschooling Data",
+      "baseUrl": "https://www.pewresearch.org/short-reads/2025/02/20/a-look-at-homeschooling-in-the-us/",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "research_summary",
+        "refreshInterval": "annual"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Pew homeschooling summary: 3.4% of K-12 students homeschooled (2022-23). Supports parent/family learning packet offers."
+    },
+    {
+      "id": "jhu-homeschool-growth",
+      "label": "Johns Hopkins Homeschool Growth 2024-2025",
+      "baseUrl": "https://education.jhu.edu/edpolicy/policy-research-initiatives/homeschool-hub/homeschool-growth-2024-2025/",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "research_data",
+        "refreshInterval": "annual"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Johns Hopkins: Homeschooling grew 4.9% in 2024-2025. Supports homeschool/alternative education lead lists."
+    },
+    {
+      "id": "edchoice-tutoring",
+      "label": "EdChoice K-12 Tutoring Survey",
+      "baseUrl": "https://www.edchoice.org/2025-a-kaleidoscope-view-of-k12-tutoring-in-america/",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "survey_report",
+        "refreshInterval": "annual"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "EdChoice: >55% parent interest in tutoring among some segments. Supports tutoring-adjacent offers with pilot validation."
+    },
+    {
+      "id": "business-com-smb-ai",
+      "label": "Business.com SMB AI Outlook 2026",
+      "baseUrl": "https://www.business.com/articles/ai-usage-smb-workplace-study/",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "industry_report",
+        "refreshInterval": "annual"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Business.com SMB AI study. Secondary evidence for training/implementation offers."
+    },
+    {
+      "id": "kalshi-public-markets",
+      "label": "Kalshi Public Markets API",
+      "baseUrl": "https://external-api.kalshi.com/trade-api/v2/markets",
+      "transport": "rest_api",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "public_api",
+        "authType": "none_for_read",
+        "rateLimit": "respectful",
+        "endpoints": ["/markets"]
+      },
+      "ioProfile": {
+        "inputMode": "api_query",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Kalshi public markets endpoint. No authenticated trading. Research-only market data for watchlist generation. Rate limits must be respected."
+    },
+    {
+      "id": "kalshi-docs",
+      "label": "Kalshi API Documentation",
+      "baseUrl": "https://docs.kalshi.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "documentation",
+        "dataType": "api_reference"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Kalshi API documentation for understanding market data structure. Reference only."
+    },
+    {
+      "id": "kofi-support",
+      "label": "Ko-fi Support Page",
+      "baseUrl": "https://ko-fi.com/alexplace",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "support_profile"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Ko-fi support link from existing repo reports. Reference for funding coordination."
+    },
+    {
+      "id": "hff-scan-repo",
+      "label": "Human Flourishing Frameworks Scan (GitHub)",
+      "baseUrl": "https://github.com/alex-place/human-flourishing-frameworks-scan",
+      "transport": "source_repo",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "github_metadata",
+        "repoPath": "alex-place/human-flourishing-frameworks-scan",
+        "localClonePath": "C:\\tmp\\human-flourishing-frameworks-scan"
+      },
+      "ioProfile": {
+        "inputMode": "source_repo_evidence",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "HFF architecture/prototype repo. Pre-v1 staging. Architecture review and connector sprint source."
+    },
+    {
+      "id": "hff-scan-local",
+      "label": "HFF Scan Local Clone",
+      "baseUrl": "file://C:/tmp/human-flourishing-frameworks-scan",
+      "transport": "local_filesystem",
+      "enabled": true,
+      "localOnly": true,
+      "allowRemote": false,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "local_git_repo",
+        "path": "C:\\tmp\\human-flourishing-frameworks-scan"
+      },
+      "ioProfile": {
+        "inputMode": "source_repo_evidence",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "local_only",
+        "agentPolicy": "local_only"
+      },
+      "notes": "Local clone of HFF repo for asset discovery and convergence validation."
+    },
+    {
+      "id": "lantern-os-repo",
+      "label": "Lantern OS Repository",
+      "baseUrl": "https://github.com/alex-place/lantern-os",
+      "transport": "source_repo",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "github_metadata",
+        "repoPath": "alex-place/lantern-os",
+        "localClonePath": "D:\\tmp\\lantern-os"
+      },
+      "ioProfile": {
+        "inputMode": "source_repo_evidence",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Primary Lantern OS repo. Control plane for Windows, local-first, RAG, household AI surfaces. Pre-v1 staging."
+    },
+    {
+      "id": "lantern-os-local",
+      "label": "Lantern OS Local Workspace",
+      "baseUrl": "file://D:/tmp/lantern-os",
+      "transport": "local_filesystem",
+      "enabled": true,
+      "localOnly": true,
+      "allowRemote": false,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "local_git_repo",
+        "path": "D:\\tmp\\lantern-os"
+      },
+      "ioProfile": {
+        "inputMode": "source_repo_evidence",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "local_only",
+        "agentPolicy": "local_only"
+      },
+      "notes": "Local working copy of Lantern OS. Asset discovery, skill validation, and fleet health monitoring source."
+    },
+    {
+      "id": "github-api",
+      "label": "GitHub API",
+      "baseUrl": "https://api.github.com",
+      "transport": "rest_api",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "public_api",
+        "authType": "token_optional",
+        "rateLimit": "respectful",
+        "endpoints": ["/repos", "/users", "/search"]
+      },
+      "ioProfile": {
+        "inputMode": "api_query",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "GitHub API for repo metadata, releases, issues. Token optional but recommended for rate limits. Read-only operations."
+    },
+    {
+      "id": "kickstarter",
+      "label": "Kickstarter",
+      "baseUrl": "https://www.kickstarter.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "crowdfunding_platform"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Kickstarter crowdfunding platform. Reference for campaign structure, fees, and timeline. Emergency funding option - slower payout (30-60 days). Not yet launched."
+    },
+    {
+      "id": "patreon",
+      "label": "Patreon",
+      "baseUrl": "https://www.patreon.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "membership_platform"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Patreon membership platform. Reference for recurring support tiers. Emergency funding option - immediate but small amounts. Monthly payout cadence. Not yet launched."
+    },
+    {
+      "id": "gofundme",
+      "label": "GoFundMe",
+      "baseUrl": "https://www.gofundme.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "crowdfunding_platform"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "GoFundMe emergency fundraising. Reference for transparency requirements and emergency framing. 7-14 day payout. Not yet launched."
+    },
+    {
+      "id": "gumroad",
+      "label": "Gumroad",
+      "baseUrl": "https://gumroad.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "digital_goods_platform"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Gumroad digital goods platform. Better for digital products but has payout timing and fees. Backup option if direct outreach fails. Not yet launched."
+    },
+    {
+      "id": "etsy",
+      "label": "Etsy",
+      "baseUrl": "https://www.etsy.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "marketplace"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Etsy marketplace. Can delay funds for new sellers. Lower priority option for digital/physical goods. Not yet launched."
+    },
+    {
+      "id": "upwork",
+      "label": "Upwork",
+      "baseUrl": "https://www.upwork.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "freelance_platform"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Upwork freelance platform. Fixed-price work has 5-day hold after client review. Slower for cash access than direct outreach. Reference for service pricing benchmarks."
+    },
+    {
+      "id": "github-sponsors",
+      "label": "GitHub Sponsors",
+      "baseUrl": "https://github.com/sponsors",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "funding_platform"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "GitHub Sponsors. Supports one-time tiers but first payouts delayed, then monthly cadence. Compounding layer after publishing proof, not first cash tactic. Not yet activated."
+    },
+    {
+      "id": "itch-io",
+      "label": "Itch.io",
+      "baseUrl": "https://itch.io",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "store_platform",
+        "docsUrl": "https://itch.io/docs/itch/integrating/quickstart.html"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Itch.io store platform. Best first public store lane for creative/education/game hybrids. Low friction, supports weird early projects. Butler CLI for uploads. Not yet launched."
+    },
+    {
+      "id": "steamworks",
+      "label": "Steamworks (Steam Direct)",
+      "baseUrl": "https://partner.steamgames.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "store_platform",
+        "docsUrl": "https://partner.steamgames.com/doc/gettingstarted/appfee"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Steamworks developer portal. $100 USD per app fee. Hold until playable app target exists. Future candidate for game-like Lantern builds. Not yet applied."
+    },
+    {
+      "id": "gog-developer",
+      "label": "GOG Developer Portal",
+      "baseUrl": "https://docs.gog.com",
+      "transport": "web_scrape",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "static_webpage",
+        "dataType": "store_platform",
+        "docsUrl": "https://docs.gog.com/quick-start/"
+      },
+      "ioProfile": {
+        "inputMode": "url_reference",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "GOG developer docs. Curated/approval-based. DRM-free aligns with Lantern philosophy. Hold until polished build proves demand on Itch first. Not yet submitted."
+    },
+    {
+      "id": "internet-archive",
+      "label": "Internet Archive",
+      "baseUrl": "https://archive.org",
+      "transport": "rest_api",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "public_api",
+        "authType": "none",
+        "rateLimit": "respectful",
+        "dataType": "digital_archive"
+      },
+      "ioProfile": {
+        "inputMode": "api_query",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Internet Archive / Wayback Machine. Public-domain and Creative Commons asset intake. Metadata and provenance tracking for archive-commons skill. Rate limits must be respected."
+    },
+    {
+      "id": "lantern-official-v2",
+      "label": "Lantern OS Official Server",
+      "baseUrl": "https://lantern-os-production.up.railway.app",
+      "transport": "http_sse",
+      "enabled": true,
+      "localOnly": false,
+      "allowRemote": true,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": false,
+      "discovery": {
+        "type": "mcp_sse_endpoint",
+        "healthPath": "/health",
+        "ssePath": "/sse",
+        "authType": "oauth_github",
+        "oauthProvider": "github",
+        "oauthScopes": ["read:user", "read:org"]
+      },
+      "ioProfile": {
+        "inputMode": "sse_jsonrpc",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Official Lantern OS production MCP server. SSE transport with GitHub OAuth. New face/interface for Lantern services. Operator-approved 2026-05-31."
+    },
+    {
+      "id": "lantern-tunnel-legacy",
+      "label": "Lantern OS Legacy Tunnel (Redirect)",
+      "baseUrl": "http://localhost:3000",
+      "transport": "http_tunnel",
+      "enabled": true,
+      "localOnly": true,
+      "allowRemote": false,
+      "allowToolExecution": false,
+      "agentAgnostic": true,
+      "tokenAgnostic": true,
+      "discovery": {
+        "type": "tunnel_redirect",
+        "tunnelProvider": "cloudflare",
+        "targetService": "lantern-official-v2",
+        "legacyPaths": ["/api/status", "/api/trade", "/api/health"],
+        "redirectMap": {
+          "/api/status": "https://lantern-os-production.up.railway.app/api/status",
+          "/api/trade": "https://lantern-os-production.up.railway.app/api/trade",
+          "/api/health": "https://lantern-os-production.up.railway.app/health"
+        }
+      },
+      "ioProfile": {
+        "inputMode": "tunnel_proxy",
+        "outputMode": "content_blocks",
+        "tokenPolicy": "externalized",
+        "agentPolicy": "externalized"
+      },
+      "notes": "Legacy tunnel endpoint for backward compatibility. Redirects old local services to new official server. Keep running until refactor complete. Operator-approved 2026-05-31."
+    }
+  ]
+}

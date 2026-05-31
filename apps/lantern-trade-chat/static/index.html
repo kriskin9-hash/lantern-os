@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lantern Trade Chat</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260530-trade-chat">
+</head>
+<body data-style="plain-dashboard">
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot"></span>
+        <h1>Lantern Trade Chat</h1>
+      </div>
+      <div class="session" id="session">
+        <a class="btn" id="loginBtn" href="/login">Sign in with GitHub</a>
+      </div>
+    </header>
+
+    <section class="statusstrip" id="statusStrip" aria-label="Account and safety status">
+      <div class="stat"><span class="k">Environment</span><span class="v" id="envVal">—</span></div>
+      <div class="stat"><span class="k">Live</span><span class="v" id="liveVal">—</span></div>
+      <div class="stat"><span class="k">Kill switch</span><span class="v" id="killVal">—</span></div>
+      <div class="stat"><span class="k">Balance</span><span class="v" id="balVal">—</span></div>
+      <div class="stat"><span class="k">Today</span><span class="v" id="todayVal">—</span></div>
+    </section>
+
+    <section class="chat" aria-label="Trading chat">
+      <div class="transcript" id="transcript" aria-live="polite"></div>
+      <form class="composer" id="composer" autocomplete="off">
+        <input type="text" id="msg" name="msg" placeholder="buy 1 yes on TICKER at 40c   (type 'help')" aria-label="Message">
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+      <p class="hint">Dry-run by default. Prefix with <code>live</code> to place real money (only if this deployment is armed and you're allowlisted).</p>
+    </section>
+  </main>
+  <script src="/static/app.js?v=20260530-trade-chat" defer></script>
+</body>
+</html>

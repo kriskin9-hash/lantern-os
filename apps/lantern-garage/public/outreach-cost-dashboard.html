@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>Lantern OS - Operational Cost Transparency</title>
+  <link rel="stylesheet" href="styles.css?v=20260529-plain-console">
+  <style>
+    .cost-dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    .dashboard-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    
+    .dashboard-header h1 {
+      color: #2c3e50;
+      margin-bottom: 0.5rem;
+    }
+    
+    .dashboard-header .subtitle {
+      color: #7f8c8d;
+      font-size: 1.1rem;
+    }
+    
+    .status-banner {
+      background: #f8f9fa;
+      border-left: 4px solid #3498db;
+      padding: 1rem;
+      margin-bottom: 2rem;
+      border-radius: 4px;
+    }
+    
+    .status-banner.connected {
+      border-left-color: #27ae60;
+      background: #d5f4e6;
+    }
+    
+    .status-banner.disconnected {
+      border-left-color: #e74c3c;
+      background: #fadbd8;
+    }
+    
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border: 1px solid #e0e0e0;
+    }
+    
+    .metric-card h3 {
+      margin: 0 0 0.5rem 0;
+      color: #7f8c8d;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .metric-card .value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #2c3e50;
+      margin: 0.5rem 0;
+    }
+    
+    .metric-card .value.positive {
+      color: #27ae60;
+    }
+    
+    .metric-card .value.negative {
+      color: #e74c3c;
+    }
+    
+    .metric-card .label {
+      color: #95a5a6;
+      font-size: 0.85rem;
+    }
+    
+    .transactions-section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border: 1px solid #e0e0e0;
+      margin-bottom: 2rem;
+    }
+    
+    .transactions-section h2 {
+      margin-top: 0;
+      color: #2c3e50;
+    }
+    
+    .transaction-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    .transaction-table th,
+    .transaction-table td {
+      padding: 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid #ecf0f1;
+    }
+    
+    .transaction-table th {
+      background: #f8f9fa;
+      color: #7f8c8d;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.85rem;
+    }
+    
+    .transaction-table tr:hover {
+      background: #f8f9fa;
+    }
+    
+    .transaction-table .amount {
+      font-family: 'Courier New', monospace;
+      font-weight: bold;
+    }
+    
+    .transaction-table .amount.negative {
+      color: #e74c3c;
+    }
+    
+    .transaction-table .amount.positive {
+      color: #27ae60;
+    }
+    
+    .infrastructure-badge {
+      display: inline-block;
+      background: #3498db;
+      color: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      margin-left: 0.5rem;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    
+    .btn-primary {
+      background: #3498db;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #2980b9;
+    }
+    
+    .btn-secondary {
+      background: #95a5a6;
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background: #7f8c8d;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: #7f8c8d;
+    }
+    
+    .error {
+      background: #fadbd8;
+      border-left: 4px solid #e74c3c;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+    }
+    
+    .last-updated {
+      text-align: right;
+      color: #95a5a6;
+      font-size: 0.85rem;
+      margin-top: 1rem;
+    }
+    
+    .transparency-note {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 1rem;
+      margin-top: 2rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+    
+    .transparency-note strong {
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="cost-dashboard">
+      <div class="dashboard-header">
+        <h1>Operational Cost Transparency</h1>
+        <p class="subtitle">Real-time infrastructure cost data from U.S. Bank API integration</p>
+      </div>
+
+      <div id="statusBanner" class="status-banner disconnected">
+        <strong>Status:</strong> <span id="statusText">Not connected to bank API</span>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-primary" onclick="initiateAuth()">Connect Bank Account</button>
+        <button class="btn btn-secondary" onclick="loadCostData()">Refresh Cost Data</button>
+        <button class="btn btn-secondary" onclick="loadCachedData()">Load Cached Data</button>
+        <button class="btn btn-secondary" onclick="showManualEntry()">Manual Entry</button>
+      </div>
+
+      <div id="manualEntryForm" style="display: none; background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; border: 1px solid #e0e0e0;">
+        <h2 style="margin-top: 0;">Manual Infrastructure Cost Entry</h2>
+        <p style="color: #7f8c8d; margin-bottom: 1rem;">Enter infrastructure costs manually if PDF parsing or API integration is unavailable.</p>
+        
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Current Balance ($)</label>
+          <input type="number" id="manualBalance" step="0.01" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="-1000.00">
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Total Infrastructure Costs ($)</label>
+          <input type="number" id="manualInfraCost" step="0.01" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;" placeholder="1500.00">
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Transaction Details (JSON)</label>
+          <textarea id="manualTransactions" rows="6" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" placeholder='[{"date": "2026-05-15", "description": "AWS Charges", "amount": -500.00, "category": "Cloud/AWS"}]'></textarea>
+        </div>
+        
+        <div style="display: flex; gap: 1rem;">
+          <button class="btn btn-primary" onclick="submitManualEntry()">Submit Manual Data</button>
+          <button class="btn btn-secondary" onclick="hideManualEntry()">Cancel</button>
+        </div>
+      </div>
+
+      <div id="errorContainer"></div>
+
+      <div id="loadingIndicator" class="loading" style="display: none;">
+        Loading cost data...
+      </div>
+
+      <div id="dashboardContent" style="display: none;">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <h3>Current Balance</h3>
+            <div class="value" id="currentBalance">$0.00</div>
+            <div class="label">Available funds</div>
+          </div>
+
+          <div class="metric-card">
+            <h3>Infrastructure Costs</h3>
+            <div class="value negative" id="infrastructureCosts">$0.00</div>
+            <div class="label">Last 30 days</div>
+          </div>
+
+          <div class="metric-card">
+            <h3>Infrastructure Transactions</h3>
+            <div class="value" id="infrastructureCount">0</div>
+            <div class="label">API/AWS/Token charges</div>
+          </div>
+
+          <div class="metric-card">
+            <h3>Total Spending</h3>
+            <div class="value negative" id="totalSpending">$0.00</div>
+            <div class="label">All transactions (30 days)</div>
+          </div>
+
+          <div class="metric-card">
+            <h3>Total Deposits</h3>
+            <div class="value positive" id="totalDeposits">$0.00</div>
+            <div class="label">All transactions (30 days)</div>
+          </div>
+
+          <div class="metric-card">
+            <h3>Net Cash Flow</h3>
+            <div class="value" id="netCashFlow">$0.00</div>
+            <div class="label">Deposits minus spending</div>
+          </div>
+        </div>
+
+        <div class="transactions-section">
+          <h2>Infrastructure Transactions <span class="infrastructure-badge">AWS • OpenAI • API</span></h2>
+          <table class="transaction-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Description</th>
+                <th>Category</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody id="infrastructureTransactions">
+              <tr>
+                <td colspan="4" style="text-align: center; color: #95a5a6;">No infrastructure transactions found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="last-updated">
+          Last updated: <span id="lastUpdated">Never</span>
+        </div>
+
+        <div class="transparency-note">
+          <strong>Transparency Note:</strong> This dashboard displays actual bank transaction data retrieved via U.S. Bank Data Toolbox API. Infrastructure costs are automatically identified from transaction descriptions containing keywords like "AWS", "OpenAI", "API", or "Token". Data is cached for 24 hours to reduce API calls.
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let isConnected = false;
+
+    async function checkConnection() {
+      try {
+        const response = await fetch('/api/auth/test');
+        const data = await response.json();
+        
+        if (data.connected) {
+          isConnected = true;
+          document.getElementById('statusBanner').className = 'status-banner connected';
+          document.getElementById('statusText').textContent = data.message;
+          loadCostData();
+        } else {
+          isConnected = false;
+          document.getElementById('statusBanner').className = 'status-banner disconnected';
+          document.getElementById('statusText').textContent = data.message;
+        }
+      } catch (error) {
+        console.error('Connection check failed:', error);
+      }
+    }
+
+    async function initiateAuth() {
+      try {
+        const response = await fetch('/api/auth/start');
+        const data = await response.json();
+        
+        if (data.authUrl) {
+          window.open(data.authUrl, '_blank');
+          alert('Authorization window opened. After completing authorization, the callback will be handled automatically.');
+        } else {
+          showError('Failed to initiate authorization');
+        }
+      } catch (error) {
+        showError('Authorization initiation failed: ' + error.message);
+      }
+    }
+
+    async function loadCostData() {
+      if (!isConnected) {
+        showError('Not connected to bank API. Please connect your bank account first.');
+        return;
+      }
+
+      showLoading(true);
+      hideError();
+
+      try {
+        const response = await fetch('/api/costs/summary?days=30');
+        const data = await response.json();
+
+        if (data.error) {
+          showError(data.error);
+          if (data.cached) {
+            displayData(data.cached.data);
+            alert('Using cached data due to API error');
+          }
+        } else {
+          displayData(data);
+        }
+      } catch (error) {
+        showError('Failed to load cost data: ' + error.message);
+        loadCachedData();
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    async function loadCachedData() {
+      try {
+        const response = await fetch('/api/costs/cached');
+        const data = await response.json();
+
+        if (data.error) {
+          showError(data.error);
+        } else {
+          displayData(data.data);
+          document.getElementById('lastUpdated').textContent = 'Cached from ' + new Date(data.cachedAt).toLocaleString();
+        }
+      } catch (error) {
+        showError('No cached data available');
+      }
+    }
+
+    function displayData(data) {
+      document.getElementById('dashboardContent').style.display = 'block';
+
+      // Update metrics
+      document.getElementById('currentBalance').textContent = formatCurrency(data.currentBalance);
+      document.getElementById('currentBalance').className = 'value ' + (data.currentBalance >= 0 ? 'positive' : 'negative');
+      
+      document.getElementById('infrastructureCosts').textContent = formatCurrency(data.infrastructureCosts.total);
+      document.getElementById('infrastructureCount').textContent = data.infrastructureCosts.transactionCount;
+      
+      document.getElementById('totalSpending').textContent = formatCurrency(data.allTransactions.totalSpending);
+      document.getElementById('totalDeposits').textContent = formatCurrency(data.allTransactions.totalDeposits);
+      
+      const netFlow = data.allTransactions.totalDeposits - data.allTransactions.totalSpending;
+      document.getElementById('netCashFlow').textContent = formatCurrency(netFlow);
+      document.getElementById('netCashFlow').className = 'value ' + (netFlow >= 0 ? 'positive' : 'negative');
+
+      // Update transactions table
+      const tbody = document.getElementById('infrastructureTransactions');
+      tbody.innerHTML = '';
+
+      if (data.infrastructureCosts.transactions.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #95a5a6;">No infrastructure transactions found</td></tr>';
+      } else {
+        data.infrastructureCosts.transactions.forEach(tx => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${new Date(tx.date).toLocaleDateString()}</td>
+            <td>${tx.description}</td>
+            <td>${tx.category || 'Uncategorized'}</td>
+            <td class="amount ${tx.amount < 0 ? 'negative' : 'positive'}">${formatCurrency(tx.amount)}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+
+      document.getElementById('lastUpdated').textContent = new Date(data.lastUpdated).toLocaleString();
+    }
+
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+      }).format(amount);
+    }
+
+    function showLoading(show) {
+      document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+    }
+
+    function showError(message) {
+      const container = document.getElementById('errorContainer');
+      container.innerHTML = `<div class="error"><strong>Error:</strong> ${message}</div>`;
+    }
+
+    function hideError() {
+      document.getElementById('errorContainer').innerHTML = '';
+    }
+
+    function showManualEntry() {
+      document.getElementById('manualEntryForm').style.display = 'block';
+    }
+
+    function hideManualEntry() {
+      document.getElementById('manualEntryForm').style.display = 'none';
+    }
+
+    async function submitManualEntry() {
+      const balance = parseFloat(document.getElementById('manualBalance').value);
+      const infraCost = parseFloat(document.getElementById('manualInfraCost').value);
+      const transactionsJson = document.getElementById('manualTransactions').value;
+
+      if (isNaN(balance) || isNaN(infraCost)) {
+        showError('Please enter valid numeric values for balance and infrastructure costs');
+        return;
+      }
+
+      let transactions = [];
+      if (transactionsJson.trim()) {
+        try {
+          transactions = JSON.parse(transactionsJson);
+        } catch (error) {
+          showError('Invalid JSON format for transaction details');
+          return;
+        }
+      }
+
+      try {
+        const response = await fetch('/api/costs/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            currentBalance: balance,
+            infrastructureCosts: {
+              total: infraCost,
+              transactions: transactions
+            }
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+          displayData(data.dashboardData);
+          hideManualEntry();
+          // Clear form
+          document.getElementById('manualBalance').value = '';
+          document.getElementById('manualInfraCost').value = '';
+          document.getElementById('manualTransactions').value = '';
+        } else {
+          showError(data.error || 'Failed to submit manual entry');
+        }
+      } catch (error) {
+        showError('Manual entry failed: ' + error.message);
+      }
+    }
+
+    // Check connection on page load
+    checkConnection();
+  </script>
+</body>
+</html>

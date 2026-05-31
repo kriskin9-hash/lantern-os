@@ -1,0 +1,56 @@
+﻿{
+    "schema":  "lantern.local_agent_receipt.v1",
+    "generatedAt":  "2026-05-31T07:42:34.7309742Z",
+    "name":  "ring-08-backup-a",
+    "slot":  23,
+    "step":  8,
+    "agent":  "local-23",
+    "role":  "Cheapest-check selector",
+    "runtime":  "local_receipt_worker",
+    "cli":  "none",
+    "spendPolicy":  "no_paid_api_calls",
+    "tokenBudget":  0,
+    "status":  "completed",
+    "workType":  "convergence_step_receipt",
+    "paidDispatch":  false,
+    "evidence":  [
+                     {
+                         "ok":  true,
+                         "name":  "repo_git_dir"
+                     },
+                     {
+                         "ok":  true,
+                         "name":  "convergence_loop_script"
+                     },
+                     {
+                         "ok":  true,
+                         "name":  "agent_rules"
+                     },
+                     {
+                         "ok":  true,
+                         "name":  "loop_doc"
+                     },
+                     {
+                         "ok":  true,
+                         "name":  "fleet_doc"
+                     },
+                     {
+                         "ok":  true,
+                         "name":  "open_issues_manifest_checked"
+                     },
+                     {
+                         "ok":  true,
+                         "name":  "git_dirty_observed"
+                     }
+                 ],
+    "boundaries":  [
+                       "local_worker_only",
+                       "no_paid_api_calls",
+                       "no_external_cli_dispatch",
+                       "no_retry_loop_churn"
+                   ],
+    "loopIssueCount":  0,
+    "loopNextAction":  "No local loop issues found. Review held issues and choose the next promotion candidate.",
+    "validation":  "pass",
+    "nextAction":  "wait_for_next_local_queue_item"
+}

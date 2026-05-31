@@ -78,6 +78,12 @@ By default, startup runs the health check first. To skip health check:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-DiscordLoungeBot.ps1 -NoHealthCheck
 ```
 
+## Test Server
+
+Live test target: **https://discord.gg/xmsbPjMGm**
+
+Use this server for voice, radio, and notebook command validation. Guild and channel IDs should be configured for this server during testing. See `manifests/TEST-DISCORD-SERVER.md` for the deployment checklist.
+
 ## Validation
 
 Acceptance checks:

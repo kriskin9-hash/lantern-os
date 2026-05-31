@@ -1,0 +1,42 @@
+{
+    "outreachExecuted":  true,
+    "root":  "D:\\tmp\\lantern-os",
+    "timestamp":  "2026-05-30T13:49:53.5743603-04:00",
+    "commercialPlanExecuted":  true,
+    "actions":  [
+                    {
+                        "platforms":  [
+                                          "Kickstarter",
+                                          "Patreon",
+                                          "GoFundMe"
+                                      ],
+                        "status":  "messages_extracted",
+                        "timestamp":  "2026-05-30T13:49:53.6314643-04:00",
+                        "type":  "outreach_preparation"
+                    },
+                    {
+                        "status":  "phase_identified",
+                        "timestamp":  "2026-05-30T13:49:53.7030006-04:00",
+                        "currentPhase":  "Foundation/Outreach",
+                        "type":  "commercial_plan_execution"
+                    },
+                    {
+                        "price":  " pilot or 2 x  slots",
+                        "status":  "ready_for_outreach",
+                        "timestamp":  "2026-05-30T13:49:53.7055076-04:00",
+                        "offer":  "Repo/RAG cleanup sprint",
+                        "type":  "offer_activation"
+                    },
+                    {
+                        "status":  "pending_execution",
+                        "timestamp":  "2026-05-30T13:49:53.7136184-04:00",
+                        "actions":  [
+                                        "Send 15 personalized outreach messages (Day 2 target)",
+                                        "Create payment link for  pilot slot",
+                                        "Prepare before/after proof sample",
+                                        "Book first consultation call"
+                                    ],
+                        "type":  "immediate_actions"
+                    }
+                ]
+}

@@ -1,0 +1,232 @@
+{
+    "validFiles":  5,
+    "files":  [
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\asi-local-pdf-convergence-2026-05-29.md",
+                      "score":  60,
+                      "name":  "asi-local-pdf-convergence-2026-05-29.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\bitcoin-pdf.md",
+                      "score":  60,
+                      "name":  "bitcoin-pdf.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  true,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\bounty-and-whitepaper-lanes-2026-05-31.md",
+                      "score":  80,
+                      "name":  "bounty-and-whitepaper-lanes-2026-05-31.md",
+                      "issues":  [
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\codex-thread-019e75ae-80d8-76a2-8a24-d1bff3b85fa1-2026-05-29.md",
+                      "score":  60,
+                      "name":  "codex-thread-019e75ae-80d8-76a2-8a24-d1bff3b85fa1-2026-05-29.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  true,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\convergence-evidence-2026-05-30.md",
+                      "score":  75,
+                      "name":  "convergence-evidence-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\ethereum-governance.md",
+                      "score":  60,
+                      "name":  "ethereum-governance.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\ethereum-whitepaper-pdf.md",
+                      "score":  60,
+                      "name":  "ethereum-whitepaper-pdf.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\game-theory-wargame-reader-2026-05-29.md",
+                      "score":  60,
+                      "name":  "game-theory-wargame-reader-2026-05-29.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  true,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\human-trial-readiness-70-percent-plan-2026-05-30.md",
+                      "score":  80,
+                      "name":  "human-trial-readiness-70-percent-plan-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-api-docs-and-trade-gate-2026-05-29.md",
+                      "score":  60,
+                      "name":  "kalshi-api-docs-and-trade-gate-2026-05-29.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-bayesian-50-dollar-brief-2026-05-30.md",
+                      "score":  60,
+                      "name":  "kalshi-bayesian-50-dollar-brief-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-market-snapshot-2026-05-29.md",
+                      "score":  60,
+                      "name":  "kalshi-market-snapshot-2026-05-29.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-near-term-paper-block-pl-receipt-2026-05-30.md",
+                      "score":  60,
+                      "name":  "kalshi-near-term-paper-block-pl-receipt-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-near-term-paper-block-receipt-2026-05-30.md",
+                      "score":  60,
+                      "name":  "kalshi-near-term-paper-block-receipt-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-paper-trade-execution-receipt-2026-05-30.md",
+                      "score":  60,
+                      "name":  "kalshi-paper-trade-execution-receipt-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\kalshi-selected-event-paper-order-receipt-2026-05-30.md",
+                      "score":  60,
+                      "name":  "kalshi-selected-event-paper-order-receipt-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  true,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\MONEY-ACTION-COMPLETED-2026-05-31.md",
+                      "score":  80,
+                      "name":  "MONEY-ACTION-COMPLETED-2026-05-31.md",
+                      "issues":  [
+                                     "missing-simple-answer"
+                                 ]
+                  },
+                  {
+                      "valid":  true,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\MONEY-ACTION-CONVERGENCE-2026-05-31.md",
+                      "score":  100,
+                      "name":  "MONEY-ACTION-CONVERGENCE-2026-05-31.md",
+                      "issues":  [
+
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\public-puzzle-math-bounty-radar-2026-05-30.md",
+                      "score":  60,
+                      "name":  "public-puzzle-math-bounty-radar-2026-05-30.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\THINGS-MADE-IMPLICIT-RECEIPT-2026-05-31.md",
+                      "score":  65,
+                      "name":  "THINGS-MADE-IMPLICIT-RECEIPT-2026-05-31.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section"
+                                 ]
+                  },
+                  {
+                      "valid":  false,
+                      "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\downloads-merge-2026-05-27\\MERGE-INDEX.md",
+                      "score":  60,
+                      "name":  "MERGE-INDEX.md",
+                      "issues":  [
+                                     "missing-simple-answer",
+                                     "missing-evidence-section",
+                                     "no-claim-boundaries"
+                                 ]
+                  }
+              ],
+    "nextAction":  "Review 16 invalid evidence files",
+    "totalFiles":  21,
+    "generatedAt":  "2026-05-31T03:38:12",
+    "averageScore":  65.7,
+    "engine":  "Evidence Validation Engine v1.0"
+}

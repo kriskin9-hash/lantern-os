@@ -1,0 +1,22 @@
+﻿{
+    "schema":  "lantern.active_processing.v1",
+    "activeProcessing":  {
+                             "enabled":  true,
+                             "chatHandoffIntegration":  true,
+                             "mode":  "local_receipt_only",
+                             "maxActiveSlots":  36,
+                             "allowPaidCliDispatch":  false,
+                             "idleBehavior":  "wait_for_local_work",
+                             "churnControls":  {
+                                                   "maxRetriesPerTask":  1,
+                                                   "minSecondsBetweenDispatch":  10,
+                                                   "requireDirtyWorktreeCheck":  true,
+                                                   "requireOperatorApprovalForPaidCli":  true
+                                               }
+                         },
+    "validation":  {
+                       "requiredConfig":  "config/agents.json",
+                       "expectedSlots":  36,
+                       "proofReceipt":  "manifests/validation/LIVE-FLEET-PROOF-LATEST.json"
+                   }
+}

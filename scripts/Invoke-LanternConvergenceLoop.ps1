@@ -47,7 +47,12 @@ $required = @(
     "manifests/CONVERGENCE-LOOP-AGENT-FLEET.md",
     "manifests/MCP-WORK-SPLIT.md",
     "manifests/validation/CONVERGENCE-FLEET-LATEST.json",
-    "scripts/Test-ConvergenceAgentFleet.py"
+    "scripts/Test-ConvergenceAgentFleet.py",
+    "scripts/Update-ArcReactorStatus.ps1",
+    "scripts/Invoke-LoopReceipt.ps1",
+    "skills/asi-arc-reactor-mk1/SKILL.md",
+    "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md",
+    ".windsurf/hooks.json"
 )
 
 foreach ($path in $required) {
@@ -110,6 +115,55 @@ if (Test-Path $readinessDoc) {
     foreach ($gate in @("Gate 7", "Gate 8", "Gate 9")) {
         if ($readinessText -notlike "*$gate*") {
             Add-Issue $issues "READINESS-MISSING-$gate" "medium" "Readiness gates missing $gate." "Add $gate to docs/V1-READINESS-GATES.md."
+        }
+    }
+}
+
+# ASI Arc Reactor MK1 validation
+$asiSkillDoc = Join-Path $Root "skills/asi-arc-reactor-mk1/SKILL.md"
+if (Test-Path $asiSkillDoc) {
+    $asiText = Get-Content -LiteralPath $asiSkillDoc -Raw
+    $requiredAsiPhrases = @(
+        "ASI patterns are architecture references only",
+        "no local ASI capability claim",
+        "no investment advice",
+        "Brier-style error tracking",
+        "human trial readiness"
+    )
+    foreach ($phrase in $requiredAsiPhrases) {
+        if ($asiText -notlike "*$phrase*") {
+            Add-Issue $issues "ASI-MISSING-$phrase" "high" "ASI skill missing required phrase: $phrase" "Add phrase to skills/asi-arc-reactor-mk1/SKILL.md."
+        }
+    }
+}
+
+$asiEvidenceDoc = Join-Path $Root "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md"
+if (Test-Path $asiEvidenceDoc) {
+    $asiEvidenceText = Get-Content -LiteralPath $asiEvidenceDoc -Raw
+    $blockedClaims = @(
+        "ASI capability exists locally",
+        "token issuance or investment advice",
+        "agent networks can bypass human approval"
+    )
+    foreach ($claim in $blockedClaims) {
+        if ($asiEvidenceText -notlike "*$claim*") {
+            Add-Issue $issues "ASI-EVIDENCE-MISSING-BLOCK-$claim" "high" "ASI evidence missing blocked claim: $claim" "Add blocked claim to manifests/evidence/asi-local-pdf-convergence-2026-05-29.md."
+        }
+    }
+}
+
+# Windsurf hooks validation
+$hooksConfig = Join-Path $Root ".windsurf/hooks.json"
+if (Test-Path $hooksConfig) {
+    $hooksText = Get-Content -LiteralPath $hooksConfig -Raw
+    $requiredHooks = @(
+        "pre_run_command",
+        "pre_mcp_tool_use",
+        "pre_write_code"
+    )
+    foreach ($hook in $requiredHooks) {
+        if ($hooksText -notlike "*$hook*") {
+            Add-Issue $issues "HOOKS-MISSING-$hook" "medium" "Windsurf hooks missing: $hook" "Add $hook to .windsurf/hooks.json."
         }
     }
 }

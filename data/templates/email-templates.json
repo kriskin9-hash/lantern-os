@@ -1,0 +1,22 @@
+{
+  "founder-intel-initial": {
+    "subject": "AI-Powered Founder Intelligence - 15 Key Insights in 48 Hours",
+    "body": "Hi {{name}},\n\nI've been analyzing {{company_name}}'s digital footprint and our AI system has identified 15 actionable intelligence points that could significantly impact your trajectory.\n\nWhat we found:\n- 3 competitive intelligence opportunities\n- 5 market positioning insights  \n- 4 operational efficiency signals\n- 3 funding readiness indicators\n\nOur COMET LEAP Founder Report Pack delivers this analysis within 48 hours, giving you intelligence that would typically take weeks to compile manually.\n\nWould you be interested in seeing a sample of our analysis?\n\nBest,\nAlexander Place\nLantern OS Founder"
+  },
+  "founder-intel-followup1": {
+    "subject": "Still diving deep into your startup data?",
+    "body": "Hi {{name}},\n\nI wanted to follow up on my previous email about the founder intelligence report for {{company_name}}.\n\nWe've helped founders like you:\n- Identify $2M+ in missed revenue opportunities\n- Discover competitive blind spots before they became problems\n- Prepare for investor conversations with data-backed insights\n\nOur system continues to track {{company_name}}'s digital signals, and I'm seeing some interesting patterns that could be valuable.\n\nWould you like to discuss what we're finding?\n\nBest,\nAlexander"
+  },
+  "founder-intel-final": {
+    "subject": "Last call for founder intelligence report",
+    "body": "Hi {{name}},\n\nThis is my final follow-up about the founder intelligence report for {{company_name}}.\n\nOur AI system has completed its analysis and the insights are time-sensitive - some of the market opportunities we identified have short windows.\n\nThe full report is $299 and includes:\n- 15 actionable intelligence points\n- Competitive landscape analysis\n- Funding readiness assessment\n- 30-day market opportunity tracker\n\nIf you're interested, just reply and I'll get started immediately.\n\nBest,\nAlexander"
+  },
+  "rag-sprint-initial": {
+    "subject": "5-Day RAG Sprint for Your Development Team",
+    "body": "Hi {{name}},\n\nI noticed {{company_name}} has a growing codebase and wanted to share how our Local RAG system can transform your development workflow.\n\nOur 5-day RAG Sprint delivers:\n- Automated code documentation\n- Smart code search across your entire repo\n- Knowledge base for team onboarding\n- Reduced developer onboarding time by 60%\n\nThe setup takes 2 hours, then our system analyzes and organizes your codebase automatically.\n\nWould you be interested in a 15-minute demo of how this could help {{company_name}}?\n\nBest,\nAlexander Place\nLantern OS Founder"
+  },
+  "rag-sprint-followup": {
+    "subject": "Code organization case studies inside",
+    "body": "Hi {{name}},\n\nI wanted to share a quick case study from a similar company that implemented our RAG system:\n\n**The Challenge**: 6-month developer onboarding time, lost knowledge when engineers left\n**The Solution**: 5-day RAG Sprint implementation\n**The Result**: 60% faster onboarding, 40% reduction in duplicate work\n\nFor {{company_name}}, this could mean:\n- Faster new hire productivity\n- Better knowledge retention\n- Reduced technical debt\n\nWould you like to see a demo of how this would work for your specific codebase?\n\nBest,\nAlexander"
+  }
+}

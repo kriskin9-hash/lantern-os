@@ -52,7 +52,7 @@ docs/
   SPEC-MK1-SUIT-REACTOR.md
   SAFETY-GATES.md
   EXOTIC-MATTER-MODEL.md
-  TESSERACT-DRIVE-NOTES.md
+  STATUS-CUBE-NOTES.md
 firmware/
   README.md
 hardware/

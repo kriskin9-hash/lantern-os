@@ -1,9 +1,10 @@
 {
   "schema": "lantern.cloud_mirrors.v1",
-  "deployProvider": "AWS ECS Fargate",
+  "deployProvider": "Netlify",
   "deployBranch": "master",
-  "mirrorPolicy": "Local is primary; AWS cloud URLs are mirrors and must not create separate dashboards. No AWS URL is verified until /, /api/health, and /api/cloud-mirrors pass.",
-  "lastChecked": "2026-05-29",
+  "mirrorPolicy": "Local is primary; cloud URLs are mirrors and must not create separate dashboards. Cloud URLs verified when /, /api/health, and /api/cloud-mirrors pass.",
+  "lastChecked": "2026-05-31T10:35:00-04:00",
+  "netlifyDeployId": "6a1c3fa0742f62c1b2fbe103",
   "awsRuntime": {
     "target": "ECS Fargate or compatible AWS container service",
     "imageSource": "apps/lantern-garage/Dockerfile",
@@ -11,7 +12,16 @@
     "startCommand": "npm run start:cloud",
     "status": "aws_service_url_pending_operator_deploy"
   },
-  "cloudMirrors": [],
+  "cloudMirrors": [
+    {
+      "name": "Lantern OS Netlify Cloud",
+      "url": "https://lantern-os-cloud.netlify.app",
+      "role": "production cloud mirror",
+      "status": "live",
+      "healthPath": "/api/health",
+      "deployedAt": "2026-05-31"
+    }
+  ],
   "retiredMirrors": [
     {
       "name": "Lantern OS Render",

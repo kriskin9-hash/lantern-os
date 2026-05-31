@@ -1,0 +1,93 @@
+{
+  "schema": "lantern.batch_jobs.v1",
+  "description": "Batch job registry for Lantern OS automation framework",
+  "updatedAt": "2026-05-31",
+  "jobs": [
+    {
+      "id": "convergence-loop",
+      "name": "Convergence Loop",
+      "script": "scripts/Invoke-LanternConvergenceLoop.ps1",
+      "args": [],
+      "enabled": true,
+      "priority": 1,
+      "intervalMinutes": 30,
+      "group": "validation",
+      "receiptClass": "convergence_loop_run",
+      "failurePolicy": "warn"
+    },
+    {
+      "id": "loop-receipt",
+      "name": "Loop Receipt Generator",
+      "script": "scripts/Invoke-LoopReceipt.ps1",
+      "args": [],
+      "enabled": true,
+      "priority": 2,
+      "intervalMinutes": 60,
+      "group": "evidence",
+      "receiptClass": "convergence_loop_receipt",
+      "failurePolicy": "warn"
+    },
+    {
+      "id": "asset-discovery",
+      "name": "Asset Discovery Engine",
+      "script": "scripts/Invoke-AssetDiscoveryEngine.ps1",
+      "args": ["-RunOnce"],
+      "enabled": true,
+      "priority": 3,
+      "intervalMinutes": 120,
+      "group": "discovery",
+      "receiptClass": "asset_discovery_run",
+      "failurePolicy": "warn"
+    },
+    {
+      "id": "sync-rag-pdf",
+      "name": "RAG + PDF Sync",
+      "script": "scripts/Sync-RagAndPdf.ps1",
+      "args": ["-SkipStyle"],
+      "enabled": true,
+      "priority": 4,
+      "intervalMinutes": 240,
+      "group": "publish",
+      "receiptClass": "sync_rag_pdf",
+      "failurePolicy": "warn"
+    },
+    {
+      "id": "style-convergence-reports",
+      "name": "Style Convergence (Reports)",
+      "script": "scripts/Invoke-StyleConvergence.ps1",
+      "args": [],
+      "enabled": false,
+      "priority": 5,
+      "intervalMinutes": 0,
+      "group": "style",
+      "receiptClass": "style_convergence",
+      "failurePolicy": "warn",
+      "note": "Run manually per-file. Disabled in batch to avoid unreviewed rewrites."
+    },
+    {
+      "id": "health-check",
+      "name": "System Health Check",
+      "script": "scripts/Invoke-HealthCheck.ps1",
+      "args": [],
+      "enabled": true,
+      "priority": 0,
+      "intervalMinutes": 15,
+      "group": "health",
+      "receiptClass": "health_check",
+      "failurePolicy": "log"
+    }
+  ],
+  "groups": {
+    "validation": { "description": "Convergence loop and validation runs" },
+    "evidence":   { "description": "Receipt and evidence generation" },
+    "discovery":  { "description": "Asset and repo scanning" },
+    "publish":    { "description": "PDF and RAG flat-file publishing" },
+    "style":      { "description": "Mookman 4 style enforcement" },
+    "health":     { "description": "System health and disk/git checks" }
+  },
+  "defaults": {
+    "failurePolicy": "warn",
+    "timeoutSeconds": 300,
+    "logDir": "data/automation/logs"
+  }
+}

@@ -174,3 +174,5 @@
 {"recordedAt":"2026-05-30T00:17:42.623Z","surface":"lantern-garage","role":"operator","text":"show queue and active tasks"}
 {"recordedAt":"2026-05-30T00:17:50.517Z","surface":"lantern-garage","role":"lantern","text":"MCP connection attempted but did not return cleanly: This operation was aborted. The dashboard will keep the message local and you can retry after checking 127.0.0.1:8787/health."}
 {"recordedAt":"2026-05-30T00:17:50.653Z","surface":"lantern-garage","role":"lantern","text":"MCP connection attempted but did not return cleanly: This operation was aborted. The dashboard will keep the message local and you can retry after checking 127.0.0.1:8787/health."}
+{"recordedAt":"2026-05-31T03:10:46.209Z","surface":"lantern-garage","role":"operator","text":"What is my sales pipeline?"}
+{"recordedAt":"2026-05-31T03:11:06.334Z","surface":"lantern-garage","role":"lantern","text":"I am on the local-rag path. I can help with the dashboard, mining lane choices, repo evidence, wallet receipts, cloud mirrors, or local fleet controls. Ask in plain language and I will route it to the safest visible lane."}

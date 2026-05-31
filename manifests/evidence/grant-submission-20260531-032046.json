@@ -1,0 +1,18 @@
+﻿{
+    "receiptId":  "grant-submission-20260531-032046",
+    "generatedAt":  "2026-05-31T03:20:46.4406646-04:00",
+    "evidenceClass":  "grant_submission_validation",
+    "applicationPath":  "applications/SFF-HSEE-2026-DRAFT.md",
+    "validationPassed":  true,
+    "missingSections":  [
+
+                        ],
+    "submissionUrls":  [
+                           "https://survivalandflourishing.fund/2026/application)"
+                       ],
+    "operatorApprovalRequired":  true,
+    "dryRun":  false,
+    "status":  "blocked_pending_operator",
+    "nextAction":  "Operator must review and approve application",
+    "boundary":  "No automated submission without operator approval per AGENTS.md"
+}

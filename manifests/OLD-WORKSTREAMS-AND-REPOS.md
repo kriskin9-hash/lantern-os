@@ -34,6 +34,8 @@ without pretending they are all cloned, clean, or promoted.
 | `github_metadata_only` | `https://github.com/alex-place/moneybags` | Java money tooling | wallet/store inspiration |
 | `github_metadata_only` | `https://github.com/alex-place/SmartBid` | Java bidding | SMB/AI cleanup candidate |
 | `github_metadata_only` | `https://github.com/alex-place/smartmealplanning` | Java meal planning | family/productivity candidate |
+| `concept_only` | `ImaginiVerse door repo path pending` | ImaginiVerse door | threshold/front-door protocol candidate |
+| `concept_only` | `ImaginiVerse anchor symbology repo path pending` | ImaginiVerse anchor symbology | symbol inventory and continuity-anchor candidate |
 
 ## Workstream Surface List
 
@@ -50,3 +52,4 @@ without pretending they are all cloned, clean, or promoted.
 11. GameMaker game and room editor lane.
 12. Legacy Java product lane.
 13. Retired Seven validation lane.
+14. ImaginiVerse door and anchor symbology lane.

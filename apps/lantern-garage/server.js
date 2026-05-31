@@ -1,13 +1,17 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { spawn, spawnSync } = require("child_process");
+const salesMcp = require("./sales/sales-mcp-tools");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
 const port = Number(process.env.LANTERN_GARAGE_PORT || process.env.PORT || 4177);
 const host = process.env.LANTERN_GARAGE_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const conversationLogPath = path.join(repoRoot, "data", "conversations", "garage-conversations.jsonl");
+const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
+const dreamerTasksDir = path.join(repoRoot, "data", "dreamer", "tasks");
 const flatRagHousePath = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 const flatRagHouseManifestPath = path.join(repoRoot, "manifests", "FLAT-RAG-HOUSE-LATEST.md");
 const mcpSourcesPath = path.join(repoRoot, "manifests", "lantern-mcp-sources.json");
@@ -19,10 +23,14 @@ const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.j
 const agentDispatchStatePath = path.join(repoRoot, "data", "operator-notes", "agent-dispatch-state.json");
 const cloudMirrorsPath = path.join(repoRoot, "manifests", "cloud-mirrors.json");
 const maxConversationTextLength = 4000;
+const maxDreamerTextLength = 2000;
 const localChatTagsTimeoutMs = Number(process.env.LANTERN_CHAT_TAGS_TIMEOUT_MS || 1000);
 const localChatTimeoutMs = Number(process.env.LANTERN_CHAT_TIMEOUT_MS || 20000);
 const mcpReadOnlyTimeoutMs = Number(process.env.LANTERN_MCP_READ_TIMEOUT_MS || 15000);
-const agentDispatchSlots = ["gemini-flash", "gemini-main", "codex-main", "gpt-web"];
+const agentDispatchSlots = [
+  "gemini-flash", "gemini-main", "codex-main", "gpt-web",
+  "discord-radio", "house-thinker", "convergence-loop", "world-model", "mcp-bridge",
+];
 const agentDispatchCooldownMs = 300000;
 const agentDispatchDelayMs = 1500;
 const writeQueues = new Map();
@@ -110,8 +118,8 @@ function readMcpSourceConfig() {
 
 function getPrimaryMcpSource() {
   const sources = readMcpSourceConfig().sources;
-  return sources.find((source) => source && source.enabled !== false)
-    || getDefaultMcpSources().sources[0];
+  const httpSource = sources.find((source) => source && source.enabled !== false && source.transport === "http_jsonrpc");
+  return httpSource || sources.find((source) => source && source.enabled !== false) || getDefaultMcpSources().sources[0];
 }
 
 function getPrimaryMcpRpcUrl() {
@@ -195,6 +203,325 @@ function readJsonl(relativePath, limit = 20) {
         return { parseError: true, raw: line };
       }
     });
+}
+
+function readJsonlFile(filePath, limit = 20) {
+  try {
+    return fs.readFileSync(filePath, "utf8")
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(-limit)
+      .map((line) => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return { parseError: true, raw: line };
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
+function normalizeDreamerUser(value) {
+  const user = String(value || "courtney")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return user || "courtney";
+}
+
+function dreamerNotebookPath(user) {
+  return path.join(dreamerNotebookDir, `${normalizeDreamerUser(user)}.jsonl`);
+}
+
+function generateEntryId() {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function generateTernaryId(seed) {
+  const hash = crypto.createHash("sha256").update(String(seed)).digest();
+  let value = hash.readUIntBE(0, 3);
+  const digits = [];
+  for (let i = 0; i < 12; i++) {
+    digits.unshift(value % 3);
+    value = Math.floor(value / 3);
+  }
+  return digits.join("");
+}
+
+function ternaryToCoords(ternaryId) {
+  const d = String(ternaryId || "000000000000").split("").map((c) => parseInt(c, 10) % 3);
+  while (d.length < 12) d.unshift(0);
+  const x = d[0] * 27 + d[1] * 9 + d[2] * 3 + d[3];
+  const y = d[4] * 27 + d[5] * 9 + d[6] * 3 + d[7];
+  const z = d[8] * 27 + d[9] * 9 + d[10] * 3 + d[11];
+  return { x, y, z, raw: d.join("") };
+}
+
+function reflectTernaryId(ternaryId) {
+  return String(ternaryId || "").split("").map((c) => {
+    const n = parseInt(c, 10) % 3;
+    return String(2 - n);
+  }).join("");
+}
+
+function coordsToTernaryId(x, y, z) {
+  function digit(v, pos) {
+    return String(Math.floor((v / Math.pow(3, 3 - pos)) % 3));
+  }
+  return digit(x, 0) + digit(x, 1) + digit(x, 2) + digit(x, 3)
+    + digit(y, 0) + digit(y, 1) + digit(y, 2) + digit(y, 3)
+    + digit(z, 0) + digit(z, 1) + digit(z, 2) + digit(z, 3);
+}
+
+function normalizeDreamerEntry(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("json_object_required");
+  }
+  const user = normalizeDreamerUser(input.user || input.owner || "courtney");
+  const kind = ["dream", "note", "place", "character", "event", "lore", "symbol", "mirror"].includes(String(input.kind || "").toLowerCase())
+    ? String(input.kind).toLowerCase()
+    : "note";
+  const text = String(input.text || input.message || "").trim().slice(0, maxDreamerTextLength);
+  if (!text) throw new Error("dreamer_text_required");
+  const tags = Array.isArray(input.tags)
+    ? input.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean).slice(0, 10)
+    : [];
+  const name = String(input.name || "").trim().slice(0, 120) || undefined;
+  const mood = String(input.mood || "").trim().slice(0, 40) || undefined;
+  const links = Array.isArray(input.links)
+    ? input.links.map((link) => String(link).trim()).filter(Boolean).slice(0, 20)
+    : [];
+  const id = input.id || generateEntryId();
+  const seed = `${text}:${name || ""}:${kind}:${mood || ""}:${tags.join(",")}`;
+  const ternaryId = input.ternaryId || generateTernaryId(seed);
+  const record = {
+    id,
+    recordedAt: new Date().toISOString(),
+    user,
+    kind,
+    source: String(input.source || "lantern-garage").trim().slice(0, 80) || "lantern-garage",
+    text,
+    tags,
+    private: true,
+    ternaryId,
+  };
+  if (name) record.name = name;
+  if (mood) record.mood = mood;
+  if (links.length) record.links = links;
+  return record;
+}
+
+async function createMirrorEntry(user, entryIds) {
+  const normalizedUser = normalizeDreamerUser(user);
+  const all = readDreamerEntries(normalizedUser, 5000).filter((e) => !e.parseError && entryIds.includes(e.id));
+  if (all.length === 0) throw new Error("no_entries_to_mirror");
+  const avgX = Math.round(all.reduce((s, e) => s + ternaryToCoords(e.ternaryId).x, 0) / all.length);
+  const avgY = Math.round(all.reduce((s, e) => s + ternaryToCoords(e.ternaryId).y, 0) / all.length);
+  const avgZ = Math.round(all.reduce((s, e) => s + ternaryToCoords(e.ternaryId).z, 0) / all.length);
+  const avgTernary = coordsToTernaryId(avgX, avgY, avgZ);
+  const reflection = reflectTernaryId(avgTernary);
+  const checksum = crypto.createHash("sha256").update(all.map((e) => e.id).join(":")).digest("hex").slice(0, 16);
+  const record = normalizeDreamerEntry({
+    user: normalizedUser,
+    kind: "mirror",
+    name: `Mirror of ${all.length} facets`,
+    text: `Reflection at ${reflection}. Checksum ${checksum}. Mirrored IDs: ${all.map((e) => e.id).join(", ")}`,
+    tags: ["mirror", "parity"],
+    source: "lantern-matrix",
+    ternaryId: reflection,
+  });
+  record.mirrors = entryIds;
+  record.checksum = checksum;
+  await appendJsonlQueued(dreamerNotebookPath(normalizedUser), record);
+  return record;
+}
+
+async function appendDreamerEntry(input) {
+  const record = normalizeDreamerEntry(input);
+  await appendJsonlQueued(dreamerNotebookPath(record.user), record);
+  return record;
+}
+
+function dreamerTasksPath(user) {
+  return path.join(dreamerTasksDir, `${normalizeDreamerUser(user)}.jsonl`);
+}
+
+function normalizeTaskEntry(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("json_object_required");
+  }
+  const user = normalizeDreamerUser(input.user || "courtney");
+  const text = String(input.text || "").trim().slice(0, 500);
+  if (!text) throw new Error("task_text_required");
+  const kind = ["explore", "connect", "write", "review", "build", "hold"].includes(String(input.kind || "").toLowerCase())
+    ? String(input.kind).toLowerCase()
+    : "explore";
+  return {
+    id: generateEntryId(),
+    createdAt: new Date().toISOString(),
+    user,
+    kind,
+    text,
+    status: "open",
+    completedAt: null,
+  };
+}
+
+async function appendTaskEntry(input) {
+  const record = normalizeTaskEntry(input);
+  await appendJsonlQueued(dreamerTasksPath(record.user), record);
+  return record;
+}
+
+function readTaskEntries(user, limit = 50) {
+  const normalizedUser = normalizeDreamerUser(user);
+  return readJsonlFile(dreamerTasksPath(normalizedUser), Math.max(1, Math.min(500, limit)))
+    .filter((entry) => !entry.parseError);
+}
+
+async function completeTaskEntry(user, taskId) {
+  const normalizedUser = normalizeDreamerUser(user);
+  const all = readTaskEntries(normalizedUser, 5000);
+  const target = all.find((e) => e.id === taskId);
+  if (!target) throw new Error("task_not_found");
+  const updated = { ...target, status: "done", completedAt: new Date().toISOString() };
+  const path = dreamerTasksPath(normalizedUser);
+  await writeTextQueued(path, all.map((e) => JSON.stringify(e.id === taskId ? updated : e)).join("\n") + "\n");
+  return updated;
+}
+
+function readDreamerEntries(user, limit = 50, query = "") {
+  const normalizedUser = normalizeDreamerUser(user);
+  const q = String(query || "").trim().toLowerCase();
+  const entries = readJsonlFile(dreamerNotebookPath(normalizedUser), Math.max(1, Math.min(500, limit)))
+    .filter((entry) => !entry.parseError);
+  return q
+    ? entries.filter((entry) => String(entry.text || "").toLowerCase().includes(q))
+    : entries;
+}
+
+function computeDreamerStats(user) {
+  const normalizedUser = normalizeDreamerUser(user);
+  const all = readJsonlFile(dreamerNotebookPath(normalizedUser), 5000)
+    .filter((entry) => !entry.parseError);
+  const total = all.length;
+  const dreams = all.filter((e) => e.kind === "dream").length;
+  const notes = all.filter((e) => e.kind === "note").length;
+  const places = all.filter((e) => e.kind === "place").length;
+  const characters = all.filter((e) => e.kind === "character").length;
+  const events = all.filter((e) => e.kind === "event").length;
+  const lores = all.filter((e) => e.kind === "lore").length;
+  const symbols = all.filter((e) => e.kind === "symbol").length;
+  const mirrors = all.filter((e) => e.kind === "mirror").length;
+  const byDate = {};
+  const tagCounts = {};
+  const bySource = {};
+  let totalTextLength = 0;
+  let firstAt = null;
+  let lastAt = null;
+  const ternaryCells = new Set();
+  let totalLinks = 0;
+  for (const entry of all) {
+    const date = String(entry.recordedAt || "").slice(0, 10);
+    if (date) byDate[date] = (byDate[date] || 0) + 1;
+    (entry.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
+    const src = String(entry.source || "unknown");
+    bySource[src] = (bySource[src] || 0) + 1;
+    totalTextLength += String(entry.text || "").length;
+    const t = entry.recordedAt ? new Date(entry.recordedAt) : null;
+    if (t) {
+      if (!firstAt || t < firstAt) firstAt = t;
+      if (!lastAt || t > lastAt) lastAt = t;
+    }
+    if (entry.ternaryId) {
+      const c = ternaryToCoords(entry.ternaryId);
+      ternaryCells.add(`${c.x},${c.y},${c.z}`);
+    }
+    totalLinks += (entry.links || []).length;
+  }
+  const sortedDates = Object.keys(byDate).sort();
+  let streak = 0;
+  if (sortedDates.length > 0) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastDate = new Date(sortedDates[sortedDates.length - 1] + "T00:00:00");
+    lastDate.setHours(0, 0, 0, 0);
+    const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+    if (diffDays <= 1) {
+      streak = 1;
+      for (let i = sortedDates.length - 2; i >= 0; i--) {
+        const curr = new Date(sortedDates[i + 1] + "T00:00:00");
+        const prev = new Date(sortedDates[i] + "T00:00:00");
+        const d = Math.floor((curr - prev) / (1000 * 60 * 60 * 24));
+        if (d === 1) streak++;
+        else break;
+      }
+    }
+  }
+  const timeline = sortedDates.map((d) => ({ date: d, count: byDate[d] }));
+  const topTags = Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+    .map(([tag, count]) => ({ tag, count }));
+  return {
+    total,
+    dreams,
+    notes,
+    places,
+    characters,
+    events,
+    lores,
+    symbols,
+    mirrors,
+    timeline,
+    topTags,
+    sources: bySource,
+    averageTextLength: total ? Math.round(totalTextLength / total) : 0,
+    firstAt: firstAt ? firstAt.toISOString() : null,
+    lastAt: lastAt ? lastAt.toISOString() : null,
+    streak,
+    user: normalizedUser,
+    path: path.relative(repoRoot, dreamerNotebookPath(normalizedUser)),
+    matrix: {
+      cells: ternaryCells.size,
+      links: totalLinks,
+      spaceSize: 81 * 81 * 81,
+    },
+    matrixCells: ternaryCells.size,
+  };
+}
+
+function writeJson(relativePath, data) {
+  try {
+    const fullPath = path.join(repoRoot, relativePath);
+    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error(`Failed to write JSON to ${relativePath}:`, error.message);
+    return false;
+  }
+}
+
+function appendLine(relativePath, line) {
+  try {
+    const fullPath = path.join(repoRoot, relativePath);
+    fs.appendFileSync(fullPath, line + '\n', 'utf8');
+    return true;
+  } catch (error) {
+    console.error(`Failed to append to ${relativePath}:`, error.message);
+    return false;
+  }
 }
 
 function readConversationLog(limit = 50) {
@@ -865,6 +1192,12 @@ const commandSpecs = {
     args: [],
     mode: "paper_settlement_no_live_execution",
   },
+  "!confidence": {
+    label: "Feature confidence report (trading, dreamer, imagniverse, payments)",
+    script: "scripts/Build-LanternConfidenceReport.ps1",
+    args: ["-WriteReceipt"],
+    mode: "read_only_confidence_assessment",
+  },
 };
 
 function normalizeLanternCommand(value) {
@@ -1272,6 +1605,77 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === "/api/invoice/create" && req.method === "POST") {
+    const body = await collectRequestBody(req);
+    const { invoiceId, offer, amountUsd, customerEmail } = JSON.parse(body);
+
+    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
+    wallet.pendingInvoices = wallet.pendingInvoices || [];
+    wallet.pendingInvoices.push({
+      invoiceId,
+      offer,
+      amountUsd,
+      customerEmail: customerEmail || "",
+      status: "draft",
+      createdAt: new Date().toISOString()
+    });
+    wallet.draftInvoiceUsd = (wallet.draftInvoiceUsd || 0) + amountUsd;
+    wallet.pendingInvoiceUsd = wallet.draftInvoiceUsd;
+    writeJson("data/wallet/local-cash-wallet.json", wallet);
+
+    appendLine("data/wallet/ledger.jsonl", JSON.stringify({
+      event: "invoice_created",
+      invoiceId,
+      offer,
+      amountUsd,
+      timestamp: new Date().toISOString()
+    }));
+
+    sendJson(res, { success: true, invoiceId });
+    return;
+  }
+
+  if (url.pathname === "/api/invoice/send" && req.method === "POST") {
+    const body = await collectRequestBody(req);
+    const { invoiceId } = JSON.parse(body);
+
+    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
+    const invoice = wallet.pendingInvoices?.find(i => i.invoiceId === invoiceId);
+
+    if (!invoice) {
+      sendJson(res, { error: "Invoice not found" }, 404);
+      return;
+    }
+
+    invoice.status = "sent";
+    invoice.sentAt = new Date().toISOString();
+    writeJson("data/wallet/local-cash-wallet.json", wallet);
+
+    appendLine("data/wallet/ledger.jsonl", JSON.stringify({
+      event: "invoice_sent",
+      invoiceId,
+      amount: invoice.amountUsd,
+      customer: invoice.customerEmail,
+      timestamp: new Date().toISOString()
+    }));
+
+    sendJson(res, { success: true, invoiceId, status: "sent" });
+    return;
+  }
+
+  if (url.pathname === "/api/invoices" && req.method === "GET") {
+    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
+    sendJson(res, {
+      pending: wallet.pendingInvoices || [],
+      received: wallet.receivedPayments || [],
+      total: {
+        pending: wallet.pendingInvoiceUsd || 0,
+        cleared: wallet.clearedCashUsd || 0
+      }
+    });
+    return;
+  }
+
   if (url.pathname === "/api/readiness") {
     sendJson(res, getReadiness());
     return;
@@ -1407,6 +1811,101 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === "/api/dreamer" && req.method === "GET") {
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+    const query = url.searchParams.get("q") || "";
+    sendJson(res, {
+      ok: true,
+      user,
+      path: path.relative(repoRoot, dreamerNotebookPath(user)),
+      entries: readDreamerEntries(user, limit, query),
+    });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer" && req.method === "POST") {
+    try {
+      const body = await collectRequestBody(req);
+      const record = await appendDreamerEntry(JSON.parse(body || "{}"));
+      sendJson(res, {
+        ok: true,
+        record,
+        path: path.relative(repoRoot, dreamerNotebookPath(record.user)),
+      }, 201);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer/stats" && req.method === "GET") {
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    sendJson(res, { ok: true, stats: computeDreamerStats(user) });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer/matrix" && req.method === "GET") {
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    const all = readDreamerEntries(user, 500, "");
+    const nodes = all.map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      name: e.name || "",
+      ternaryId: e.ternaryId,
+      recordedAt: e.recordedAt,
+      mood: e.mood || "",
+      links: e.links || [],
+    }));
+    sendJson(res, { ok: true, user, nodes });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer/mirror" && req.method === "POST") {
+    try {
+      const body = await collectRequestBody(req);
+      const input = JSON.parse(body || "{}");
+      const user = normalizeDreamerUser(input.user || "courtney");
+      const ids = Array.isArray(input.ids) ? input.ids : [];
+      if (ids.length === 0) throw new Error("ids_required");
+      const record = await createMirrorEntry(user, ids);
+      sendJson(res, { ok: true, record }, 201);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer/tasks" && req.method === "GET") {
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    sendJson(res, { ok: true, user, tasks: readTaskEntries(user, 100) });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer/tasks" && req.method === "POST") {
+    try {
+      const body = await collectRequestBody(req);
+      const input = JSON.parse(body || "{}");
+      const record = await appendTaskEntry(input);
+      sendJson(res, { ok: true, record }, 201);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/dreamer/tasks/") && req.method === "PATCH") {
+    try {
+      const taskId = url.pathname.slice("/api/dreamer/tasks/".length).split("/")[0];
+      const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+      const record = await completeTaskEntry(user, taskId);
+      sendJson(res, { ok: true, record });
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 400);
+    }
+    return;
+  }
+
   if (url.pathname === "/api/actions/run-loop" && req.method === "POST") {
     const result = await runLanternCommand("!converge");
     sendJson(res, result, result.code === 0 ? 200 : 500);
@@ -1488,6 +1987,57 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === "/api/sales/tools" && req.method === "GET") {
+    sendJson(res, { tools: salesMcp.listTools() });
+    return;
+  }
+
+  if (url.pathname === "/api/sales/invoke" && req.method === "POST") {
+    try {
+      const body = await collectRequestBody(req);
+      const input = JSON.parse(body || "{}");
+      const result = await salesMcp.invokeTool(input.tool, input.params || {});
+      sendJson(res, { ok: true, tool: input.tool, result }, 200);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/sales/pipeline" && req.method === "GET") {
+    try {
+      const result = await salesMcp.invokeTool("summarize_sales_pipeline", {});
+      sendJson(res, result);
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 500);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/sales/leads" && req.method === "GET") {
+    try {
+      const ledger = require("./sales/sales-ledger");
+      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+      const leads = ledger.readJsonl(ledger.files.leads).slice(-limit);
+      sendJson(res, { leads, count: leads.length });
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 500);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/sales/opportunities" && req.method === "GET") {
+    try {
+      const ledger = require("./sales/sales-ledger");
+      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
+      const opportunities = ledger.readJsonl(ledger.files.opportunities).slice(-limit);
+      sendJson(res, { opportunities, count: opportunities.length });
+    } catch (error) {
+      sendJson(res, { ok: false, error: error.message }, 500);
+    }
+    return;
+  }
+
   if (url.pathname.startsWith("/repo/")) {
     const relative = decodeURIComponent(url.pathname.replace(/^\/repo\//, ""));
     const target = path.resolve(repoRoot, relative);
@@ -1496,6 +2046,23 @@ async function route(req, res) {
       return;
     }
     sendFile(res, target);
+    return;
+  }
+
+  if (url.pathname === "/api/ternary-convergence") {
+    const convergence = readJson("manifests/validation/CONVERGENCE-FLEET-LATEST.json", {});
+    const receipt = readJson("data/automation/TERNARY-CONVERGENCE-RECEIPT-20260531-061000.json", {});
+    sendJson(res, {
+      ok: true,
+      generatedAt: receipt.generatedAt || new Date().toISOString(),
+      method: receipt.method || "3^12-1",
+      focus: receipt.focus || "lantern-os",
+      dimensions: receipt.dimensions || [],
+      score: receipt.score || {},
+      matrix: receipt.matrix || {},
+      nextActions: receipt.nextActions || [],
+      convergenceFleet: convergence,
+    });
     return;
   }
 
@@ -1515,6 +2082,11 @@ async function route(req, res) {
       return;
     }
     sendFile(res, target);
+    return;
+  }
+
+  if (url.pathname === "/imagniverse") {
+    sendFile(res, path.resolve(publicRoot, "art.html"));
     return;
   }
 

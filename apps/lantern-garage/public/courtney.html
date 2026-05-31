@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>Courtney's Well — Lantern Dreamer</title>
+  <link rel="stylesheet" href="styles.css?v=20260531-dreamer-v1">
+  <script defer src="courtney.js?v=20260531-dreamer-v1"></script>
+</head>
+<body data-style="dreamer-notebook">
+  <a class="skip-link" href="#main">Skip to the well</a>
+  <main id="main" class="shell dreamer-shell" tabindex="-1">
+    <header class="hero os-hero compact-hero">
+      <p class="eyebrow">Lantern Dreamer v1</p>
+      <h1>Courtney's Well</h1>
+      <p class="subtitle">A private place for pretty words, half-remembered dreams, passing thoughts, and sparks that matter. What you write here stays on this machine.</p>
+      <nav class="dreamer-nav" aria-label="Dreamer sections">
+        <a href="/courtney.html" aria-current="page">The Well</a>
+        <a href="/dreamer-dashboard.html">The View</a>
+        <a href="/">Back to the Garage</a>
+      </nav>
+    </header>
+
+    <section class="dreamer-grid" aria-label="Dreamer well">
+      <article class="panel dreamer-compose">
+        <h2>What came to you?</h2>
+        <form id="dreamerForm" class="dreamer-form">
+          <label for="dreamerKind">Kind of spark</label>
+          <select id="dreamerKind" name="kind">
+            <option value="dream">A dream</option>
+            <option value="note">A note</option>
+            <option value="place">A place</option>
+            <option value="character">A being</option>
+            <option value="event">An event</option>
+            <option value="lore">A story-thread</option>
+            <option value="symbol">A symbol</option>
+          </select>
+          <label for="dreamerName">Name — if this has one</label>
+          <input id="dreamerName" name="name" maxlength="120" placeholder="The Blue Door, Old Willow, The Keeper...">
+          <label for="dreamerMood">Mood — the feeling around it</label>
+          <input id="dreamerMood" name="mood" maxlength="40" placeholder="warm, uncertain, vast, fragile...">
+          <label for="dreamerText">The thread</label>
+          <textarea id="dreamerText" name="text" rows="8" maxlength="2000" placeholder="What did you see? What felt true? No proof needed here..."></textarea>
+          <label for="dreamerLinks">Links — threads this touches (entry IDs, comma-separated)</label>
+          <input id="dreamerLinks" name="links" maxlength="400" placeholder="a1b2c3d4, e5f6g7h8...">
+          <label for="dreamerTags">Tags — small names for the feeling</label>
+          <input id="dreamerTags" name="tags" maxlength="160" placeholder="morning, worry, idea, warmth">
+          <button type="submit">Drop it in the well</button>
+        </form>
+        <p id="dreamerStatus" class="muted">The well is listening.</p>
+      </article>
+
+      <article class="panel dreamer-recall">
+        <h2>Recall</h2>
+        <form id="recallForm" class="dreamer-form dreamer-recall-form">
+          <label for="recallQuery">Search the threads</label>
+          <input id="recallQuery" name="q" maxlength="160" placeholder="A word, a feeling, a name...">
+          <button type="submit">Reach back</button>
+        </form>
+        <div class="dreamer-meta">
+          <span id="dreamerCount">0 threads</span>
+          <span id="dreamerPath">well pending</span>
+        </div>
+        <ol id="dreamerEntries" class="dreamer-entries"></ol>
+      </article>
+    </section>
+
+    <section class="panel dreamer-boundary">
+      <h2>What this is, and what it is not</h2>
+      <p>This is a symbolic sandbox for private reflection. It stores your words on this machine only. It does not claim to heal, diagnose, predict, or remember better than you do. It does not sync to clouds or post anywhere. Discord commands keep only the speaker's own threads.</p>
+      <p class="restore-phrase"><em>Pretty words stay pretty here. The well holds meaning without making it proof, pressure, permission, or command.</em></p>
+      <a href="/">Back to Lantern Garage</a>
+    </section>
+  </main>
+</body>
+</html>

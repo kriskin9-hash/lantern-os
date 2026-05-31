@@ -6,15 +6,14 @@ Status: paper-only public-data settlement check; live trading remains blocked.
 
 | Field | Value |
 |---|---:|
-| Paper orders | 9 |
+| Paper orders | 0 |
 | Settled | 0 |
-| Open | 9 |
+| Open | 0 |
 | Unknown | 0 |
-| Paper cost | $4.79 |
+| Paper cost | $0.00 |
 | Paper payout | $0.00 |
 | Paper P/L | $0.00 |
 | Real money spent | $0.00 |
-| Next check after | 2026-05-30T06:00:00.0000000Z |
 
 ## Boundary
 
@@ -27,15 +26,6 @@ Status: paper-only public-data settlement check; live trading remains blocked.
 
 | Ticker | Result | Cost | Payout | P/L | Outcome |
 |---|---|---:|---:|---:|---|
-| KXHYPED-26MAY3002-T63.9999 |  | $0.99 | $0.00 | $0.00 | unsettled |
-| KXXRPD-26MAY3002-T1.3599 |  | $0.02 | $0.00 | $0.00 | unsettled |
-| KXBTC-26MAY3002-B73550 |  | $0.66 | $0.00 | $0.00 | unsettled |
-| KXBTC-26MAY3002-B73450 |  | $0.10 | $0.00 | $0.00 | unsettled |
-| KXETHD-26MAY3002-T1999.99 |  | $0.99 | $0.00 | $0.00 | unsettled |
-| KXETHD-26MAY3002-T1979.99 |  | $0.99 | $0.00 | $0.00 | unsettled |
-| KXSOLD-26MAY3002-T81.9999 |  | $0.98 | $0.00 | $0.00 | unsettled |
-| KXETHD-26MAY3002-T2019.99 |  | $0.02 | $0.00 | $0.00 | unsettled |
-| KXBTC-26MAY3002-B73650 |  | $0.04 | $0.00 | $0.00 | unsettled |
 
 ## Files
 
