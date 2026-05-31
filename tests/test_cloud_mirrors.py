@@ -9,9 +9,9 @@ def test_cloud_mirror_manifest_has_multiple_cloud_urls() -> None:
     manifest = json.loads((ROOT / "manifests" / "cloud-mirrors.json").read_text(encoding="utf-8"))
     mirrors = manifest["cloudMirrors"]
     urls = [item["url"] for item in mirrors]
-    assert manifest["deployProvider"] == "AWS ECS Fargate"
+    assert manifest["deployProvider"] == "Netlify"
     assert manifest["deployBranch"] == "master"
-    assert urls == []
+    assert len(urls) >= 1  # Netlify mirror is live
     assert len(urls) == len(set(urls))
     assert manifest["awsRuntime"]["imageSource"] == "apps/lantern-garage/Dockerfile"
     assert manifest["awsRuntime"]["containerPort"] == 8080

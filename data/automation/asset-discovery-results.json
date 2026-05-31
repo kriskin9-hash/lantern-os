@@ -1,12 +1,24 @@
 {
     "mode":  "live",
-    "totalAssets":  15378,
+    "totalAssets":  15550,
     "assets":  [
                    {
                        "topAssets":  [
                                          {
                                              "path":  "D:\\tmp\\lantern-os\\reports\\FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS-2026-05-29.md",
                                              "name":  "FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS-2026-05-29.md",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS-2026-05-29.pdf",
+                                             "name":  "FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS-2026-05-29.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS.pdf",
+                                             "name":  "FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS.pdf",
                                              "type":  "high-value-indicator",
                                              "indicator":  "FASTEST-PATHS-FIRST-200-DIGITAL-ASSETS"
                                          },
@@ -107,6 +119,12 @@
                                              "indicator":  "COMET-LEAP"
                                          },
                                          {
+                                             "path":  "D:\\tmp\\lantern-os\\manifests\\evidence\\COMET-LEAP-ARTIFACTS-PROMOTED-2026-05-31.md",
+                                             "name":  "COMET-LEAP-ARTIFACTS-PROMOTED-2026-05-31.md",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
                                              "path":  "D:\\tmp\\lantern-os\\reports\\COMET-LEAP-11-DAY-CASH-SPRINT.md",
                                              "name":  "COMET-LEAP-11-DAY-CASH-SPRINT.md",
                                              "type":  "high-value-indicator",
@@ -163,6 +181,66 @@
                                          {
                                              "path":  "D:\\tmp\\lantern-os\\reports\\MOOKMAN-COMET-LEAP-SETUP-INVESTOR-72H-2026-05-26.md",
                                              "name":  "MOOKMAN-COMET-LEAP-SETUP-INVESTOR-72H-2026-05-26.md",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-11-DAY-CASH-SPRINT.pdf",
+                                             "name":  "COMET-LEAP-11-DAY-CASH-SPRINT.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-26.pdf",
+                                             "name":  "COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-26.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-27.pdf",
+                                             "name":  "COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-27.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-MICHAH-PERFECT-REPORT-2026-05-27.pdf",
+                                             "name":  "COMET-LEAP-MICHAH-PERFECT-REPORT-2026-05-27.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-MOOKMAN11-PERFECT-REPORT-2026-05-27.pdf",
+                                             "name":  "COMET-LEAP-MOOKMAN11-PERFECT-REPORT-2026-05-27.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-ORCH-CHALLENGE-SCIENCE-FIRST.pdf",
+                                             "name":  "COMET-LEAP-ORCH-CHALLENGE-SCIENCE-FIRST.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf",
+                                             "name":  "COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAPER-OPERATING-NARRATIVE-v1.pdf",
+                                             "name":  "COMET-LEAPER-OPERATING-NARRATIVE-v1.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\LANTERN-CORE-MKII-COMET-LEAP-ARC-REACTOR-HOUSING-2026-05-26.pdf",
+                                             "name":  "LANTERN-CORE-MKII-COMET-LEAP-ARC-REACTOR-HOUSING-2026-05-26.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "COMET-LEAP"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\MOOKMAN-COMET-LEAP-SETUP-INVESTOR-72H-2026-05-26.pdf",
+                                             "name":  "MOOKMAN-COMET-LEAP-SETUP-INVESTOR-72H-2026-05-26.pdf",
                                              "type":  "high-value-indicator",
                                              "indicator":  "COMET-LEAP"
                                          },
@@ -227,6 +305,12 @@
                                              "indicator":  "CASH-SPRINT"
                                          },
                                          {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-11-DAY-CASH-SPRINT.pdf",
+                                             "name":  "COMET-LEAP-11-DAY-CASH-SPRINT.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "CASH-SPRINT"
+                                         },
+                                         {
                                              "path":  "D:\\tmp\\lantern-os\\.devin\\skills\\convergence-dashboard\\SKILL.md",
                                              "name":  "SKILL.md",
                                              "type":  "high-value-indicator",
@@ -252,6 +336,12 @@
                                          },
                                          {
                                              "path":  "D:\\tmp\\lantern-os\\skills\\asi-arc-reactor-mk1\\SKILL.md",
+                                             "name":  "SKILL.md",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "SKILL.md"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\skills\\babel-door-translator\\SKILL.md",
                                              "name":  "SKILL.md",
                                              "type":  "high-value-indicator",
                                              "indicator":  "SKILL.md"
@@ -399,19 +489,43 @@
                                              "name":  "COMET-LEAP-MOOKMAN11-PERFECT-REPORT-2026-05-27.md",
                                              "type":  "high-value-indicator",
                                              "indicator":  "PERFECT-REPORT"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-26.pdf",
+                                             "name":  "COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-26.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "PERFECT-REPORT"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-27.pdf",
+                                             "name":  "COMET-LEAP-FOUNDER-PERFECT-REPORT-2026-05-27.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "PERFECT-REPORT"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-MICHAH-PERFECT-REPORT-2026-05-27.pdf",
+                                             "name":  "COMET-LEAP-MICHAH-PERFECT-REPORT-2026-05-27.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "PERFECT-REPORT"
+                                         },
+                                         {
+                                             "path":  "D:\\tmp\\lantern-os\\reports\\PDF\\COMET-LEAP-MOOKMAN11-PERFECT-REPORT-2026-05-27.pdf",
+                                             "name":  "COMET-LEAP-MOOKMAN11-PERFECT-REPORT-2026-05-27.pdf",
+                                             "type":  "high-value-indicator",
+                                             "indicator":  "PERFECT-REPORT"
                                          }
                                      ],
-                       "totalFiles":  4032,
+                       "totalFiles":  4202,
                        "repoName":  "lantern-os",
                        "repoPath":  "D:\\tmp\\lantern-os",
-                       "scannedAt":  "2026-05-31 03:14:15",
+                       "scannedAt":  "2026-05-31 13:27:48",
                        "commercialViabilityScore":  100,
                        "categories":  {
                                           "scripts":  {
                                                           "path":  "scripts",
                                                           "viability":  "medium",
                                                           "lastModified":  "2026-05-31",
-                                                          "count":  86,
+                                                          "count":  102,
                                                           "found":  [
                                                                         "D:\\tmp\\lantern-os\\scripts\\Add-ExternalRagCacheItem.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Add-WalletLedgerEvent.ps1",
@@ -419,6 +533,7 @@
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-CourtneyBatchLauncher.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-CourtneyExeInstaller.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-DayOneNormiePdf.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Build-LanternOSCourtneyExe.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-MasterConvergencePdf.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-PerfectArtPdf.founder-v4.dark.noopacity.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-PerfectArtPdf.founder-v4.dark.print.ps1",
@@ -429,15 +544,18 @@
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-SelfExtractingExe.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-SimpleReportPdf.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Build-WindsurfConvergenceReportPdf.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Compute-FleetConfidence.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Deploy-DiscordBotCloud.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Deploy-LanternGarageCloud.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Deploy-WindsurfDevToCloud.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Deploy-WindsurfDevToGitHubPages.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Find-CorruptedJson.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Generate-DayOneNormieArt.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Get-HardwareInventory.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Get-OneIdeStatus.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Get-ReportSkillOptions.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Import-AppleWalletExport.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Install-LanternOSAllAccounts.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Install-LanternShortcut.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-ArchiveCommonsBatch.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-AssetDiscoveryEngine.ps1",
@@ -453,14 +571,20 @@
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-FleetHealthEngine.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-GitAutoDeploy.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-GitHygieneEngine.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Invoke-HealthCheck.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-HFFConvergence.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-HotSwapVmReceipt.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-HouseThinker.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Invoke-HumanTrialGateMonitor.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-KalshiLiveOrder.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-LanternAutomationTestSuite.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-LanternConvergenceLoop.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-LanternSdk.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-LoopReceipt.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Invoke-McpCanaryTestEngine.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Invoke-Movie2ReadinessTracker.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Invoke-ReceiptGenerator.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Invoke-StyleConvergence.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-SuperJarvisPerfectLoop.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-WindowsSurfaceSetup.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Invoke-WorldModelActionLoop.ps1",
@@ -478,6 +602,7 @@
                                                                         "D:\\tmp\\lantern-os\\scripts\\Paste-DiscordBotToken.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Resolve-KalshiNearTermPaperBlock.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Set-DiscordBotToken.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Setup-PaymentRail.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Start-ActiveAgentFleet.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Start-DiscordLoungeBot.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Start-LanternGarageApp.ps1",
@@ -485,7 +610,10 @@
                                                                         "D:\\tmp\\lantern-os\\scripts\\Start-LanternLocalControls.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Start-LanternRepoApp.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Start-WindsurfDeveloper.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Submit-GrantApplication.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Sync-RagAndPdf.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-ActiveFleet.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Test-AgentCliRegistry.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-BrowserAutomation.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-DiscordBotHealth.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-LanternChatEndpoint.ps1",
@@ -493,8 +621,10 @@
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-LanternLocalAgentRing.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-LanternMcpConnector.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-LanternOrchestratorDependency.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Test-LanternServerStart.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-MiningProfitability.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-SalesMcpTools.ps1",
+                                                                        "D:\\tmp\\lantern-os\\scripts\\Test-Syntax.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Test-TonyGarageSurface.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Update-ArcReactorStatus.ps1",
                                                                         "D:\\tmp\\lantern-os\\scripts\\Update-InternalHouseRag.ps1",
@@ -506,7 +636,7 @@
                                                           "path":  "reports",
                                                           "viability":  "high",
                                                           "lastModified":  "2026-05-31",
-                                                          "count":  87,
+                                                          "count":  89,
                                                           "found":  [
                                                                         "D:\\tmp\\lantern-os\\reports\\ADS-ARCHITECTURE-REVIEW-v0.1.md",
                                                                         "D:\\tmp\\lantern-os\\reports\\ALEX-PLACE-FOUNDER-ALL-STREAMS-CONVERGENCE-2026-05-27-CASH.md",
@@ -590,6 +720,8 @@
                                                                         "D:\\tmp\\lantern-os\\reports\\RECENT-MODELS-RESEARCH-INTAKE-2026-05-28.md",
                                                                         "D:\\tmp\\lantern-os\\reports\\SCIENCE-UPDATES-NORMIE-2026-05-27.md",
                                                                         "D:\\tmp\\lantern-os\\reports\\SUPER-JARVIS-LANTERN-OS-FRONT-PAGE.md",
+                                                                        "D:\\tmp\\lantern-os\\reports\\TRADING-CHOICES-SPREADS-EXECUTIONS-REVIEW-2026-05-31.md",
+                                                                        "D:\\tmp\\lantern-os\\reports\\TRADING-SPREADS-SUMMARY-2026-05-31.md",
                                                                         "D:\\tmp\\lantern-os\\reports\\V1-READINESS-TEST-2026-05-26.md",
                                                                         "D:\\tmp\\lantern-os\\reports\\WEEKLY-NOVEL-INNOVATIONS-SIMPLE-2026-05-30.md",
                                                                         "D:\\tmp\\lantern-os\\reports\\WINDSURF-DEVELOPER-CONVERGENCE-REPORT-2026-05-29.md",
@@ -602,7 +734,7 @@
                                                        "path":  "data",
                                                        "viability":  "low",
                                                        "lastModified":  "2026-05-31",
-                                                       "count":  78,
+                                                       "count":  83,
                                                        "found":  [
                                                                      "D:\\tmp\\lantern-os\\data\\automation-setup-report.json",
                                                                      "D:\\tmp\\lantern-os\\data\\business-plan.json",
@@ -618,6 +750,10 @@
                                                                      "D:\\tmp\\lantern-os\\data\\automation\\evidence-validation-results.json",
                                                                      "D:\\tmp\\lantern-os\\data\\automation\\fleet-health-results.json",
                                                                      "D:\\tmp\\lantern-os\\data\\automation\\git-hygiene-results.json",
+                                                                     "D:\\tmp\\lantern-os\\data\\automation\\health-status.json",
+                                                                     "D:\\tmp\\lantern-os\\data\\automation\\human-trial-gate-results.json",
+                                                                     "D:\\tmp\\lantern-os\\data\\automation\\mcp-canary-results.json",
+                                                                     "D:\\tmp\\lantern-os\\data\\automation\\movie2-readiness-results.json",
                                                                      "D:\\tmp\\lantern-os\\data\\automation\\orchestrator-config.json",
                                                                      "D:\\tmp\\lantern-os\\data\\automation\\orchestrator-results.json",
                                                                      "D:\\tmp\\lantern-os\\data\\automation\\poll-config.json",
@@ -677,6 +813,7 @@
                                                                      "D:\\tmp\\lantern-os\\data\\outreach\\investor-targets.json",
                                                                      "D:\\tmp\\lantern-os\\data\\private\\patient-packets\\PATIENT-T-2026-05-29.json",
                                                                      "D:\\tmp\\lantern-os\\data\\rag-house\\flat-rag-house-latest.json",
+                                                                     "D:\\tmp\\lantern-os\\data\\rag-world-model\\FLEET-CONFIDENCE-STATE.json",
                                                                      "D:\\tmp\\lantern-os\\data\\style\\preferred_art_style_profile_v0.1.json",
                                                                      "D:\\tmp\\lantern-os\\data\\templates\\email-templates.json",
                                                                      "D:\\tmp\\lantern-os\\data\\wallet\\license-wallet.schema.json",
@@ -689,12 +826,13 @@
                                                          "path":  "skills",
                                                          "viability":  "high",
                                                          "lastModified":  "2026-05-31",
-                                                         "count":  19,
+                                                         "count":  20,
                                                          "found":  [
                                                                        "D:\\tmp\\lantern-os\\skills\\4d-gms-game-system\\SKILL.md",
                                                                        "D:\\tmp\\lantern-os\\skills\\arc-reactor-confidence\\SKILL.md",
                                                                        "D:\\tmp\\lantern-os\\skills\\archive-commons-batch\\SKILL.md",
                                                                        "D:\\tmp\\lantern-os\\skills\\asi-arc-reactor-mk1\\SKILL.md",
+                                                                       "D:\\tmp\\lantern-os\\skills\\babel-door-translator\\SKILL.md",
                                                                        "D:\\tmp\\lantern-os\\skills\\bayesian-world-model\\SKILL.md",
                                                                        "D:\\tmp\\lantern-os\\skills\\clean-storm-agile\\SKILL.md",
                                                                        "D:\\tmp\\lantern-os\\skills\\comet-leap-agile\\SKILL.md",
@@ -826,9 +964,10 @@
                                           "offers":  {
                                                          "path":  "offers",
                                                          "viability":  "high",
-                                                         "lastModified":  "2026-05-30",
-                                                         "count":  2,
+                                                         "lastModified":  "2026-05-31",
+                                                         "count":  3,
                                                          "found":  [
+                                                                       "D:\\tmp\\lantern-os\\offers\\CINCINNATI-CHILDRENS-OUTREACH-PACKET-2026-05-31.md",
                                                                        "D:\\tmp\\lantern-os\\offers\\EMERGENCY-FUNDING-OUTREACH-2026-05-30.md",
                                                                        "D:\\tmp\\lantern-os\\offers\\MOOKMAN-20-WALLET-VERSION.md"
                                                                    ],
@@ -837,7 +976,7 @@
                                           "surfaces":  {
                                                            "path":  "surfaces",
                                                            "viability":  "medium",
-                                                           "lastModified":  "2026-05-30",
+                                                           "lastModified":  "2026-05-31",
                                                            "count":  5,
                                                            "found":  [
                                                                          "D:\\tmp\\lantern-os\\surfaces\\agent-fleet\\index.html",
@@ -852,7 +991,7 @@
                                                        "path":  "docs",
                                                        "viability":  "low",
                                                        "lastModified":  "2026-05-31",
-                                                       "count":  49,
+                                                       "count":  51,
                                                        "found":  [
                                                                      "D:\\tmp\\lantern-os\\docs\\ACTION-POOLING-AND-BATCHING.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\ACTIVE-FLEET-DEPLOYMENT.md",
@@ -870,6 +1009,7 @@
                                                                      "D:\\tmp\\lantern-os\\docs\\COURTNEY-DESKTOP-BRIDGE-SETUP-2026-05-30.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\COURTNEY-QUICK-SYNC-2026-05-30.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\COURTNEY-WINDOWS-SETUP-GUIDE-2026-05-30.md",
+                                                                     "D:\\tmp\\lantern-os\\docs\\DASHBOARD-CONSOLIDATION.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\DISCORD-FIRST-DEV-PREVIEW-CHECKIN-2026-05-28.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\EXECUTION-BOUNDARIES.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\GIT-AUTOMATION-SYSTEM-GUIDE.md",
@@ -884,6 +1024,7 @@
                                                                      "D:\\tmp\\lantern-os\\docs\\LANTERN-ORCHESTRATOR-DEPENDENCY.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\LANTERN-OS-RECEPTIONIST-CALL-LIST.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\LANTERN-RUNTIME-CICD.md",
+                                                                     "D:\\tmp\\lantern-os\\docs\\LANTERN-SERVER-CREDENTIALS.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\MCP-CONNECTOR.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\NOVEL-KUBERNETES-RAG-INTEGRATION.md",
                                                                      "D:\\tmp\\lantern-os\\docs\\ONE-HOUR-1000-DEMO.md",
@@ -1052,7 +1193,7 @@
                        "totalFiles":  2240,
                        "repoName":  "human-flourishing-frameworks-scan",
                        "repoPath":  "C:\\tmp\\human-flourishing-frameworks-scan",
-                       "scannedAt":  "2026-05-31 03:14:28",
+                       "scannedAt":  "2026-05-31 13:28:12",
                        "commercialViabilityScore":  100,
                        "categories":  {
                                           "scripts":  {
@@ -1689,16 +1830,16 @@
                                              "indicator":  "pilot"
                                          }
                                      ],
-                       "totalFiles":  9106,
+                       "totalFiles":  9108,
                        "repoName":  "gm-agent-orchestrator",
                        "repoPath":  "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
-                       "scannedAt":  "2026-05-31 03:14:34",
+                       "scannedAt":  "2026-05-31 13:28:20",
                        "commercialViabilityScore":  100,
                        "categories":  {
                                           "scripts":  {
                                                           "path":  "scripts",
                                                           "viability":  "medium",
-                                                          "lastModified":  "2026-05-30",
+                                                          "lastModified":  "2026-05-31",
                                                           "count":  102,
                                                           "found":  [
                                                                         "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator\\scripts\\backup-foundry-data.ps1",
@@ -2077,7 +2218,7 @@
                                     ],
     "engine":  "Asset Discovery Engine v1.0",
     "reposScanned":  3,
-    "generatedAt":  "2026-05-31T03:15:02",
+    "generatedAt":  "2026-05-31T13:28:44",
     "topOpportunities":  {
                              "confidence":  "high",
                              "name":  "Repo/RAG Cleanup Sprint",

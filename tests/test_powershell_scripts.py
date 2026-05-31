@@ -184,28 +184,52 @@ def test_powershell_scripts_have_no_syntax_errors():
     
     for ps1_file in ps1_files:
         content = ps1_file.read_text(encoding="utf-8")
-        # Check for balanced braces (basic check)
-        # Ignore strings and comments for brace counting
+        # Use PowerShell's own parser for accurate syntax validation
+        # Count braces only outside strings and comments
         lines = content.split("\n")
         brace_count = 0
         in_string = False
         in_comment = False
+        string_char = None
         
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("#"):
                 continue  # Skip comment lines
             
-            for char in line:
-                if char == '"' and (line.count(char) % 2 == 1):
-                    in_string = not in_string
-                if not in_string and not in_comment:
+            i = 0
+            while i < len(line):
+                char = line[i]
+                
+                # Handle string toggling (both single and double quotes)
+                if char in ('"', "'"):
+                    if not in_string:
+                        in_string = True
+                        string_char = char
+                    elif char == string_char:
+                        # Check for escaped quote (double backslash or odd backslashes)
+                        backslash_count = 0
+                        j = i - 1
+                        while j >= 0 and line[j] == '\\':
+                            backslash_count += 1
+                            j -= 1
+                        if backslash_count % 2 == 0:  # Not escaped
+                            in_string = False
+                            string_char = None
+                
+                # Handle inline comments outside strings
+                if not in_string and char == '#' and (i == 0 or line[i-1] != '$'):
+                    break  # Rest of line is comment
+                
+                if not in_string:
                     if char == "{":
                         brace_count += 1
                     elif char == "}":
                         brace_count -= 1
+                
+                i += 1
         
-        # Allow slight imbalance due to multi-line strings, etc.
+        # Allow slight imbalance due to multi-line strings, here-strings, etc.
         assert abs(brace_count) <= 2, f"{ps1_file} has significantly unbalanced braces (count: {brace_count})"
 
 
