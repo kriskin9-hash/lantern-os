@@ -1,0 +1,44 @@
+{
+  "slotId": "gemini-2.5-mini-agent-slot-001",
+  "agentName": "Gemini Fleet Worker",
+  "model": "gemini-2.5-mini",
+  "provider": "google",
+  "apiKeyEnv": "GEMINI_API_KEY",
+  "costProfile": "free-tier-optimized",
+  "createdAt": "2026-05-31T18:30:00Z",
+  "rateLimit": {
+    "requestsPerMinute": 15000,
+    "tokensPerMonth": 5000000,
+    "warningThreshold": 0.8
+  },
+  "taskCategories": [
+    "report_generation",
+    "code_analysis",
+    "documentation",
+    "asset_discovery",
+    "convergence_work"
+  ],
+  "billingTracking": {
+    "enabled": true,
+    "trackingFile": "data/billing/gemini-2.5-mini-001-ledger.jsonl",
+    "alertOnOverage": true,
+    "monthlyBudget": 0,
+    "notes": "Free tier only - no paid charges. Operator approval required for any upgrades."
+  },
+  "greenLight": {
+    "apiKeyValid": false,
+    "testsPass": false,
+    "billingConfigured": false,
+    "readyToStart": false,
+    "checklist": {
+      "geminiApiKeyCreated": false,
+      "apiKeyTested": false,
+      "billingLedgerCreated": false,
+      "allBranchesMerged": true,
+      "testsPass": true,
+      "operatorApprovalGiven": false
+    }
+  },
+  "status": "AWAITING_GREEN_LIGHT",
+  "operatorNotes": "Created by convergence task. Awaiting API key creation and operator approval to start."
+}
