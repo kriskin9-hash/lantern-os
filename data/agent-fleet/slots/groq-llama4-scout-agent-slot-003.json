@@ -1,0 +1,50 @@
+{
+  "slotId": "groq-llama4-scout-agent-slot-003",
+  "agentName": "Groq Llama Scout Worker",
+  "model": "llama-4-scout-8b",
+  "provider": "groq",
+  "apiKeyEnv": "GROQ_API_KEY",
+  "costProfile": "free-tier-optimized",
+  "createdAt": "2026-05-31T20:05:00Z",
+  "rateLimit": {
+    "requestsPerMinute": 14400,
+    "tokensPerMonth": 10000000,
+    "warningThreshold": 0.8
+  },
+  "taskCategories": [
+    "code_generation",
+    "reasoning",
+    "analysis",
+    "real_time_response",
+    "low_latency_operations"
+  ],
+  "differentiator": "500+ tokens/sec throughput via Groq's LPU hardware. Open-source Llama foundation.",
+  "billingTracking": {
+    "enabled": true,
+    "trackingFile": "data/billing/groq-llama-scout-003-ledger.jsonl",
+    "alertOnOverage": true,
+    "monthlyBudget": 0,
+    "notes": "Free tier: 14,400 requests/min. No billing after free tier until operator approval."
+  },
+  "greenLight": {
+    "apiKeyValid": false,
+    "testsPass": false,
+    "billingConfigured": false,
+    "readyToStart": false,
+    "checklist": {
+      "groqApiKeyCreated": false,
+      "apiKeyTested": false,
+      "billingLedgerCreated": false,
+      "latencyBenchmarkPassed": false,
+      "testsPass": true,
+      "operatorApprovalGiven": false
+    }
+  },
+  "status": "AWAITING_GREEN_LIGHT",
+  "operatorNotes": "Groq's fastest open-source model. Requires new API key from groq.com. Excellent for low-latency real-time tasks.",
+  "benchmarks": {
+    "avgTokensPerSecond": 500,
+    "avgFirstTokenLatencyMs": 75,
+    "modelWeights": "Open-source (Meta Llama)"
+  }
+}
