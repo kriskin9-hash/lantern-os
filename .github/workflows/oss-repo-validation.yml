@@ -1,0 +1,52 @@
+name: OSS Repository Validation
+
+on:
+  push:
+    branches: [ master, main, 'codex/**' ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  validate-hff:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: lantern-os
+
+      - name: Checkout HFF Repository
+        uses: actions/checkout@v4
+        with:
+          repository: alex-place/human-flourishing-frameworks
+          path: human-flourishing-frameworks-scan
+        continue-on-error: true
+
+      - name: Validate HFF Repository
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (Test-Path human-flourishing-frameworks-scan) {
+            Copy-Item lantern-os/scripts/Invoke-LanternConvergenceLoop.ps1 human-flourishing-frameworks-scan/scripts/ -Force
+            cd human-flourishing-frameworks-scan
+            .\scripts\Invoke-LanternConvergenceLoop.ps1 -Root . -Output convergence-hff-ci.json
+            $results = Get-Content convergence-hff-ci.json | ConvertFrom-Json
+            if ($results.issues.Count -gt 0) {
+              Write-Host "::warning:: HFF repo: $($results.issues.Count) issues found"
+            }
+            if ($results.issues | Where-Object { $_.severity -eq 'HIGH' }) {
+              throw "HIGH severity issues in HFF repo. Fix before claiming convergence."
+            }
+          } else {
+            Write-Host "::warning:: HFF repository not accessible. Skipping validation."
+          }
+
+      - name: Upload HFF Validation Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hff-validation-results
+          path: human-flourishing-frameworks-scan/convergence-hff-ci.json
+        continue-on-error: true
