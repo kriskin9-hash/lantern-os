@@ -316,6 +316,36 @@ async function handlePaymentFailure(invoice) {
   console.log(`Payment failed for invoice ${lanternInvoiceId}`);
 }
 
+// Create Stripe Checkout session
+app.post('/api/payment/create-checkout-session', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+  try {
+    const { tierId, email } = req.body;
+    const priceMap = {
+      supporter: 'price_1QQQQQQQQQQQQQ',
+      pilot: 'price_2QQQQQQQQQQQQQ'
+    };
+    const priceId = priceMap[tierId];
+    if (!priceId) {
+      return res.status(400).json({ error: 'Unknown tier' });
+    }
+    const session = await stripe.checkout.sessions.create({
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: 'subscription',
+      success_url: ${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=success,
+      cancel_url: ${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=cancel,
+      customer_email: email || undefined,
+      metadata: { tierId, lantern_os: 'true' }
+    });
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Checkout session error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Lantern Payment Bridge running on port ${PORT}`);
