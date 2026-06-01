@@ -1,6 +1,6 @@
 ﻿{
-    "receiptId":  "orchestrator-20260601-124530",
-    "generatedAt":  "2026-06-01T12:45:30.3813430-04:00",
+    "receiptId":  "orchestrator-20260601-123523",
+    "generatedAt":  "2026-06-01T12:35:23.6671425-04:00",
     "evidenceClass":  "batch_orchestrator_run",
     "dryRun":  false,
     "summary":  {
@@ -17,23 +17,23 @@
                      "reason":  "script_not_found",
                      "exitCode":  null,
                      "durationMs":  0,
-                     "startedAt":  "2026-06-01T12:45:24.1739481-04:00"
+                     "startedAt":  "2026-06-01T12:35:17.0623233-04:00"
                  },
                  {
                      "id":  "convergence-loop",
                      "status":  "failed",
                      "reason":  null,
                      "exitCode":  1,
-                     "durationMs":  4094,
-                     "startedAt":  "2026-06-01T12:45:24.2089657-04:00"
+                     "durationMs":  3101,
+                     "startedAt":  "2026-06-01T12:35:17.0886413-04:00"
                  },
                  {
                      "id":  "loop-receipt",
                      "status":  "ok",
                      "reason":  null,
                      "exitCode":  0,
-                     "durationMs":  1023,
-                     "startedAt":  "2026-06-01T12:45:28.3123801-04:00"
+                     "durationMs":  1032,
+                     "startedAt":  "2026-06-01T12:35:20.2092465-04:00"
                  },
                  {
                      "id":  "asset-discovery",
@@ -41,7 +41,7 @@
                      "reason":  "script_not_found",
                      "exitCode":  null,
                      "durationMs":  0,
-                     "startedAt":  "2026-06-01T12:45:29.3391543-04:00"
+                     "startedAt":  "2026-06-01T12:35:21.2487898-04:00"
                  },
                  {
                      "id":  "sync-rag-pdf",
@@ -49,15 +49,15 @@
                      "reason":  "script_not_found",
                      "exitCode":  null,
                      "durationMs":  0,
-                     "startedAt":  "2026-06-01T12:45:29.3446941-04:00"
+                     "startedAt":  "2026-06-01T12:35:21.2550704-04:00"
                  },
                  {
                      "id":  "post-ingestion-purge",
                      "status":  "ok",
                      "reason":  null,
                      "exitCode":  0,
-                     "durationMs":  1016,
-                     "startedAt":  "2026-06-01T12:45:29.3483475-04:00"
+                     "durationMs":  2034,
+                     "startedAt":  "2026-06-01T12:35:21.2624047-04:00"
                  }
              ],
     "boundary":  "No automated paid API calls. No autonomous action without human review gate."
