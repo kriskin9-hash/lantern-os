@@ -1,0 +1,127 @@
+# Unified Lantern OS + HFF Convergence Container
+# Combines all repos (lantern-os, hff-*, lantern-*) into one modernized image
+# Base: Python 3.12 + Node.js 22 multi-stage build
+# Generated: 2025
+
+# Stage 1: Python base with all HFF/Lantern services
+FROM python:3.12-slim as python-builder
+
+LABEL maintainer="Lantern OS Team"
+LABEL version="1.0.0-unified"
+LABEL description="Unified Lantern OS + HFF Convergence Stack"
+
+WORKDIR /app
+
+# System dependencies for Python services
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy unified requirements (modernized dependencies)
+COPY lantern-os/requirements.txt.unified ./requirements.txt
+
+# Install Python packages
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Create application structure
+RUN mkdir -p /app/{hff,lantern,data,logs,config} && \
+    mkdir -p /app/data/{rag-house,wallet,manifests,media} && \
+    mkdir -p /app/.lantern/sounds
+
+# Copy HFF applications
+COPY hff-lantern-recovery/apps /app/hff/apps
+COPY hff-lantern-recovery/docs /app/hff/docs
+
+# Copy Lantern applications
+COPY lantern-os/apps /app/lantern/apps
+COPY lantern-os/src /app/lantern/src
+COPY lantern-os/data /app/data
+COPY lantern-os/docs /app/lantern/docs
+
+# Create service user
+RUN useradd --create-home --shell /usr/sbin/nologin lantern && \
+    chown -R lantern:lantern /app && \
+    chmod +x /app/entrypoint.sh
+
+USER lantern
+
+# Stage 2: Node.js for Lantern Garage
+FROM node:22-alpine as node-builder
+
+WORKDIR /app/garage
+
+# Copy Lantern Garage
+COPY --from=python-builder /app/lantern/apps/lantern-garage /app/garage
+COPY lantern-os/apps/lantern-garage/package*.json ./
+
+# Install Node dependencies (production only)
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Stage 3: Final unified image
+FROM python:3.12-slim
+
+LABEL maintainer="Lantern OS Team"
+LABEL version="1.0.0-unified"
+LABEL description="Unified Lantern OS + HFF Convergence Stack"
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python environment from builder
+COPY --from=python-builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=python-builder /usr/local/bin /usr/local/bin
+
+# Copy application code from builders
+COPY --from=python-builder /app /app
+COPY --from=node-builder /app/garage /app/lantern/apps/lantern-garage
+
+# Create service user and fix permissions
+RUN useradd --create-home --shell /usr/sbin/nologin lantern && \
+    chown -R lantern:lantern /app && \
+    chmod 755 /app/entrypoint.sh
+
+USER lantern
+
+# Expose ports
+# 5000: Flask HFF API
+# 4177: Lantern OS Dashboard (Node.js)
+# 8765: Lantern Browser
+# 4178: Discord Bot
+# 9000: Health/metrics
+EXPOSE 5000 4177 8765 4178 9000
+
+# Environment configuration
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    NODE_ENV=production \
+    FLASK_ENV=production \
+    LANTERN_MODE=convergence-unified \
+    PORT=5000 \
+    LANTERN_DASHBOARD_PORT=4177 \
+    DISCORD_BOT_PORT=4178 \
+    RAG_HOUSE_PATH=/app/data/rag-house \
+    WALLET_PATH=/app/data/wallet \
+    MEDIA_PATH=/app/data/media
+
+# Health checks
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:9000/health || exit 1
+
+# Entrypoint: orchestrates all services
+COPY lantern-os/ops/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+CMD ["/app/entrypoint.sh"]
