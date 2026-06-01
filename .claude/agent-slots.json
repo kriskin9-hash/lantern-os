@@ -1,0 +1,214 @@
+{
+  "version": "1.0.0",
+  "description": "Agent Slot Configuration for Lantern OS Foundry",
+  "slots": [
+    {
+      "id": "claude-slot-1",
+      "agent": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus",
+      "worktreeBase": "/d/tmp/lantern-os",
+      "branch": "claude/orchestrator/slot-1",
+      "status": "ready",
+      "capabilities": {
+        "maxTokens": 200000,
+        "batchSize": 10,
+        "parallelTasks": 3,
+        "supportedTools": ["all"]
+      },
+      "quotaTracking": {
+        "enabled": true,
+        "windowSize": 3600,
+        "maxTokensPerWindow": 1000000,
+        "fallbackAgent": "codex-slot-1"
+      },
+      "responsibilities": [
+        "architecture_decisions",
+        "complex_analysis",
+        "documentation",
+        "code_review",
+        "strategic_planning"
+      ],
+      "syncInterval": 300,
+      "healthCheck": {
+        "interval": 60,
+        "timeout": 10
+      }
+    },
+    {
+      "id": "codex-slot-1",
+      "agent": "codex",
+      "provider": "openai",
+      "model": "gpt-4-turbo",
+      "worktreeBase": "/d/tmp/lantern-os",
+      "branch": "codex/orchestrator/slot-1",
+      "status": "ready",
+      "capabilities": {
+        "maxTokens": 128000,
+        "batchSize": 8,
+        "parallelTasks": 2,
+        "supportedTools": ["code_execution", "git", "testing"]
+      },
+      "quotaTracking": {
+        "enabled": true,
+        "windowSize": 3600,
+        "maxTokensPerWindow": 500000,
+        "fallbackAgent": "gemini-slot-1"
+      },
+      "responsibilities": [
+        "feature_implementation",
+        "bug_fixes",
+        "code_generation",
+        "test_writing",
+        "refactoring"
+      ],
+      "syncInterval": 300,
+      "healthCheck": {
+        "interval": 60,
+        "timeout": 10
+      }
+    },
+    {
+      "id": "gemini-slot-1",
+      "agent": "gemini",
+      "provider": "google",
+      "model": "gemini-pro",
+      "worktreeBase": "/d/tmp/lantern-os",
+      "branch": "gemini/orchestrator/slot-1",
+      "status": "ready",
+      "capabilities": {
+        "maxTokens": 100000,
+        "batchSize": 6,
+        "parallelTasks": 2,
+        "supportedTools": ["analysis", "git", "documentation"]
+      },
+      "quotaTracking": {
+        "enabled": true,
+        "windowSize": 3600,
+        "maxTokensPerWindow": 300000,
+        "fallbackAgent": "claude-slot-1"
+      },
+      "responsibilities": [
+        "content_analysis",
+        "documentation_generation",
+        "problem_decomposition",
+        "validation",
+        "research"
+      ],
+      "syncInterval": 300,
+      "healthCheck": {
+        "interval": 60,
+        "timeout": 10
+      }
+    },
+    {
+      "id": "devin-slot-1",
+      "agent": "devin",
+      "provider": "cognition",
+      "model": "devin",
+      "worktreeBase": "/d/tmp/lantern-os",
+      "branch": "devin/orchestrator/slot-1",
+      "status": "ready",
+      "capabilities": {
+        "maxTokens": 150000,
+        "batchSize": 5,
+        "parallelTasks": 2,
+        "supportedTools": ["coding", "debugging", "testing", "git"]
+      },
+      "quotaTracking": {
+        "enabled": true,
+        "windowSize": 3600,
+        "maxTokensPerWindow": 400000,
+        "fallbackAgent": "claude-slot-1"
+      },
+      "responsibilities": [
+        "deep_engineering_work",
+        "complex_debugging",
+        "performance_optimization",
+        "system_design",
+        "integration"
+      ],
+      "syncInterval": 300,
+      "healthCheck": {
+        "interval": 60,
+        "timeout": 10
+      }
+    }
+  ],
+  "batchSync": {
+    "enabled": true,
+    "interval": 300,
+    "strategy": "rebase_with_master",
+    "conflictResolution": "automated",
+    "rollbackOnFailure": true,
+    "notification": "on_failure"
+  },
+  "routing": {
+    "strategy": "load_balanced",
+    "weights": {
+      "claude-slot-1": 0.35,
+      "codex-slot-1": 0.30,
+      "gemini-slot-1": 0.20,
+      "devin-slot-1": 0.15
+    },
+    "affinityRules": {
+      "strategic_decisions": "claude-slot-1",
+      "implementation_work": "codex-slot-1",
+      "analysis_tasks": "gemini-slot-1",
+      "engineering_work": "devin-slot-1"
+    }
+  },
+  "monitoring": {
+    "enabled": true,
+    "metrics": [
+      "token_usage",
+      "task_throughput",
+      "error_rate",
+      "response_time",
+      "quota_utilization"
+    ],
+    "alerts": {
+      "highErrorRate": {
+        "threshold": 0.05,
+        "action": "failover"
+      },
+      "quotaExhaustion": {
+        "threshold": 0.80,
+        "action": "alert_and_route_to_fallback"
+      },
+      "slotUnhealthy": {
+        "action": "remove_from_pool"
+      }
+    }
+  },
+  "security": {
+    "apiKeyRotation": {
+      "enabled": true,
+      "interval": 86400
+    },
+    "auditLogging": {
+      "enabled": true,
+      "logLevel": "detailed"
+    },
+    "tokenEncryption": {
+      "enabled": true,
+      "algorithm": "AES-256"
+    }
+  },
+  "performance": {
+    "caching": {
+      "enabled": true,
+      "ttl": 3600,
+      "maxSize": "1GB"
+    },
+    "rateLimit": {
+      "enabled": true,
+      "requestsPerSecond": 100
+    },
+    "timeouts": {
+      "taskTimeout": 3600,
+      "queueTimeout": 300,
+      "healthCheckTimeout": 10
+    }
+  }
+}
