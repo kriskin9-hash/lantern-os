@@ -29,9 +29,7 @@ function Test-PathRelative {
 }
 
 $issues = [System.Collections.Generic.List[object]]::new()
-$fixed = [System.Collections.Generic.List[object]]::new()
 $held = [System.Collections.Generic.List[object]]::new()
-
 $required = @(
     "README.md",
     "AGENTS.md",
@@ -52,6 +50,8 @@ $required = @(
     "scripts/Invoke-LoopReceipt.ps1",
     "skills/asi-arc-reactor-mk1/SKILL.md",
     "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md",
+    "manifests/TMP-REPO-RAG-INDEX.md",
+    "manifests/TMP-REPO-RAG-INDEX.json",
     ".windsurf/hooks.json"
 )
 
@@ -168,10 +168,20 @@ if (Test-Path $hooksConfig) {
     }
 }
 
-$sourceRepos = @(
-    "C:\tmp\human-flourishing-frameworks-scan",
-    "C:\Users\alexp\Documents\gm-agent-orchestrator"
-)
+# Load source repos from RAG index instead of hardcoded local paths
+$ragIndexPath = Join-Path $Root "manifests/TMP-REPO-RAG-INDEX.json"
+$sourceRepos = @()
+$ragIndex = $null
+if (Test-Path -LiteralPath $ragIndexPath) {
+    try {
+        $ragIndex = Get-Content -LiteralPath $ragIndexPath -Raw | ConvertFrom-Json
+        $sourceRepos = $ragIndex.repos | Where-Object { $_.ragState -eq "local_inspected" -or $_.ragState -eq "held" } | Select-Object -ExpandProperty localFolder
+    } catch {
+        Add-Issue $issues "RAG-INDEX-PARSE-FAILED" "high" "Failed to parse TMP-REPO-RAG-INDEX.json" "Validate JSON syntax in manifests/TMP-REPO-RAG-INDEX.json."
+    }
+} else {
+    Add-Issue $issues "RAG-INDEX-MISSING" "high" "TMP-REPO-RAG-INDEX.json not found" "Run the repo indexing step or restore manifests/TMP-REPO-RAG-INDEX.json."
+}
 
 $sourceStates = foreach ($repo in $sourceRepos) {
     if (Test-Path -LiteralPath $repo) {

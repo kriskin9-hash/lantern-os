@@ -30,12 +30,22 @@ Every change should move raw material toward an Orion-style technical sheet: cle
 
 ## Source Repos
 
+All source repositories are indexed in `manifests/TMP-REPO-RAG-INDEX.md` and
+`manifests/TMP-REPO-RAG-INDEX.json`. CI/CD checks them out dynamically; local
+paths are no longer the source of truth.
+
 ```text
-C:\tmp\human-flourishing-frameworks-scan
-C:\Users\alexp\Documents\gm-agent-orchestrator
+# Primary indexes
+manifests/TMP-REPO-RAG-INDEX.md
+manifests/TMP-REPO-RAG-INDEX.json
+
+# Key upstream origins
+https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git
+https://github.com/alex-place/lantern-os.git
 ```
 
-Both may be dirty. Treat their working tree state as evidence, not as something to overwrite or reset.
+Treat working tree state as evidence, not as something to overwrite or reset.
+Update the RAG index when repo locations or remotes change.
 
 ---
 
@@ -100,85 +110,3 @@ Then handle the first 2-4 reported issues in priority order. If an issue cannot 
 ## Branching
 
 Use `codex/` branch names for agent work unless the operator asks otherwise.
-
----
-
-## Kalshi Connector — Agent Boundary
-
-**App:** `apps/lantern-trade-chat/` — FastAPI, GitHub OAuth, RSA-PSS signing.
-**Registry:** `data/automation/mcp-canary-results.json` → id `kalshi-public-markets`.
-
-### What agents MAY do (operator-approved 2026-05-31 — EXPLICIT LIVE APPROVAL GIVEN)
-
-- Read `apps/lantern-trade-chat/app/kalshi.py` and `app/main.py` to understand the client.
-- Call read-only methods via the running app's `/api/status` endpoint (requires login):
-  - `account_connectivity` — credentials present and reachable
-  - `open_orders` — resting orders only
-  - `open_positions` — current holdings
-  - `recent_fills` — last 20 executed trades
-  - `settlement_warnings` — voided, disputed, or pending settlements flagged automatically
-- Run read-only balance checks against **demo** or **prod** environment (operator approval on file).
-- Update `data/automation/mcp-canary-results.json` `checkedAt` field after a successful status check.
-
-### Environment variables required to call the API
-
-```text
-KALSHI_API_KEY_ID       — API Key ID from Kalshi dashboard
-KALSHI_PRIVATE_KEY      — RSA private key PEM (full text, newlines preserved)
-KALSHI_ENVIRONMENT      — demo (default, safe) | prod (real money)
-LANTERN_LIVE_ENABLED    — 0 (default) | 1 (arms live order submission)
-```
-
-### Platform-risk note
-
-Public coverage as of March 2026 flags regulatory/settlement disputes on Kalshi
-(Khamenei-related market payout). Before routing meaningful capital, check
-`settlementWarnings` in `/api/status` and review the Kalshi terms for the
-specific market. This is not investment advice.
-
----
-
-## Dream Journal — Naming Convention
-
-**Feature:** Local-first symbolic journal for reflection and pattern tracking.
-
-### Names are equivalent
-
-The following names refer to the same feature:
-
-- **Dream Journal** — Dashboard panel name (`dashboard/index.html` → panel-journal)
-- **Dreamer** — Internal system name (`apps/lantern-garage/public/dreamer-dashboard.html`)
-- **Courtney's Well** — User-facing name (`apps/lantern-garage/public/courtney.html`)
-- **data-analyst** — MCP service alias (in some contexts)
-- **/sales** — MCP service route (in some contexts)
-
-### Implementation location
-
-- **Backend:** `apps/lantern-garage/server.js` — `/api/dreamer` endpoints
-- **Storage:** `data/dreamer/notebooks/{user}.jsonl` — JSONL persistence per user
-- **Tasks:** `data/dreamer/tasks/{user}.jsonl` — Task tracking
-- **UI surfaces:**
-  - `apps/lantern-garage/public/courtney.html` — Entry form and recall
-  - `apps/lantern-garage/public/dreamer-dashboard.html` — Stats, matrix, timeline
-  - `dashboard/index.html` — Launch panel with links
-
-### Capabilities (already implemented)
-
-- JSONL persistence for entries (dreams, notes, places, characters, events, lore, symbols, mirrors)
-- Ternary matrix visualization (3^12 constellation)
-- Task tracking with completion
-- Search/query across entries
-- Stats dashboard (counts, streak, heatmap, timeline)
-- Mirror entry generation (average of selected entries)
-- Local-only storage (no cloud sync)
-
-### API endpoints
-
-- `GET /api/dreamer?user={user}&limit={limit}&q={query}` — List entries
-- `POST /api/dreamer` — Create entry
-- `GET /api/dreamer/stats?user={user}` — Compute statistics
-- `GET /api/dreamer/matrix?user={user}` — Matrix nodes for visualization
-- `POST /api/dreamer/mirror` — Create mirror entry
-- `GET /api/dreamer/tasks?user={user}` — List tasks
-- `POST /api/dreamer/tasks` — Create task
-- `PATCH /api/dreamer/tasks/{id}?user={user}` — Complete task

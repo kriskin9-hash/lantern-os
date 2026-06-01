@@ -1,19 +1,9 @@
 # Lantern OS
 
-Status: pre-v1.0.0 staging
-Scope: local-first operating repo, dashboard, reports, manifests, validation gates, and AWS-safe mirror bridge
-Style spine: `docs/ORION-MOOKMANREPORT4-STYLE.md`
-Truth boundary: local MCP status, dirty source worktrees, private folders, boot mutation, and live worker counts require operator-machine evidence
-
----
-
-## Simple Answer
-
-Lantern OS is the clean control plane for the Windows/local-first Lantern line.
-
-This repository is not a dump of legacy framework content or every prior artifact. It is the place where promoted Lantern work becomes readable, validated, public-safe, and ready for the next operator step.
-
-Repo = evidence store. Dashboard = fast access. AWS bridge = read-only/public mirror until health checks prove otherwise.
+Status: pre-v1.0.0 staging  
+Scope: local-first operating repo, surfaces, reports, manifests, and release gates  
+Style spine: `docs/ORION-MOOKMANREPORT4-STYLE.md`  
+Operator boundary: local MCP status, dirty worktrees, private folders, boot mutation, and live worker counts require operator-machine evidence
 
 ---
 
@@ -25,15 +15,21 @@ Primary local dashboard:
 http://127.0.0.1:4177
 ```
 
-This is the front door for interaction: first-class chat, RAG memory, wallet truth, local controls, outreach, reports, devices, diagnostics, cloud mirrors, and Arc Reactor Mining Lab converge here. No setup screen or secondary launcher is required when the dashboard is already running. No separate mining dashboard, no shortcut sprawl, no fake surfaces.
+This is the front door for interaction: first-class chat, RAG memory, wallet
+truth, local controls, outreach, reports, devices, diagnostics, cloud mirrors,
+and Arc Reactor Mining Lab converge here. No setup screen or secondary launcher
+is required when the dashboard is already running. No separate mining dashboard,
+no shortcut sprawl, no fake surfaces.
 
-Windows tester download path:
+---
 
-```text
-https://github.com/alex-place/lantern-os/releases/latest
-```
+## Simple Answer
 
-Use `lantern-desktop-tester-latest.zip` for the current tester lane. The install wiki is `docs/wiki/WINDOWS-TESTER-INSTALL.md`. Do not claim an `.exe` is ready unless that release asset exists on GitHub. `Lantern-OS-Free-Setup.exe` and `Lantern-OS-Founder-20-Setup.exe` are future installer asset names only until they are attached to a release.
+Lantern OS is the clean control plane for the Windows/local-first Lantern line.
+
+The repo is not a dump of every prior artifact. It is the place where promoted work becomes readable, validated, public-safe, and ready for the next operator step.
+
+Repo = evidence store. Surface = fast access. Together they reduce confusion.
 
 ---
 
@@ -45,7 +41,6 @@ Use `lantern-desktop-tester-latest.zip` for the current tester lane. The install
 | RAG Dollhouse | Keep source-labeled flat memory and receipts | present |
 | Release gates | Prevent v1 claims before proof and operator approval | active |
 | MCP split | Separate remote docs from local-only health and worker proof | active |
-| AWS bridge | Serve a public-safe cloud runtime without local PowerShell, MCP, or private state mutation | pending operator deploy |
 | Agent contact | Tell agents what to inspect first and what to hold | active |
 | Orion style | Convert flat docs and CSS into human-readable technical sheets | active style pass |
 
@@ -53,9 +48,18 @@ Use `lantern-desktop-tester-latest.zip` for the current tester lane. The install
 
 ## Evidence / Source Discipline
 
-Lantern OS promotes material only when it has a purpose, source path, claim summary, validation status, blockers, rollback notes, operator approval status, and a human-readable first screen.
+Source repos remain authoritative until promoted:
 
-Legacy scans, prior framework packets, external repos, and local working trees are evidence sources only. They do not define this repo's public identity, and they must not be copied in bulk into the front page. Dirty source worktrees are treated as evidence to inspect, not state to overwrite or reset.
+```text
+C:\tmp\human-flourishing-frameworks-scan
+C:\Users\alexp\Documents\gm-agent-orchestrator
+```
+
+Remote control plane:
+
+```text
+https://github.com/alex-place/lantern-os
+```
 
 Core maps:
 
@@ -63,12 +67,6 @@ Core maps:
 manifests/foundry-shareholder-repos.md
 docs/wiki/ALEX-PLACE.md
 docs/ORION-MOOKMANREPORT4-STYLE.md
-```
-
-Remote control plane:
-
-```text
-https://github.com/alex-place/lantern-os
 ```
 
 ---
@@ -81,9 +79,8 @@ https://github.com/alex-place/lantern-os
 | Held local-only | Requires the operator machine: MCP health, dirty worktrees, private folders, local queue/active/failed state, live worker counts |
 | Design contract | Describes intended system shape, not live proof |
 | Public-safe | Avoids private identity, raw dumps, unsafe fabrication details, and fake live-state claims |
-| AWS-held | A cloud endpoint is not verified until `/`, `/api/health`, and `/api/cloud-mirrors` pass |
 
-Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires the convergence loop in `docs/CONVERGENCE-LOOP.md` and operator approval.
+Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires the convergence loop in `docs/CONVERGENCE-LOOP.md`.
 
 ---
 
@@ -94,8 +91,6 @@ Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires th
 | Canonical Lantern dashboard | `http://127.0.0.1:4177` |
 | Lantern Garage app | `apps/lantern-garage/` |
 | Cloud mirror manifest | `manifests/cloud-mirrors.json` |
-| AWS cloud runtime | `apps/lantern-garage/cloud-server.js` |
-| AWS container recipe | `apps/lantern-garage/Dockerfile` |
 | Redirected legacy surfaces | `surfaces/shareholder-index/index.html`, `surfaces/tony-garage/index.html`, `surfaces/lantern-desktop/index.html` |
 | Agent initial-contact surface | `manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md` |
 | Arc Reactor status | `data/arc-reactor/status.json` |
@@ -107,50 +102,58 @@ Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires th
 
 ## One Dashboard
 
-Lantern OS uses one dashboard with internal cards and formatted document views. Do not add a new public dashboard for every product lane. Internal cards/routes should be backed by real files, validation receipts, or live APIs.
+Lantern OS uses one dashboard with internal cards and formatted document views.
+Do not add a new public dashboard for every product lane. Internal cards/routes
+should be backed by real files, validation receipts, or live APIs.
 
-The dashboard should always make chat first-class, keep cloud tunnel/mirror status visible, and route Markdown through the formatted Lantern reader instead of dropping operators into raw text docs.
+The dashboard should always make chat first-class, keep cloud tunnel/mirror
+status visible, and route Markdown through the formatted Lantern reader instead
+of dropping operators into raw text docs.
 
 ---
 
-## Cloud Mirrors and AWS Bridge
+## Cloud Mirrors
 
-`master` is the canonical worktree and deploy branch until v1.0.0. Cloud URLs are mirrors of the same Lantern OS dashboard, not separate products or extra dashboards.
+`master` is the deploy branch for the Render mirror. Cloud URLs are mirrors of
+the same Lantern OS dashboard, not separate products or extra dashboards.
 
 Mirror policy:
 
 - Local primary: `http://127.0.0.1:4177`
-- AWS/service mirrors live in `manifests/cloud-mirrors.json`
-- AWS uses `apps/lantern-garage/cloud-server.js` and `apps/lantern-garage/Dockerfile`
+- Render/service mirrors live in `manifests/cloud-mirrors.json`
+- Render uses `apps/lantern-garage/render-server.js`
 - Local Windows uses `apps/lantern-garage/server.js`
-- A mirror can be listed as `candidate`, `configured`, or `verified`; the UI must show that status plainly
-- No AWS URL is verified until `/`, `/api/health`, and `/api/cloud-mirrors` pass on that URL
-
-Execution boundary: until v1.0.0, executable work must stay in the AWS-safe deploy/check lane or the Kalshi public-data research lane. See `docs/EXECUTION-BOUNDARIES.md`.
-
-Cloud command boundary: `POST /api/command` is the single command entrypoint, but the AWS runtime holds local commands and points operators back to local Lantern Garage. See `docs/LANTERN-COMMAND-ENTRYPOINT.md`.
+- A mirror can be listed as `candidate`, `configured`, or `verified`; the UI
+  must show that status plainly
 
 ---
 
 ## Brand Guidelines
 
-Lantern OS should feel like a local operator cockpit: calm, evidence-backed, warm, and usable under pressure.
+Lantern OS should feel like a local operator cockpit: calm, evidence-backed,
+warm, and usable under pressure.
 
 Brand rules:
 
 - One front door: use `http://127.0.0.1:4177` as the local interaction URL.
-- Local first: default to localhost, repo-backed files, and explicit operator control before cloud or tunnels.
-- Truth first: cards appear only when backed by files, validation receipts, or live APIs.
+- Local first: default to localhost, repo-backed files, and explicit operator
+  control before cloud or tunnels.
+- Truth first: cards appear only when backed by files, validation receipts, or
+  live APIs.
 - No fake dashboards: use one dashboard with internal cards/routes.
-- No secret collection: never ask for seed phrases, private keys, Apple ID credentials, exchange passwords, or hidden signing permissions.
+- No secret collection: never ask for seed phrases, private keys, Apple ID
+  credentials, exchange passwords, or hidden signing permissions.
 - Plain language: say what is ready, held, blocked, or experimental.
-- Visual style: light cockpit surface, deep ink text, Lantern teal `#08756f`, steel blue `#1e5f89`, amber warnings `#9f5a07`, and rose risk `#9a3d55`.
+- Visual style: light cockpit surface, deep ink text, Lantern teal `#08756f`,
+  steel blue `#1e5f89`, amber warnings `#9f5a07`, and rose risk `#9a3d55`.
 
 ---
 
 ## Arc Reactor Mining Lab
 
-Mining Lab is a safe, legal, local-first package for inventorying owned hardware, routing hardware into viable lanes, validating wallets in read-only mode, and producing receipts.
+Mining Lab is a safe, legal, local-first package for inventorying owned
+hardware, routing hardware into viable lanes, validating wallets in read-only
+mode, and producing receipts.
 
 Mining boundaries:
 
@@ -192,12 +195,6 @@ Master convergence PDF:
 artifacts/COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf
 ```
 
-Public bounty radar:
-
-```text
-artifacts/PUBLIC-PUZZLE-MATH-BOUNTY-RADAR-2026-05-30.pdf
-```
-
 ---
 
 ## Non-Goals For This Repo
@@ -209,7 +206,6 @@ artifacts/PUBLIC-PUZZLE-MATH-BOUNTY-RADAR-2026-05-30.pdf
 - No skeleton-only milestones.
 - No treating offline/local/server-farm Foundry tokens as cloud-metered, "Lite", or per-token rated.
 - No raw filepath spam above the first human-relevant explanation.
-- No bulk promotion of legacy framework content into the Lantern OS front page.
 
 ---
 

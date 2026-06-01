@@ -20,33 +20,55 @@ jobs:
       - name: Checkout HFF Repository
         uses: actions/checkout@v4
         with:
-          repository: alex-place/human-flourishing-frameworks
-          path: human-flourishing-frameworks-scan
+          repository: human-flourishing-frameworks/human-flourishing-frameworks
+          path: human-flourishing-frameworks
+        continue-on-error: true
+
+      - name: Checkout HFF Public Site
+        uses: actions/checkout@v4
+        with:
+          repository: human-flourishing-frameworks/hff-public-site
+          path: hff-public-site
+        continue-on-error: true
+
+      - name: Checkout Lantern Symbolic Sandbox
+        uses: actions/checkout@v4
+        with:
+          repository: alex-place/lantern-symbolic-sandbox
+          path: lantern-symbolic-sandbox
         continue-on-error: true
 
       - name: Validate HFF Repository
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          if (Test-Path human-flourishing-frameworks-scan) {
-            Copy-Item lantern-os/scripts/Invoke-LanternConvergenceLoop.ps1 human-flourishing-frameworks-scan/scripts/ -Force
-            cd human-flourishing-frameworks-scan
-            .\scripts\Invoke-LanternConvergenceLoop.ps1 -Root . -Output convergence-hff-ci.json
-            $results = Get-Content convergence-hff-ci.json | ConvertFrom-Json
-            if ($results.issues.Count -gt 0) {
-              Write-Host "::warning:: HFF repo: $($results.issues.Count) issues found"
+          $ragIndex = Get-Content lantern-os/manifests/TMP-REPO-RAG-INDEX.json | ConvertFrom-Json
+          foreach ($repo in $ragIndex.ciCdCheckout) {
+            $localPath = $repo.path
+            if (Test-Path $localPath) {
+              Write-Host "Validating $($repo.repo) at $localPath"
+              Copy-Item lantern-os/scripts/Invoke-LanternConvergenceLoop.ps1 "$localPath/scripts/" -Force -ErrorAction SilentlyContinue
+              if (Test-Path "$localPath/scripts/Invoke-LanternConvergenceLoop.ps1") {
+                cd $localPath
+                .\scripts\Invoke-LanternConvergenceLoop.ps1 -Root . -Output convergence-ci.json -CloudVirtualization
+                $results = Get-Content convergence-ci.json | ConvertFrom-Json
+                if ($results.issues.Count -gt 0) {
+                  Write-Host "::warning:: $($repo.repo): $($results.issues.Count) issues found"
+                }
+                if ($results.issues | Where-Object { $_.severity -eq 'HIGH' }) {
+                  throw "HIGH severity issues in $($repo.repo). Fix before claiming convergence."
+                }
+                cd ..
+              }
+            } else {
+              Write-Host "::warning:: $($repo.repo) not checked out. Skipping validation."
             }
-            if ($results.issues | Where-Object { $_.severity -eq 'HIGH' }) {
-              throw "HIGH severity issues in HFF repo. Fix before claiming convergence."
-            }
-          } else {
-            Write-Host "::warning:: HFF repository not accessible. Skipping validation."
           }
 
-      - name: Upload HFF Validation Results
+      - name: Upload Validation Results
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: hff-validation-results
-          path: human-flourishing-frameworks-scan/convergence-hff-ci.json
+          name: oss-validation-results
+          path: '**/convergence-ci.json'
         continue-on-error: true

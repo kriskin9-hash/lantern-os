@@ -1,40 +1,20 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 const { spawn, spawnSync } = require("child_process");
-const salesMcp = require("./sales/sales-mcp-tools");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
 const port = Number(process.env.LANTERN_GARAGE_PORT || process.env.PORT || 4177);
 const host = process.env.LANTERN_GARAGE_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const conversationLogPath = path.join(repoRoot, "data", "conversations", "garage-conversations.jsonl");
-const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
-const dreamerTasksDir = path.join(repoRoot, "data", "dreamer", "tasks");
 const flatRagHousePath = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 const flatRagHouseManifestPath = path.join(repoRoot, "manifests", "FLAT-RAG-HOUSE-LATEST.md");
-const mcpSourcesPath = path.join(repoRoot, "manifests", "lantern-mcp-sources.json");
-const mcpCatalogPath = path.join(repoRoot, "manifests", "validation", "MCP-CONNECTOR-LATEST.json");
-const orchestratorDependencyPath = path.join(repoRoot, "manifests", "orchestrator-dependency.json");
-const orchestratorDependencyValidationPath = path.join(repoRoot, "manifests", "validation", "LANTERN-ORCHESTRATOR-DEPENDENCY-LATEST.json");
-const orchestratorQueueDir = path.join("C:\\Users\\alexp\\Documents\\gm-agent-orchestrator", "tasks", "queue");
+const orchestratorQueueDir = process.env.ORCHESTRATOR_QUEUE_DIR || path.join(repoRoot, "data", "orchestrator-queue");
 const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.jsonl");
-const agentDispatchStatePath = path.join(repoRoot, "data", "operator-notes", "agent-dispatch-state.json");
 const cloudMirrorsPath = path.join(repoRoot, "manifests", "cloud-mirrors.json");
 const maxConversationTextLength = 4000;
-const maxDreamerTextLength = 2000;
-const localChatTagsTimeoutMs = Number(process.env.LANTERN_CHAT_TAGS_TIMEOUT_MS || 1000);
-const localChatTimeoutMs = Number(process.env.LANTERN_CHAT_TIMEOUT_MS || 20000);
-const mcpReadOnlyTimeoutMs = Number(process.env.LANTERN_MCP_READ_TIMEOUT_MS || 15000);
-const agentDispatchSlots = [
-  "gemini-flash", "gemini-main", "codex-main", "gpt-web",
-  "discord-radio", "house-thinker", "convergence-loop", "world-model", "mcp-bridge",
-];
-const agentDispatchCooldownMs = 300000;
-const agentDispatchDelayMs = 1500;
 const writeQueues = new Map();
-let activeAgentDispatch = null;
 
 function enqueueFileWrite(filePath, operation) {
   const previous = writeQueues.get(filePath) || Promise.resolve();
@@ -81,116 +61,6 @@ function readJson(relativePath, fallback = null) {
   }
 }
 
-function getDefaultMcpSources() {
-  return {
-    sources: [
-      {
-        id: "gm-agent-orchestrator-local",
-        label: "GM Agent Orchestrator Local",
-        baseUrl: "http://127.0.0.1:8787",
-        transport: "http_jsonrpc",
-        enabled: true,
-        localOnly: true,
-        allowRemote: false,
-        allowToolExecution: false,
-        agentAgnostic: true,
-        tokenAgnostic: true,
-        discovery: { healthPath: "/health", rpcPath: "/mcp" },
-        ioProfile: {
-          inputMode: "jsonrpc_tools",
-          outputMode: "content_blocks",
-          tokenPolicy: "externalized",
-          agentPolicy: "externalized",
-        },
-        notes: "Fallback local MCP source.",
-      },
-    ],
-  };
-}
-
-function readMcpSourceConfig() {
-  const config = readJson(path.relative(repoRoot, mcpSourcesPath), null) || getDefaultMcpSources();
-  const sources = Array.isArray(config.sources) && config.sources.length > 0
-    ? config.sources
-    : getDefaultMcpSources().sources;
-  return { ...config, sources };
-}
-
-function getPrimaryMcpSource() {
-  const sources = readMcpSourceConfig().sources;
-  const httpSource = sources.find((source) => source && source.enabled !== false && source.transport === "http_jsonrpc");
-  return httpSource || sources.find((source) => source && source.enabled !== false) || getDefaultMcpSources().sources[0];
-}
-
-function getPrimaryMcpRpcUrl() {
-  const source = getPrimaryMcpSource();
-  const baseUrl = String(source.baseUrl || "http://127.0.0.1:8787").replace(/\/+$/, "");
-  const rpcPath = String(source.discovery?.rpcPath || "/mcp");
-  return `${baseUrl}${rpcPath.startsWith("/") ? rpcPath : `/${rpcPath}`}`;
-}
-
-function getMcpCatalog() {
-  const catalog = readJson(path.relative(repoRoot, mcpCatalogPath), null);
-  if (catalog) return catalog;
-  const sourceConfig = readMcpSourceConfig();
-  return {
-    generatedAt: null,
-    status: "unverified",
-    boundaryStatus: "hold",
-    primarySourceId: getPrimaryMcpSource().id,
-    summary: {
-      sourceCount: sourceConfig.sources.length,
-      readySourceCount: 0,
-      readyWithToolsCount: 0,
-      heldSourceCount: sourceConfig.sources.length,
-      totalToolCount: 0,
-      tokenAgnosticSources: sourceConfig.sources.filter((source) => source?.tokenAgnostic !== false).length,
-      agentAgnosticSources: sourceConfig.sources.filter((source) => source?.agentAgnostic !== false).length,
-    },
-    sources: sourceConfig.sources,
-    normalizedToolCatalog: [],
-  };
-}
-
-function summarizeMcpCatalog(catalog) {
-  const summary = catalog?.summary || {};
-  return {
-    status: catalog?.status || "unverified",
-    primarySourceId: catalog?.primarySourceId || getPrimaryMcpSource().id,
-    sourceCount: summary.sourceCount ?? (Array.isArray(catalog?.sources) ? catalog.sources.length : 0),
-    readySourceCount: summary.readySourceCount ?? 0,
-    toolCount: summary.totalToolCount ?? (Array.isArray(catalog?.normalizedToolCatalog) ? catalog.normalizedToolCatalog.length : 0),
-  };
-}
-
-function getOrchestratorDependencyStatus() {
-  const manifest = readJson(path.relative(repoRoot, orchestratorDependencyPath), {});
-  const validation = readJson(path.relative(repoRoot, orchestratorDependencyValidationPath), null);
-  const fleet = validation?.fleet || {};
-  const mcp = validation?.mcp || {};
-  return {
-    dependencyId: manifest.dependencyId || "gm-agent-orchestrator-local",
-    label: manifest.label || "GM Agent Orchestrator",
-    repoPath: manifest.repoPath || "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
-    healthUrl: manifest.mcp?.healthUrl || "http://127.0.0.1:8787/health",
-    rpcUrl: manifest.mcp?.rpcUrl || "http://127.0.0.1:8787/mcp",
-    status: fleet.status || "unvalidated",
-    healthOk: mcp.healthOk === true,
-    toolCount: mcp.toolCount ?? null,
-    missingReadTools: Array.isArray(mcp.missingReadTools) ? mcp.missingReadTools : [],
-    targetLanternSlots: Array.isArray(manifest.targetLanternSlots) ? manifest.targetLanternSlots : [],
-    availableAgentCount: fleet.availableAgentCount ?? null,
-    activeAgentCount: fleet.activeAgentCount ?? null,
-    staleAgentCount: fleet.staleAgentCount ?? null,
-    queueCount: fleet.queue ?? null,
-    failedCount: fleet.failed ?? null,
-    canUseReadTools: validation?.boundary?.canUseReadTools === true,
-    canDispatchAgents: validation?.boundary?.canDispatchAgents === true,
-    nextHumanAction: fleet.nextHumanAction || manifest.lanternPolicy?.nextSafePath || "Run scripts/Test-LanternOrchestratorDependency.ps1.",
-    validationPath: validation ? path.relative(repoRoot, orchestratorDependencyValidationPath) : null,
-  };
-}
-
 function readJsonl(relativePath, limit = 20) {
   return readText(relativePath)
     .split(/\r?\n/)
@@ -203,325 +73,6 @@ function readJsonl(relativePath, limit = 20) {
         return { parseError: true, raw: line };
       }
     });
-}
-
-function readJsonlFile(filePath, limit = 20) {
-  try {
-    return fs.readFileSync(filePath, "utf8")
-      .replace(/^\uFEFF/, "")
-      .split(/\r?\n/)
-      .filter(Boolean)
-      .slice(-limit)
-      .map((line) => {
-        try {
-          return JSON.parse(line);
-        } catch {
-          return { parseError: true, raw: line };
-        }
-      });
-  } catch {
-    return [];
-  }
-}
-
-function normalizeDreamerUser(value) {
-  const user = String(value || "courtney")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-  return user || "courtney";
-}
-
-function dreamerNotebookPath(user) {
-  return path.join(dreamerNotebookDir, `${normalizeDreamerUser(user)}.jsonl`);
-}
-
-function generateEntryId() {
-  if (typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = Math.random() * 16 | 0;
-    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
-  });
-}
-
-function generateTernaryId(seed) {
-  const hash = crypto.createHash("sha256").update(String(seed)).digest();
-  let value = hash.readUIntBE(0, 3);
-  const digits = [];
-  for (let i = 0; i < 12; i++) {
-    digits.unshift(value % 3);
-    value = Math.floor(value / 3);
-  }
-  return digits.join("");
-}
-
-function ternaryToCoords(ternaryId) {
-  const d = String(ternaryId || "000000000000").split("").map((c) => parseInt(c, 10) % 3);
-  while (d.length < 12) d.unshift(0);
-  const x = d[0] * 27 + d[1] * 9 + d[2] * 3 + d[3];
-  const y = d[4] * 27 + d[5] * 9 + d[6] * 3 + d[7];
-  const z = d[8] * 27 + d[9] * 9 + d[10] * 3 + d[11];
-  return { x, y, z, raw: d.join("") };
-}
-
-function reflectTernaryId(ternaryId) {
-  return String(ternaryId || "").split("").map((c) => {
-    const n = parseInt(c, 10) % 3;
-    return String(2 - n);
-  }).join("");
-}
-
-function coordsToTernaryId(x, y, z) {
-  function digit(v, pos) {
-    return String(Math.floor((v / Math.pow(3, 3 - pos)) % 3));
-  }
-  return digit(x, 0) + digit(x, 1) + digit(x, 2) + digit(x, 3)
-    + digit(y, 0) + digit(y, 1) + digit(y, 2) + digit(y, 3)
-    + digit(z, 0) + digit(z, 1) + digit(z, 2) + digit(z, 3);
-}
-
-function normalizeDreamerEntry(input) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("json_object_required");
-  }
-  const user = normalizeDreamerUser(input.user || input.owner || "courtney");
-  const kind = ["dream", "note", "place", "character", "event", "lore", "symbol", "mirror"].includes(String(input.kind || "").toLowerCase())
-    ? String(input.kind).toLowerCase()
-    : "note";
-  const text = String(input.text || input.message || "").trim().slice(0, maxDreamerTextLength);
-  if (!text) throw new Error("dreamer_text_required");
-  const tags = Array.isArray(input.tags)
-    ? input.tags.map((tag) => String(tag).trim().toLowerCase()).filter(Boolean).slice(0, 10)
-    : [];
-  const name = String(input.name || "").trim().slice(0, 120) || undefined;
-  const mood = String(input.mood || "").trim().slice(0, 40) || undefined;
-  const links = Array.isArray(input.links)
-    ? input.links.map((link) => String(link).trim()).filter(Boolean).slice(0, 20)
-    : [];
-  const id = input.id || generateEntryId();
-  const seed = `${text}:${name || ""}:${kind}:${mood || ""}:${tags.join(",")}`;
-  const ternaryId = input.ternaryId || generateTernaryId(seed);
-  const record = {
-    id,
-    recordedAt: new Date().toISOString(),
-    user,
-    kind,
-    source: String(input.source || "lantern-garage").trim().slice(0, 80) || "lantern-garage",
-    text,
-    tags,
-    private: true,
-    ternaryId,
-  };
-  if (name) record.name = name;
-  if (mood) record.mood = mood;
-  if (links.length) record.links = links;
-  return record;
-}
-
-async function createMirrorEntry(user, entryIds) {
-  const normalizedUser = normalizeDreamerUser(user);
-  const all = readDreamerEntries(normalizedUser, 5000).filter((e) => !e.parseError && entryIds.includes(e.id));
-  if (all.length === 0) throw new Error("no_entries_to_mirror");
-  const avgX = Math.round(all.reduce((s, e) => s + ternaryToCoords(e.ternaryId).x, 0) / all.length);
-  const avgY = Math.round(all.reduce((s, e) => s + ternaryToCoords(e.ternaryId).y, 0) / all.length);
-  const avgZ = Math.round(all.reduce((s, e) => s + ternaryToCoords(e.ternaryId).z, 0) / all.length);
-  const avgTernary = coordsToTernaryId(avgX, avgY, avgZ);
-  const reflection = reflectTernaryId(avgTernary);
-  const checksum = crypto.createHash("sha256").update(all.map((e) => e.id).join(":")).digest("hex").slice(0, 16);
-  const record = normalizeDreamerEntry({
-    user: normalizedUser,
-    kind: "mirror",
-    name: `Mirror of ${all.length} facets`,
-    text: `Reflection at ${reflection}. Checksum ${checksum}. Mirrored IDs: ${all.map((e) => e.id).join(", ")}`,
-    tags: ["mirror", "parity"],
-    source: "lantern-matrix",
-    ternaryId: reflection,
-  });
-  record.mirrors = entryIds;
-  record.checksum = checksum;
-  await appendJsonlQueued(dreamerNotebookPath(normalizedUser), record);
-  return record;
-}
-
-async function appendDreamerEntry(input) {
-  const record = normalizeDreamerEntry(input);
-  await appendJsonlQueued(dreamerNotebookPath(record.user), record);
-  return record;
-}
-
-function dreamerTasksPath(user) {
-  return path.join(dreamerTasksDir, `${normalizeDreamerUser(user)}.jsonl`);
-}
-
-function normalizeTaskEntry(input) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("json_object_required");
-  }
-  const user = normalizeDreamerUser(input.user || "courtney");
-  const text = String(input.text || "").trim().slice(0, 500);
-  if (!text) throw new Error("task_text_required");
-  const kind = ["explore", "connect", "write", "review", "build", "hold"].includes(String(input.kind || "").toLowerCase())
-    ? String(input.kind).toLowerCase()
-    : "explore";
-  return {
-    id: generateEntryId(),
-    createdAt: new Date().toISOString(),
-    user,
-    kind,
-    text,
-    status: "open",
-    completedAt: null,
-  };
-}
-
-async function appendTaskEntry(input) {
-  const record = normalizeTaskEntry(input);
-  await appendJsonlQueued(dreamerTasksPath(record.user), record);
-  return record;
-}
-
-function readTaskEntries(user, limit = 50) {
-  const normalizedUser = normalizeDreamerUser(user);
-  return readJsonlFile(dreamerTasksPath(normalizedUser), Math.max(1, Math.min(500, limit)))
-    .filter((entry) => !entry.parseError);
-}
-
-async function completeTaskEntry(user, taskId) {
-  const normalizedUser = normalizeDreamerUser(user);
-  const all = readTaskEntries(normalizedUser, 5000);
-  const target = all.find((e) => e.id === taskId);
-  if (!target) throw new Error("task_not_found");
-  const updated = { ...target, status: "done", completedAt: new Date().toISOString() };
-  const path = dreamerTasksPath(normalizedUser);
-  await writeTextQueued(path, all.map((e) => JSON.stringify(e.id === taskId ? updated : e)).join("\n") + "\n");
-  return updated;
-}
-
-function readDreamerEntries(user, limit = 50, query = "") {
-  const normalizedUser = normalizeDreamerUser(user);
-  const q = String(query || "").trim().toLowerCase();
-  const entries = readJsonlFile(dreamerNotebookPath(normalizedUser), Math.max(1, Math.min(500, limit)))
-    .filter((entry) => !entry.parseError);
-  return q
-    ? entries.filter((entry) => String(entry.text || "").toLowerCase().includes(q))
-    : entries;
-}
-
-function computeDreamerStats(user) {
-  const normalizedUser = normalizeDreamerUser(user);
-  const all = readJsonlFile(dreamerNotebookPath(normalizedUser), 5000)
-    .filter((entry) => !entry.parseError);
-  const total = all.length;
-  const dreams = all.filter((e) => e.kind === "dream").length;
-  const notes = all.filter((e) => e.kind === "note").length;
-  const places = all.filter((e) => e.kind === "place").length;
-  const characters = all.filter((e) => e.kind === "character").length;
-  const events = all.filter((e) => e.kind === "event").length;
-  const lores = all.filter((e) => e.kind === "lore").length;
-  const symbols = all.filter((e) => e.kind === "symbol").length;
-  const mirrors = all.filter((e) => e.kind === "mirror").length;
-  const byDate = {};
-  const tagCounts = {};
-  const bySource = {};
-  let totalTextLength = 0;
-  let firstAt = null;
-  let lastAt = null;
-  const ternaryCells = new Set();
-  let totalLinks = 0;
-  for (const entry of all) {
-    const date = String(entry.recordedAt || "").slice(0, 10);
-    if (date) byDate[date] = (byDate[date] || 0) + 1;
-    (entry.tags || []).forEach((tag) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; });
-    const src = String(entry.source || "unknown");
-    bySource[src] = (bySource[src] || 0) + 1;
-    totalTextLength += String(entry.text || "").length;
-    const t = entry.recordedAt ? new Date(entry.recordedAt) : null;
-    if (t) {
-      if (!firstAt || t < firstAt) firstAt = t;
-      if (!lastAt || t > lastAt) lastAt = t;
-    }
-    if (entry.ternaryId) {
-      const c = ternaryToCoords(entry.ternaryId);
-      ternaryCells.add(`${c.x},${c.y},${c.z}`);
-    }
-    totalLinks += (entry.links || []).length;
-  }
-  const sortedDates = Object.keys(byDate).sort();
-  let streak = 0;
-  if (sortedDates.length > 0) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const lastDate = new Date(sortedDates[sortedDates.length - 1] + "T00:00:00");
-    lastDate.setHours(0, 0, 0, 0);
-    const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 1) {
-      streak = 1;
-      for (let i = sortedDates.length - 2; i >= 0; i--) {
-        const curr = new Date(sortedDates[i + 1] + "T00:00:00");
-        const prev = new Date(sortedDates[i] + "T00:00:00");
-        const d = Math.floor((curr - prev) / (1000 * 60 * 60 * 24));
-        if (d === 1) streak++;
-        else break;
-      }
-    }
-  }
-  const timeline = sortedDates.map((d) => ({ date: d, count: byDate[d] }));
-  const topTags = Object.entries(tagCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 20)
-    .map(([tag, count]) => ({ tag, count }));
-  return {
-    total,
-    dreams,
-    notes,
-    places,
-    characters,
-    events,
-    lores,
-    symbols,
-    mirrors,
-    timeline,
-    topTags,
-    sources: bySource,
-    averageTextLength: total ? Math.round(totalTextLength / total) : 0,
-    firstAt: firstAt ? firstAt.toISOString() : null,
-    lastAt: lastAt ? lastAt.toISOString() : null,
-    streak,
-    user: normalizedUser,
-    path: path.relative(repoRoot, dreamerNotebookPath(normalizedUser)),
-    matrix: {
-      cells: ternaryCells.size,
-      links: totalLinks,
-      spaceSize: 81 * 81 * 81,
-    },
-    matrixCells: ternaryCells.size,
-  };
-}
-
-function writeJson(relativePath, data) {
-  try {
-    const fullPath = path.join(repoRoot, relativePath);
-    fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error(`Failed to write JSON to ${relativePath}:`, error.message);
-    return false;
-  }
-}
-
-function appendLine(relativePath, line) {
-  try {
-    const fullPath = path.join(repoRoot, relativePath);
-    fs.appendFileSync(fullPath, line + '\n', 'utf8');
-    return true;
-  } catch (error) {
-    console.error(`Failed to append to ${relativePath}:`, error.message);
-    return false;
-  }
 }
 
 function readConversationLog(limit = 50) {
@@ -578,380 +129,6 @@ async function appendExternalRagItem(input) {
   const cachePath = path.join(repoRoot, "data", "rag-intake", "external-llm-web-cache", "cache.jsonl");
   await appendJsonlQueued(cachePath, record);
   return record;
-}
-
-async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
-    const text = await response.text();
-    let body = null;
-    if (text) {
-      try {
-        body = JSON.parse(text);
-      } catch {
-        body = { raw: text };
-      }
-    }
-    if (!response.ok) {
-      throw new Error(body?.error || body?.raw || `HTTP ${response.status}`);
-    }
-    if (body?.error) {
-      throw new Error(body.error.message || body.error.code || "mcp_json_rpc_error");
-    }
-    return body;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function callMcpTool(name, args = {}, timeoutMs = 8000) {
-  return fetchJsonWithTimeout(getPrimaryMcpRpcUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: Date.now(),
-      method: "tools/call",
-      params: { name, arguments: args },
-    }),
-  }, timeoutMs);
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function readAgentDispatchState() {
-  try {
-    return JSON.parse(fs.readFileSync(agentDispatchStatePath, "utf8"));
-  } catch {
-    return { lastDispatchAt: 0, running: false, results: [] };
-  }
-}
-
-async function writeAgentDispatchState(state) {
-  await writeTextQueued(agentDispatchStatePath, `${JSON.stringify(state, null, 2)}\n`);
-}
-
-function parseMcpToolContent(data) {
-  const text = data?.result?.content?.find((item) => item.type === "text")?.text
-    || data?.result?.content?.[0]?.text
-    || "";
-  if (!text) return data;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { text };
-  }
-}
-
-async function getFleetSnapshot() {
-  try {
-    const data = await callMcpTool("get_agent_status", {}, mcpReadOnlyTimeoutMs);
-    const parsed = parseMcpToolContent(data);
-    return {
-      ok: true,
-      generatedAt: new Date().toISOString(),
-      agents: Array.isArray(parsed.agents) ? parsed.agents : [],
-      counts: parsed.counts || {},
-      raw: parsed,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      generatedAt: new Date().toISOString(),
-      agents: [],
-      counts: {},
-      error: error.message,
-    };
-  }
-}
-
-function summarizeDispatchFleet(fleet) {
-  const agents = Array.isArray(fleet.agents) ? fleet.agents : [];
-  const availability = fleet.raw?.availability || {};
-  const parsedAvailableCount = Number(availability.availableCount);
-  const availableCount = Number.isFinite(parsedAvailableCount)
-    ? parsedAvailableCount
-    : agents.filter((agent) => agent.available === true && !agent.currentTask).length;
-  const dispatchableSlots = agents
-    .filter((agent) => agentDispatchSlots.includes(agent.slot))
-    .filter((agent) => agent.available === true && !agent.currentTask)
-    .map((agent) => agent.slot);
-  const nextHumanAction = availability.nextHumanAction
-    || fleet.raw?.nextAction?.action
-    || fleet.raw?.headline
-    || fleet.error
-    || "Refresh MCP fleet status after clearing stale slots, failed tasks, or dirty worktrees.";
-  return { availableCount, dispatchableSlots, nextHumanAction };
-}
-
-async function runAgentDispatchBatch(startedAt, slots = agentDispatchSlots) {
-  const results = [];
-  for (const slot of slots) {
-    try {
-      const data = await callMcpTool("start_agent", { slot }, 12000);
-      const parsed = parseMcpToolContent(data);
-      results.push({ slot, ok: parsed.ok === true, result: parsed });
-    } catch (error) {
-      results.push({ slot, ok: false, error: error.message });
-    }
-    await writeAgentDispatchState({
-      lastDispatchAt: startedAt,
-      running: true,
-      updatedAt: new Date().toISOString(),
-      results,
-    });
-    if (slot !== slots[slots.length - 1]) {
-      await sleep(agentDispatchDelayMs);
-    }
-  }
-  const state = {
-    lastDispatchAt: startedAt,
-    running: false,
-    updatedAt: new Date().toISOString(),
-    code: results.every((item) => item.ok) ? 0 : 1,
-    results,
-  };
-  await writeAgentDispatchState(state);
-  return state;
-}
-
-async function dispatchAllAgents() {
-  const now = Date.now();
-  const state = readAgentDispatchState();
-  const staleRunning = state.running === true && now - Number(state.lastDispatchAt || 0) > 300000;
-  if (activeAgentDispatch || (state.running === true && !staleRunning)) {
-    return {
-      code: 2,
-      active: true,
-      retryAfterMs: 10000,
-      message: "Agent dispatch is already running. Refresh Fleet in a few seconds.",
-      results: state.results || [],
-    };
-  }
-  const lastDispatchAt = staleRunning ? 0 : Number(state.lastDispatchAt || 0);
-  const retryAfterMs = Math.max(0, agentDispatchCooldownMs - (now - lastDispatchAt));
-  if (retryAfterMs > 0) {
-    return {
-      code: 2,
-      rateLimited: true,
-      retryAfterMs,
-      message: `Dispatch is rate-limited. Try again in ${Math.ceil(retryAfterMs / 1000)} seconds.`,
-      results: [],
-    };
-  }
-  const fleet = await getFleetSnapshot();
-  const dispatchSummary = summarizeDispatchFleet(fleet);
-  if (!fleet.ok || dispatchSummary.dispatchableSlots.length === 0) {
-    await writeAgentDispatchState({
-      lastDispatchAt: lastDispatchAt || 0,
-      running: false,
-      updatedAt: new Date().toISOString(),
-      held: true,
-      results: [],
-      fleetCounts: fleet.counts || {},
-      nextHumanAction: dispatchSummary.nextHumanAction,
-    });
-    return {
-      code: 3,
-      held: true,
-      canDispatch: false,
-      message: "Dispatch held: no safe agent slots available.",
-      mcpOk: fleet.ok,
-      availableCount: dispatchSummary.availableCount,
-      nextHumanAction: dispatchSummary.nextHumanAction,
-      counts: fleet.counts || {},
-      agents: (fleet.agents || []).map((agent) => ({
-        slot: agent.slot,
-        available: agent.available === true,
-        currentTask: agent.currentTask || null,
-        reason: agent.reason || null,
-      })),
-      results: [],
-    };
-  }
-  const dispatchableSlots = dispatchSummary.dispatchableSlots;
-  await writeAgentDispatchState({
-    lastDispatchAt: now,
-    running: true,
-    updatedAt: new Date().toISOString(),
-    results: [],
-    slots: dispatchableSlots,
-  });
-  activeAgentDispatch = runAgentDispatchBatch(now, dispatchableSlots).finally(() => {
-    activeAgentDispatch = null;
-  });
-  return {
-    code: 0,
-    accepted: true,
-    message: "Agent dispatch started as a rate-limited background batch.",
-    rateLimited: false,
-    cooldownMs: agentDispatchCooldownMs,
-    delayMs: agentDispatchDelayMs,
-    slots: dispatchableSlots,
-    results: [],
-  };
-}
-
-async function getHffSensorStatus() {
-  return {
-    ok: false,
-    status: "aws_endpoint_pending",
-    dataSource: "local-held",
-    liveSensorsEnabled: false,
-    verifiedNodes: 0,
-    securityNodes: 0,
-    minConsensusNodes: 0,
-    error: "HFF Render polling was retired from Lantern dashboard truth. Add an AWS/HFF endpoint only after /api/status is verified live.",
-  };
-}
-
-function buildDashboardReply(message, provider = "local-rag") {
-  const lower = message.toLowerCase();
-  if (lower.includes("mine") || lower.includes("mining") || lower.includes("monero") || lower.includes("btc") || lower.includes("rock and stone")) {
-    return "Rock and stone, safely. CPU goes to the Monero learning lane, GPU stays experimental for RVN or ETC, and BTC belongs only on owned SHA-256 ASIC hardware or a clearly labeled lottery path. Next useful step: run hardware intake, set power cost, then compare net/day before any miner starts. No wallet cracking, no hidden signing, no fake one-shot ROI.";
-  }
-  if (lower.includes("dispatch") || lower.includes("fleet") || lower.includes("agent")) {
-    return "Fleet work now routes through the Lantern server instead of browser-to-MCP calls. Refresh Fleet checks the local orchestrator, and Dispatch Agents asks the local MCP service to start the known slots. If MCP is offline, the button should report that honestly instead of pretending it worked.";
-  }
-  if (lower.includes("refresh") || lower.includes("works")) {
-    return "Refresh pulls the current wallet, readiness, RAG, mining lab, cloud mirror, queue, fleet, and HFF sensor status. It is a read-only status pull; the higher-impact actions are separated into their own buttons.";
-  }
-  if (lower.includes("sync") || lower.includes("evidence") || lower.includes("ingest") || lower.includes("repo") || lower.includes("rag")) {
-    return "Sync Evidence rebuilds the flat RAG house from the configured local source repos. It should answer who/what by listing sources and records, not by dropping you into raw notes.";
-  }
-  if (lower.includes("sensor") || lower.includes("hff")) {
-    return "HFF needs real installed polling nodes to earn live confidence. This dashboard now reports AWS endpoint pending, verified node count, consensus target, and whether the data source is live or locally held.";
-  }
-  if (lower.includes("mic") || lower.includes("voice")) {
-    return "Mic input is a browser feature: tap the mic button by the composer, speak, review the text, then send. If the browser blocks speech recognition, Lantern will say so in the action log.";
-  }
-  if (lower.includes("operator") || lower.includes("tony")) {
-    return "Tony is operator material here: short action labels, formatted reader pages, and evidence panels first. The dashboard should make the next move obvious without requiring someone to decode internal project names.";
-  }
-  return `I am on the ${provider} path. I can help with the dashboard, mining lane choices, repo evidence, wallet receipts, cloud mirrors, or local fleet controls. Ask in plain language and I will route it to the safest visible lane.`;
-}
-
-function wantsMcpChatReply(message) {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("mcp") ||
-    lower.includes("tool") ||
-    lower.includes("tools") ||
-    lower.includes("fleet") ||
-    lower.includes("agent") ||
-    lower.includes("queue") ||
-    lower.includes("task") ||
-    lower.includes("status")
-  );
-}
-
-async function tryMcpChatReply(message) {
-  if (!wantsMcpChatReply(message)) return null;
-  const lower = message.toLowerCase();
-  const chunks = [];
-  const wantsQueue = lower.includes("queue") || lower.includes("task");
-  const wantsFleet = lower.includes("fleet") || lower.includes("agent");
-  const wantsTools = lower.includes("mcp") || lower.includes("tool") || lower.includes("tools") || lower.includes("status");
-
-  try {
-    if (wantsQueue) {
-      const summary = parseMcpToolContent(await callMcpTool("get_queue_summary", {}, mcpReadOnlyTimeoutMs));
-      const counts = summary.counts || summary;
-      chunks.push(`Queue: ${counts.queue ?? "--"} queued, ${counts.active ?? "--"} active, ${counts.failed ?? "--"} failed, ${counts.done ?? "--"} done.`);
-    }
-
-    if (wantsFleet) {
-      const fleet = parseMcpToolContent(await callMcpTool("get_agent_status", {}, mcpReadOnlyTimeoutMs));
-      const agents = Array.isArray(fleet.agents) ? fleet.agents : [];
-      const active = agents.filter((agent) => agent.currentTask).length;
-      const available = agents.filter((agent) => agent.available).length;
-      chunks.push(`Fleet: ${available}/${agents.length} slots available, ${active} active.`);
-    }
-
-    if (wantsTools || chunks.length === 0) {
-      const features = parseMcpToolContent(await callMcpTool("get_mcp_feature_overview", {}, mcpReadOnlyTimeoutMs));
-      const tools = Array.isArray(features.availableTools) ? features.availableTools : [];
-      const gaps = Array.isArray(features.missingOpsGaps) ? features.missingOpsGaps : [];
-      chunks.push(`MCP (Model Context Protocol, not Multi-Chain Protocol): ${tools.length} live tools exposed on ${features.server?.mcpUrl || getPrimaryMcpRpcUrl()}. Gaps held: ${gaps.slice(0, 4).join(", ") || "none listed"}.`);
-    }
-  } catch (error) {
-    return {
-      provider: "mcp-read-only-error",
-      reply: `MCP connection attempted but did not return cleanly: ${error.message}. The dashboard will keep the message local and you can retry after checking 127.0.0.1:8787/health.`,
-    };
-  }
-
-  return {
-    provider: "mcp-read-only",
-    reply: `${chunks.join(" ")} Read-only chat path only: no agent start, queue move, repo sync, or shell action was run.`,
-  };
-}
-
-async function tryLocalModelReply(message) {
-  const tags = await fetchJsonWithTimeout("http://127.0.0.1:11434/api/tags", {}, localChatTagsTimeoutMs);
-  const model = process.env.LANTERN_CHAT_MODEL || tags?.models?.[0]?.name;
-  if (!model) return null;
-  const data = await fetchJsonWithTimeout("http://127.0.0.1:11434/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages: [
-        {
-          role: "system",
-          content: "You are Lantern OS inside a local-first operator dashboard. Be concise, practical, truthful, and do not promise hidden wallet actions, brute force, or fake ROI.",
-        },
-        { role: "user", content: message },
-      ],
-    }),
-  }, localChatTimeoutMs);
-  const reply = String(data?.message?.content || data?.response || "").trim();
-  return reply ? { reply, provider: `ollama:${model}` } : null;
-}
-
-async function handleChatMessage(input) {
-  const message = String(input.message || input.text || "").trim().slice(0, maxConversationTextLength);
-  if (!message) throw new Error("message_required");
-  const operatorEntry = normalizeConversationEntry({ surface: "lantern-garage", role: "operator", text: message });
-  await appendConversationEntry(operatorEntry);
-
-  let provider = "local-rag";
-  let reply = "";
-  const command = normalizeLanternCommand(message);
-  if (command) {
-    const commandResult = await runLanternCommand(command);
-    provider = "lantern-command-entrypoint";
-    reply = renderCommandReply(commandResult);
-  } else {
-    const mcpReply = await tryMcpChatReply(message);
-    if (mcpReply) {
-      provider = mcpReply.provider;
-      reply = mcpReply.reply;
-    }
-  }
-  if (!reply) {
-    try {
-      const localModel = await tryLocalModelReply(message);
-      if (localModel) {
-        provider = localModel.provider;
-        reply = localModel.reply;
-      }
-    } catch {
-      provider = "local-rag";
-    }
-  }
-  if (!reply) {
-    reply = buildDashboardReply(message, provider);
-  }
-
-  const lanternEntry = normalizeConversationEntry({ surface: "lantern-garage", role: "lantern", text: reply });
-  await appendConversationEntry(lanternEntry);
-  return { ok: true, provider, reply, entries: [operatorEntry, lanternEntry] };
 }
 
 function normalizeRagCacheItem(input) {
@@ -1024,19 +201,19 @@ function repoSources() {
     },
     {
       name: "human-flourishing-frameworks",
-      path: "C:\\tmp\\human-flourishing-frameworks-scan",
+      path: process.env.HFF_REPO_PATH || path.join(repoRoot, "..", "human-flourishing-frameworks-scan"),
       role: "HFF scan, COMET LEAP docs and PDFs, prior convergence evidence",
       archiveDecision: "source_evidence_only",
     },
     {
       name: "gm-agent-orchestrator",
-      path: "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+      path: process.env.ORCHESTRATOR_REPO_PATH || path.join(repoRoot, "..", "gm-agent-orchestrator"),
       role: "local MCP/orchestrator, agents, queue, service supervision",
       archiveDecision: "source_evidence_only",
     },
     {
       name: "ChildOfLevistus",
-      path: "C:\\Users\\alexp\\Documents\\Codex\\2026-04-23-what-are-you-able-to-do\\ChildOfLevistus",
+      path: process.env.CHILD_OF_LEVISTUS_PATH || path.join(repoRoot, "..", "ChildOfLevistus"),
       role: "GameMaker game source and GM validation lane",
       archiveDecision: "source_evidence_only",
     },
@@ -1143,8 +320,18 @@ Default boot mutation: ${house.windowsSurface.defaultBootMutation}
 
 function runPowerShell(scriptRelativePath, args = []) {
   return new Promise((resolve) => {
+    const powerShellCommand = getPowerShellCommand();
+    if (!powerShellCommand) {
+      resolve({
+        code: 2,
+        stdout: "",
+        stderr: "PowerShell is not installed in this environment; run this action on the operator machine.",
+      });
+      return;
+    }
+
     const scriptPath = path.join(repoRoot, scriptRelativePath);
-    const child = spawn("powershell.exe", [
+    const child = spawn(powerShellCommand, [
       "-NoProfile",
       "-ExecutionPolicy",
       "Bypass",
@@ -1157,105 +344,15 @@ function runPowerShell(scriptRelativePath, args = []) {
     let stderr = "";
     child.stdout.on("data", (data) => { stdout += data.toString(); });
     child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", (error) => resolve({ code: 2, stdout, stderr: `${stderr}${error.message}` }));
     child.on("close", (code) => resolve({ code, stdout, stderr }));
   });
-}
-
-const commandSpecs = {
-  "!one": {
-    label: "One IDE read-only status",
-    script: "scripts/Get-OneIdeStatus.ps1",
-    args: [],
-    mode: "read_only_preflight",
-  },
-  "!converge": {
-    label: "Lantern convergence loop",
-    script: "scripts/Invoke-LanternConvergenceLoop.ps1",
-    args: [],
-    mode: "local_convergence",
-  },
-  "!superjarvis": {
-    label: "Super Jarvis one-pass diagnostic",
-    script: "scripts/Invoke-SuperJarvisPerfectLoop.ps1",
-    args: ["-Passes", "1"],
-    mode: "local_diagnostic",
-  },
-  "!near20": {
-    label: "Kalshi near-term paper block",
-    script: "scripts/New-KalshiNearTermPaperBlock.ps1",
-    args: ["-WindowMinutes", "20", "-BudgetUsd", "50", "-MaxOrders", "10"],
-    mode: "paper_trade_no_live_execution",
-  },
-  "!near20-pl": {
-    label: "Kalshi near-term paper P/L",
-    script: "scripts/Resolve-KalshiNearTermPaperBlock.ps1",
-    args: [],
-    mode: "paper_settlement_no_live_execution",
-  },
-  "!confidence": {
-    label: "Feature confidence report (trading, dreamer, imagniverse, payments)",
-    script: "scripts/Build-LanternConfidenceReport.ps1",
-    args: ["-WriteReceipt"],
-    mode: "read_only_confidence_assessment",
-  },
-};
-
-const commandAliases = {
-  "!super-jarvis": "!superjarvis",
-};
-
-function normalizeLanternCommand(value) {
-  const token = String(value || "").trim().split(/\s+/)[0].toLowerCase();
-  const aliased = commandAliases[token] || token;
-  return commandSpecs[aliased] ? aliased : "";
-}
-
-function listLanternCommands() {
-  return Object.entries(commandSpecs).map(([command, spec]) => ({
-    command,
-    label: spec.label,
-    mode: spec.mode,
-    script: spec.script,
-  }));
-}
-
-function renderCommandReply(result) {
-  const state = result.code === 0 ? "completed" : "returned warnings";
-  const output = String(result.stdout || result.stderr || "").trim();
-  const tail = output.split(/\r?\n/).filter(Boolean).slice(-3).join(" | ");
-  return `${result.command} ${state} through /api/command (${result.label}). ${tail || "No output returned."}`;
-}
-
-async function runLanternCommand(rawCommand) {
-  const command = normalizeLanternCommand(rawCommand);
-  if (!command) {
-    return {
-      ok: false,
-      code: 64,
-      error: "unknown_lantern_command",
-      commands: listLanternCommands(),
-    };
-  }
-  const spec = commandSpecs[command];
-  const result = await runPowerShell(spec.script, spec.args);
-  return {
-    ok: result.code === 0,
-    entrypoint: "/api/command",
-    command,
-    label: spec.label,
-    mode: spec.mode,
-    script: spec.script,
-    args: spec.args,
-    ...result,
-  };
 }
 
 function getStatus() {
   const arc = readJson("data/arc-reactor/status.json", {});
   const wallet = readJson("data/wallet/local-cash-wallet.json", {});
   const controls = readJson("manifests/validation/LOCAL-CONTROLS-LATEST.json", {});
-  const mcpCatalog = getMcpCatalog();
-  const mcpCatalogSummary = summarizeMcpCatalog(mcpCatalog);
   const readiness = getReadiness();
   const v1 = readText("reports/V1-READINESS-TEST-2026-05-26.md");
 
@@ -1277,8 +374,6 @@ function getStatus() {
       mcpOk: controls.mcp?.ok === true,
       lanternOk: controls.lantern?.ok === true,
     },
-    mcpCatalog: mcpCatalogSummary,
-    orchestratorDependency: getOrchestratorDependencyStatus(),
     readiness: {
       readyForPrep: readiness.readyForPrep === true,
       readyForInstall: readiness.readyForInstall === true,
@@ -1488,6 +583,138 @@ function parseMirrorEnv() {
     }));
 }
 
+
+
+function commandExists(command) {
+  const probe = process.platform === "win32" ? "where" : "which";
+  const result = spawnSync(probe, [command], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function getPowerShellCommand() {
+  const candidates = process.platform === "win32"
+    ? ["powershell.exe", "pwsh.exe", "powershell", "pwsh"]
+    : ["pwsh", "powershell"];
+  return candidates.find(commandExists) || null;
+}
+
+function getActionCapabilities() {
+  const powerShellCommand = getPowerShellCommand();
+  const powerShellReady = Boolean(powerShellCommand);
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: "local",
+    powerShellCommand,
+    actions: {
+      refresh: { enabled: true, kind: "real-action", reason: "GET routes are available in the Node app." },
+      flatRagIngest: { enabled: true, kind: "real-action", reason: "Writes the local Flat RAG manifest only; no repo deletion." },
+      notes: { enabled: true, kind: "real-action", reason: "Appends operator notes to data/operator-notes/notes.jsonl." },
+      chat: { enabled: true, kind: "real-action", reason: "Appends local chat memory to data/conversations/garage-conversations.jsonl." },
+      runLoop: { enabled: powerShellReady, kind: powerShellReady ? "real-action" : "held-action", reason: powerShellReady ? `PowerShell available via ${powerShellCommand}.` : "Held: PowerShell is not installed in this environment." },
+      localControls: { enabled: powerShellReady, kind: powerShellReady ? "real-action" : "held-action", reason: powerShellReady ? `PowerShell available via ${powerShellCommand}.` : "Held: local controls require PowerShell on the operator machine." },
+      dispatchAll: { enabled: false, kind: "founder-held", reason: "Held until founder auth, MCP canary, and operator approval are present." }
+    },
+    summary: {
+      real: ["Refresh Status", "Ingest Repos", "Auto Update", "+ Note", "Chat send", "RAG intake"],
+      links: ["Health", "Status JSON", "Access Model", "Mirror JSON", "Readiness Gates", "Evidence Method", "Open Issues"],
+      held: powerShellReady
+        ? ["Dispatch All stays founder-held until MCP canary and auth proof."]
+        : ["Converge Loop held: PowerShell missing.", "Local Controls held: operator-machine PowerShell required.", "Dispatch All founder-held until MCP canary and auth proof."]
+    }
+  };
+}
+
+function getOperatorFeedbackMemory() {
+  const notes = readJsonl(path.relative(repoRoot, operatorNotesPath), 50).filter((note) => !note.parseError);
+  const feedback = [];
+  for (const note of notes) {
+    const text = String(note.text || "").trim();
+    const lower = text.toLowerCase();
+    if (lower.includes("button") || lower.includes("fake")) {
+      feedback.push({
+        id: "OPERATOR-BUTTON-TRUTH",
+        priority: note.priority || "P1",
+        source: path.relative(repoRoot, operatorNotesPath),
+        feedback: text,
+        appliedAs: "Every first-screen control is classified as real-action, live-link, held-action, or founder-held; unavailable held buttons are disabled."
+      });
+    }
+    if (lower.includes("tony") || lower.includes("garage") || lower.includes("orion")) {
+      feedback.push({
+        id: "OPERATOR-ORION-GARAGE",
+        priority: note.priority || "P0",
+        source: path.relative(repoRoot, operatorNotesPath),
+        feedback: text,
+        appliedAs: "Dashboard keeps the limestone/grid Orion cockpit style, redirects retired Tony Garage, and shows one canonical local URL."
+      });
+    }
+  }
+  feedback.push({
+    id: "RESTART-EXTERNAL-MEMORY",
+    priority: "P1",
+    source: "data/context/RESTART-TEMPLATE-2026-05-29.md",
+    feedback: "Use external memory files and complete targeted dashboard integration before expanding.",
+    appliedAs: "Dashboard now exposes memory feedback and action capabilities as first-class API-backed panels."
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    feedback,
+    boundary: "Operator feedback memory is read from local notes and context receipts; private details are summarized, not exposed as secrets."
+  };
+}
+
+function getAccessModel() {
+  return {
+    generatedAt: new Date().toISOString(),
+    audienceTarget: "dozens_of_users",
+    activeUserSoftCap: 48,
+    authBoundary: "This is an access contract for the dashboard surface. Real identity, billing, and founder authorization must be wired before private or paid actions leave local mode.",
+    tiers: [
+      {
+        id: "public",
+        label: "Public",
+        priceUsdMonthly: null,
+        authRequired: false,
+        summary: "Always-on public proof, health checks, public reports, cloud mirrors, and safe documentation.",
+        features: ["/api/health", "/api/status", "public PDFs", "read-only readiness"]
+      },
+      {
+        id: "auth_0",
+        label: "$0 Auth",
+        priceUsdMonthly: 0,
+        authRequired: true,
+        summary: "Free signed-in workspace for saved notes, RAG intake, and user preference continuity.",
+        features: ["saved notes", "RAG intake", "workspace continuity"]
+      },
+      {
+        id: "auth_20",
+        label: "$20 Auth",
+        priceUsdMonthly: 20,
+        authRequired: true,
+        summary: "Supporter workspace for queue visibility, report packets, and a weekly operator digest.",
+        features: ["queue visibility", "report packets", "weekly digest"]
+      },
+      {
+        id: "auth_200",
+        label: "$200 Auth",
+        priceUsdMonthly: 200,
+        authRequired: true,
+        summary: "Pilot workspace for guided cleanup sessions, report review, and direct operator scheduling.",
+        features: ["pilot review", "cleanup session", "operator scheduling"]
+      },
+      {
+        id: "founder",
+        label: "Founder",
+        priceUsdMonthly: null,
+        authRequired: true,
+        founderOnly: true,
+        summary: "Founder-only controls for local dispatch, release promotion, secrets, billing setup, and boot-sensitive decisions.",
+        features: ["local controls", "agent dispatch", "release gates", "private receipts"]
+      }
+    ]
+  };
+}
+
 function getCloudMirrorStatus() {
   const manifest = readJson(path.relative(repoRoot, cloudMirrorsPath), {});
   const manifestMirrors = Array.isArray(manifest.cloudMirrors) ? manifest.cloudMirrors : [];
@@ -1515,7 +742,7 @@ function getCloudMirrorStatus() {
     activeHost: host,
     activePort: port,
     deployBranch: manifest.deployBranch || "master",
-    deployProvider: manifest.deployProvider || "AWS ECS Fargate",
+    deployProvider: manifest.deployProvider || "Render",
     mirrorPolicy: manifest.mirrorPolicy || "Local is primary; cloud URLs are mirrors and must not create separate dashboards.",
     cloudMirrorCount: cloudMirrors.length,
     cloudMirrors,
@@ -1524,24 +751,14 @@ function getCloudMirrorStatus() {
 
 function sendJson(res, data, status = 200) {
   const body = JSON.stringify(data, null, 2);
-  res.writeHead(status, responseHeaders({
+  res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  }));
-  res.end(body);
-}
-
-function responseHeaders(extra = {}) {
-  return {
     "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
-    "X-Frame-Options": "DENY",
-    "Permissions-Policy": "camera=(), geolocation=(), microphone=(self)",
-    ...extra,
-  };
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  });
+  res.end(body);
 }
 
 function sendFile(res, filePath) {
@@ -1561,17 +778,21 @@ function sendFile(res, filePath) {
       sendJson(res, { error: "not_found" }, 404);
       return;
     }
-    res.writeHead(200, responseHeaders({
+    res.writeHead(200, {
       "Content-Type": type,
-    }));
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+    });
     res.end(data);
   });
 }
 
 function sendHtml(res, html, status = 200) {
-  res.writeHead(status, responseHeaders({
+  res.writeHead(status, {
     "Content-Type": "text/html; charset=utf-8",
-  }));
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+  });
   res.end(html);
 }
 
@@ -1579,10 +800,12 @@ async function route(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   if (req.method === "OPTIONS") {
-    res.writeHead(204, responseHeaders({
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
-    }));
+      "Cache-Control": "no-store",
+    });
     res.end();
     return;
   }
@@ -1610,77 +833,6 @@ async function route(req, res) {
     return;
   }
 
-  if (url.pathname === "/api/invoice/create" && req.method === "POST") {
-    const body = await collectRequestBody(req);
-    const { invoiceId, offer, amountUsd, customerEmail } = JSON.parse(body);
-
-    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
-    wallet.pendingInvoices = wallet.pendingInvoices || [];
-    wallet.pendingInvoices.push({
-      invoiceId,
-      offer,
-      amountUsd,
-      customerEmail: customerEmail || "",
-      status: "draft",
-      createdAt: new Date().toISOString()
-    });
-    wallet.draftInvoiceUsd = (wallet.draftInvoiceUsd || 0) + amountUsd;
-    wallet.pendingInvoiceUsd = wallet.draftInvoiceUsd;
-    writeJson("data/wallet/local-cash-wallet.json", wallet);
-
-    appendLine("data/wallet/ledger.jsonl", JSON.stringify({
-      event: "invoice_created",
-      invoiceId,
-      offer,
-      amountUsd,
-      timestamp: new Date().toISOString()
-    }));
-
-    sendJson(res, { success: true, invoiceId });
-    return;
-  }
-
-  if (url.pathname === "/api/invoice/send" && req.method === "POST") {
-    const body = await collectRequestBody(req);
-    const { invoiceId } = JSON.parse(body);
-
-    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
-    const invoice = wallet.pendingInvoices?.find(i => i.invoiceId === invoiceId);
-
-    if (!invoice) {
-      sendJson(res, { error: "Invoice not found" }, 404);
-      return;
-    }
-
-    invoice.status = "sent";
-    invoice.sentAt = new Date().toISOString();
-    writeJson("data/wallet/local-cash-wallet.json", wallet);
-
-    appendLine("data/wallet/ledger.jsonl", JSON.stringify({
-      event: "invoice_sent",
-      invoiceId,
-      amount: invoice.amountUsd,
-      customer: invoice.customerEmail,
-      timestamp: new Date().toISOString()
-    }));
-
-    sendJson(res, { success: true, invoiceId, status: "sent" });
-    return;
-  }
-
-  if (url.pathname === "/api/invoices" && req.method === "GET") {
-    const wallet = readJson("data/wallet/local-cash-wallet.json", {});
-    sendJson(res, {
-      pending: wallet.pendingInvoices || [],
-      received: wallet.receivedPayments || [],
-      total: {
-        pending: wallet.pendingInvoiceUsd || 0,
-        cleared: wallet.clearedCashUsd || 0
-      }
-    });
-    return;
-  }
-
   if (url.pathname === "/api/readiness") {
     sendJson(res, getReadiness());
     return;
@@ -1691,63 +843,23 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === "/api/action-capabilities") {
+    sendJson(res, getActionCapabilities());
+    return;
+  }
+
+  if (url.pathname === "/api/operator-feedback") {
+    sendJson(res, getOperatorFeedbackMemory());
+    return;
+  }
+
+  if (url.pathname === "/api/access-model") {
+    sendJson(res, getAccessModel());
+    return;
+  }
+
   if (url.pathname === "/api/cloud-mirrors") {
     sendJson(res, getCloudMirrorStatus());
-    return;
-  }
-
-  if (url.pathname === "/api/fleet") {
-    sendJson(res, await getFleetSnapshot());
-    return;
-  }
-
-  if (url.pathname === "/api/mcp-catalog") {
-    sendJson(res, getMcpCatalog());
-    return;
-  }
-
-  if (url.pathname === "/api/orchestrator-dependency") {
-    sendJson(res, getOrchestratorDependencyStatus());
-    return;
-  }
-
-  if (url.pathname === "/api/agent-dispatch-status") {
-    sendJson(res, readAgentDispatchState());
-    return;
-  }
-
-  if (url.pathname === "/api/hff-sensors") {
-    sendJson(res, await getHffSensorStatus());
-    return;
-  }
-
-  if (url.pathname === "/api/command" && req.method === "GET") {
-    sendJson(res, {
-      entrypoint: "/api/command",
-      commands: listLanternCommands(),
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/command" && req.method === "POST") {
-    try {
-      const body = await collectRequestBody(req);
-      const input = JSON.parse(body || "{}");
-      const result = await runLanternCommand(input.command || input.message || input.text);
-      sendJson(res, result, result.ok ? 200 : 400);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 400);
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/chat" && req.method === "POST") {
-    try {
-      const body = await collectRequestBody(req);
-      sendJson(res, await handleChatMessage(JSON.parse(body || "{}")), 201);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 400);
-    }
     return;
   }
 
@@ -1816,168 +928,15 @@ async function route(req, res) {
     return;
   }
 
-  if (url.pathname === "/api/dreamer" && req.method === "GET") {
-    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
-    const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
-    const query = url.searchParams.get("q") || "";
-    sendJson(res, {
-      ok: true,
-      user,
-      path: path.relative(repoRoot, dreamerNotebookPath(user)),
-      entries: readDreamerEntries(user, limit, query),
-    });
-    return;
-  }
-
-  if (url.pathname === "/api/dreamer" && req.method === "POST") {
-    try {
-      const body = await collectRequestBody(req);
-      const record = await appendDreamerEntry(JSON.parse(body || "{}"));
-      sendJson(res, {
-        ok: true,
-        record,
-        path: path.relative(repoRoot, dreamerNotebookPath(record.user)),
-      }, 201);
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 400);
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/dreamer/stats" && req.method === "GET") {
-    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
-    sendJson(res, { ok: true, stats: computeDreamerStats(user) });
-    return;
-  }
-
-  if (url.pathname === "/api/dreamer/matrix" && req.method === "GET") {
-    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
-    const all = readDreamerEntries(user, 500, "");
-    const nodes = all.map((e) => ({
-      id: e.id,
-      kind: e.kind,
-      name: e.name || "",
-      ternaryId: e.ternaryId,
-      recordedAt: e.recordedAt,
-      mood: e.mood || "",
-      links: e.links || [],
-    }));
-    sendJson(res, { ok: true, user, nodes });
-    return;
-  }
-
-  if (url.pathname === "/api/dreamer/mirror" && req.method === "POST") {
-    try {
-      const body = await collectRequestBody(req);
-      const input = JSON.parse(body || "{}");
-      const user = normalizeDreamerUser(input.user || "courtney");
-      const ids = Array.isArray(input.ids) ? input.ids : [];
-      if (ids.length === 0) throw new Error("ids_required");
-      const record = await createMirrorEntry(user, ids);
-      sendJson(res, { ok: true, record }, 201);
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 400);
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/dreamer/tasks" && req.method === "GET") {
-    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
-    sendJson(res, { ok: true, user, tasks: readTaskEntries(user, 100) });
-    return;
-  }
-
-  if (url.pathname === "/api/dreamer/tasks" && req.method === "POST") {
-    try {
-      const body = await collectRequestBody(req);
-      const input = JSON.parse(body || "{}");
-      const record = await appendTaskEntry(input);
-      sendJson(res, { ok: true, record }, 201);
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 400);
-    }
-    return;
-  }
-
-  if (url.pathname.startsWith("/api/dreamer/tasks/") && req.method === "PATCH") {
-    try {
-      const taskId = url.pathname.slice("/api/dreamer/tasks/".length).split("/")[0];
-      const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
-      const record = await completeTaskEntry(user, taskId);
-      sendJson(res, { ok: true, record });
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 400);
-    }
-    return;
-  }
-
   if (url.pathname === "/api/actions/run-loop" && req.method === "POST") {
-    const result = await runLanternCommand("!converge");
+    const result = await runPowerShell("scripts/Invoke-LanternConvergenceLoop.ps1");
     sendJson(res, result, result.code === 0 ? 200 : 500);
-    return;
-  }
-
-  if (url.pathname === "/api/actions/kalshi-near-term-paper-block" && req.method === "POST") {
-    const result = await runLanternCommand("!near20");
-    let payload = null;
-    try {
-      payload = readJson("data/kalshi/kalshi-near-term-paper-block-latest.json", null);
-    } catch {
-      payload = null;
-    }
-    sendJson(res, {
-      ...result,
-      receiptPath: "manifests/evidence/kalshi-near-term-paper-block-receipt-2026-05-30.md",
-      dataPath: "data/kalshi/kalshi-near-term-paper-block-latest.json",
-      paperOrderCount: payload?.paperOrderCount ?? null,
-      realMoneyUsd: payload?.realMoneyUsd ?? 0,
-      liveTradingStatus: payload?.liveTradingStatus || "blocked",
-      paperBlock: payload ? {
-        generatedAt: payload.generatedAt,
-        windowMinutes: payload.windowMinutes,
-        allocatedPaperRiskUsd: payload.budgetPolicy?.allocatedPaperRiskUsd ?? 0,
-        remainingDailyPaperRiskUsd: payload.budgetPolicy?.remainingDailyPaperRiskUsd ?? 0,
-        orders: (payload.orders || []).slice(0, 10).map((order) => ({
-          ticker: order.ticker,
-          title: order.title,
-          limitCents: order.paperLimitCents,
-          maxLossUsd: order.paperMaxLossUsd,
-          minutesToKnown: order.minutesToKnown,
-          status: order.orderStatus,
-        })),
-      } : null,
-    }, result.code === 0 ? 200 : 500);
-    return;
-  }
-
-  if (url.pathname === "/api/actions/kalshi-near-term-paper-pl" && req.method === "POST") {
-    const result = await runLanternCommand("!near20-pl");
-    let payload = null;
-    try {
-      payload = readJson("data/kalshi/kalshi-near-term-paper-block-pl-latest.json", null);
-    } catch {
-      payload = null;
-    }
-    sendJson(res, {
-      ...result,
-      receiptPath: "manifests/evidence/kalshi-near-term-paper-block-pl-receipt-2026-05-30.md",
-      dataPath: "data/kalshi/kalshi-near-term-paper-block-pl-latest.json",
-      paperPl: payload,
-      realMoneyUsd: payload?.realMoneyUsd ?? 0,
-      liveTradingStatus: payload?.liveTradingStatus || "blocked",
-    }, result.code === 0 ? 200 : 500);
     return;
   }
 
   if (url.pathname === "/api/actions/local-controls" && req.method === "POST") {
     const result = await runPowerShell("scripts/Start-LanternLocalControls.ps1");
     sendJson(res, result, result.code === 0 ? 200 : 500);
-    return;
-  }
-
-  if (url.pathname === "/api/actions/dispatch-all" && req.method === "POST") {
-    const result = await dispatchAllAgents();
-    sendJson(res, result, result.code === 0 ? 200 : 207);
     return;
   }
 
@@ -1992,57 +951,6 @@ async function route(req, res) {
     return;
   }
 
-  if (url.pathname === "/api/sales/tools" && req.method === "GET") {
-    sendJson(res, { tools: salesMcp.listTools() });
-    return;
-  }
-
-  if (url.pathname === "/api/sales/invoke" && req.method === "POST") {
-    try {
-      const body = await collectRequestBody(req);
-      const input = JSON.parse(body || "{}");
-      const result = await salesMcp.invokeTool(input.tool, input.params || {});
-      sendJson(res, { ok: true, tool: input.tool, result }, 200);
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 400);
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/sales/pipeline" && req.method === "GET") {
-    try {
-      const result = await salesMcp.invokeTool("summarize_sales_pipeline", {});
-      sendJson(res, result);
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 500);
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/sales/leads" && req.method === "GET") {
-    try {
-      const ledger = require("./sales/sales-ledger");
-      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
-      const leads = ledger.readJsonl(ledger.files.leads).slice(-limit);
-      sendJson(res, { leads, count: leads.length });
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 500);
-    }
-    return;
-  }
-
-  if (url.pathname === "/api/sales/opportunities" && req.method === "GET") {
-    try {
-      const ledger = require("./sales/sales-ledger");
-      const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
-      const opportunities = ledger.readJsonl(ledger.files.opportunities).slice(-limit);
-      sendJson(res, { opportunities, count: opportunities.length });
-    } catch (error) {
-      sendJson(res, { ok: false, error: error.message }, 500);
-    }
-    return;
-  }
-
   if (url.pathname.startsWith("/repo/")) {
     const relative = decodeURIComponent(url.pathname.replace(/^\/repo\//, ""));
     const target = path.resolve(repoRoot, relative);
@@ -2051,23 +959,6 @@ async function route(req, res) {
       return;
     }
     sendFile(res, target);
-    return;
-  }
-
-  if (url.pathname === "/api/ternary-convergence") {
-    const convergence = readJson("manifests/validation/CONVERGENCE-FLEET-LATEST.json", {});
-    const receipt = readJson("data/automation/TERNARY-CONVERGENCE-RECEIPT-20260531-061000.json", {});
-    sendJson(res, {
-      ok: true,
-      generatedAt: receipt.generatedAt || new Date().toISOString(),
-      method: receipt.method || "3^12-1",
-      focus: receipt.focus || "lantern-os",
-      dimensions: receipt.dimensions || [],
-      score: receipt.score || {},
-      matrix: receipt.matrix || {},
-      nextActions: receipt.nextActions || [],
-      convergenceFleet: convergence,
-    });
     return;
   }
 
@@ -2087,11 +978,6 @@ async function route(req, res) {
       return;
     }
     sendFile(res, target);
-    return;
-  }
-
-  if (url.pathname === "/imagniverse") {
-    sendFile(res, path.resolve(publicRoot, "art.html"));
     return;
   }
 

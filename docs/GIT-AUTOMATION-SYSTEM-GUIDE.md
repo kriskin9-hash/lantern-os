@@ -77,7 +77,7 @@ Location: `data/automation/orchestrator-config.json`
   "components": [
     {
       "name": "git-auto-deploy",
-      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-GitAutoDeploy.ps1",
+      "script": "scripts/Invoke-GitAutoDeploy.ps1",
       "enabled": true,
       "priority": 1,
       "intervalMinutes": 5
@@ -94,7 +94,7 @@ Location: `data/automation/poll-config.json`
   "sources": [
     {
       "name": "lantern-os-repo",
-      "path": "D:\\tmp\\lantern-os",
+      "path": "${REPO_ROOT}",
       "intervalMinutes": 5,
       "enabled": true
     }
@@ -102,7 +102,7 @@ Location: `data/automation/poll-config.json`
   "actions": [
     {
       "name": "convergence-loop",
-      "script": "D:\\tmp\\lantern-os\\scripts\\Invoke-LanternConvergenceLoop.ps1",
+      "script": "scripts/Invoke-LanternConvergenceLoop.ps1",
       "triggerOnChanges": true
     }
   ]
@@ -120,9 +120,9 @@ Location: `data/automation/poll-config.json`
 ### Auto-Poll Scheduler
 - **Purpose**: Monitor multiple repositories for changes
 - **Monitored Repos**: 
-  - Lantern OS (D:\tmp\lantern-os)
-  - HFF Scan (C:\tmp\human-flourishing-frameworks-scan)
-  - Orchestrator (C:\Users\alexp\Documents\gm-agent-orchestrator)
+  - Lantern OS (${REPO_ROOT})
+  - HFF Scan (${HFF_REPO_PATH})
+  - Orchestrator (${ORCHESTRATOR_REPO_PATH})
 - **Triggers**: Actions based on change detection
 
 ### HFF Convergence
@@ -148,7 +148,7 @@ Location: `data/automation/poll-config.json`
 ### Continuous Development Setup
 ```powershell
 # Start continuous automation in background
-Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File D:\tmp\lantern-os\scripts\Invoke-AutomationOrchestrator.ps1" -WindowStyle Hidden
+Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File $env:REPO_ROOT/scripts/Invoke-AutomationOrchestrator.ps1" -WindowStyle Hidden
 ```
 
 ### Manual Sync Before Push
@@ -295,7 +295,7 @@ Get-Content data\automation\orchestrator-results.json | ConvertFrom-Json
 Get-Content data\automation\orchestrator.log -Tail 20
 
 # Test individual component
-.\scripts\Invoke-GitAutoDeploy.ps1 -RepoPath "D:\tmp\lantern-os" -RunOnce
+.\scripts\Invoke-GitAutoDeploy.ps1 -RepoPath "$env:REPO_ROOT" -RunOnce
 
 # Check git status
 git status --porcelain

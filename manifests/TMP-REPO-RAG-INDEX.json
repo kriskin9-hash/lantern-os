@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-05-31T20:45:00-04:00",
+  "root": "D:\\tmp",
+  "indexVersion": "1.0.0",
+  "repos": [
+    {
+      "localFolder": "D:\\tmp\\lantern-os",
+      "githubOrigin": "https://github.com/alex-place/lantern-os.git",
+      "ragState": "local_inspected",
+      "isPrimaryOrchestrator": true,
+      "notes": "Primary orchestrator repo. Convergence loop and CI/CD live here."
+    },
+    {
+      "localFolder": "D:\\tmp\\human-flourishing-frameworks-scan",
+      "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
+      "ragState": "local_inspected",
+      "dirtyCount": 9,
+      "notes": "HFF main repo."
+    },
+    {
+      "localFolder": "D:\\tmp\\hff-master-clean",
+      "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
+      "ragState": "local_inspected",
+      "notes": "HFF mirror."
+    },
+    {
+      "localFolder": "D:\\tmp\\hff-lantern-recovery",
+      "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
+      "ragState": "local_inspected",
+      "notes": "HFF mirror."
+    },
+    {
+      "localFolder": "D:\\tmp\\hff-public-site",
+      "githubOrigin": "https://github.com/human-flourishing-frameworks/hff-public-site.git",
+      "ragState": "local_inspected",
+      "notes": "HFF public site."
+    },
+    {
+      "localFolder": "D:\\tmp\\hff-seven-validate",
+      "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
+      "ragState": "local_inspected",
+      "notes": "HFF mirror."
+    },
+    {
+      "localFolder": "D:\\tmp\\lantern-symbolic-sandbox",
+      "githubOrigin": "https://github.com/alex-place/lantern-symbolic-sandbox.git",
+      "ragState": "local_inspected",
+      "notes": "Symbolic sandbox experiments."
+    },
+    {
+      "localFolder": "D:\\tmp\\lantern-discord",
+      "githubOrigin": null,
+      "ragState": "not_yet_cloned",
+      "notes": "No .git directory. Treat as local-only or init repo."
+    },
+    {
+      "localFolder": "D:\\tmp\\lantern-os (1)",
+      "githubOrigin": null,
+      "ragState": "not_yet_cloned",
+      "notes": "Duplicate folder, no .git."
+    },
+    {
+      "localFolder": "D:\\tmp\\lantern-os-skills",
+      "githubOrigin": null,
+      "ragState": "not_yet_cloned",
+      "notes": "No .git directory."
+    },
+    {
+      "localFolder": "D:\\tmp\\lantern-os-zip-work",
+      "githubOrigin": null,
+      "ragState": "not_yet_cloned",
+      "notes": "No .git directory."
+    },
+    {
+      "localFolder": "D:\\tmp\\hff-evidence-master-clean",
+      "githubOrigin": null,
+      "ragState": "not_yet_cloned",
+      "notes": "No .git directory."
+    },
+    {
+      "localFolder": "D:\\tmp\\hff-release-candidate",
+      "githubOrigin": null,
+      "ragState": "not_yet_cloned",
+      "notes": "No .git directory."
+    },
+    {
+      "localFolder": "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+      "githubOrigin": null,
+      "ragState": "held",
+      "notes": "Referenced by convergence loop. Verify remote before promotion."
+    }
+  ],
+  "ciCdCheckout": [
+    {
+      "repo": "alex-place/lantern-os",
+      "path": "lantern-os",
+      "required": true
+    },
+    {
+      "repo": "human-flourishing-frameworks/human-flourishing-frameworks",
+      "path": "human-flourishing-frameworks",
+      "required": false
+    },
+    {
+      "repo": "human-flourishing-frameworks/hff-public-site",
+      "path": "hff-public-site",
+      "required": false
+    },
+    {
+      "repo": "alex-place/lantern-symbolic-sandbox",
+      "path": "lantern-symbolic-sandbox",
+      "required": false
+    }
+  ]
+}
