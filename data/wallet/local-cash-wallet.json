@@ -1,13 +1,13 @@
 {
   "name": "Lantern Local Cash Wallet",
-  "generatedAt": "2026-05-26T07:00:00-04:00",
+  "generatedAt": "2026-05-31T15:30:00-04:00",
   "repo": "https://github.com/alex-place/lantern-os",
-  "localRoot": "C:\\tmp\\lantern-os",
+  "localRoot": "${REPO_ROOT}",
   "currency": "USD",
   "type": "local_ledger_not_bank_or_crypto_wallet",
   "clearedCashUsd": 0,
-  "pendingInvoiceUsd": 199,
-  "draftInvoiceUsd": 199,
+  "pendingInvoiceUsd": 398,
+  "draftInvoiceUsd": 398,
   "receivedPayments": [],
   "pendingInvoices": [
     {
@@ -20,6 +20,19 @@
         "artifacts/COMET-LEAP-11-DAY-CASH-SPRINT.pdf",
         "reports/LANTERN-PRODUCT-UNIVERSE-ATLAS.md",
         "skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md"
+      ]
+    },
+    {
+      "invoiceId": "INV-REPO-CONVERGENCE-AUDIT-001",
+      "offer": "Repo Convergence Audit",
+      "amountUsd": 199,
+      "status": "draft_ready_to_send",
+      "invoicePath": "data/wallet/invoices/INV-REPO-CONVERGENCE-AUDIT-001.md",
+      "proofAssets": [
+        "packets/REPO-CONVERGENCE-AUDIT-PACKET.md",
+        "packets/REPO-CONVERGENCE-AUDIT-EVIDENCE-MANIFEST.md",
+        "docs/OLLAMA-AGENT-SETUP.md",
+        "manifests/evidence/STATUS-CUBE-CONVERGENCE-2026-05-31.md"
       ]
     }
   ],
@@ -35,5 +48,6 @@
     "Do not create new offers during the 11-day sprint.",
     "Record outreach, objections, invoices, and cleared cash as ledger events.",
     "Keep secrets and private payment credentials out of Git."
-  ]
+  ],
+  "ragIndex": "manifests/TMP-REPO-RAG-INDEX.json"
 }

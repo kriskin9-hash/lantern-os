@@ -1,0 +1,14 @@
+{
+  "pre_run_command": {
+    "enabled": true,
+    "description": "Review command before local execution"
+  },
+  "pre_mcp_tool_use": {
+    "enabled": true,
+    "description": "Review MCP tool call before execution"
+  },
+  "pre_write_code": {
+    "enabled": true,
+    "description": "Review code changes before writing to disk"
+  }
+}

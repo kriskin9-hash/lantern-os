@@ -1,84 +1,189 @@
 # Lantern OS
 
-Fresh repository for the Lantern OS v1.0.0 line.
+Status: pre-v1.0.0 staging  
+Scope: local-first operating repo, surfaces, reports, manifests, and release gates  
+Style spine: `docs/ORION-MOOKMANREPORT4-STYLE.md`  
+Operator boundary: local MCP status, dirty worktrees, private folders, boot mutation, and live worker counts require operator-machine evidence
 
-Lantern OS is the clean convergence target for the Windows, local-first, NixOS,
-COMET LEAP, and household AI surfaces. This repo starts as a staging and release
-control plane, not a dump of every prior artifact.
+---
 
-## Current Status
+## Open Lantern
 
-Status: pre-v1.0.0 staging
+Primary local dashboard:
 
-This repo is ready to receive promoted artifacts when the operator decides the
-v1.0.0 line is ready. Until then, source repos remain authoritative:
+```text
+http://127.0.0.1:4177
+```
 
-- `C:\tmp\human-flourishing-frameworks-scan`
-- `C:\Users\alexp\Documents\gm-agent-orchestrator`
+This is the front door for interaction: first-class chat, RAG memory, wallet
+truth, local controls, outreach, reports, devices, diagnostics, cloud mirrors,
+and Arc Reactor Mining Lab converge here. No setup screen or secondary launcher
+is required when the dashboard is already running. No separate mining dashboard,
+no shortcut sprawl, no fake surfaces.
 
-Remote control plane: `https://github.com/alex-place/lantern-os`
+---
 
-Shareholder/repo consolidation map:
-`manifests/foundry-shareholder-repos.md`
+## Simple Answer
 
-Public-safe operator wiki page:
-`docs/wiki/ALEX-PLACE.md`
+Lantern OS is the clean control plane for the Windows/local-first Lantern line.
 
-## Release Rule
+The repo is not a dump of every prior artifact. It is the place where promoted work becomes readable, validated, public-safe, and ready for the next operator step.
 
-Nothing becomes v1.0.0 here merely because it exists elsewhere. Promotion
-requires the Lantern OS convergence loop in
-`docs/CONVERGENCE-LOOP.md`.
+Repo = evidence store. Surface = fast access. Together they reduce confusion.
 
-Before adding new surfaces, run the loop and fix the first 2-4 open issues it
-finds. Expansion is allowed only after the leading blockers are handled or
-explicitly marked held by the operator.
+---
 
-Fleet execution uses the 12x3 convergence-ring contract in
-`manifests/CONVERGENCE-LOOP-AGENT-FLEET.md`: 12 loop steps, 3 agent roles per
-step, 36 designed ring slots, and a 64-worker elastic pool target. This is a
-design and receipt contract, not live-worker proof.
+## What It Actually Does
 
-MCP work is split by `manifests/MCP-WORK-SPLIT.md`. Remote docs can validate
-contracts and receipts, but local-only MCP health, dirty worktrees, private
-folders, and live worker counts still require operator-machine evidence.
+| Lane | Purpose | Current state |
+|---|---|---|
+| Local cockpit | Open operator surfaces for app, garage, RAG, wallet, boot gates, and reports | present |
+| RAG Dollhouse | Keep source-labeled flat memory and receipts | present |
+| Release gates | Prevent v1 claims before proof and operator approval | active |
+| MCP split | Separate remote docs from local-only health and worker proof | active |
+| Agent contact | Tell agents what to inspect first and what to hold | active |
+| Orion style | Convert flat docs and CSS into human-readable technical sheets | active style pass |
+
+---
+
+## Evidence / Source Discipline
+
+Source repos remain authoritative until promoted:
+
+```text
+C:\tmp\human-flourishing-frameworks-scan
+C:\Users\alexp\Documents\gm-agent-orchestrator
+```
+
+Remote control plane:
+
+```text
+https://github.com/alex-place/lantern-os
+```
+
+Core maps:
+
+```text
+manifests/foundry-shareholder-repos.md
+docs/wiki/ALEX-PLACE.md
+docs/ORION-MOOKMANREPORT4-STYLE.md
+```
+
+---
+
+## Proven / Held / Local-Only
+
+| State | Meaning |
+|---|---|
+| Proven in repo | File exists here and can be reviewed through GitHub or local checkout |
+| Held local-only | Requires the operator machine: MCP health, dirty worktrees, private folders, local queue/active/failed state, live worker counts |
+| Design contract | Describes intended system shape, not live proof |
+| Public-safe | Avoids private identity, raw dumps, unsafe fabrication details, and fake live-state claims |
+
+Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires the convergence loop in `docs/CONVERGENCE-LOOP.md`.
+
+---
 
 ## Initial Surfaces
 
-- Windows desktop/start-menu launcher bundle
-- Shareholder HTML index at `surfaces/shareholder-index/index.html`
-- Tony Garage operator cockpit at `surfaces/tony-garage/index.html`
-- Lantern Garage full-stack app at `apps/lantern-garage/`
-- Arc Reactor confidence skill at `skills/arc-reactor-confidence/SKILL.md`
-- Arc Reactor status at `data/arc-reactor/status.json`
-- Store release lanes at `manifests/STORE-RELEASE-LANES.md`
-- v1 readiness test at `reports/V1-READINESS-TEST-2026-05-26.md`
-- Old workstreams/repo map at `manifests/OLD-WORKSTREAMS-AND-REPOS.md`
-- Printable Super Jarvis front page at `artifacts/SUPER-JARVIS-LANTERN-OS-FRONT-PAGE.pdf`
-- Gage school art packet at `school-packets/gage-high-intel-art/GAGE-HIGH-INTEL-ART-PACKET.zip`
-- COMET LEAP 11-day cash sprint at `reports/COMET-LEAP-11-DAY-CASH-SPRINT.md`
-- Product universe atlas at `reports/LANTERN-PRODUCT-UNIVERSE-ATLAS.md`
-- One World Leader app skill at `skills/one-world-leader-app/SKILL.md`
-- COMET LEAP agile methodology skill at `skills/comet-leap-agile/SKILL.md`
-- Flat Lantern RAG dollhouse skill at `skills/lantern-rag-dollhouse/SKILL.md`
-- Super Jarvis Lantern OS router skill at `skills/super-jarvis-lantern-os/SKILL.md`
-- Clean Storm Agile sprint skill at `skills/clean-storm-agile/SKILL.md`
-- Bayesian world-model skill at `skills/bayesian-world-model/SKILL.md`
-- Archive/Wayback/commons batch skill at `skills/archive-commons-batch/SKILL.md`
-- NixOS dual-boot configuration path
-- COMET LEAP 30-day model artifact manifest
-- Buffett/COMET LEAP planning document references
-- Lantern app/runtime surface references
+| Surface | Path |
+|---|---|
+| Canonical Lantern dashboard | `http://127.0.0.1:4177` |
+| Lantern Garage app | `apps/lantern-garage/` |
+| Cloud mirror manifest | `manifests/cloud-mirrors.json` |
+| Redirected legacy surfaces | `surfaces/shareholder-index/index.html`, `surfaces/tony-garage/index.html`, `surfaces/lantern-desktop/index.html` |
+| Agent initial-contact surface | `manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md` |
+| Arc Reactor status | `data/arc-reactor/status.json` |
+| Arc Reactor Mining Lab | `docs/ARC-REACTOR-MINING-LAB.md` |
+| Flat Lantern RAG Dollhouse | `skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md` |
+| Orion / Mookman Report 4 style | `docs/ORION-MOOKMANREPORT4-STYLE.md` |
+
+---
+
+## One Dashboard
+
+Lantern OS uses one dashboard with internal cards and formatted document views.
+Do not add a new public dashboard for every product lane. Internal cards/routes
+should be backed by real files, validation receipts, or live APIs.
+
+The dashboard should always make chat first-class, keep cloud tunnel/mirror
+status visible, and route Markdown through the formatted Lantern reader instead
+of dropping operators into raw text docs.
+
+---
+
+## Cloud Mirrors
+
+`master` is the deploy branch for the Render mirror. Cloud URLs are mirrors of
+the same Lantern OS dashboard, not separate products or extra dashboards.
+
+Mirror policy:
+
+- Local primary: `http://127.0.0.1:4177`
+- Render/service mirrors live in `manifests/cloud-mirrors.json`
+- Render uses `apps/lantern-garage/render-server.js`
+- Local Windows uses `apps/lantern-garage/server.js`
+- A mirror can be listed as `candidate`, `configured`, or `verified`; the UI
+  must show that status plainly
+
+---
+
+## Brand Guidelines
+
+Lantern OS should feel like a local operator cockpit: calm, evidence-backed,
+warm, and usable under pressure.
+
+Brand rules:
+
+- One front door: use `http://127.0.0.1:4177` as the local interaction URL.
+- Local first: default to localhost, repo-backed files, and explicit operator
+  control before cloud or tunnels.
+- Truth first: cards appear only when backed by files, validation receipts, or
+  live APIs.
+- No fake dashboards: use one dashboard with internal cards/routes.
+- No secret collection: never ask for seed phrases, private keys, Apple ID
+  credentials, exchange passwords, or hidden signing permissions.
+- Plain language: say what is ready, held, blocked, or experimental.
+- Visual style: light cockpit surface, deep ink text, Lantern teal `#08756f`,
+  steel blue `#1e5f89`, amber warnings `#9f5a07`, and rose risk `#9a3d55`.
+
+---
+
+## Arc Reactor Mining Lab
+
+Mining Lab is a safe, legal, local-first package for inventorying owned
+hardware, routing hardware into viable lanes, validating wallets in read-only
+mode, and producing receipts.
+
+Mining boundaries:
+
+- CPU routes to Monero learning/P2Pool checks.
+- GPU routes stay experimental for RVN or ETC.
+- BTC/LTC/DOGE/KAS require owned or separately justified dedicated hardware.
+- ETH is wallet/claim/read-only only, not a mining lane.
+- No wallet cracking, brute force, hidden signing, or fake one-shot ROI claims.
+
+---
+
+## Release Rule
+
+Before adding new surfaces, run the loop and fix the first 2-4 open issues it finds. Expansion is allowed only after the leading blockers are handled or explicitly marked held by the operator.
+
+Fleet execution uses the 12x3 convergence-ring contract in `manifests/CONVERGENCE-LOOP-AGENT-FLEET.md`: 12 loop steps, 3 agent roles per step, 36 designed ring slots, and a 64-worker elastic pool target. This is a design and receipt contract, not live-worker proof.
+
+MCP work is split by `manifests/MCP-WORK-SPLIT.md`. Remote docs can validate contracts and receipts, but local-only MCP health, dirty worktrees, private folders, and live worker counts still require operator-machine evidence.
+
+---
 
 ## Receptionist Routing
 
-Use `docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md` for public-safe call routing.
-It uses organization switchboards and public program contacts only; do not add
-personal phone numbers, scraped direct dials, or unverified private numbers.
+Use `docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md` for public-safe call routing. It uses organization switchboards and public program contacts only. Do not add personal phone numbers, scraped direct dials, or unverified private numbers.
 
-## Printable Report
+---
 
-Use this front page for quick print/share:
+## Printable Reports
+
+Quick front page:
 
 ```text
 artifacts/SUPER-JARVIS-LANTERN-OS-FRONT-PAGE.pdf
@@ -90,6 +195,8 @@ Master convergence PDF:
 artifacts/COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf
 ```
 
+---
+
 ## Non-Goals For This Repo
 
 - No unattended bootloader edits.
@@ -97,8 +204,10 @@ artifacts/COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf
 - No unreviewed generated artifact dump.
 - No claim that v1.0.0 is ready before the operator says so.
 - No skeleton-only milestones.
-- No treating offline/local/server-farm Foundry tokens as cloud-metered,
-  "Lite", or per-token rated.
+- No treating offline/local/server-farm Foundry tokens as cloud-metered, "Lite", or per-token rated.
+- No raw filepath spam above the first human-relevant explanation.
+
+---
 
 ## First Command
 
@@ -114,6 +223,8 @@ Validate the convergence fleet count contract:
 python .\scripts\Test-ConvergenceAgentFleet.py --write-json .\manifests\validation\CONVERGENCE-FLEET-LATEST.json
 ```
 
+---
+
 ## Garage Command
 
 Open the Movie 1 operator cockpit:
@@ -122,8 +233,9 @@ Open the Movie 1 operator cockpit:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Open-TonyGarage.ps1
 ```
 
-If the browser shows stale styling, reopen through the launcher or refresh with
-cache bypass. The garage surface cache-busts its CSS, image, and document links.
+If the browser shows stale styling, reopen through the launcher or refresh with cache bypass. The garage surface cache-busts its CSS, image, and document links.
+
+---
 
 ## Local Controls Command
 
@@ -132,6 +244,8 @@ Open the local control bridge and validate dashboard/MCP/Lantern health:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-LanternLocalControls.ps1
 ```
+
+---
 
 ## Full-Stack App Command
 

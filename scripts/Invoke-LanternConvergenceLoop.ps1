@@ -29,9 +29,7 @@ function Test-PathRelative {
 }
 
 $issues = [System.Collections.Generic.List[object]]::new()
-$fixed = [System.Collections.Generic.List[object]]::new()
 $held = [System.Collections.Generic.List[object]]::new()
-
 $required = @(
     "README.md",
     "AGENTS.md",
@@ -47,7 +45,14 @@ $required = @(
     "manifests/CONVERGENCE-LOOP-AGENT-FLEET.md",
     "manifests/MCP-WORK-SPLIT.md",
     "manifests/validation/CONVERGENCE-FLEET-LATEST.json",
-    "scripts/Test-ConvergenceAgentFleet.py"
+    "scripts/Test-ConvergenceAgentFleet.py",
+    "scripts/Update-ArcReactorStatus.ps1",
+    "scripts/Invoke-LoopReceipt.ps1",
+    "skills/asi-arc-reactor-mk1/SKILL.md",
+    "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md",
+    "manifests/TMP-REPO-RAG-INDEX.md",
+    "manifests/TMP-REPO-RAG-INDEX.json",
+    ".windsurf/hooks.json"
 )
 
 foreach ($path in $required) {
@@ -114,20 +119,115 @@ if (Test-Path $readinessDoc) {
     }
 }
 
-$sourceRepos = @(
-    "C:\tmp\human-flourishing-frameworks-scan",
-    "C:\Users\alexp\Documents\gm-agent-orchestrator"
-)
+# ASI Arc Reactor MK1 validation
+$asiSkillDoc = Join-Path $Root "skills/asi-arc-reactor-mk1/SKILL.md"
+if (Test-Path $asiSkillDoc) {
+    $asiText = Get-Content -LiteralPath $asiSkillDoc -Raw
+    $requiredAsiPhrases = @(
+        "ASI patterns are architecture references only",
+        "no local ASI capability claim",
+        "no investment advice",
+        "Brier-style error tracking",
+        "human trial readiness"
+    )
+    foreach ($phrase in $requiredAsiPhrases) {
+        if ($asiText -notlike "*$phrase*") {
+            Add-Issue $issues "ASI-MISSING-$phrase" "high" "ASI skill missing required phrase: $phrase" "Add phrase to skills/asi-arc-reactor-mk1/SKILL.md."
+        }
+    }
+}
+
+$asiEvidenceDoc = Join-Path $Root "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md"
+if (Test-Path $asiEvidenceDoc) {
+    $asiEvidenceText = Get-Content -LiteralPath $asiEvidenceDoc -Raw
+    $blockedClaims = @(
+        "ASI capability exists locally",
+        "token issuance or investment advice",
+        "agent networks can bypass human approval"
+    )
+    foreach ($claim in $blockedClaims) {
+        if ($asiEvidenceText -notlike "*$claim*") {
+            Add-Issue $issues "ASI-EVIDENCE-MISSING-BLOCK-$claim" "high" "ASI evidence missing blocked claim: $claim" "Add blocked claim to manifests/evidence/asi-local-pdf-convergence-2026-05-29.md."
+        }
+    }
+}
+
+# Windsurf hooks validation
+$hooksConfig = Join-Path $Root ".windsurf/hooks.json"
+if (Test-Path $hooksConfig) {
+    $hooksText = Get-Content -LiteralPath $hooksConfig -Raw
+    $requiredHooks = @(
+        "pre_run_command",
+        "pre_mcp_tool_use",
+        "pre_write_code"
+    )
+    foreach ($hook in $requiredHooks) {
+        if ($hooksText -notlike "*$hook*") {
+            Add-Issue $issues "HOOKS-MISSING-$hook" "medium" "Windsurf hooks missing: $hook" "Add $hook to .windsurf/hooks.json."
+        }
+    }
+}
+
+# Load source repos from RAG index instead of hardcoded local paths
+$ragIndexPath = Join-Path $Root "manifests/TMP-REPO-RAG-INDEX.json"
+$sourceRepos = @()
+$ragIndex = $null
+if (Test-Path -LiteralPath $ragIndexPath) {
+    try {
+        $ragIndex = Get-Content -LiteralPath $ragIndexPath -Raw | ConvertFrom-Json
+        $sourceRepos = $ragIndex.repos | Where-Object { $_.ragState -eq "local_inspected" -or $_.ragState -eq "held" } | Select-Object -ExpandProperty localFolder
+    } catch {
+        Add-Issue $issues "RAG-INDEX-PARSE-FAILED" "high" "Failed to parse TMP-REPO-RAG-INDEX.json" "Validate JSON syntax in manifests/TMP-REPO-RAG-INDEX.json."
+    }
+} else {
+    Add-Issue $issues "RAG-INDEX-MISSING" "high" "TMP-REPO-RAG-INDEX.json not found" "Run the repo indexing step or restore manifests/TMP-REPO-RAG-INDEX.json."
+}
 
 $sourceStates = foreach ($repo in $sourceRepos) {
     if (Test-Path -LiteralPath $repo) {
-        $status = @(git -C $repo status --short 2>$null)
+        $status = @()
+        $gitStatusError = $null
+        $gitStatusMode = "normal"
+        try {
+            $status = @(git -C $repo status --short 2>&1)
+            if ($LASTEXITCODE -ne 0) {
+                $gitStatusError = ($status -join " ")
+                $status = @()
+            }
+        } catch {
+            $gitStatusError = $_.Exception.Message
+            $status = @()
+        }
+
+        if ($gitStatusError -and $gitStatusError -like "*dubious ownership*") {
+            try {
+                $retryStatus = @(git -c "safe.directory=$repo" -c "core.excludesFile=" -C $repo status --short 2>&1)
+                if ($LASTEXITCODE -eq 0) {
+                    $status = $retryStatus
+                    $gitStatusError = $null
+                    $gitStatusMode = "safe_directory_read_only_retry"
+                }
+                else {
+                    $gitStatusError = ($retryStatus -join " ")
+                }
+            }
+            catch {
+                $gitStatusError = $_.Exception.Message
+            }
+        }
+
+        if ($gitStatusError) {
+            Add-Issue $issues "SOURCE-GIT-STATUS-FAILED-$($repo.Replace('\', '-').Replace(':', ''))" "high" "Git status failed for source repo: $repo" "Fix git safe-directory/ownership or inspect manually before source repo mutation."
+        }
+
         [pscustomobject]@{
             repo = $repo
             exists = $true
-            dirty = ($status.Count -gt 0)
+            dirty = if ($gitStatusError) { $null } else { ($status.Count -gt 0) }
             changedCount = $status.Count
-            state = if ($status.Count -gt 0) { "local_dirty" } else { "local_clean" }
+            state = if ($gitStatusError) { "git_status_failed" } elseif ($status.Count -gt 0) { "local_dirty" } else { "local_clean" }
+            gitStatusError = $gitStatusError
+            gitStatusMode = $gitStatusMode
         }
     } else {
         if (-not $CloudVirtualization) {

@@ -1,0 +1,162 @@
+---
+# Lantern OS RAG Dollhouse + COMET LEAPER Kubernetes Deployment
+# Novel infrastructure for narrative-driven operations
+# Generated: 2026-05-27
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lantern-os
+  labels:
+    app: lantern-os
+    version: v1
+    governance: arc-reactor
+
+---
+# ConfigMap: RAG Dollhouse Manifest
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rag-dollhouse-config
+  namespace: lantern-os
+data:
+  rag-house-path: /data/rag-house/
+  narrative-mode: "COMET-LEAPER-Operating-Narrative-v1"
+  evidence-classes: |
+    - repo_verified
+    - source_verified
+    - operator_asserted
+    - inferred
+    - blocked
+  data-states: |
+    - local_inspected
+    - local_asset_copied
+    - github_metadata_only
+    - external_llm_summary
+    - external_search_snippet
+    - not_yet_cloned
+    - held
+
+---
+# ConfigMap: Operating Narrative Weekly Cadence
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: operating-narrative-cadence
+  namespace: lantern-os
+data:
+  monday-morning: |
+    Review prior week's experiments
+    Measure against planned outcomes
+    Update confidence ledger
+    Identify top 2-3 blockers
+    Duration: 1 hour
+  
+  tuesday-thursday: |
+    Test assumptions: 1-2 small experiments per day
+    Rank risks by impact × probability
+    Run low-burn validation
+    Capture outcomes in shared log
+    Duration: Daily 15-min standup
+  
+  friday-afternoon: |
+    Weekly evidence synthesis
+    Confidence loops tied to measurable metrics
+    Reallocate capital toward proven channels
+    Plan next week's 3-5 priority experiments
+    Duration: 90 minutes
+
+---
+# Deployment: Lantern Garage Full-Stack App
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lantern-garage-app
+  namespace: lantern-os
+  labels:
+    app: lantern-garage
+    version: v1.0.0
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: lantern-garage
+  template:
+    metadata:
+      labels:
+        app: lantern-garage
+        version: v1.0.0
+    spec:
+      containers:
+      - name: lantern-garage
+        image: lantern-os/lantern-garage:v1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 4177
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: NARRATIVE_MODE
+          value: "COMET-LEAPER"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+---
+# Service: Lantern Garage External Access
+apiVersion: v1
+kind: Service
+metadata:
+  name: lantern-garage-service
+  namespace: lantern-os
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 4177
+  selector:
+    app: lantern-garage
+
+---
+# StatefulSet: RAG House Data Persistence
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rag-house-persistence
+  namespace: lantern-os
+spec:
+  serviceName: rag-house-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-house
+  template:
+    metadata:
+      labels:
+        app: rag-house
+    spec:
+      containers:
+      - name: rag-house-storage
+        image: lantern-os/rag-house:v1.0.0
+        ports:
+        - containerPort: 8080
+
+---
+# Service: RAG House API
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-house-service
+  namespace: lantern-os
+spec:
+  clusterIP: None
+  selector:
+    app: rag-house
+  ports:
+  - port: 8080
+    targetPort: 8080

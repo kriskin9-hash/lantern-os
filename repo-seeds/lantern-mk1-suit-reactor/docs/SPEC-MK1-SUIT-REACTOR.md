@@ -61,23 +61,26 @@ The reactor face uses 12 low-power optical nodes. They are called gems for aesth
 | 8 | PPE | protection module state |
 | 9 | Power | battery/thermal state |
 | 10 | Link | BLE/Wi-Fi/router state |
-| 11 | Tesseract | coordinate/dimensional UI mode |
+| 11 | Status Cube | coordinate/dimensional UI mode |
 | 12 | Hold | safety block/stop state |
 
 ## Laser / Optical Rule
 
 MK1 does not use open high-power lasers. Use LEDs, diffusers, light pipes, low-power ToF/range modules, or Class 1 enclosed optical sensors only. Any laser-like aesthetic must be decorative or enclosed.
 
-## Tesseract Drive Notes
+## Status Cube Notes
 
-Tesseract does not mean exotic propulsion. In MK1 it means a 4D UI map:
+Status Cube does not mean exotic propulsion, time travel, or a physical drive.
+In MK1 it means a 4D UI map:
 
 - x: body location;
 - y: module lane;
 - z: risk/safety depth;
 - t: timeline/proof state.
 
-The 12 gems map to a rotating tesseract dashboard in Lantern OS.
+The 12 gems map to a rotating Status Cube dashboard in Lantern OS. The cube is
+an interface metaphor for module status, safety depth, and proof history; it is
+not a time machine or exotic-physics claim.
 
 ## Proposed Exotic Matter - Safe Interpretation
 

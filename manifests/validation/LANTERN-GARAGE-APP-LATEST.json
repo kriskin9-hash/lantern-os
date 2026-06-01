@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-26T11:26:56.988Z",
+  "generatedAt": "2026-05-29T23:32:41.967Z",
   "ok": true,
   "base": "http://127.0.0.1:4177",
   "results": [
@@ -29,7 +29,22 @@
       "statusCode": 200
     },
     {
+      "path": "/api/mining-lab",
+      "ok": true,
+      "statusCode": 200
+    },
+    {
+      "path": "/api/cloud-mirrors",
+      "ok": true,
+      "statusCode": 200
+    },
+    {
       "path": "/api/rag-cache",
+      "ok": true,
+      "statusCode": 200
+    },
+    {
+      "path": "/view?path=README.md",
       "ok": true,
       "statusCode": 200
     }

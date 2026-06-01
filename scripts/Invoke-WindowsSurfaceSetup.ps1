@@ -2,10 +2,16 @@ param(
     [string]$DesktopPath = "$env:USERPROFILE\OneDrive\Desktop\Lantern Surfaces",
     [string]$StartMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Lantern",
     [string]$HFFScanRepo = "C:\tmp\human-flourishing-frameworks-scan",
-    [string]$OrchestratorRepo = "C:\Users\alexp\Documents\gm-agent-orchestrator"
+    [string]$OrchestratorRepo = "C:\Users\alexp\Documents\gm-agent-orchestrator",
+    [switch]$SingleShortcutOnly
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($SingleShortcutOnly) {
+    & (Join-Path $PSScriptRoot "Install-LanternShortcut.ps1") -DesktopPath $DesktopPath -StartMenuPath $StartMenuPath
+    return
+}
 
 function New-LanternShortcut {
     param(
@@ -169,15 +175,10 @@ New-LanternShortcut -Path $projectDir `
 # Update Start Menu with main reference points
 Write-Output "Creating Start Menu shortcuts..."
 
-New-LanternShortcut -Path $StartMenuPath `
-    -Name "Lantern Dashboard" `
-    -TargetPath "https://localhost:8000" `
-    -Description "Local Lantern dashboard" | Out-Null
-
 New-URLShortcut -Path $StartMenuPath `
-    -Name "Lantern Dashboard" `
-    -URL "http://localhost:8000" `
-    -Description "Local dashboard for Lantern Surfaces"
+    -Name "Lantern OS" `
+    -URL "http://127.0.0.1:4177/" `
+    -Description "Single Lantern OS dashboard"
 
 New-LanternShortcut -Path $StartMenuPath `
     -Name "Lantern OS Repository" `

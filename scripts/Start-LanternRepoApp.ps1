@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [int]$Port = 8787,
+    [int]$Port = 4177,
     [switch]$NoBrowser,
     [switch]$RebootAfterLaunch,
     [int]$RebootDelaySeconds = 300
@@ -9,42 +9,35 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-$surfacePath = Join-Path $repoRoot 'surfaces\tony-garage\index.html'
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$appScript = Join-Path $repoRoot 'scripts\Start-LanternGarageApp.ps1'
+$appUrl = "http://127.0.0.1:$Port/"
 
-if (-not (Test-Path $surfacePath)) {
-    throw "Tony Garage surface not found: $surfacePath"
+if (-not (Test-Path $appScript)) {
+    throw "Lantern dashboard launcher not found: $appScript"
 }
 
 Write-Host "Lantern OS repo root: $repoRoot"
-Write-Host "Tony Garage surface: $surfacePath"
-Write-Host "Requested port: $Port"
+Write-Host "Lantern OS dashboard: $appUrl"
 
-$python = Get-Command py -ErrorAction SilentlyContinue
-$pythonArgs = @('-3', '-m', 'http.server', $Port.ToString(), '--bind', '127.0.0.1')
-
-if (-not $python) {
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    $pythonArgs = @('-m', 'http.server', $Port.ToString(), '--bind', '127.0.0.1')
+try {
+    $health = Invoke-WebRequest -UseBasicParsing -Uri "$appUrl/api/health" -TimeoutSec 2
+    if ($health.StatusCode -eq 200 -and $health.Content -match "lantern-garage") {
+        Write-Host "Lantern dashboard already running."
+        if (-not $NoBrowser) { Start-Process $appUrl }
+    }
+    else {
+        throw "Unexpected health response."
+    }
 }
-
-$appUrl = "http://127.0.0.1:$Port/surfaces/tony-garage/index.html"
-
-if ($python) {
-    Write-Host "Starting local static server with $($python.Source)"
-    $process = Start-Process -FilePath $python.Source -ArgumentList $pythonArgs -WorkingDirectory $repoRoot -PassThru -WindowStyle Minimized
+catch {
+    Write-Host "Starting Lantern dashboard on $appUrl"
+    Start-Process -FilePath "powershell.exe" `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $appScript, "-Port", $Port) `
+        -WorkingDirectory $repoRoot `
+        -WindowStyle Hidden | Out-Null
     Start-Sleep -Seconds 2
-    Write-Host "Local app URL: $appUrl"
-    if (-not $NoBrowser) {
-        Start-Process $appUrl
-    }
-    Write-Host "Server PID: $($process.Id)"
-    Write-Host "Stop server: Stop-Process -Id $($process.Id)"
-} else {
-    Write-Warning "Python was not found. Opening the file directly instead of serving over localhost."
-    if (-not $NoBrowser) {
-        Start-Process $surfacePath
-    }
+    if (-not $NoBrowser) { Start-Process $appUrl }
 }
 
 if ($RebootAfterLaunch) {

@@ -18,14 +18,19 @@ $hashFile = Join-Path $OutputDir "RAG-HOUSE-MANIFEST.sha256"
 $includeGlobs = @(
     "README.md",
     "AGENTS.md",
+    "QUICK-START.md",
     "docs/*.md",
+    "docs/**/*.md",
     "manifests/*.md",
+    "manifests/**/*.md",
     "reports/*.md",
+    "data/automation/*.json",
+    "data/automation/*.md",
+    "data/arc-reactor/*.json",
     "skills/*/SKILL.md",
+    "skills/**/*.md",
     "scripts/*.ps1",
     "data/world-model/*.jsonl",
-    "data/arc-reactor/*.json",
-    "data/wallet/**/*.json",
     "references/*.md"
 )
 
@@ -66,7 +71,7 @@ function Get-FileSha256 {
 }
 
 $allFiles = Get-ChildItem -LiteralPath $repoRoot -File -Recurse | ForEach-Object {
-    $relative = [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName).Replace("/", "\")
+    $relative = $_.FullName.Substring($repoRoot.Length).TrimStart("\").Replace("/", "\")
     if (Test-IncludedPath -RelativePath $relative) {
         [pscustomobject]@{
             path = $relative.Replace("\", "/")

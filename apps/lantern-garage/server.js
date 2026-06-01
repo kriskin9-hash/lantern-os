@@ -5,14 +5,78 @@ const { spawn, spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
-const port = Number(process.env.LANTERN_GARAGE_PORT || 4177);
+const port = Number(process.env.LANTERN_GARAGE_PORT || process.env.PORT || 4177);
+const host = process.env.LANTERN_GARAGE_HOST || (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const conversationLogPath = path.join(repoRoot, "data", "conversations", "garage-conversations.jsonl");
 const flatRagHousePath = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 const flatRagHouseManifestPath = path.join(repoRoot, "manifests", "FLAT-RAG-HOUSE-LATEST.md");
-const orchestratorQueueDir = path.join("C:\\Users\\alexp\\Documents\\gm-agent-orchestrator", "tasks", "queue");
+const orchestratorQueueDir = process.env.ORCHESTRATOR_QUEUE_DIR || path.join(repoRoot, "data", "orchestrator-queue");
 const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.jsonl");
+const cloudMirrorsPath = path.join(repoRoot, "manifests", "cloud-mirrors.json");
 const maxConversationTextLength = 4000;
+const maxDreamerTextLength = 2000;
+const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
 const writeQueues = new Map();
+
+
+function normalizeDreamerUser(value) {
+  const user = String(value || "courtney")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return user || "courtney";
+}
+
+function dreamerNotebookPath(user) {
+  return path.join(dreamerNotebookDir, `${normalizeDreamerUser(user)}.jsonl`);
+}
+
+function generateEntryId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function generateTernaryId(seed) {
+  const map = { "0": "o", "1": "i", "2": "z" };
+  const base3 = Math.abs(seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0))
+    .toString(3).padStart(12, "0");
+  return base3.replace(/[012]/g, (d) => map[d]);
+}
+
+async function appendDreamerEntry(user, entry) {
+  const record = {
+    id: generateEntryId(),
+    kind: String(entry.kind || "note").slice(0, 40),
+    name: String(entry.name || "").slice(0, 120),
+    mood: String(entry.mood || "").slice(0, 40),
+    text: String(entry.text || "").slice(0, maxDreamerTextLength),
+    tags: Array.isArray(entry.tags) ? entry.tags.map((t) => String(t).slice(0, 40)).slice(0, 10) : [],
+    links: Array.isArray(entry.links) ? entry.links.map((t) => String(t).slice(0, 40)).slice(0, 20) : [],
+    recordedAt: new Date().toISOString(),
+    ternaryId: generateTernaryId(generateEntryId() + String(entry.text || "")),
+    private: true,
+  };
+  const filePath = dreamerNotebookPath(user);
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.appendFile(filePath, JSON.stringify(record) + "\n", "utf8");
+  return record;
+}
+
+function readDreamerNotebook(user) {
+  const filePath = dreamerNotebookPath(user);
+  if (!fs.existsSync(filePath)) return [];
+  const lines_text = fs.readFileSync(filePath, "utf8").trim().split("\n").filter(Boolean);
+  return lines_text.map((line) => {
+    try { return JSON.parse(line); } catch { return null; }
+  }).filter(Boolean);
+}
 
 function enqueueFileWrite(filePath, operation) {
   const previous = writeQueues.get(filePath) || Promise.resolve();
@@ -199,19 +263,19 @@ function repoSources() {
     },
     {
       name: "human-flourishing-frameworks",
-      path: "C:\\tmp\\human-flourishing-frameworks-scan",
+      path: process.env.HFF_REPO_PATH || path.join(repoRoot, "..", "human-flourishing-frameworks-scan"),
       role: "HFF scan, COMET LEAP docs and PDFs, prior convergence evidence",
       archiveDecision: "source_evidence_only",
     },
     {
       name: "gm-agent-orchestrator",
-      path: "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+      path: process.env.ORCHESTRATOR_REPO_PATH || path.join(repoRoot, "..", "gm-agent-orchestrator"),
       role: "local MCP/orchestrator, agents, queue, service supervision",
       archiveDecision: "source_evidence_only",
     },
     {
       name: "ChildOfLevistus",
-      path: "C:\\Users\\alexp\\Documents\\Codex\\2026-04-23-what-are-you-able-to-do\\ChildOfLevistus",
+      path: process.env.CHILD_OF_LEVISTUS_PATH || path.join(repoRoot, "..", "ChildOfLevistus"),
       role: "GameMaker game source and GM validation lane",
       archiveDecision: "source_evidence_only",
     },
@@ -318,8 +382,18 @@ Default boot mutation: ${house.windowsSurface.defaultBootMutation}
 
 function runPowerShell(scriptRelativePath, args = []) {
   return new Promise((resolve) => {
+    const powerShellCommand = getPowerShellCommand();
+    if (!powerShellCommand) {
+      resolve({
+        code: 2,
+        stdout: "",
+        stderr: "PowerShell is not installed in this environment; run this action on the operator machine.",
+      });
+      return;
+    }
+
     const scriptPath = path.join(repoRoot, scriptRelativePath);
-    const child = spawn("powershell.exe", [
+    const child = spawn(powerShellCommand, [
       "-NoProfile",
       "-ExecutionPolicy",
       "Bypass",
@@ -332,6 +406,7 @@ function runPowerShell(scriptRelativePath, args = []) {
     let stderr = "";
     child.stdout.on("data", (data) => { stdout += data.toString(); });
     child.stderr.on("data", (data) => { stderr += data.toString(); });
+    child.on("error", (error) => resolve({ code: 2, stdout, stderr: `${stderr}${error.message}` }));
     child.on("close", (code) => resolve({ code, stdout, stderr }));
   });
 }
@@ -383,11 +458,367 @@ function getReadiness() {
     || {};
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function inlineMarkdown(value) {
+  return escapeHtml(value)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => (
+      `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`
+    ));
+}
+
+function renderMarkdownDocument(markdown, sourcePath) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const body = [];
+  let inCode = false;
+  let inList = false;
+  let inTable = false;
+  let tableRows = [];
+  let title = path.basename(sourcePath);
+
+  const closeList = () => {
+    if (inList) {
+      body.push("</ul>");
+      inList = false;
+    }
+  };
+  const closeTable = () => {
+    if (inTable) {
+      const rows = tableRows.filter((row) => !/^\s*\|?\s*:?-{3,}:?\s*\|/.test(row));
+      body.push("<table>");
+      rows.forEach((row, index) => {
+        const cells = row.replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+        body.push(index === 0 ? "<thead><tr>" : "<tbody><tr>");
+        cells.forEach((cell) => body.push(index === 0 ? `<th>${inlineMarkdown(cell)}</th>` : `<td>${inlineMarkdown(cell)}</td>`));
+        body.push(index === 0 ? "</tr></thead>" : "</tr></tbody>");
+      });
+      body.push("</table>");
+      tableRows = [];
+      inTable = false;
+    }
+  };
+
+  lines.forEach((line) => {
+    if (/^```/.test(line.trim())) {
+      closeList();
+      closeTable();
+      body.push(inCode ? "</code></pre>" : "<pre><code>");
+      inCode = !inCode;
+      return;
+    }
+    if (inCode) {
+      body.push(`${escapeHtml(line)}\n`);
+      return;
+    }
+    if (/^\s*\|.+\|\s*$/.test(line)) {
+      closeList();
+      inTable = true;
+      tableRows.push(line);
+      return;
+    }
+    closeTable();
+    const heading = /^(#{1,4})\s+(.+)$/.exec(line);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      if (level === 1) title = heading[2].trim();
+      body.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      return;
+    }
+    const listItem = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (listItem) {
+      if (!inList) {
+        body.push("<ul>");
+        inList = true;
+      }
+      body.push(`<li>${inlineMarkdown(listItem[1])}</li>`);
+      return;
+    }
+    if (!line.trim()) {
+      closeList();
+      return;
+    }
+    closeList();
+    body.push(`<p>${inlineMarkdown(line)}</p>`);
+  });
+  closeList();
+  closeTable();
+  if (inCode) body.push("</code></pre>");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)} - Lantern OS</title>
+  <style>
+    :root { color-scheme: light; --ink:#11191f; --muted:#596874; --paper:#eef4ef; --line:#bdc9c9; --arc:#08756f; --blue:#1e5f89; }
+    * { box-sizing: border-box; }
+    body { margin:0; color:var(--ink); background:var(--paper); font-family:"Segoe UI", Arial, sans-serif; }
+    main { width:min(980px, calc(100% - 28px)); margin:0 auto; padding:24px 0 48px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:22px; }
+    .source { color:var(--muted); font-size:0.86rem; overflow-wrap:anywhere; }
+    a { color:var(--blue); font-weight:800; }
+    .back { border:1px solid var(--line); padding:10px 12px; background:white; text-decoration:none; white-space:nowrap; }
+    h1 { font-size:2.1rem; line-height:1.05; margin:0 0 10px; letter-spacing:0; }
+    h2 { margin-top:28px; border-top:1px solid var(--line); padding-top:18px; }
+    p, li { line-height:1.58; }
+    code { background:white; border:1px solid var(--line); padding:1px 5px; }
+    pre { background:#11191f; color:white; overflow:auto; padding:14px; }
+    table { width:100%; border-collapse:collapse; background:white; margin:18px 0; }
+    th, td { border:1px solid var(--line); padding:9px; vertical-align:top; }
+    th { text-align:left; background:#f7faf8; color:var(--muted); text-transform:uppercase; font-size:0.78rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><strong>Lantern Reader</strong><div class="source">${escapeHtml(sourcePath)}</div></div>
+      <a class="back" href="/">Dashboard</a>
+    </header>
+    ${body.join("\n")}
+  </main>
+</body>
+</html>`;
+}
+
+function getMiningLabStatus() {
+  const files = [
+    "docs/ARC-REACTOR-MINING-LAB.md",
+    "docs/WALLET-MATRIX-TEMPLATE.md",
+    "skills/solo-mining/SKILL.md",
+    "templates/hardware-intake.csv",
+    "templates/wallet-matrix.csv",
+    "templates/coin-feasibility.csv",
+    "templates/mining-receipt.json",
+    "scripts/Get-HardwareInventory.ps1",
+    "scripts/Test-MiningProfitability.ps1",
+    "reports/ARC-REACTOR-MINING-LAB-2026-05-29.md",
+  ];
+  const present = files.map((relativePath) => ({
+    path: relativePath,
+    exists: fs.existsSync(path.join(repoRoot, relativePath)),
+  }));
+  const ready = present.every((item) => item.exists);
+  return {
+    ready,
+    mode: "manual_first_read_only",
+    shortcutRule: "single_lantern_shortcut",
+    routeSummary: {
+      cpu: "XMR learning lane",
+      gpu: "RVN / ETC experiment lane",
+      eth: "wallet / claim checks only",
+      asic: "BTC / LTC / DOGE / KAS only with owned or justified hardware",
+    },
+    blocked: [
+      "wallet_bruteforce",
+      "unauthorized_transfers",
+      "hidden_transaction_signing",
+      "mining_on_unowned_devices",
+      "fake_roi_claims",
+      "eth_mainnet_mining_claims",
+    ],
+    files: present,
+  };
+}
+
+function parseMirrorEnv() {
+  return String(process.env.LANTERN_CLOUD_MIRROR_URLS || "")
+    .split(/[,\s]+/)
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .map((url, index) => ({
+      name: `env-mirror-${index + 1}`,
+      url,
+      role: "environment configured mirror",
+      status: "configured",
+      healthPath: "/api/health",
+      source: "LANTERN_CLOUD_MIRROR_URLS",
+    }));
+}
+
+
+
+function commandExists(command) {
+  const probe = process.platform === "win32" ? "where" : "which";
+  const result = spawnSync(probe, [command], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function getPowerShellCommand() {
+  const candidates = process.platform === "win32"
+    ? ["powershell.exe", "pwsh.exe", "powershell", "pwsh"]
+    : ["pwsh", "powershell"];
+  return candidates.find(commandExists) || null;
+}
+
+function getActionCapabilities() {
+  const powerShellCommand = getPowerShellCommand();
+  const powerShellReady = Boolean(powerShellCommand);
+  return {
+    generatedAt: new Date().toISOString(),
+    mode: "local",
+    powerShellCommand,
+    actions: {
+      refresh: { enabled: true, kind: "real-action", reason: "GET routes are available in the Node app." },
+      flatRagIngest: { enabled: true, kind: "real-action", reason: "Writes the local Flat RAG manifest only; no repo deletion." },
+      notes: { enabled: true, kind: "real-action", reason: "Appends operator notes to data/operator-notes/notes.jsonl." },
+      chat: { enabled: true, kind: "real-action", reason: "Appends local chat memory to data/conversations/garage-conversations.jsonl." },
+      runLoop: { enabled: powerShellReady, kind: powerShellReady ? "real-action" : "held-action", reason: powerShellReady ? `PowerShell available via ${powerShellCommand}.` : "Held: PowerShell is not installed in this environment." },
+      localControls: { enabled: powerShellReady, kind: powerShellReady ? "real-action" : "held-action", reason: powerShellReady ? `PowerShell available via ${powerShellCommand}.` : "Held: local controls require PowerShell on the operator machine." },
+      dispatchAll: { enabled: false, kind: "founder-held", reason: "Held until founder auth, MCP canary, and operator approval are present." }
+    },
+    summary: {
+      real: ["Refresh Status", "Ingest Repos", "Auto Update", "+ Note", "Chat send", "RAG intake"],
+      links: ["Health", "Status JSON", "Access Model", "Mirror JSON", "Readiness Gates", "Evidence Method", "Open Issues"],
+      held: powerShellReady
+        ? ["Dispatch All stays founder-held until MCP canary and auth proof."]
+        : ["Converge Loop held: PowerShell missing.", "Local Controls held: operator-machine PowerShell required.", "Dispatch All founder-held until MCP canary and auth proof."]
+    }
+  };
+}
+
+function getOperatorFeedbackMemory() {
+  const notes = readJsonl(path.relative(repoRoot, operatorNotesPath), 50).filter((note) => !note.parseError);
+  const feedback = [];
+  for (const note of notes) {
+    const text = String(note.text || "").trim();
+    const lower = text.toLowerCase();
+    if (lower.includes("button") || lower.includes("fake")) {
+      feedback.push({
+        id: "OPERATOR-BUTTON-TRUTH",
+        priority: note.priority || "P1",
+        source: path.relative(repoRoot, operatorNotesPath),
+        feedback: text,
+        appliedAs: "Every first-screen control is classified as real-action, live-link, held-action, or founder-held; unavailable held buttons are disabled."
+      });
+    }
+    if (lower.includes("tony") || lower.includes("garage") || lower.includes("orion")) {
+      feedback.push({
+        id: "OPERATOR-ORION-GARAGE",
+        priority: note.priority || "P0",
+        source: path.relative(repoRoot, operatorNotesPath),
+        feedback: text,
+        appliedAs: "Dashboard keeps the limestone/grid Orion cockpit style, redirects retired Tony Garage, and shows one canonical local URL."
+      });
+    }
+  }
+  feedback.push({
+    id: "RESTART-EXTERNAL-MEMORY",
+    priority: "P1",
+    source: "data/context/RESTART-TEMPLATE-2026-05-29.md",
+    feedback: "Use external memory files and complete targeted dashboard integration before expanding.",
+    appliedAs: "Dashboard now exposes memory feedback and action capabilities as first-class API-backed panels."
+  });
+  return {
+    generatedAt: new Date().toISOString(),
+    feedback,
+    boundary: "Operator feedback memory is read from local notes and context receipts; private details are summarized, not exposed as secrets."
+  };
+}
+
+function getAccessModel() {
+  return {
+    generatedAt: new Date().toISOString(),
+    audienceTarget: "dozens_of_users",
+    activeUserSoftCap: 48,
+    authBoundary: "This is an access contract for the dashboard surface. Real identity, billing, and founder authorization must be wired before private or paid actions leave local mode.",
+    tiers: [
+      {
+        id: "public",
+        label: "Public",
+        priceUsdMonthly: null,
+        authRequired: false,
+        summary: "Always-on public proof, health checks, public reports, cloud mirrors, and safe documentation.",
+        features: ["/api/health", "/api/status", "public PDFs", "read-only readiness"]
+      },
+      {
+        id: "auth_0",
+        label: "$0 Auth",
+        priceUsdMonthly: 0,
+        authRequired: true,
+        summary: "Free signed-in workspace for saved notes, RAG intake, and user preference continuity.",
+        features: ["saved notes", "RAG intake", "workspace continuity"]
+      },
+      {
+        id: "auth_20",
+        label: "$20 Auth",
+        priceUsdMonthly: 20,
+        authRequired: true,
+        summary: "Supporter workspace for queue visibility, report packets, and a weekly operator digest.",
+        features: ["queue visibility", "report packets", "weekly digest"]
+      },
+      {
+        id: "auth_200",
+        label: "$200 Auth",
+        priceUsdMonthly: 200,
+        authRequired: true,
+        summary: "Pilot workspace for guided cleanup sessions, report review, and direct operator scheduling.",
+        features: ["pilot review", "cleanup session", "operator scheduling"]
+      },
+      {
+        id: "founder",
+        label: "Founder",
+        priceUsdMonthly: null,
+        authRequired: true,
+        founderOnly: true,
+        summary: "Founder-only controls for local dispatch, release promotion, secrets, billing setup, and boot-sensitive decisions.",
+        features: ["local controls", "agent dispatch", "release gates", "private receipts"]
+      }
+    ]
+  };
+}
+
+function getCloudMirrorStatus() {
+  const manifest = readJson(path.relative(repoRoot, cloudMirrorsPath), {});
+  const manifestMirrors = Array.isArray(manifest.cloudMirrors) ? manifest.cloudMirrors : [];
+  const envMirrors = parseMirrorEnv();
+  const seen = new Set();
+  const cloudMirrors = [...manifestMirrors, ...envMirrors]
+    .filter((mirror) => mirror && typeof mirror.url === "string" && mirror.url.startsWith("https://"))
+    .filter((mirror) => {
+      if (seen.has(mirror.url)) return false;
+      seen.add(mirror.url);
+      return true;
+    })
+    .map((mirror) => ({
+      name: String(mirror.name || "cloud mirror").slice(0, 80),
+      url: mirror.url,
+      role: String(mirror.role || "cloud mirror").slice(0, 160),
+      status: String(mirror.status || "configured").slice(0, 80),
+      healthPath: String(mirror.healthPath || "/api/health").slice(0, 120),
+      source: String(mirror.source || "manifests/cloud-mirrors.json").slice(0, 160),
+    }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    localPrimary: `http://127.0.0.1:${port}`,
+    activeHost: host,
+    activePort: port,
+    deployBranch: manifest.deployBranch || "master",
+    deployProvider: manifest.deployProvider || "Render",
+    mirrorPolicy: manifest.mirrorPolicy || "Local is primary; cloud URLs are mirrors and must not create separate dashboards.",
+    cloudMirrorCount: cloudMirrors.length,
+    cloudMirrors,
+  };
+}
+
 function sendJson(res, data, status = 200) {
   const body = JSON.stringify(data, null, 2);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(body);
 }
@@ -412,13 +843,34 @@ function sendFile(res, filePath) {
     res.writeHead(200, {
       "Content-Type": type,
       "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
     });
     res.end(data);
   });
 }
 
+function sendHtml(res, html, status = 200) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Access-Control-Allow-Origin": "*",
+  });
+  res.end(html);
+}
+
 async function route(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Cache-Control": "no-store",
+    });
+    res.end();
+    return;
+  }
 
   if (url.pathname === "/api/health") {
     sendJson(res, { ok: true, service: "lantern-garage", generatedAt: new Date().toISOString() });
@@ -445,6 +897,31 @@ async function route(req, res) {
 
   if (url.pathname === "/api/readiness") {
     sendJson(res, getReadiness());
+    return;
+  }
+
+  if (url.pathname === "/api/mining-lab") {
+    sendJson(res, getMiningLabStatus());
+    return;
+  }
+
+  if (url.pathname === "/api/action-capabilities") {
+    sendJson(res, getActionCapabilities());
+    return;
+  }
+
+  if (url.pathname === "/api/operator-feedback") {
+    sendJson(res, getOperatorFeedbackMemory());
+    return;
+  }
+
+  if (url.pathname === "/api/access-model") {
+    sendJson(res, getAccessModel());
+    return;
+  }
+
+  if (url.pathname === "/api/cloud-mirrors") {
+    sendJson(res, getCloudMirrorStatus());
     return;
   }
 
@@ -547,6 +1024,46 @@ async function route(req, res) {
     return;
   }
 
+  if (url.pathname === "/view") {
+    const relative = decodeURIComponent(url.searchParams.get("path") || "");
+    const target = path.resolve(repoRoot, relative);
+    if (!relative || !target.startsWith(repoRoot)) {
+      sendJson(res, { error: "forbidden" }, 403);
+      return;
+    }
+    if (!fs.existsSync(target)) {
+      sendJson(res, { error: "not_found" }, 404);
+      return;
+    }
+    if (path.extname(target).toLowerCase() === ".md") {
+      sendHtml(res, renderMarkdownDocument(fs.readFileSync(target, "utf8"), relative));
+      return;
+    }
+    sendFile(res, target);
+    return;
+  }
+
+
+  if (url.pathname === "/api/dreamer" && req.method === "GET") {
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    const entries = readDreamerNotebook(user);
+    sendJson(res, { user, entries, path: path.relative(repoRoot, dreamerNotebookPath(user)) });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const user = normalizeDreamerUser(body.user || "courtney");
+      const record = await appendDreamerEntry(user, body);
+      sendJson(res, { saved: true, record });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
   const staticPath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
   const target = path.resolve(publicRoot, staticPath);
   if (!target.startsWith(publicRoot)) {
@@ -569,6 +1086,6 @@ server.on("error", (error) => {
   throw error;
 });
 
-server.listen(port, "127.0.0.1", () => {
-  console.log(`Lantern Garage app listening on http://127.0.0.1:${port}`);
+server.listen(port, host, () => {
+  console.log(`Lantern Garage app listening on ${host}:${port}`);
 });

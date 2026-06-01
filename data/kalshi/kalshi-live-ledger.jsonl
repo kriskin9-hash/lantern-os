@@ -1,0 +1,1 @@
+{"count":1,"action":"buy","costUsd":0.35,"ticker":"TEST-TICKER","type":"limit","environment":"demo","side":"yes","limitCents":35,"wouldBlock":["kill_switch_active (file:${REPO_ROOT}\\data\\kalshi\\LIVE-KILL-SWITCH)"],"mode":"dry_run","clientOrderId":"0f30c5ae-4d53-46c1-b46c-e6f75ef48d68","ts":"2026-05-31T00:34:12.9157647Z","event":"dry_run_order_planned"}
