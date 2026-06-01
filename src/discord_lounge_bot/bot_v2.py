@@ -46,6 +46,16 @@ except ImportError as e:
     get_curator = None
     print(f"[INFO] Archive Curator not available: {e}")
 
+# Voice Curator — Frank Sinatra playback in lounge
+try:
+    from voice_curator import get_voice_player, get_sinatra
+    VOICE_AVAILABLE = True
+except ImportError as e:
+    VOICE_AVAILABLE = False
+    get_voice_player = None
+    get_sinatra = None
+    print(f"[INFO] Voice Curator not available: {e}")
+
 # Cognitive Dream Journal — fallacy detection + persistent characters
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills" / "dream_journal"))
 try:
@@ -582,11 +592,147 @@ async def cmd_movies(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
+# ── Voice & Music Commands (Frank Sinatra in Lounge) ──
+
+@tree.command(name="sing", description="🎵 Sing Frank Sinatra in your voice channel")
+@app_commands.describe(song="Song name (leave blank for current)")
+async def cmd_sing(interaction: discord.Interaction, song: Optional[str] = None):
+    """Play Frank Sinatra from Internet Archive in voice channel"""
+    if not VOICE_AVAILABLE or not get_voice_player or not get_sinatra:
+        await interaction.response.send_message(
+            "🎵 Voice playback unavailable. Check FFmpeg installation: `choco install ffmpeg`",
+            ephemeral=True
+        )
+        return
+
+    # Check if user is in a voice channel
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message(
+            "🎵 You must be in a voice channel to request a song.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer()
+
+    # Get Sinatra collection
+    sinatra = get_sinatra()
+
+    # Find song
+    if song:
+        song_key = song.lower().replace(" ", "_")
+        song_info = sinatra.get_song_info(song_key)
+        if not song_info:
+            await interaction.followup.send(
+                f"Song '{song}' not found. Use `/music` to see available songs.",
+                ephemeral=True
+            )
+            return
+        song_url = song_info["url"]
+        song_title = song_info["title"]
+    else:
+        current_key = sinatra.get_current_song()
+        song_info = sinatra.get_song_info(current_key)
+        if not song_info:
+            await interaction.followup.send("No songs available.", ephemeral=True)
+            return
+        song_url = song_info["url"]
+        song_title = song_info["title"]
+
+    # Join voice and play
+    voice_player = get_voice_player(client)
+    joined = await voice_player.join_voice_channel(interaction.user.voice.channel)
+
+    if not joined:
+        await interaction.followup.send("❌ Could not join voice channel.", ephemeral=True)
+        return
+
+    playing = await voice_player.play_song(song_url)
+
+    if playing:
+        embed = discord.Embed(
+            title="🎵 Now Playing",
+            description=f"**{song_title}** — Frank Sinatra",
+            color=discord.Color.gold()
+        )
+        embed.add_field(
+            name="Album",
+            value=song_info.get("album", "Unknown"),
+            inline=True
+        )
+        embed.add_field(
+            name="Year",
+            value=str(song_info.get("year", "?")),
+            inline=True
+        )
+        embed.set_footer(text="From Internet Archive • CC-licensed + Public Domain")
+        await interaction.followup.send(embed=embed)
+    else:
+        await interaction.followup.send(
+            "❌ Could not play audio. Ensure FFmpeg is installed and working.",
+            ephemeral=True
+        )
+
+
+@tree.command(name="nextsong", description="⏭️ Skip to next song in queue")
+async def cmd_next_song(interaction: discord.Interaction):
+    """Play next song in Sinatra collection"""
+    if not VOICE_AVAILABLE or not get_sinatra:
+        await interaction.response.send_message("Voice unavailable.", ephemeral=True)
+        return
+
+    sinatra = get_sinatra()
+    next_key = sinatra.next_song()
+    next_info = sinatra.get_song_info(next_key)
+
+    if next_info:
+        await interaction.response.send_message(
+            f"⏭️ Up next: **{next_info['title']}** ({next_info['year']})"
+        )
+    else:
+        await interaction.response.send_message("No songs in queue.", ephemeral=True)
+
+
+@tree.command(name="stop", description="⏹️ Stop playback and leave voice")
+async def cmd_stop(interaction: discord.Interaction):
+    """Stop audio and disconnect from voice"""
+    if not VOICE_AVAILABLE or not get_voice_player:
+        await interaction.response.send_message("Voice unavailable.", ephemeral=True)
+        return
+
+    voice_player = get_voice_player()
+    if voice_player:
+        await voice_player.stop_playback()
+        await voice_player.disconnect()
+        await interaction.response.send_message("⏹️ Stopped. Left voice channel.")
+    else:
+        await interaction.response.send_message("Not connected.", ephemeral=True)
+
+
+@tree.command(name="leave", description="👋 Leave voice channel")
+async def cmd_leave(interaction: discord.Interaction):
+    """Disconnect from voice channel"""
+    if not VOICE_AVAILABLE or not get_voice_player:
+        await interaction.response.send_message("Voice unavailable.", ephemeral=True)
+        return
+
+    voice_player = get_voice_player()
+    if voice_player:
+        await voice_player.disconnect()
+        await interaction.response.send_message("👋 Left the lounge.")
+    else:
+        await interaction.response.send_message("Not connected.", ephemeral=True)
+
+
 # ── Events ──
 
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user} at {now_utc()}")
+    # Initialize voice player
+    if VOICE_AVAILABLE:
+        voice_player = get_voice_player(client)
+        print(f"[INFO] Voice player initialized")
     # Sync globally (no guild-specific permissions required for testing)
     synced = await tree.sync()
     print(f"[SYNC] Synced {len(synced)} slash commands globally")
