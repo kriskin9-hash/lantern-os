@@ -1,0 +1,40 @@
+﻿{
+    "schema":  "lantern.purge_receipt.v1",
+    "generatedAt":  "2026-06-01T07:41:12.1659343-04:00",
+    "evidenceClass":  "post_ingestion_purge",
+    "stamp":  "20260601-074108",
+    "dryRun":  false,
+    "retentionDays":  7,
+    "maxReceiptsPerClass":  30,
+    "purgedPdfs":  [
+
+                   ],
+    "purgedReceipts":  [
+                           "orchestrator-20260601-023000.json",
+                           "orchestrator-20260601-022000.json",
+                           "orchestrator-20260601-021000.json",
+                           "orchestrator-20260601-020000.json",
+                           "orchestrator-20260601-015000.json",
+                           "orchestrator-20260601-014000.json",
+                           "orchestrator-20260601-013000.json",
+                           "orchestrator-20260601-012000.json",
+                           "orchestrator-20260601-011000.json",
+                           "orchestrator-20260601-005959.json",
+                           "orchestrator-20260601-004959.json",
+                           "orchestrator-20260601-003959.json",
+                           "orchestrator-20260601-002959.json",
+                           "orchestrator-20260601-001959.json",
+                           "orchestrator-20260601-000959.json",
+                           "orchestrator-20260531-235959.json",
+                           "orchestrator-20260531-234959.json",
+                           "orchestrator-20260531-233958.json",
+                           "orchestrator-20260531-232958.json"
+                       ],
+    "purgedKalshi":  [
+
+                     ],
+    "totalPurged":  19,
+    "errors":  [
+
+               ]
+}

@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🚀 Deploying Lantern OS to AWS ECS" -ForegroundColor Cyan
+Write-Host "Deploying Lantern OS to AWS ECS" -ForegroundColor Cyan
 
 # Step 1: Build Docker image
 Write-Host "`n[1/5] Building Docker image..." -ForegroundColor Yellow
@@ -45,7 +45,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "✅ Image pushed: $RepositoryUri`:$ImageTag"
+Write-Host "[OK] Image pushed: $RepositoryUri`:$ImageTag" -ForegroundColor Green
 
 # Step 5: Deploy CloudFormation stack
 Write-Host "`n[5/5] Deploying CloudFormation stack..." -ForegroundColor Yellow
@@ -65,7 +65,7 @@ aws cloudformation deploy `
     --no-fail-on-empty-changeset
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "`n✅ Stack deployment successful!" -ForegroundColor Green
+    Write-Host "`n[OK] Stack deployment successful!" -ForegroundColor Green
 
     # Get outputs
     $Outputs = aws cloudformation describe-stacks `
@@ -74,7 +74,7 @@ if ($LASTEXITCODE -eq 0) {
         --query 'Stacks[0].Outputs' `
         --output json | ConvertFrom-Json
 
-    Write-Host "`n📋 Deployment Outputs:" -ForegroundColor Cyan
+    Write-Host "`nDeployment Outputs:" -ForegroundColor Cyan
     foreach ($Output in $Outputs) {
         Write-Host "$($Output.OutputKey): $($Output.OutputValue)"
     }
@@ -83,4 +83,4 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-Write-Host "`n🎉 Deployment complete!" -ForegroundColor Green
+Write-Host "`n[OK] Deployment complete!" -ForegroundColor Green
