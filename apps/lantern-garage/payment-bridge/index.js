@@ -334,8 +334,8 @@ app.post('/api/payment/create-checkout-session', async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: ${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=success,
-      cancel_url: ${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=cancel,
+      success_url: `${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=success`,
+      cancel_url: `${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=cancel`,
       customer_email: email || undefined,
       metadata: { tierId, lantern_os: 'true' }
     });
