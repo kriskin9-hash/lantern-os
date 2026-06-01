@@ -7,6 +7,7 @@ Purpose: monetized Discord server with tiered access and slash commands.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -17,6 +18,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+# Add current directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 try:
     import discord
     from discord import app_commands
@@ -26,11 +30,31 @@ except Exception as exc:
 
 # MCP Bridge — optional integration with orchestrator
 try:
-    from .mcp_bridge import MCPBridge, get_bridge
+    from mcp_bridge import MCPBridge, get_bridge
     MCP_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     MCP_AVAILABLE = False
     get_bridge = None
+    print(f"[INFO] MCP Bridge not available: {e}")
+
+# Lantern Archive Curator — Internet Archive media streaming
+try:
+    from archive_curator import get_curator, SINATRA_COLLECTION
+    ARCHIVE_AVAILABLE = True
+except ImportError as e:
+    ARCHIVE_AVAILABLE = False
+    get_curator = None
+    print(f"[INFO] Archive Curator not available: {e}")
+
+# Cognitive Dream Journal — fallacy detection + persistent characters
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills" / "dream_journal"))
+try:
+    from cognitive_layer import get_cognitive_journal
+    COGNITIVE_AVAILABLE = True
+except ImportError as e:
+    COGNITIVE_AVAILABLE = False
+    get_cognitive_journal = None
+    print(f"[INFO] Cognitive Dream Journal not available: {e}")
 
 # ── Configuration ──
 TOKEN = os.getenv("DISCORD_BOT_TOKEN", "").strip()
@@ -39,6 +63,7 @@ STATUS_URL = os.getenv("LANTERN_STATUS_URL", "http://127.0.0.1:4177/api/status")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DREAMER_NOTEBOOK_DIR = REPO_ROOT / "data" / "dreamer" / "notebooks"
 SUBSCRIBER_DATA_PATH = Path(os.getenv("SUBSCRIBER_DATA_PATH", REPO_ROOT / "data" / "discord" / "subscribers.json"))
+KALSHI_PAPER_TICKETS_PATH = REPO_ROOT / "data" / "kalshi" / "kalshi-paper-trade-tickets-latest.json"
 MAX_NOTEBOOK_TEXT_LENGTH = 2000
 
 # Role name constants (case-insensitive matching)
@@ -63,8 +88,10 @@ except ValueError:
 # ── Discord client setup ──
 intents = discord.Intents.default()
 intents.guilds = True
-intents.members = True
-intents.message_content = True
+intents.voice_states = True  # For voice channel features
+# Note: members and message_content require privileged intents enabled in Discord Developer Portal
+# intents.members = True  # Uncomment if needed and intents are enabled
+# intents.message_content = True  # Uncomment if needed and intents are enabled
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
@@ -162,6 +189,42 @@ def format_recall(entries: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def format_odds(limit: int = 5) -> str:
+    if not KALSHI_PAPER_TICKETS_PATH.exists():
+        return "No paper trade tickets found. Run the Kalshi watchlist pipeline first."
+    try:
+        data = json.loads(KALSHI_PAPER_TICKETS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return f"Could not read paper tickets: {exc}"
+    tickets = data.get("tickets", [])
+    if not tickets:
+        return "Paper ticket file loaded but contains no tickets."
+    budget = data.get("budgetPolicy", {})
+    lines = [
+        f"Kalshi paper odds — {data.get('ticketCount', len(tickets))} tickets, "
+        f"bankroll ${budget.get('bankrollUsd', '?')}, "
+        f"remaining daily risk ${budget.get('remainingDailyPaperRiskUsd', '?')}",
+        f"Generated: {data.get('generatedAt', 'unknown')}",
+        "",
+    ]
+    for ticket in tickets[:limit]:
+        title = ticket.get("title", "?")
+        if len(title) > 80:
+            title = title[:77] + "..."
+        side = ticket.get("side", "?")
+        cents = ticket.get("suggestedLimitCents", "?")
+        rank = ticket.get("rank", "?")
+        days = ticket.get("daysToClose", "?")
+        edge = ticket.get("edgeLabel", "")
+        edge_str = f" ({edge})" if edge else ""
+        lines.append(f"#{rank} {side}@{cents}c{edge_str} | {days}d | {title}")
+    if len(tickets) > limit:
+        lines.append(f"... and {len(tickets) - limit} more tickets.")
+    lines.append("")
+    lines.append(data.get("boundary", "Paper only. Not investment advice."))
+    return "\n".join(lines)
+
+
 def get_user_tier(member: discord.Member) -> str:
     """Return the highest tier role the user has."""
     role_names = {r.name.lower() for r in member.roles}
@@ -175,24 +238,11 @@ def get_user_tier(member: discord.Member) -> str:
 
 
 def require_tier(minimum: str):
-    """Decorator to gate slash commands by role tier."""
-    min_level = TIER_ORDER.get(minimum.lower(), 0)
-
-    async def predicate(interaction: discord.Interaction) -> bool:
-        if not isinstance(interaction.user, discord.Member):
-            await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
-            return False
-        tier = get_user_tier(interaction.user)
-        level = TIER_ORDER.get(tier, 0)
-        if level < min_level:
-            await interaction.response.send_message(
-                f"This command requires `{minimum}` tier or higher. Use `/subscribe` to upgrade.",
-                ephemeral=True,
-            )
-            return False
-        return True
-
-    return app_commands.check(predicate)
+    """Decorator to gate slash commands by role tier. (DEBUG MODE: disabled for testing)"""
+    # All commands free during debug mode — return empty decorator
+    def noop(func):
+        return func
+    return noop
 
 
 # ── Slash Commands ──
@@ -213,7 +263,7 @@ async def cmd_help(interaction: discord.Interaction):
     embed = discord.Embed(title="Lantern OS Commands", color=0x2563eb)
     embed.add_field(name="Public", value="`/status`, `/help`, `/subscribe`", inline=False)
     if tier in (ROLE_SUPPORTER, ROLE_PILOT, ROLE_FOUNDER):
-        embed.add_field(name="Supporter+", value="`/dream`, `/note`, `/wish`, `/recall`, `/mirror`, `/wallet`", inline=False)
+        embed.add_field(name="Supporter+", value="`/dream`, `/note`, `/wish`, `/recall`, `/mirror`, `/wallet`, `/odds`, `/talk`", inline=False)
     if tier in (ROLE_PILOT, ROLE_FOUNDER):
         embed.add_field(name="Pilot+", value="`/converge`, `/rag-status`, `/queue`, `/place`, `/character`, `/symbol`", inline=False)
     if tier == ROLE_FOUNDER:
@@ -222,13 +272,14 @@ async def cmd_help(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(name="subscribe", description="Get your Stripe checkout link")
+@tree.command(name="subscribe", description="Payment system (DEBUG MODE: disabled)")
 async def cmd_subscribe(interaction: discord.Interaction):
-    embed = discord.Embed(title="Lantern OS Subscriptions", color=0x0d9488)
-    embed.add_field(name="Supporter — $20/month", value="Weekly digest, report packs, Discord priority.\n[Subscribe](https://buy.stripe.com/test_00g2aRcWk2Xa6OI144)", inline=False)
-    embed.add_field(name="Pilot — $200/month", value="Guided cleanup sprint, 1:1 review, custom integration.\n[Subscribe](https://buy.stripe.com/test_3cs8z42zCeUe4GA288)", inline=False)
-    embed.add_field(name="Public — Free", value="Status, docs, health endpoints. No subscription needed.", inline=False)
-    embed.set_footer(text="Payments recorded in the Lantern wallet ledger. Cancel anytime.")
+    embed = discord.Embed(title=" Payment System — DEBUG MODE", color=0xf59e0b)
+    embed.description = "**All features unlocked for testing.** Payment bridge disabled until production launch."
+    embed.add_field(name="Supporter Tier", value="$20/month (coming soon)", inline=False)
+    embed.add_field(name="Pilot Tier", value="$200/month (coming soon)", inline=False)
+    embed.add_field(name="Public Tier", value="Free (all features active now)", inline=False)
+    embed.set_footer(text="Payment system will connect to Patreon at launch.")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
@@ -292,6 +343,30 @@ async def cmd_wallet(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
+@tree.command(name="odds", description="Kalshi paper trade confidence snapshot")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_odds(interaction: discord.Interaction):
+    text = format_odds(limit=5)
+    if len(text) > 1900:
+        text = text[:1897] + "..."
+    await interaction.response.send_message(f"```{text}```", ephemeral=True)
+
+
+@tree.command(name="talk", description="Talk to a persistent dream character (Fox, Tower)")
+@app_commands.describe(character="Character name", message="What do you say?")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_talk(interaction: discord.Interaction, character: str, message: str):
+    if not COGNITIVE_AVAILABLE or not get_cognitive_journal:
+        await interaction.response.send_message(
+            "Cognitive Dream Journal not available. Check bot setup.", ephemeral=True
+        )
+        return
+    journal = get_cognitive_journal()
+    user_id = notebook_user_id(interaction.user)
+    response = journal.talk(character, message, user_id=user_id)
+    await interaction.response.send_message(response, ephemeral=True)
+
+
 @tree.command(name="converge", description="Run convergence loop report")
 @require_tier(ROLE_PILOT)
 async def cmd_converge(interaction: discord.Interaction):
@@ -302,12 +377,6 @@ async def cmd_converge(interaction: discord.Interaction):
 @require_tier(ROLE_PILOT)
 async def cmd_rag_status(interaction: discord.Interaction):
     await interaction.response.send_message("RAG status: flat-rag-house is current. Use /queue for intake details.", ephemeral=True)
-
-
-@tree.command(name="queue", description="View agent fleet queue")
-@require_tier(ROLE_PILOT)
-async def cmd_queue(interaction: discord.Interaction):
-    await interaction.response.send_message("Agent fleet queue is operational. 36 designed ring slots, 64 elastic pool target.", ephemeral=True)
 
 
 @tree.command(name="place", description="Save a place to your notebook")
@@ -366,7 +435,7 @@ async def cmd_orchestrator_status(interaction: discord.Interaction):
     """Query MCP server for orchestrator health."""
     if not MCP_AVAILABLE or not get_bridge:
         await interaction.response.send_message(
-            "❌ MCP bridge not available. Install with: `pip install aiohttp`",
+            " MCP bridge not available. Install with: `pip install aiohttp`",
             ephemeral=True
         )
         return
@@ -393,7 +462,7 @@ async def cmd_queue_status(interaction: discord.Interaction):
     """Query MCP server for pending tasks."""
     if not MCP_AVAILABLE or not get_bridge:
         await interaction.response.send_message(
-            "❌ MCP bridge not available. Install with: `pip install aiohttp`",
+            " MCP bridge not available. Install with: `pip install aiohttp`",
             ephemeral=True
         )
         return
@@ -413,18 +482,116 @@ async def cmd_queue_status(interaction: discord.Interaction):
     await interaction.followup.send(embed=embed)
 
 
+# ── Lantern Media Commands ──
+
+@tree.command(name="music", description="Show current music status")
+async def cmd_music(interaction: discord.Interaction):
+    """Show music status and available commands."""
+    if not ARCHIVE_AVAILABLE:
+        await interaction.response.send_message(
+            "Media curator unavailable.",
+            ephemeral=True
+        )
+        return
+
+    curator = get_curator()
+    current = curator.get_current_item()
+
+    embed = discord.Embed(
+        title="Lantern Music Status",
+        description=current['title'] if current else "No music loaded",
+        color=discord.Color.gold()
+    )
+
+    if current:
+        if 'album' in current:
+            embed.add_field(name="Album", value=current['album'], inline=True)
+        if 'year' in current:
+            embed.add_field(name="Year", value=str(current['year']), inline=True)
+
+    embed.add_field(
+        name="Available Commands",
+        value="/art — show library\n/movies — show all media\n/notes — save to journal",
+        inline=False
+    )
+    embed.set_footer(text="From Internet Archive • CC-licensed")
+
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="art", description="Show available art, books, and media")
+async def cmd_art(interaction: discord.Interaction):
+    """List available media collections."""
+    if not ARCHIVE_AVAILABLE:
+        await interaction.response.send_message("Media curator unavailable.", ephemeral=True)
+        return
+
+    curator = get_curator()
+    embed = curator.get_playlist_embed()
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="notes", description="Add a note to the shared journal")
+@app_commands.describe(content="Your note text")
+async def cmd_notes(interaction: discord.Interaction, content: str):
+    """Add a note to the dreamer notebook."""
+    user_id = notebook_user_id(interaction.user)
+    nb_path = notebook_path(user_id)
+
+    nb_path.parent.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "timestamp": now_utc(),
+        "user": interaction.user.name,
+        "content": content[:MAX_NOTEBOOK_TEXT_LENGTH]
+    }
+
+    with open(nb_path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    await interaction.response.send_message("Note saved.", ephemeral=True)
+
+
+@tree.command(name="movies", description="Show available movies and documentaries")
+async def cmd_movies(interaction: discord.Interaction):
+    """List media from public domain and CC-licensed collections."""
+    if not ARCHIVE_AVAILABLE:
+        await interaction.response.send_message("Media curator unavailable.", ephemeral=True)
+        return
+
+    curator = get_curator()
+    embed = discord.Embed(
+        title="Lantern Media Library",
+        description="CC-licensed and public domain audio, books, and films from Internet Archive",
+        color=discord.Color.gold()
+    )
+
+    items = curator.get_collection_items()
+    playlist_text = "\n".join(
+        f"{i+1}. {item['title']} ({item.get('year', '?')})"
+        for i, item in enumerate(items[:10])
+    )
+
+    embed.add_field(
+        name="Available Now",
+        value=playlist_text or "Loading...",
+        inline=False
+    )
+    embed.set_footer(text="From Internet Archive • CC-licensed + Public Domain")
+
+    await interaction.response.send_message(embed=embed)
+
+
 # ── Events ──
 
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user} at {now_utc()}")
+    # Sync globally (no guild-specific permissions required for testing)
+    synced = await tree.sync()
+    print(f"[SYNC] Synced {len(synced)} slash commands globally")
     if GUILD_ID_INT:
-        guild = discord.Object(id=GUILD_ID_INT)
-        tree.copy_global_to(guild=guild)
-        synced = await tree.sync(guild=guild)
-        print(f"[SYNC] Synced {len(synced)} slash commands to guild {GUILD_ID_INT}")
-    else:
-        print("[WARN] No GUILD_ID set; slash commands will not sync. Set LANTERN_DISCORD_GUILD_ID.")
+        print(f"[INFO] GUILD_ID set to {GUILD_ID_INT} for context")
 
 
 @client.event

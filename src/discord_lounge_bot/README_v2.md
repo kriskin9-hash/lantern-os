@@ -45,6 +45,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-DiscordBotV2
 - `/recall [query]` — Search notebook
 - `/mirror` — Mirror all facets
 - `/wallet` — Check subscription status
+- `/odds` — Kalshi paper trade confidence snapshot
+- `/talk <character> <message>` — Talk to a persistent dream character (Fox, Tower)
 
 ### Pilot ($200/month)
 - `/converge` — Convergence loop report

@@ -24,13 +24,13 @@ class MCPBridge:
 
     def __init__(self, mcp_url: str = None, timeout_sec: float = 5.0):
         """Initialize MCP bridge with orchestrator endpoint."""
-        self.mcp_url = mcp_url or os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8787")
+        self.mcp_url = mcp_url or os.getenv("MCP_SERVER_URL", "http://127.0.0.1:8770")
         self.timeout = timeout_sec
         self.last_error = None
 
     async def get_orchestrator_status(self) -> Dict[str, Any]:
-        """Query /api/account/summary or equivalent from MCP server."""
-        endpoint = f"{self.mcp_url}/api/account/summary"
+        """Query /health endpoint from MCP server for status."""
+        endpoint = f"{self.mcp_url}/health"
         try:
             if aiohttp is None:
                 return {
@@ -71,8 +71,8 @@ class MCPBridge:
             }
 
     async def get_queue_tasks(self, limit: int = 10) -> Dict[str, Any]:
-        """Query task queue from MCP server."""
-        endpoint = f"{self.mcp_url}/api/tasks/queue"
+        """Query task queue from MCP server (uses health endpoint as placeholder)."""
+        endpoint = f"{self.mcp_url}/health"
         try:
             if aiohttp is None:
                 return {
@@ -142,7 +142,7 @@ class MCPBridge:
         if status_data.get("status") == "online":
             data = status_data.get("data", {})
             return (
-                f"🟢 **Orchestrator Online**\n"
+                f" **Orchestrator Online**\n"
                 f"Active Slots: {data.get('active_slots', 'N/A')}\n"
                 f"Queue Pending: {data.get('pending_tasks', 'N/A')}\n"
                 f"Uptime: {data.get('uptime_hours', 'N/A')}h"
@@ -150,15 +150,15 @@ class MCPBridge:
         elif status_data.get("status") == "timeout":
             return "⏱️ **Orchestrator Timeout** — slow response, check manually"
         else:
-            return f"🔴 **Orchestrator Offline** — {status_data.get('reason', 'unknown error')}"
+            return f" **Orchestrator Offline** — {status_data.get('reason', 'unknown error')}"
 
     def format_queue_embed(self, queue_data: Dict[str, Any]) -> str:
         """Format task queue for Discord embed."""
         if queue_data.get("status") == "online":
             tasks = queue_data.get("tasks", [])
             if not tasks:
-                return "📋 **Queue Empty** — no pending tasks"
-            lines = [f"📋 **Queue ({queue_data.get('count', 0)} tasks)**"]
+                return " **Queue Empty** — no pending tasks"
+            lines = [f" **Queue ({queue_data.get('count', 0)} tasks)**"]
             for task in tasks[:5]:  # Show first 5
                 task_id = task.get("id", "unknown")[:8]
                 task_title = task.get("title", "untitled")[:40]
@@ -167,7 +167,7 @@ class MCPBridge:
                 lines.append(f"  ... and {len(tasks) - 5} more")
             return "\n".join(lines)
         else:
-            return f"❌ **Queue Error** — {queue_data.get('reason', 'unknown')}"
+            return f" **Queue Error** — {queue_data.get('reason', 'unknown')}"
 
     @staticmethod
     def now_utc() -> str:
