@@ -323,7 +323,7 @@ app.post('/api/payment/create-checkout-session', async (req, res) => {
   }
   try {
     const { tierId, email } = req.body;
-    const priceMap = {
+    const priceMap = config.paymentProviders?.stripe?.priceIds || {
       supporter: 'price_1QQQQQQQQQQQQQ',
       pilot: 'price_2QQQQQQQQQQQQQ'
     };

@@ -947,6 +947,27 @@ main:focus-visible {
   color: #92400e;
 }
 
+/* Proof page styles */
+#healthStatus.ok { color: var(--arc); font-weight: 800; }
+#healthStatus.down, #healthStatus.unreachable { color: var(--rose); font-weight: 800; }
+
+.proof-boundary {
+  border-color: var(--arc);
+  background: rgba(8, 117, 111, 0.04);
+}
+
+.proof-boundary ul {
+  margin: 0;
+  padding: 0 0 0 18px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.proof-boundary li {
+  margin: 0 0 8px;
+}
+
+
 
 .access-panel {
   box-shadow: inset 0 4px 0 var(--arc);
