@@ -27,3 +27,6 @@ artifacts/*
 # Node modules
 node_modules/
 **/node_modules/
+
+# Discord subscriber data (local only, not in Git)
+data/discord/subscribers.json

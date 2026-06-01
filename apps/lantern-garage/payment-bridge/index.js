@@ -299,6 +299,34 @@ async function handlePaymentSuccess(invoice) {
   console.log(`Payment succeeded for invoice ${lanternInvoiceId}: $${invoice.amount_paid / 100}`);
 }
 
+function updateDiscordSubscriber(invoice) {
+  try {
+    const tierId = invoice.metadata?.tierId;
+    const customerEmail = invoice.customer_email;
+    if (!tierId) return;
+    const subPath = path.join(repoRoot, 'data', 'discord', 'subscribers.json');
+    let subs = { subscribers: [] };
+    if (fs.existsSync(subPath)) {
+      try { subs = JSON.parse(fs.readFileSync(subPath, 'utf8')); } catch (e) { subs = { subscribers: [] }; }
+    }
+    subs.subscribers = subs.subscribers || [];
+    subs.subscribers.push({
+      stripeCustomerId: invoice.customer,
+      stripeInvoiceId: invoice.id,
+      tierId,
+      email: customerEmail,
+      amount: invoice.amount_paid / 100,
+      currency: invoice.currency,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    });
+    fs.writeFileSync(subPath, JSON.stringify(subs, null, 2));
+    console.log([DISCORD] Subscriber record updated: );
+  } catch (e) {
+    console.error([DISCORD] Failed to update subscriber: );
+  }
+}
+
 async function handlePaymentFailure(invoice) {
   const lanternInvoiceId = invoice.metadata?.lantern_invoice_id;
   if (!lanternInvoiceId) {
