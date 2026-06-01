@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>Courtney's Well — Lantern Dreamer</title>
+  <link rel="stylesheet" href="styles.css?v=20260531-dreamer-v1">
+  <script defer src="courtney.js?v=20260531-dreamer-v1"></script>
+</head>
+<body data-style="dreamer-notebook">
+  <a class="skip-link" href="#main">Skip to the well</a>
+  <main id="main" class="shell dreamer-shell" tabindex="-1">
+    <header class="hero os-hero compact-hero">
+      <p class="eyebrow">Lantern Dreamer v1</p>
+      <h1>Courtney's Well</h1>
+      <p class="subtitle">A private place for pretty words, half-remembered dreams, passing thoughts, and sparks that matter. What you write here stays on this machine.</p>
+      <nav class="dreamer-nav" aria-label="Dreamer sections">
+        <a href="/courtney.html" aria-current="page">The Well</a>
+        <a href="/">Back to the Garage</a>
+      </nav>
+    </header>
+
+    <section class="dreamer-grid" aria-label="Dreamer well">
+      <article class="panel dreamer-compose">
+        <h2>What came to you?</h2>
+        <form id="dreamerForm" class="dreamer-form">
+          <label for="dreamerKind">Kind of spark</label>
+          <select id="dreamerKind" name="kind">
+            <option value="dream">A dream</option>
+            <option value="note">A note</option>
+            <option value="place">A place</option>
+            <option value="character">A being</option>
+            <option value="event">An event</option>
+            <option value="lore">A story-thread</option>
+            <option value="symbol">A symbol</option>
+          </select>
+          <label for="dreamerName">Name — if this has one</label>
+          <input id="dreamerName" name="name" maxlength="120" placeholder="The Blue Door, Old Willow, The Keeper...">
+          <label for="dreamerMood">Mood — the feeling around it</label>
+          <input id="dreamerMood" name="mood" maxlength="40" placeholder="warm, uncertain, vast, fragile...">
+          <label for="dreamerText">The thread</label>
+          <textarea id="dreamerText" name="text" rows="8" maxlength="2000" placeholder="What did you see? What felt true? No proof needed here..."></textarea>
+          <label for="dreamerTags">Tags — small names for the feeling</label>
+          <input id="dreamerTags" name="tags" maxlength="160" placeholder="morning, worry, idea, warmth">
+          <button type="submit">Drop it in the well</button>
+        </form>
+        <p class="dreamer-status" id="dreamerStatus" aria-live="polite"></p>
+      </article>
+
+      <article class="panel dreamer-recall">
+        <h2>The well <span class="muted" id="dreamerCount">0 threads</span></h2>
+        <p class="muted" id="dreamerPath">the well</p>
+        <ul class="dreamer-entries" id="dreamerEntries" aria-label="Notebook entries"></ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

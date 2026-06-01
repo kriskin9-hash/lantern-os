@@ -14,7 +14,69 @@ const orchestratorQueueDir = process.env.ORCHESTRATOR_QUEUE_DIR || path.join(rep
 const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.jsonl");
 const cloudMirrorsPath = path.join(repoRoot, "manifests", "cloud-mirrors.json");
 const maxConversationTextLength = 4000;
+const maxDreamerTextLength = 2000;
+const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
 const writeQueues = new Map();
+
+
+function normalizeDreamerUser(value) {
+  const user = String(value || "courtney")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return user || "courtney";
+}
+
+function dreamerNotebookPath(user) {
+  return path.join(dreamerNotebookDir, `${normalizeDreamerUser(user)}.jsonl`);
+}
+
+function generateEntryId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+function generateTernaryId(seed) {
+  const map = { "0": "o", "1": "i", "2": "z" };
+  const base3 = Math.abs(seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0))
+    .toString(3).padStart(12, "0");
+  return base3.replace(/[012]/g, (d) => map[d]);
+}
+
+async function appendDreamerEntry(user, entry) {
+  const record = {
+    id: generateEntryId(),
+    kind: String(entry.kind || "note").slice(0, 40),
+    name: String(entry.name || "").slice(0, 120),
+    mood: String(entry.mood || "").slice(0, 40),
+    text: String(entry.text || "").slice(0, maxDreamerTextLength),
+    tags: Array.isArray(entry.tags) ? entry.tags.map((t) => String(t).slice(0, 40)).slice(0, 10) : [],
+    links: Array.isArray(entry.links) ? entry.links.map((t) => String(t).slice(0, 40)).slice(0, 20) : [],
+    recordedAt: new Date().toISOString(),
+    ternaryId: generateTernaryId(generateEntryId() + String(entry.text || "")),
+    private: true,
+  };
+  const filePath = dreamerNotebookPath(user);
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.promises.appendFile(filePath, JSON.stringify(record) + "\n", "utf8");
+  return record;
+}
+
+function readDreamerNotebook(user) {
+  const filePath = dreamerNotebookPath(user);
+  if (!fs.existsSync(filePath)) return [];
+  const lines_text = fs.readFileSync(filePath, "utf8").trim().split("\n").filter(Boolean);
+  return lines_text.map((line) => {
+    try { return JSON.parse(line); } catch { return null; }
+  }).filter(Boolean);
+}
 
 function enqueueFileWrite(filePath, operation) {
   const previous = writeQueues.get(filePath) || Promise.resolve();
@@ -978,6 +1040,27 @@ async function route(req, res) {
       return;
     }
     sendFile(res, target);
+    return;
+  }
+
+
+  if (url.pathname === "/api/dreamer" && req.method === "GET") {
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    const entries = readDreamerNotebook(user);
+    sendJson(res, { user, entries, path: path.relative(repoRoot, dreamerNotebookPath(user)) });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const user = normalizeDreamerUser(body.user || "courtney");
+      const record = await appendDreamerEntry(user, body);
+      sendJson(res, { saved: true, record });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
     return;
   }
 
