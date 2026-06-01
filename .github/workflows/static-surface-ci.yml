@@ -112,8 +112,9 @@ jobs:
           ]
           missing = [job for job in required_jobs if job not in text]
           if missing:
-            raise SystemExit(f"Missing jobs: {missing}")
-          if "needs: [repo-surface, manifests, html-links, python-tests, workflow-shape]" not in text:
+              raise SystemExit(f"Missing jobs: {missing}")
+          expected_needs = "needs: [repo-surface, manifests, html-links, python-tests, convergence-cloud, workflow-shape]"
+          if expected_needs not in text:
               raise SystemExit("summary job must depend on every parallel lane")
 
   summary:
@@ -129,4 +130,5 @@ jobs:
           echo "manifests=${{ needs.manifests.result }}"
           echo "html-links=${{ needs.html-links.result }}"
           echo "python-tests=${{ needs.python-tests.result }}"
+          echo "convergence-cloud=${{ needs.convergence-cloud.result }}"
           echo "workflow-shape=${{ needs.workflow-shape.result }}"

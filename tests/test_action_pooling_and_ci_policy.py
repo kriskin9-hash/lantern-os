@@ -33,4 +33,21 @@ def test_ci_workflow_parallel_lanes_and_summary_gate_are_present():
 
     assert 'needs: [repo-surface, manifests, html-links, python-tests, workflow-shape]' in text
     assert 'workflow_dispatch:' in text
+    assert 'group: static-surface-ci-${{ github.ref }}' in text
     assert 'cancel-in-progress: true' in text
+    assert '-CloudVirtualization' in text
+    assert 'convergence-cloud=${{ needs.convergence-cloud.result }}' in text
+
+
+def test_convergence_loop_has_cloud_virtualization_boundary():
+    text = Path('scripts/Invoke-LanternConvergenceLoop.ps1').read_text(encoding='utf-8')
+
+    required = [
+        '[switch]$CloudVirtualization',
+        'cloud_metadata_only',
+        'Local source tree is not visible from GitHub Actions; inspect locally before mutation.',
+        'Cloud repo invariants passed. Run local controls on the operator machine before MCP/local runtime mutation.',
+    ]
+    missing = [phrase for phrase in required if phrase not in text]
+    assert missing == []
+
