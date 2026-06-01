@@ -71,12 +71,39 @@ services:
       timeout: 5s
       retries: 5
 
+  # Audit Verification API (NEW)
+  audit-verification-api:
+    build:
+      context: .
+      dockerfile: services/audit-verification-api/Dockerfile
+    container_name: lantern-audit-api
+    ports:
+      - "8766:8766"
+    environment:
+      PYTHONUNBUFFERED: 1
+      AUDIT_MODE: production
+    volumes:
+      - lantern-audit-chain:/app/audit-chain
+      - lantern-logs:/app/logs
+    networks:
+      - lantern-network
+    depends_on:
+      lantern-db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8766/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   lantern-data:
   lantern-logs:
   lantern-state:
   lantern-db-data:
   lantern-cache-data:
+  lantern-audit-chain:
 
 networks:
   lantern-network:

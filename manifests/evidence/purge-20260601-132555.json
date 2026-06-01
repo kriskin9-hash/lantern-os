@@ -1,0 +1,23 @@
+﻿{
+    "schema":  "lantern.purge_receipt.v1",
+    "generatedAt":  "2026-06-01T13:25:57.4549201-04:00",
+    "evidenceClass":  "post_ingestion_purge",
+    "stamp":  "20260601-132555",
+    "dryRun":  false,
+    "retentionDays":  7,
+    "maxReceiptsPerClass":  30,
+    "purgedPdfs":  [
+
+                   ],
+    "purgedReceipts":  [
+                           "orchestrator-20260601-074116.json",
+                           "orchestrator-20260601-073002.json"
+                       ],
+    "purgedKalshi":  [
+
+                     ],
+    "totalPurged":  2,
+    "errors":  [
+
+               ]
+}
