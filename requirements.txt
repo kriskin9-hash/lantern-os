@@ -1,0 +1,45 @@
+# Core Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+gunicorn==21.2.0
+
+# HTTP & Networking
+requests==2.31.0
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Security
+cryptography==41.0.7
+PyJWT==2.8.1
+python-dotenv==1.0.0
+
+# Data & Database
+SQLAlchemy==2.0.23
+psycopg2-binary==2.9.9
+redis==5.0.1
+pydantic==2.5.1
+
+# AI/ML
+anthropic==0.7.13
+openai==1.6.1
+langchain==0.1.1
+sentence-transformers==2.2.2
+
+# Speech & Audio
+vosk==0.3.45
+pydub==0.25.1
+librosa==0.10.0
+
+# Discord
+discord.py==2.3.2
+
+# Utilities
+PyGithub==2.1.1
+click==8.1.7
+rich==13.7.0
+pandas==2.1.3
+numpy==1.26.2
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1

@@ -21,6 +21,7 @@ from pathlib import Path
 
 try:
     import discord
+    from discord import app_commands
 except Exception as exc:
     print(f"[FATAL] Missing dependency 'discord.py': {exc}")
     print("Install with: pip install discord.py")
@@ -39,6 +40,7 @@ ENABLE_VOICE = os.getenv("LANTERN_DISCORD_ENABLE_VOICE", "").strip().lower() in 
 ENABLE_RADIO = os.getenv("LANTERN_DISCORD_ENABLE_RADIO", "").strip().lower() in {"1", "true", "yes", "on"}
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DREAMER_NOTEBOOK_DIR = REPO_ROOT / "data" / "dreamer" / "notebooks"
+KALSHI_PAPER_TICKETS_PATH = REPO_ROOT / "data" / "kalshi" / "kalshi-paper-trade-tickets-latest.json"
 MAX_NOTEBOOK_TEXT_LENGTH = 2000
 
 # Lantern image pack skill
@@ -72,6 +74,7 @@ intents.message_content = True
 intents.voice_states = True
 
 client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
 
 def now_utc() -> str:
@@ -85,7 +88,8 @@ def status_text() -> str:
         f"- guild: {GUILD_ID_INT}\n"
         f"- channel: {CHANNEL_ID_INT}\n"
         f"- local status endpoint: {STATUS_URL}\n"
-        "- commands: !lantern-status, !lantern-voice-check, !dream, !note, !place, !character, !event, !lore, !symbol, !mirror, !recall, !one"
+        "- commands: !lantern-status, !lantern-voice-check, !dream, !note, !place, !character, !event, !lore, !symbol, !mirror, !recall, !odds, !one\n"
+        "- slash commands: /dream"
     )
 
 
@@ -222,6 +226,55 @@ async def connect_to_lounge(message: discord.Message):
     return voice_client
 
 
+def format_odds(limit: int = 5) -> str:
+    if not KALSHI_PAPER_TICKETS_PATH.exists():
+        return "No paper trade tickets found. Run the Kalshi watchlist pipeline first."
+    try:
+        data = json.loads(KALSHI_PAPER_TICKETS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return f"Could not read paper tickets: {exc}"
+    tickets = data.get("tickets", [])
+    if not tickets:
+        return "Paper ticket file loaded but contains no tickets."
+    budget = data.get("budgetPolicy", {})
+    lines = [
+        f"Kalshi paper odds — {data.get('ticketCount', len(tickets))} tickets, "
+        f"bankroll ${budget.get('bankrollUsd', '?')}, "
+        f"remaining daily risk ${budget.get('remainingDailyPaperRiskUsd', '?')}",
+        f"Generated: {data.get('generatedAt', 'unknown')}",
+        "",
+    ]
+    for ticket in tickets[:limit]:
+        title = ticket.get("title", "?")
+        if len(title) > 80:
+            title = title[:77] + "..."
+        side = ticket.get("side", "?")
+        cents = ticket.get("suggestedLimitCents", "?")
+        rank = ticket.get("rank", "?")
+        days = ticket.get("daysToClose", "?")
+        edge = ticket.get("edgeLabel", "")
+        edge_str = f" ({edge})" if edge else ""
+        lines.append(f"#{rank} {side}@{cents}c{edge_str} | {days}d | {title}")
+    if len(tickets) > limit:
+        lines.append(f"... and {len(tickets) - limit} more tickets.")
+    lines.append("")
+    lines.append(data.get("boundary", "Paper only. Not investment advice."))
+    return "\n".join(lines)
+
+
+@tree.command(name="dream", description="Save a dream to your private Lantern notebook")
+@app_commands.describe(text="Describe your dream")
+async def slash_dream(interaction: discord.Interaction, text: str):
+    if interaction.channel_id != CHANNEL_ID_INT:
+        await interaction.response.send_message("This command only works in the Lantern channel.", ephemeral=True)
+        return
+    try:
+        append_notebook_entry(interaction.user, "dream", text)
+        await interaction.response.send_message("Dream saved to your private local Lantern notebook.", ephemeral=True)
+    except ValueError:
+        await interaction.response.send_message("Write something after `/dream`.", ephemeral=True)
+
+
 @client.event
 async def on_ready():
     print(f"[READY] Logged in as {client.user} at {now_utc()}")
@@ -229,6 +282,13 @@ async def on_ready():
     if channel is None:
         print("[WARN] Configured channel was not found in cache. Check bot permissions and IDs.")
         return
+    try:
+        guild = discord.Object(id=GUILD_ID_INT)
+        tree.copy_global_to(guild=guild)
+        await tree.sync(guild=guild)
+        print(f"[READY] Slash commands synced to guild {GUILD_ID_INT}")
+    except Exception as exc:
+        print(f"[WARN] Failed to sync slash commands: {exc}")
     try:
         await channel.send(status_text())
     except Exception as exc:
@@ -305,6 +365,12 @@ async def on_message(message: discord.Message):
     elif content == "!recall" or content.startswith("!recall "):
         query = raw_content[len("!recall"):].strip()
         await message.reply(format_recall(recall_notebook_entries(message.author, query)))
+    elif content == "!odds" or content.startswith("!odds "):
+        limit = 5
+        args = raw_content[len("!odds"):].strip()
+        if args.isdigit():
+            limit = max(1, min(20, int(args)))
+        await message.reply(format_odds(limit))
     elif content == "!one" or content.startswith("!one "):
         args = raw_content[len("!one"):].strip()
         if not args:
