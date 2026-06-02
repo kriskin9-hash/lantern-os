@@ -43,3 +43,4 @@ data/dreamer/notebooks/*.jsonl
 # Google Drive temp folders
 .tmp.driveupload/
 .tmp.drivedownload/
+.claude/worktrees/
