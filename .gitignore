@@ -28,6 +28,11 @@ artifacts/*
 node_modules/
 **/node_modules/
 
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+
 # Discord subscriber data (local only, not in Git)
 data/discord/subscribers.json
 
