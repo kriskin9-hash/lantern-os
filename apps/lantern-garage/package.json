@@ -5,6 +5,9 @@
   "description": "Local-first Lantern OS garage full-stack app.",
   "scripts": {
     "start": "node server.js",
+    "start:local": "node server.js",
+    "start:cloud": "node cloud-server.js",
+    "check": "node --check server.js && node --check cloud-server.js",
     "validate": "node validate.js"
   },
   "engines": {
