@@ -2,7 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
-const repoRoot = path.resolve(__dirname, "..", "..");
+const repoRoot = process.env.LANTERN_REPO_ROOT || path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
 const port = Number(process.env.PORT || 8080);
 const host = "0.0.0.0";
@@ -216,10 +216,11 @@ async function route(req, res) {
     return;
   }
 
-  // Cloud read-only gate: block all POST writes except explicitly allowed endpoints
+  // POST write allowlist — add endpoints here to permit writes in cloud mode
   const writePathsAllowed = [
     url.pathname === "/api/chat" && req.method === "POST",
     url.pathname === "/api/dream/chat" && req.method === "POST",
+    url.pathname === "/api/dream/create" && req.method === "POST",
     url.pathname === "/api/command" && req.method === "POST",
     url.pathname.startsWith("/api/actions/") && req.method === "POST",
   ];
@@ -273,6 +274,71 @@ async function route(req, res) {
       sendJson(res, reply, 202);
     } catch (error) {
       sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dream/create" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const dreamId = `dream_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const entry = {
+        id: dreamId,
+        timestamp: new Date().toISOString(),
+        kind: body.kind || "dream",
+        text: String(body.text || body.content || "").slice(0, 10000),
+        lucidity: Number(body.lucidity) || 0,
+        emotions: (body.emotions || []).slice(0, 20),
+        tags: (body.tags || []).slice(0, 10),
+        symbols: body.symbols || [],
+        source: "api",
+      };
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
+      const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
+      fs.appendFileSync(monthFile, JSON.stringify(entry) + "\n");
+      sendJson(res, { id: dreamId, saved: true, entry });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dream/stats" && req.method === "GET") {
+    try {
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      let entries = [];
+      if (fs.existsSync(dreamDir)) {
+        const files = fs.readdirSync(dreamDir).filter((f) => f.endsWith(".jsonl"));
+        for (const file of files) {
+          const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+          if (content) {
+            entries.push(...content.split("\n").map((line) => {
+              try { return JSON.parse(line); } catch { return null; }
+            }).filter(Boolean));
+          }
+        }
+      }
+      const stats = {
+        total_entries: entries.length,
+        entries_by_kind: {},
+        top_emotions: {},
+        top_tags: {},
+        avg_lucidity: 0,
+      };
+      let totalLucidity = 0;
+      for (const e of entries) {
+        const k = e.kind || "dream";
+        stats.entries_by_kind[k] = (stats.entries_by_kind[k] || 0) + 1;
+        for (const em of (e.emotions || [])) stats.top_emotions[em] = (stats.top_emotions[em] || 0) + 1;
+        for (const t of (e.tags || [])) stats.top_tags[t] = (stats.top_tags[t] || 0) + 1;
+        totalLucidity += e.lucidity || 0;
+      }
+      if (entries.length > 0) stats.avg_lucidity = (totalLucidity / entries.length).toFixed(2);
+      sendJson(res, stats);
+    } catch (error) {
+      sendJson(res, { error: error.message }, 500);
     }
     return;
   }

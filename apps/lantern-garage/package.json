@@ -8,7 +8,9 @@
     "start:local": "node server.js",
     "start:cloud": "node cloud-server.js",
     "check": "node --check server.js && node --check cloud-server.js",
-    "validate": "node validate.js"
+    "validate": "node validate.js",
+    "test": "node ../../tests/test_cloud_server.js",
+    "test:api": "node ../../tests/test_dream_journal_api.js"
   },
   "engines": {
     "node": ">=20"
