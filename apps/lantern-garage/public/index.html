@@ -299,6 +299,127 @@
     .footer-note strong {
       color: #5b4e9e;
     }
+
+    /* Chat panel */
+    .chat-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 12px rgba(155, 92, 157, 0.15);
+      border: 1px solid rgba(155, 92, 157, 0.1);
+      overflow: hidden;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1rem 1.5rem;
+      background: linear-gradient(135deg, #5b4e9e 0%, #9d5c9d 100%);
+      color: white;
+    }
+
+    .chat-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      margin-left: auto;
+      opacity: 0.95;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #69b478;
+      box-shadow: 0 0 0 3px rgba(105, 180, 120, 0.3);
+    }
+
+    .status-dot.offline {
+      background: #d4a574;
+      box-shadow: 0 0 0 3px rgba(212, 165, 116, 0.3);
+    }
+
+    .chat-log {
+      padding: 1.25rem 1.5rem;
+      max-height: 420px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      background: #faf8ff;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 0.8rem 1rem;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .bubble.lantern {
+      align-self: flex-start;
+      background: linear-gradient(135deg, #ebe3ff 0%, #f3e8ff 100%);
+      color: #3c3470;
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble.operator {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #d4a574 0%, #c9956a 100%);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .bubble.typing {
+      align-self: flex-start;
+      color: #9a8fb8;
+      font-style: italic;
+    }
+
+    .chat-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0 1.5rem 1rem;
+    }
+
+    .chip {
+      background: rgba(155, 92, 157, 0.08);
+      color: #5b4e9e;
+      border: 1px solid rgba(155, 92, 157, 0.25);
+      padding: 0.45rem 0.9rem;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-family: inherit;
+      box-shadow: none;
+    }
+
+    .chip:hover {
+      background: rgba(155, 92, 157, 0.16);
+      transform: translateY(-1px);
+      box-shadow: none;
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 0.6rem;
+      padding: 1rem 1.5rem 1.5rem;
+      border-top: 1px solid rgba(155, 92, 157, 0.12);
+    }
+
+    .chat-input-row input {
+      flex: 1;
+    }
+
+    .chat-input-row button {
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -311,6 +432,26 @@
     </header>
 
     <div id="message"></div>
+
+    <section id="chat-section">
+      <h2>Talk to your Dream Journal</h2>
+      <div class="chat-card">
+        <div class="chat-header">
+          <span>🌙</span>
+          <strong>Dream Journal</strong>
+          <span class="chat-status">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Online</span>
+          </span>
+        </div>
+        <div class="chat-log" id="chatLog"></div>
+        <div class="chat-suggestions" id="chatSuggestions"></div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInput" placeholder="Tell me a dream, a door, or a feeling..." autocomplete="off">
+          <button id="chatSend" type="button">Send</button>
+        </div>
+      </div>
+    </section>
 
     <section id="stats-section">
       <h2>Your Journal</h2>
@@ -459,6 +600,143 @@
         showMessage(`Error: ${error.message}`, 'error');
       }
     });
+
+    // ---------------------------------------------------------------- //
+    // Dream Journal Chat — always responds, online or offline.
+    // ---------------------------------------------------------------- //
+    const DOORS_LORE = {
+      founder: { name: "Founder's Wish Door", anchors: ["Love", "Safety", "Truth", "Beauty", "Freedom", "Memory", "Return"], phrase: "Hold the center. Protect the wish. Return to the anchor." },
+      xp: { name: "Gage's Windows XP Door", phrase: "Never log off. Level up always." },
+      xenon: { name: "Xenon Door", phrase: "Build beyond one world." },
+      fog: { name: "Sea of Fog and Clouds Door", phrase: "Let the powerful images rest before they become stories." },
+      sigil: { name: "Sigil / City of Doors", phrase: "You hold the keys. You protect the doors. You are never alone." }
+    };
+
+    let lastDraft = "";
+
+    function setStatus(online) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      dot.className = 'status-dot' + (online ? '' : ' offline');
+      text.textContent = online ? 'Online' : 'Offline (local)';
+    }
+
+    function addBubble(role, text) {
+      const log = document.getElementById('chatLog');
+      const bubble = document.createElement('div');
+      bubble.className = `bubble ${role}`;
+      bubble.textContent = text;
+      log.appendChild(bubble);
+      log.scrollTop = log.scrollHeight;
+      return bubble;
+    }
+
+    function renderSuggestions(suggestions) {
+      const box = document.getElementById('chatSuggestions');
+      box.innerHTML = '';
+      (suggestions || []).forEach((s) => {
+        const chip = document.createElement('button');
+        chip.className = 'chip';
+        chip.type = 'button';
+        chip.textContent = s;
+        chip.addEventListener('click', () => handleSuggestion(s));
+        box.appendChild(chip);
+      });
+    }
+
+    // Offline in-character reply mirror of the server engine.
+    function offlineReply(message) {
+      const text = (message || '').trim();
+      const lower = text.toLowerCase();
+      const base = ["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"];
+      for (const key of Object.keys(DOORS_LORE)) {
+        if (lower.includes(key) ||
+            (key === 'founder' && lower.includes('wish')) ||
+            (key === 'xp' && (lower.includes('windows') || lower.includes('gage'))) ||
+            (key === 'fog' && lower.includes('garden')) ||
+            (key === 'sigil' && lower.includes('city'))) {
+          const d = DOORS_LORE[key];
+          const anchors = d.anchors ? ` Its anchors: ${d.anchors.join(', ')}.` : '';
+          return { reply: `${d.name} stands open.${anchors} "${d.phrase}" What do you see when you step through?`, suggestions: ["Log this as a dream", "Another door", "Mirror a dream"] };
+        }
+      }
+      if (/^(hi|hello|hey|good (morning|evening|night)|greetings)/.test(lower)) {
+        return { reply: "Welcome back. I am the Dream Journal — local, private, always here, even offline. Did you dream?", suggestions: base };
+      }
+      if (lower.includes('mirror') || lower.includes('interpret') || lower.includes('mean') || lower.includes('symbol')) {
+        return { reply: "Sit with three questions: 1) What feeling stayed after waking? 2) What in waking life does this echo? 3) What small, reversible step would honor it?", suggestions: ["Record a reflection", "Recent dreams"] };
+      }
+      if (lower.includes('recent') || lower.includes('history')) {
+        return { reply: "Open the journal below to see your saved entries. Want to mirror one?", suggestions: ["Mirror a dream", "Log a dream"] };
+      }
+      if (lower.includes('log') || lower.includes('dream') || lower.includes('save')) {
+        return { reply: "Good — let us keep it. Tell me the dream in your own words. I will save it locally; only you can see it.", suggestions: ["Recent dreams", "Mirror a dream"] };
+      }
+      return { reply: `I hear it: "${text.slice(0, 160)}". That is worth keeping. Tap "Log this as a dream" to save it.`, suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], draft: text };
+    }
+
+    async function sendChat(message) {
+      const msg = (message || '').trim();
+      if (!msg) return;
+      addBubble('operator', msg);
+      const typing = addBubble('typing', '…');
+
+      try {
+        const res = await fetch('/api/dream/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        });
+        if (!res.ok) throw new Error('chat_failed');
+        const data = await res.json();
+        typing.remove();
+        setStatus(true);
+        addBubble('lantern', data.reply);
+        renderSuggestions(data.suggestions);
+        lastDraft = data.draft || msg;
+      } catch (err) {
+        // Server unreachable — stay in character, fully offline.
+        typing.remove();
+        setStatus(false);
+        const local = offlineReply(msg);
+        addBubble('lantern', local.reply);
+        renderSuggestions(local.suggestions);
+        lastDraft = local.draft || msg;
+      }
+    }
+
+    async function handleSuggestion(label) {
+      const l = label.toLowerCase();
+      if (l.includes('log')) {
+        // Pre-fill the entry form with the last draft and scroll to it.
+        if (lastDraft) document.getElementById('text').value = lastDraft;
+        document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
+        addBubble('lantern', 'I moved your words to the New Entry form below. Add tags and emotions, then Save Entry.');
+        return;
+      }
+      if (l.includes('recent')) {
+        document.getElementById('stats-section').scrollIntoView({ behavior: 'smooth' });
+      }
+      sendChat(label);
+    }
+
+    document.getElementById('chatSend').addEventListener('click', () => {
+      const input = document.getElementById('chatInput');
+      const msg = input.value;
+      input.value = '';
+      sendChat(msg);
+    });
+
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('chatSend').click();
+      }
+    });
+
+    // Opening greeting
+    addBubble('lantern', 'The dream door is open. What did you bring back? Tell me a dream, or tap a prompt below.');
+    renderSuggestions(["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"]);
 
     // Load stats on page load
     loadStats();
