@@ -44,6 +44,14 @@ from chat_memory_integration import ChatMemoryIntegration
 
 app = Flask(__name__)
 
+# Register Dream Journal blueprint
+try:
+    from routes.dream_journal import dream_bp
+    app.register_blueprint(dream_bp)
+    print("[OK] Dream Journal API routes registered")
+except Exception as e:
+    print(f"[WARNING] Could not register Dream Journal routes: {e}")
+
 # Initialize chat memory integration
 try:
     chat_memory = ChatMemoryIntegration()

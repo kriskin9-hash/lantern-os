@@ -9,7 +9,7 @@
 
 param(
     [int]$Port = 8771,
-    [string]$Host = "127.0.0.1",
+    [string]$BindHost = "127.0.0.1",
     [switch]$Background
 )
 
@@ -18,7 +18,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot | Resolve-Path
 
 Write-Host "[MCP] Starting Lantern OS MCP Server..." -ForegroundColor Cyan
 Write-Host "[MCP] Repo: $repoRoot" -ForegroundColor Gray
-Write-Host "[MCP] Endpoint: http://${Host}:${Port}" -ForegroundColor Gray
+Write-Host "[MCP] Endpoint: http://${BindHost}:${Port}" -ForegroundColor Gray
 
 # Check Python
 $python = Get-Command python -ErrorAction SilentlyContinue
@@ -36,7 +36,7 @@ if (Test-Path $reqFile) {
 
 # Set env
 $env:MCP_SERVER_PORT = $Port
-$env:MCP_SERVER_HOST = $Host
+$env:MCP_SERVER_HOST = $BindHost
 
 # Start server
 $serverScript = Join-Path $serverDir "server.py"
@@ -47,7 +47,7 @@ if (-not (Test-Path $serverScript)) {
 if ($Background) {
     $proc = Start-Process python -ArgumentList $serverScript -WorkingDirectory $repoRoot -WindowStyle Hidden -PassThru
     Write-Host "[MCP] Server started in background (PID: $($proc.Id))" -ForegroundColor Green
-    Write-Host "[MCP] Health: http://${Host}:${Port}/health" -ForegroundColor Green
+    Write-Host "[MCP] Health: http://${BindHost}:${Port}/health" -ForegroundColor Green
     return $proc.Id
 } else {
     Write-Host "[MCP] Starting in foreground..." -ForegroundColor Green

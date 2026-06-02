@@ -161,7 +161,6 @@ Resources:
     Properties:
       DBInstanceIdentifier: lantern-db
       Engine: postgres
-      EngineVersion: '15.3'
       DBInstanceClass: db.t3.micro
       AllocatedStorage: 20
       StorageType: gp3

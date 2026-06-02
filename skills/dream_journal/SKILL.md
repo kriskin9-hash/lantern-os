@@ -1,14 +1,14 @@
 ---
-name: dream-journal
-description: Structured Dream Journal skill for Lantern OS. Captures dreams with lucidity scores, emotions, tags, linked goals, and SFI impact vectors. Generates mirror prompts for Supergrok / Bayesian analysis. Reads existing data/dreamer/ notebooks for continuity. Companion to lucid_dreaming skill and bayesian-world-model.
+name: dream-journal-v2
+description: Dream Journal v2 for Lantern OS. Persistent characters (Fox, Tower), Bayesian fallacy detection, cognitive layer with mirror prompts, Flask API routes, Discord slash commands, and Voice Lounge music queue. Integrates with unified Docker deployment.
 ---
 
-# Dream Journal
+# Dream Journal v2
 
-Status: active development (codex/dream-journal-structured)  
-Scope: local operator dream logging, lucidity tracking, symbolic analysis prompts, integration with existing Lantern Dreamer notebooks and Bayesian World Model  
-Source: Lantern OS dreamer notebooks (data/dreamer/), Discord bot append_notebook_entry, ternary coordinate system, prior codex/dream-journal-alias branch  
-Validation: convergence loop clean (0 leading issues); module imports and round-trips tested locally
+Status: production-ready (feature/LAN-124-dream-journal-v2)  
+Scope: local operator dream logging, lucidity tracking, symbolic analysis, persistent character memory, Bayesian fallacy detection, Voice Lounge audio, Docker integration  
+Source: Lantern OS dreamer notebooks (data/dreamer/), Discord bot, Flask API, cognitive_layer.py  
+Validation: convergence loop clean; MCP health checks pass; bot imports clean
 
 ## Simple Answer
 

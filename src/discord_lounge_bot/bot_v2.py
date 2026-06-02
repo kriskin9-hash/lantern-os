@@ -65,6 +65,16 @@ except ImportError as e:
     get_sinatra = None
     print(f"[INFO] Voice Curator not available: {e}")
 
+# Music Queue — yt-dlp based audio streaming
+try:
+    from music_queue import music_manager, YTDLP_AVAILABLE
+    MUSIC_AVAILABLE = True
+except ImportError as e:
+    MUSIC_AVAILABLE = False
+    music_manager = None
+    YTDLP_AVAILABLE = False
+    print(f"[INFO] Music Queue not available: {e}")
+
 # Cognitive Dream Journal — fallacy detection + persistent characters
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills" / "dream_journal"))
 try:
@@ -288,6 +298,8 @@ async def cmd_help(interaction: discord.Interaction):
     if tier == ROLE_FOUNDER:
         embed.add_field(name="Founder", value="`/dispatch`, `/controls`, `/boot-check`, `/release-gate`, `/mcp-call`", inline=False)
     embed.add_field(name="🎵 Music & Voice", value="`/sing`, `/nextsong`, `/stop`, `/leave` — Frank Sinatra from Internet Archive", inline=False)
+    if tier in (ROLE_PILOT, ROLE_FOUNDER):
+        embed.add_field(name="🎶 Music Queue (yt-dlp)", value="`/play`, `/skip`, `/pause`, `/resume`, `/nowplaying`, `/clearqueue`", inline=False)
     embed.set_footer(text=f"Your tier: {tier.title()}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -734,6 +746,107 @@ async def cmd_leave(interaction: discord.Interaction):
         await interaction.response.send_message("Not connected.", ephemeral=True)
 
 
+# ── Music Queue Commands ──
+
+@tree.command(name="play", description="Play audio from URL or search query")
+@app_commands.describe(query="URL or search term (e.g. 'frank sinatra my way')")
+@require_tier(ROLE_PILOT)
+async def cmd_play(interaction: discord.Interaction, query: str):
+    if not MUSIC_AVAILABLE or not music_manager or not YTDLP_AVAILABLE:
+        await interaction.response.send_message(
+            "Music unavailable. Install: `pip install yt-dlp`", ephemeral=True
+        )
+        return
+
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message(
+            "Join a voice channel first.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    guild_id = interaction.guild_id
+    voice_client = interaction.guild.voice_client
+
+    if not voice_client or not voice_client.is_connected():
+        voice_client = await interaction.user.voice.channel.connect()
+
+    queue = music_manager.get_queue(guild_id, voice_client)
+    try:
+        song = await queue.add(query)
+        msg = f"✅ Added: **{song['title']}**"
+        if not queue._is_playing:
+            await queue.play_next()
+            msg += "\n▶ Now playing..."
+        await interaction.followup.send(msg, ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"Error: {e}", ephemeral=True)
+
+
+@tree.command(name="skip", description="Skip current song")
+@require_tier(ROLE_PILOT)
+async def cmd_skip(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    if queue.skip():
+        await interaction.response.send_message("⏭ Skipped.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing playing.", ephemeral=True)
+
+
+@tree.command(name="pause", description="Pause playback")
+@require_tier(ROLE_PILOT)
+async def cmd_pause(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    if queue.pause():
+        await interaction.response.send_message("⏸ Paused.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing to pause.", ephemeral=True)
+
+
+@tree.command(name="resume", description="Resume playback")
+@require_tier(ROLE_PILOT)
+async def cmd_resume(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    if queue.resume():
+        await interaction.response.send_message("▶ Resumed.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing to resume.", ephemeral=True)
+
+
+@tree.command(name="nowplaying", description="Show current song")
+@require_tier(ROLE_PILOT)
+async def cmd_nowplaying(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    np = queue.now_playing()
+    if np:
+        await interaction.response.send_message(f"🎵 Now playing: **{np}**", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing playing.", ephemeral=True)
+
+
+@tree.command(name="clearqueue", description="Clear the music queue")
+@require_tier(ROLE_PILOT)
+async def cmd_clearqueue(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    queue.clear()
+    await interaction.response.send_message("Queue cleared.", ephemeral=True)
+
+
 # ── OpenAI Agents MCP Commands ──
 
 @tree.command(name="mcp-connect", description="Connect to MCP server via openai-agents SDK")
@@ -824,6 +937,8 @@ async def on_ready():
     if VOICE_AVAILABLE:
         voice_player = get_voice_player(client)
         print(f"[INFO] Voice player initialized")
+    if MUSIC_AVAILABLE:
+        print(f"[INFO] Music Queue ready (yt-dlp: {YTDLP_AVAILABLE})")
     # Sync globally (no guild-specific permissions required for testing)
     synced = await tree.sync()
     print(f"[SYNC] Synced {len(synced)} slash commands globally")

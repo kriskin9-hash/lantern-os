@@ -25,6 +25,8 @@ services:
       - lantern-data:/app/data
       - lantern-logs:/app/logs
       - lantern-state:/app/state
+      - ./skills/dream_journal:/app/skills/dream_journal:ro
+      - ./data/dreams:/app/data/dreams
     networks:
       - lantern-network
     restart: unless-stopped

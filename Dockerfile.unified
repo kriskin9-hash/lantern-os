@@ -27,6 +27,10 @@ RUN mkdir -p /app/{src,apps,scripts,data,logs,config,state,.lantern} && \
     mkdir -p /app/data/{rag-house,wallet,manifests,media} && \
     mkdir -p /app/.lantern/sounds
 
+# Copy Dream Journal skill
+COPY skills/dream_journal/ /app/skills/dream_journal/
+RUN mkdir -p /app/data/dreams
+
 # Copy application code
 COPY src/ src/
 COPY apps/ apps/
