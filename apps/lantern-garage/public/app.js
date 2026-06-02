@@ -580,13 +580,8 @@ function canonicalFrontDoorVerified(cloudMirrors) {
   return cloudMirrors.some((m) => m.verified === true && m.url && m.url.includes("lantern-os-cloud"));
 }
 
-function getFrontDoorUrl(cloudMirrors) {
-  if (!cloudMirrors || !Array.isArray(cloudMirrors)) {
-    return LOCAL_APP_ORIGIN;
-  }
-  const verified = cloudMirrors.find((m) => m.verified === true);
-  const localPrimary = cloudMirrors.find((m) => m.local === true);
-  return localPrimary ? localPrimary.url : (verified ? verified.url : LOCAL_APP_ORIGIN || "service URL pending");
+function getFrontDoorUrl(mirrors) {
+  return mirrors?.localPrimary || LOCAL_APP_ORIGIN || "service URL pending";
 }
 
 function cloudMirrorStateLabel(mirror, mirrors) {
