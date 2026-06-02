@@ -1341,6 +1341,227 @@ async function route(req, res) {
     return;
   }
 
+  // ── Streaming dream chat — ChatGPT-style SSE endpoint ──────────────────
+  // GET /api/dream/stream?message=...&user=...
+  // Streams tokens via text/event-stream. Tries Anthropic API first (if
+  // ANTHROPIC_API_KEY is set), then Ollama (http://127.0.0.1:11434), then
+  // falls back to the offline dreamChatReply rule-engine streamed word-by-word.
+  if (url.pathname === "/api/dream/stream" && req.method === "GET") {
+    const message = String(url.searchParams.get("message") || "").slice(0, maxDreamerTextLength).trim();
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Accel-Buffering": "no",
+    });
+
+    const recentDreams = readRecentDreams(5);
+
+    // Build system prompt anchored in dream journal persona
+    const dreamContext = recentDreams.length > 0
+      ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
+          `${i + 1}. ${String(d.text || d.content || "").slice(0, 200)}`
+        ).join("\n")}`
+      : "No journal entries yet — this is the dreamer's first visit.";
+
+    const systemPrompt = `You are the Dream Journal — a warm, wise, and grounded guide living inside Lantern OS. You help dreamers record, reflect on, and find meaning in their dreams. You speak with gentle clarity, never over-claiming symbolic meaning. You ask precise questions to help the dreamer understand themselves better.
+
+${dreamContext}
+
+Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. End responses with one question or one invitation to record.`;
+
+    const sendToken = (token) => {
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    };
+    const sendDone = (source) => {
+      res.write(`data: ${JSON.stringify({ done: true, source })}\n\n`);
+      res.end();
+    };
+    const sendError = (msg) => {
+      res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
+    };
+
+    // Log user message (best-effort, non-blocking)
+    appendConversationEntry({
+      recordedAt: new Date().toISOString(),
+      surface: "dream-chat-stream",
+      role: "operator",
+      text: message.slice(0, maxConversationTextLength),
+    }).catch(() => {});
+
+    let fullReply = "";
+
+    // ── Provider 1: Anthropic Claude (streaming) ──────────────────────────
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (anthropicKey && message) {
+      try {
+        const payload = JSON.stringify({
+          model: process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022",
+          max_tokens: 1024,
+          stream: true,
+          system: systemPrompt,
+          messages: [{ role: "user", content: message }],
+        });
+
+        await new Promise((resolve, reject) => {
+          const opts = {
+            hostname: "api.anthropic.com",
+            path: "/v1/messages",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": anthropicKey,
+              "anthropic-version": "2023-06-01",
+              "Content-Length": Buffer.byteLength(payload),
+            },
+          };
+          const https = require("https");
+          const req2 = https.request(opts, (upstream) => {
+            let buf = "";
+            upstream.on("data", (chunk) => {
+              buf += chunk.toString();
+              const lines = buf.split("\n");
+              buf = lines.pop(); // keep incomplete line
+              for (const line of lines) {
+                if (!line.startsWith("data:")) continue;
+                const raw = line.slice(5).trim();
+                if (raw === "[DONE]" || raw === "") continue;
+                try {
+                  const evt = JSON.parse(raw);
+                  if (evt.type === "content_block_delta" && evt.delta?.text) {
+                    fullReply += evt.delta.text;
+                    sendToken(evt.delta.text);
+                  }
+                } catch { /* skip malformed */ }
+              }
+            });
+            upstream.on("end", () => resolve());
+            upstream.on("error", reject);
+          });
+          req2.on("error", reject);
+          req2.write(payload);
+          req2.end();
+        });
+
+        // Log the full reply
+        appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-chat-stream",
+          role: "lantern",
+          text: fullReply.slice(0, maxConversationTextLength),
+        }).catch(() => {});
+
+        sendDone("anthropic");
+        return;
+      } catch (err) {
+        sendError(`anthropic_unavailable: ${err.message}`);
+        // fall through to Ollama
+      }
+    }
+
+    // ── Provider 2: Ollama (streaming) ────────────────────────────────────
+    const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+    const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+    if (message) {
+      try {
+        const payload = JSON.stringify({
+          model: ollamaModel,
+          stream: true,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message },
+          ],
+        });
+
+        const ollamaUrl = new URL(ollamaBase);
+        const ollamaOpts = {
+          hostname: ollamaUrl.hostname,
+          port: ollamaUrl.port || 11434,
+          path: "/api/chat",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        };
+
+        let ollamaOk = false;
+        await new Promise((resolve, reject) => {
+          const req2 = require("http").request(ollamaOpts, (upstream) => {
+            if (upstream.statusCode !== 200) {
+              upstream.resume();
+              reject(new Error(`ollama_status_${upstream.statusCode}`));
+              return;
+            }
+            ollamaOk = true;
+            let buf = "";
+            upstream.on("data", (chunk) => {
+              buf += chunk.toString();
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                  const evt = JSON.parse(line);
+                  const token = evt.message?.content || evt.response || "";
+                  if (token) {
+                    fullReply += token;
+                    sendToken(token);
+                  }
+                } catch { /* skip */ }
+              }
+            });
+            upstream.on("end", () => resolve());
+            upstream.on("error", reject);
+          });
+          req2.on("error", reject);
+          req2.setTimeout(5000, () => {
+            req2.destroy();
+            reject(new Error("ollama_connect_timeout"));
+          });
+          req2.write(payload);
+          req2.end();
+        });
+
+        if (ollamaOk) {
+          appendConversationEntry({
+            recordedAt: new Date().toISOString(),
+            surface: "dream-chat-stream",
+            role: "lantern",
+            text: fullReply.slice(0, maxConversationTextLength),
+          }).catch(() => {});
+          sendDone("ollama");
+          return;
+        }
+      } catch (err) {
+        sendError(`ollama_unavailable: ${err.message}`);
+        // fall through to offline fallback
+      }
+    }
+
+    // ── Provider 3: Offline fallback — stream words from rule-engine ─────
+    const fallback = dreamChatReply(message, recentDreams);
+    const words = String(fallback.reply || "").split(" ");
+    for (const word of words) {
+      sendToken(word + " ");
+      await new Promise((r) => setTimeout(r, 28)); // typewriter pacing
+    }
+    if (fallback.suggestions) {
+      res.write(`data: ${JSON.stringify({ suggestions: fallback.suggestions })}\n\n`);
+    }
+    appendConversationEntry({
+      recordedAt: new Date().toISOString(),
+      surface: "dream-chat-stream",
+      role: "lantern",
+      text: fallback.reply.slice(0, maxConversationTextLength),
+    }).catch(() => {});
+    sendDone("offline");
+    return;
+  }
+
   if (url.pathname === "/api/dream/stats" && req.method === "GET") {
     try {
       const dreamDir = path.join(repoRoot, "data", "dream_journal");

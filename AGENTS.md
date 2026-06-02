@@ -1,4 +1,102 @@
-# Operator Role — Lantern OS Repo
+# AGENTS.md — Lantern OS
+
+> **For AI agents (Claude, Codex, Gemini, Kiro, etc.):** Start here. This file tells you how to work in this repo — build, test, run, and the rules that keep the codebase honest.
+
+---
+
+## Quick Start for AI Agents
+
+### Build & Test
+```bash
+# Install Python deps (use .venv if present)
+.venv\Scripts\python.exe -m pip install -r requirements.txt   # Windows
+# or
+python -m pip install -r requirements.txt
+
+# Run the full test suite (skip tests with missing optional deps)
+python -m pytest tests/ -q --tb=short \
+  --ignore=tests/test_anti_entropy_memory.py \
+  --ignore=tests/test_audit_chain.py \
+  --ignore=tests/test_discord_bot.py \
+  --ignore=tests/test_discord_voice_gate.py
+
+# Validate MCP server syntax
+python -c "import ast; ast.parse(open('src/mcp_server/server.py').read()); print('OK')"
+```
+
+### Run Locally
+```bash
+# MCP server (port 8771)
+.venv\Scripts\python.exe src/mcp_server/server.py
+
+# Lantern Garage web app (port 4177)
+node apps/lantern-garage/server.js
+
+# Dream Chat UI — open in browser after starting Garage:
+# http://127.0.0.1:4177/dream-chat.html
+```
+
+### Key Entry Points
+| Surface | File | Port |
+|---|---|---|
+| Dream Chat (ChatGPT-style) | `apps/lantern-garage/public/dream-chat.html` | 4177 |
+| Lantern Garage dashboard | `apps/lantern-garage/server.js` | 4177 |
+| MCP server (tools) | `src/mcp_server/server.py` | 8771 |
+| Dream Journal skill | `skills/dream_journal/dream_journal.py` | — |
+| Discord bot | `src/discord_lounge_bot/bot.py` | — |
+
+---
+
+## What Is Real vs Design Contract
+
+**Real skills (have Python modules):**
+- `dream_journal` → `skills/dream_journal/dream_journal.py`
+- `lucid_dreaming` → `skills/lucid_dreaming/mild_wbtb_protocol.py`
+- `archive_curator` → `src/discord_lounge_bot/archive_curator.py`
+- `voice_curator` → `src/discord_lounge_bot/voice_curator.py`
+
+**Design-contract / spec-only (no Python module — do not claim they are live):**
+- All other entries in `skills/*/SKILL.md` — spec documents only
+- `super_jarvis_fleet` — 36-slot fleet design contract. `activeSlots = 0`. See `data/status/super-jarvis-fleet.json`
+- `kalshi_bridge` — disabled, no module, only `scripts/kalshi_odds.py` standalone script
+
+**Fleet claim boundary:** The 36 ring slots are a design contract. Never claim they are live workers without a current `data/status/super-jarvis-fleet.json` showing `activeSlots > 0`.
+
+---
+
+## Rules for AI Agents
+
+1. **Read before writing.** Inspect the file you're about to change.
+2. **Tests must pass.** Run `pytest` after any Python change. 65 tests expected to pass.
+3. **No fabricated status.** Do not hardcode slot counts, skill counts, or "online" states that aren't measured from real state.
+4. **Skills registry is honest.** Only add to `_skills_db` in `src/mcp_server/server.py` if a real Python module exists.
+5. **One Linear ticket per PR.** Branch name must contain `LAN-NNN`. CI enforces this.
+6. **No new top-level dirs** without a Linear ticket. Anti-sprawl CI gate blocks PRs with >25 new files.
+7. **Never commit secrets.** No API keys, tokens, passwords in tracked files.
+8. **Streaming chat uses SSE.** The dream chat endpoint is `GET /api/dream/stream?message=...` — it streams tokens via `text/event-stream`. The offline fallback streams words from the rule engine with a 28ms delay.
+
+---
+
+## Streaming Chat Architecture
+
+```
+Browser (dream-chat.html)
+  └── fetch GET /api/dream/stream?message=...
+        └── server.js → Provider chain:
+              1. Anthropic Claude (if ANTHROPIC_API_KEY set) → streaming SSE
+              2. Ollama @ 127.0.0.1:11434 (if running) → streaming SSE
+              3. Offline dreamChatReply() rule-engine → words streamed at 28ms
+```
+
+Environment variables:
+- `ANTHROPIC_API_KEY` — enables Claude responses
+- `ANTHROPIC_MODEL` — override model (default: `claude-3-5-haiku-20241022`)
+- `OLLAMA_BASE_URL` — override Ollama URL (default: `http://127.0.0.1:11434`)
+- `OLLAMA_MODEL` — override model (default: `llama3`)
+
+---
+
+## Operator Role — Lantern OS Repo
 
 **Status:** Active operator instructions  
 **Effective:** 2026-06-01 (Phase A implementation)  

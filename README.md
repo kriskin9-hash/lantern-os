@@ -1,167 +1,82 @@
-# Lantern OS — Dream Journal
+# Lantern OS + Suzie Orchestrator
 
-**Product:** Dream Journal by Lantern OS  
-**Status:** Production (local)  
+**Status:** TRL 4 (Field Validation)  
 **Last Updated:** 2026-06-02  
-**Created by:** Alex Place
-
-> *Every dream is a door. Every memory is a home.*
-
----
-
-## What This Is
-
-Dream Journal is a **local-first, private journaling app** built on Lantern OS. Your dreams, reflections, and notes are saved on your own device. No cloud, no tracking, no ads.
-
-- **Local** — runs at `http://127.0.0.1:4177`, never leaves your machine
-- **Private** — all data in `data/dream_journal/*.jsonl`, plain text you own
-- **Fast** — Node.js server, loads in under 1 second
-- **Simple** — one form, four fields, one button
+**Repo Contract:** See `docs/REPO-CONTRACT.md`  
+**AI Agent Guide:** See [`AGENTS.md`](AGENTS.md) — build, test, run, and rules for agents working in this repo
 
 ---
 
-## Quick Start (Windows)
+## Dream Journal — ChatGPT-style chat
 
-### Prerequisites
+A private, local-first dream journal with a streaming chat interface. Open it after starting Lantern Garage:
 
-```powershell
-node --version   # v20+ required
-npm --version    # bundled with Node
-git --version    # to clone/pull
+```
+http://127.0.0.1:4177/dream-chat.html
 ```
 
-Install Node.js from [nodejs.org](https://nodejs.org) if needed.
-
-### Start the app
-
-```powershell
-cd C:\Users\alexp\OneDrive\Documents\GitHub\lantern-os
-npm install --prefix apps/lantern-garage
-npm start --prefix apps/lantern-garage
-```
-
-Open Chrome: **http://127.0.0.1:4177**
-
-### Autostart (Windows — run once as Admin)
-
-To have Lantern start automatically on login, create a Task Scheduler entry:
-
-```powershell
-# Run as Administrator — registers autostart task
-$action = New-ScheduledTaskAction -Execute "node" `
-  -Argument "apps\lantern-garage\server.js" `
-  -WorkingDirectory "C:\Users\alexp\OneDrive\Documents\GitHub\lantern-os"
-
-$trigger = New-ScheduledTaskTrigger -AtLogon
-
-Register-ScheduledTask `
-  -TaskName "LanternDreamJournal" `
-  -Action $action `
-  -Trigger $trigger `
-  -RunLevel Highest `
-  -Force
-
-Write-Host "Lantern will now start automatically at login."
-```
-
-To remove autostart:
-```powershell
-Unregister-ScheduledTask -TaskName "LanternDreamJournal" -Confirm:$false
-```
+Streams tokens in real-time via SSE. Uses Anthropic Claude if `ANTHROPIC_API_KEY` is set, Ollama if running locally, or falls back to an offline rule-engine with the same door-series lore. No data leaves your machine unless you set a cloud API key.
 
 ---
 
-## Services
+## What This Repo Contains
 
-| Service | Port | Start Command | Notes |
-|---------|------|--------------|-------|
-| **Lantern Garage** (Dream Journal UI + API) | 4177 | `npm start --prefix apps/lantern-garage` | Primary service — start this first |
-| **MCP Server** | 8771 | `.venv\Scripts\python.exe src\mcp_server\server.py` | Agent orchestration, optional |
-| **Local Lantern Chat** | 8766 | Auto-started by MCP | Advisory chat, optional |
-| **Discord Bot** | — | `.\lantern-discord\deploy-discord-bot.ps1` | Requires `DISCORD_BOT_TOKEN` env var |
+### Lantern OS — Local-First AI Chat for Families
+Privacy-first AI chat stack: desktop, browser, and dashboard surfaces.
+- **Desktop:** Offline-first app with Vosk STT (no cloud speech-to-text)
+- **Browser:** Same chat experience without install
+- **Dashboard:** Local Flask service + Claude/Gemini/Codex routing
+- **Voice Curator:** Public domain music library (CC-licensed + synthetic)
+- **Kids Edition:** Age-gated, parental review, no external bridges
 
-**Minimum to run:** Only Lantern Garage (4177) is required for Dream Journal.
+**Not included:** Cloud-hosted deployment, medical/legal advice surfaces, autonomous escalation.
 
----
+### Suzie Orchestrator — AI Agent Management
+Windows-first control plane for supervising 1–40 AI agents across local worktrees, GitHub, and MCP tool surfaces.
+- **Slot Management:** Manage 8+ concurrent agent slots (Claude, Codex, Gemini, GPT, Ollama)
+- **Task Queue:** Filesystem-based queue (being modernized to Redis for 400-agent scalability)
+- **Token Quota:** Per-agent fallback routing when primary provider quota exhausted
+- **MCP Boundary:** Safe tool allowlist — agents cannot escape sandbox
 
-## Dream Journal Features
-
-### Entry Types
-| Type | Use |
-|------|-----|
-| `dream` | Nightly dreams, lucid experiences |
-| `note` | Daytime thoughts, observations |
-| `symbol` | Recurring images, archetypes |
-| `reflection` | Analysis of patterns, meanings |
-
-### Fields
-- **Text** — free-form, required
-- **Emotions** — comma-separated (clarity, wonder, awe, etc.)
-- **Tags** — comma-separated, max 10 (project, season, recurring, etc.)
-- **Lucidity** — 0.0 (fully asleep) to 1.0 (fully lucid)
-
-### API Endpoints
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/dream/create` | Save a new entry |
-| `GET` | `/api/dream/stats` | Aggregated stats (counts, top emotions, avg lucidity) |
-| `GET` | `/api/dream/search?text=X&tags=Y` | Search by text or tags |
-| `GET` | `/api/dream/read/:id` | Fetch one entry by ID |
-
-### Data Storage
-- `data/dream_journal/dreams_YYYY-MM.jsonl` — monthly append-only files
-- Each entry: `id`, `timestamp`, `kind`, `text`, `lucidity`, `emotions`, `tags`, `symbols`
-- Plain JSON lines — readable, portable, zero lock-in
+**Modernization:** Suzie 2.0 (Rust + Redis + PostgreSQL + Kubernetes) targets 400 agents across 20 operators. See `SUZIE-2.0-PLAN.md`.
 
 ---
 
-## Architecture
+## Quick Start
 
-```
-Browser (Chrome)
-    ↓ http://127.0.0.1:4177
-apps/lantern-garage/server.js   ← Node.js HTTP server (no framework)
-    ├── public/index.html        ← Dream Journal UI (white/purple theme)
-    ├── /api/dream/*             ← REST endpoints
-    └── data/dream_journal/      ← JSONL storage
+### 1. Install Dependencies
 
-skills/dream_journal/            ← Python skill (cognitive layer)
-    ├── dream_journal.py         ← DreamJournal class (structured logging)
-    └── cognitive_layer.py       ← BayesianFallacyDetector, DreamCharacter, CognitiveJournal
-
-lore/LANTERN-CHARACTERS-AND-REALMS.md  ← Characters + symbolic realms
-rag/seeds/                             ← RAG CAAD memory seeds
-```
-
-**Design constraints:**
-- No external runtime dependencies for the UI (vanilla JS, no React/Vue)
-- Local-only by default (`127.0.0.1`, not `0.0.0.0`)
-- Write-queued appends (no concurrent JSONL corruption)
-- All data readable without the app (plain text)
-
----
-
-## Testing
-
-### Python (Dream Journal skill)
 ```bash
-python -m pytest tests/test_dream_journal.py -v
-# 34/34 passing
+# Python packages
+pip install discord.py aiohttp flask vosk pydub
+
+# System packages (macOS/Linux)
+brew install portaudio openssl
+
+# Windows: install ffmpeg, portaudio from binaries
 ```
 
-### Node.js (REST API)
+### 2. Start Lantern
+
 ```bash
-# Server must be running first
-npm start --prefix apps/lantern-garage &
-sleep 2
-node tests/test_dream_journal_api.js
-# 14/14 passing
+cd apps/lantern-desktop
+python lantern_desktop.py
 ```
 
-### Run all tests
+### 3. Start Suzie (Agent Orchestrator)
+
 ```bash
-python -m pytest tests/ -v --ignore=tests/node_modules
-node tests/test_dream_journal_api.js
+cd gm-agent-orchestrator
+pwsh -NoExit -Command { & .\Start-GmAgentOrchestrator.ps1 }
+```
+
+### 4. Start Discord Bot (Optional)
+
+```bash
+export DISCORD_BOT_TOKEN="your-token-here"
+export LANTERN_DISCORD_GUILD_ID="your-guild-id"
+cd src/discord_lounge_bot
+pwsh -NoExit -Command { & ..\..\scripts\Start-DiscordBotWatchdog.ps1 }
 ```
 
 ---
@@ -169,64 +84,103 @@ node tests/test_dream_journal_api.js
 ## Repository Structure
 
 ```
-lantern-os/
 ├── apps/
-│   └── lantern-garage/          ← Dream Journal server + UI
-│       ├── server.js            ← HTTP server, REST API
-│       └── public/
-│           └── index.html       ← Dream Journal UI
-├── skills/
-│   └── dream_journal/           ← Python cognitive layer
-│       ├── dream_journal.py
-│       └── cognitive_layer.py
-├── lore/
-│   └── LANTERN-CHARACTERS-AND-REALMS.md  ← Symbolic characters and realms
-├── rag/seeds/                   ← RAG CAAD memory (9 seeds)
-├── data/
-│   ├── dream_journal/           ← JSONL dream entries (yours, private)
-│   └── wallet/                  ← Invoice ledger (cleared cash = $0)
+│   ├── lantern-desktop/          # Tkinter desktop app + Vosk STT
+│   ├── lantern-browser/          # Flask + HTML/JS web UI
+│   └── lantern-kids/             # Age-gated variant (parental review)
+├── services/
+│   ├── lantern-dashboard/        # Flask control plane
+│   ├── audit-verification-api/   # Cryptographic audit chain
+│   └── discord-lounge-bot/       # Discord integration
+├── gm-agent-orchestrator/        # Suzie: slot/queue/token management
+├── src/
+│   ├── hff-api/                  # Shared Flask utilities
+│   └── voice_curator/            # Public domain music library
+├── scripts/
+│   ├── Start-DiscordBotWatchdog.ps1     # 24/7 bot monitoring
+│   ├── Start-GmAgentOrchestrator.ps1    # Orchestrator supervisor
+│   └── ... (135+ support scripts)
 ├── docs/
-│   └── DREAM-JOURNAL-USER-GUIDE.md  ← End-user guide
-└── tests/
-    ├── test_dream_journal.py    ← 34 Python tests
-    └── test_dream_journal_api.js ← 14 REST API tests
+│   ├── REPO-CONTRACT.md          # What belongs in this repo
+│   ├── LINEAR-WORKFLOW.md        # Operator training for sprints
+│   └── ARCHITECTURE.md           # System design
+├── tests/
+│   ├── test_lantern_desktop.py
+│   ├── test_suzie_orchestrator.py
+│   └── ...
+└── docker/
+    ├── Dockerfile.lantern        # Lantern container
+    └── Dockerfile.suzie          # Orchestrator container
 ```
 
 ---
 
-## Lore & Characters
+## Active Product Streams
 
-The Dream Journal is grounded in Lantern OS lore. Characters and realms live in `lore/LANTERN-CHARACTERS-AND-REALMS.md`:
+| Stream | TRL | Status | Owner |
+|--------|-----|--------|-------|
+| Lantern Desktop Chat | 4 | Shipped | (unassigned) |
+| Lantern Browser Chat | 4 | Shipped | (unassigned) |
+| Vosk STT Integration | 4 | Active | (unassigned) |
+| Discord Bot + MCP | 4 | Just shipped | Founder |
+| Suzie Orchestrator Core | 4 | Active (Phase 1 modernization) | Founder |
+| Dashboard Three-View | 4 | Active | (unassigned) |
 
-| Character | Role | Symbol |
-|-----------|------|--------|
-| **Captain Lantern Blinkbug** | Mascot, warm guide | Yellow glow, warmth |
-| **Gage** | Artist-learner | Creative precision |
-| **Mary Place** | Alex's mother | Waterfall, peacock |
-| **Angela** | Courtney's mother | Healer, connector |
-| **Courtney** | Navigator | Xenon spaceship |
-| **Alex Place** | Founder/operator | Keys, vision |
-
----
-
-## Wallet Truth
-
-```
-Cleared cash: $0     ← real until payment receipt logged
-Pending invoices: $398
-Operating rule: Do not claim revenue until funds clear.
-```
+For complete stream list, see `docs/STREAMS.md`.
 
 ---
 
-## Operator Principles
+## Contributor Guide
 
-1. **Memory is not proof** — RAG seeds are evidence artifacts, operator corrections override them
-2. **Default-closed writes** — no repo mutation without explicit approval
-3. **Local-first** — the machine is the source of truth
-4. **Visible flame** — system state is always inspectable
+### For Operators
+
+1. **Read this README** — understand Lanterns + Suzie roles
+2. **Check `CONTRIBUTING.md`** — git workflow, commit message style
+3. **Join Linear workspace** — backlog lives there, not GitHub issues
+4. **Claim a task** — see `docs/LINEAR-WORKFLOW.md` for how
+5. **Work locally** on `cleanup/*` or `feature/*` branch
+6. **Push and open PR** — Founder reviews Friday
+7. **Merge once approved** — Linear status → Done
+
+### For Founders
+
+- Architecture decisions: see `docs/ARCHITECTURE.md`
+- IP strategy: see memory file `/MEMORY.md`
+- Roadmap: Suzie 2.0 plan, Lantern Kids scale-up, 20-operator foundry model
 
 ---
 
-**Last Updated:** 2026-06-02  
-**Next milestone:** Discord bot integration + per-user journal customization
+## Known Limitations (v1.0)
+
+| Limitation | Impact | Roadmap |
+|-----------|--------|---------|
+| Filesystem task queue | O(N) claim ops, race conditions | Suzie 2.0: Redis (Q3 2026) |
+| JSON state files | No indexing, bottleneck at 40+ agents | Suzie 2.0: PostgreSQL (Q3 2026) |
+| Single-node deployment | No distributed consensus | Suzie 2.0: Kubernetes (Q3 2026) |
+| Parental review in Kids mode | Manual, not automated | Lantern Kids v2 (Q3 2026) |
+| Vosk STT latency | ~500ms on Starlink | Accept trade-off: offline-first |
+
+---
+
+## Support & Resources
+
+- **Getting started:** Run `python apps/lantern-desktop/lantern_desktop.py`
+- **Troubleshooting:** Check `~/.lantern/logs/` for error logs
+- **Operator onboarding:** See `docs/LINEAR-WORKFLOW.md`
+- **Architecture questions:** See `docs/ARCHITECTURE.md`
+- **Issues & backlog:** Linear workspace (not GitHub)
+
+---
+
+## License
+
+- **Lantern OS core** — AGPL (source-available)
+- **Lantern Kids** — Proprietary (parental consent gating)
+- **Suzie Orchestrator** — AGPL (source-available, self-host tier)
+- **Third-party dependencies** — See `LICENSE.md` for full attribution
+
+---
+
+**Last Updated:** 2026-06-01  
+**Reviewed:** Phase A (Discord + Linear setup), Phase C Phase 0 (top-level cleanup)  
+**Next Review:** 2026-06-07 (end of Cycle 1 cleanup)
