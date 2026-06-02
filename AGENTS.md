@@ -97,9 +97,53 @@ Then handle the first 2-4 reported issues in priority order. If an issue cannot 
 
 ---
 
+## Change Control — Linear Ticket Gate + Anti-Sprawl (MANDATORY)
+
+**All code changes to master must reference a Linear backlog ticket. CI blocks PRs that sprawl beyond ticket scope.**
+
+Enforced by `linear-ticket-gate.yml` with three gates:
+
+### Gate 1 — Linear ticket required
+
+1. Every PR title, body, or branch name must contain a Linear ticket ID (e.g., `LAN-123`).
+2. Agents must create or claim a Linear ticket **before** writing code.
+3. No speculative, untracked, or "cleanup" PRs without a ticket.
+4. Fabricated ticket IDs will be caught in review.
+
+### Gate 2 — Anti-sprawl (blocks agentic overproduction)
+
+CI will **fail** the PR if it detects:
+- **New top-level directories** not already in master (agents love creating new modules)
+- **>25 new files** in a single PR (scope creep signal)
+- **>3 new markdown files** outside of AGENTS.md/README.md (doc sprawl)
+- **>2 new Dockerfiles/requirements files** (infra sprawl)
+
+Operator can override by adding `sprawl-approved` to the PR body.
+
+### Gate 3 — No new repos or submodules
+
+Submodule additions are blocked. Everything lives in this one repo.
+
+### Exempt changes (no ticket required)
+
+- `ci/`, `ci-`, `dependabot/`, `hotfix/` branch prefixes
+- `ci:`, `chore(ci):`, `hotfix:`, `revert:` PR title prefixes
+
+### Why
+
+Agentic-first development caused: new repos nobody asked for, dozens of generated files per PR, doc sprawl, infra duplication, and scope drift. This gate forces agents to stay within the ticket scope and prevents the repo from growing sideways.
+
+---
+
+## One Repo Policy
+
+**Everything lives in `lantern-os`.** Do not create separate repos for trading, Discord bots, dashboards, or any other surface. New modules go into existing directories or get a subdirectory approved via a Linear ticket.
+
+---
+
 ## Branching
 
-Use `codex/` branch names for agent work unless the operator asks otherwise.
+Use `codex/` branch names for agent work unless the operator asks otherwise. Include the Linear ticket ID: `codex/LAN-123-description`.
 
 ---
 

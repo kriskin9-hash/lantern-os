@@ -1,0 +1,188 @@
+name: Linear Ticket Gate + Anti-Sprawl
+
+on:
+  pull_request:
+    branches: ["master"]
+    types: [opened, synchronize, reopened, edited]
+
+concurrency:
+  group: linear-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  linear-ticket-required:
+    name: Require Linear ticket + block sprawl
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gate 1 — Linear ticket reference
+        id: ticket
+        shell: python
+        run: |
+          import os, re, sys
+
+          title = os.environ.get("PR_TITLE", "")
+          body = os.environ.get("PR_BODY", "")
+          branch = os.environ.get("PR_BRANCH", "")
+          combined = f"{title}\n{body}\n{branch}"
+
+          # Exempt prefixes
+          exempt_branch = ["ci/", "ci-", "dependabot/", "hotfix/"]
+          if any(branch.lower().startswith(p) for p in exempt_branch):
+              print(f"EXEMPT: branch '{branch}'")
+              sys.exit(0)
+
+          exempt_title = ["ci:", "chore(ci):", "hotfix:", "revert:"]
+          if any(title.lower().startswith(p) for p in exempt_title):
+              print(f"EXEMPT: title '{title}'")
+              sys.exit(0)
+
+          ticket_pattern = r"[A-Z]{2,10}-\d+"
+          matches = re.findall(ticket_pattern, combined)
+
+          if matches:
+              print(f"PASS: ticket(s) {matches}")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write(f"tickets={','.join(matches)}\n")
+              sys.exit(0)
+          else:
+              print("=" * 60)
+              print("BLOCKED: No Linear ticket found in PR.")
+              print("=" * 60)
+              print("Add a ticket ID (e.g. LAN-123) to your PR title,")
+              print("body, or branch name.")
+              print("Exempt: ci/*, hotfix/*, dependabot/*, revert:")
+              sys.exit(1)
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BRANCH: ${{ github.head_ref }}
+
+      - name: Gate 2 — Anti-sprawl (new files + dirs)
+        shell: python
+        run: |
+          import os, subprocess, sys
+
+          base = os.environ.get("BASE_REF", "master")
+          result = subprocess.run(
+              ["git", "diff", "--name-status", "--diff-filter=A",
+               f"origin/{base}...HEAD"],
+              capture_output=True, text=True
+          )
+          new_files = [
+              line.split("\t", 1)[1]
+              for line in result.stdout.strip().split("\n")
+              if line.strip() and "\t" in line
+          ]
+
+          if not new_files:
+              print("PASS: no new files added.")
+              sys.exit(0)
+
+          # Count new top-level dirs being introduced
+          existing_dirs_result = subprocess.run(
+              ["git", "ls-tree", "--name-only", f"origin/{base}"],
+              capture_output=True, text=True
+          )
+          existing_top = set(existing_dirs_result.stdout.strip().split("\n"))
+
+          new_top_dirs = set()
+          for f in new_files:
+              top = f.split("/")[0]
+              if top not in existing_top and "/" in f:
+                  new_top_dirs.add(top)
+
+          # Sprawl signals
+          warnings = []
+
+          if new_top_dirs:
+              warnings.append(
+                  f"NEW TOP-LEVEL DIRS: {', '.join(sorted(new_top_dirs))}\n"
+                  f"  Adding top-level directories is sprawl unless the Linear\n"
+                  f"  ticket explicitly approves new module creation."
+              )
+
+          # Flag excessive new files (agents love generating dozens of files)
+          if len(new_files) > 25:
+              warnings.append(
+                  f"FILE COUNT: {len(new_files)} new files added.\n"
+                  f"  PRs adding >25 files need operator review for scope creep.\n"
+                  f"  Agents must stay within the scope of their Linear ticket."
+              )
+
+          # Flag new markdown docs (agents love generating docs nobody asked for)
+          new_md = [f for f in new_files if f.endswith((".md", ".MD"))]
+          # Exempt: AGENTS.md, README.md, CHANGELOG.md, and anything in .github/
+          exempt_md = {"AGENTS.md", "README.md", "CHANGELOG.md"}
+          new_md = [f for f in new_md if os.path.basename(f) not in exempt_md
+                    and not f.startswith(".github/")]
+          if len(new_md) > 3:
+              warnings.append(
+                  f"DOC SPRAWL: {len(new_md)} new markdown files.\n"
+                  f"  Files: {', '.join(new_md[:8])}{'...' if len(new_md) > 8 else ''}\n"
+                  f"  Agents must not generate docs unless the ticket requires it."
+              )
+
+          # Flag new requirement files or dockerfiles (infra sprawl)
+          infra_files = [f for f in new_files
+                         if os.path.basename(f).lower().startswith(("dockerfile", "requirements", "docker-compose"))]
+          if len(infra_files) > 2:
+              warnings.append(
+                  f"INFRA SPRAWL: {len(infra_files)} new infra files.\n"
+                  f"  Files: {', '.join(infra_files)}\n"
+                  f"  Each new Dockerfile/requirements file must be in the ticket scope."
+              )
+
+          if warnings:
+              print("=" * 60)
+              print("SPRAWL WARNING — Review required")
+              print("=" * 60)
+              for w in warnings:
+                  print()
+                  print(w)
+              print()
+              print("This PR may contain agentic sprawl beyond the Linear ticket scope.")
+              print("If this is intentional, add 'sprawl-approved' to the PR body.")
+
+              body = os.environ.get("PR_BODY", "").lower()
+              if "sprawl-approved" in body:
+                  print()
+                  print("OVERRIDE: 'sprawl-approved' found in PR body. Passing.")
+                  sys.exit(0)
+
+              sys.exit(1)
+          else:
+              print(f"PASS: {len(new_files)} new file(s), no sprawl signals.")
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+
+      - name: Gate 3 — No new repos or submodules
+        shell: python
+        run: |
+          import subprocess, sys
+
+          result = subprocess.run(
+              ["git", "diff", "--name-only", "origin/master...HEAD"],
+              capture_output=True, text=True
+          )
+          changed = result.stdout.strip().split("\n")
+
+          blocked = [f for f in changed if f in (".gitmodules",)
+                     or f.endswith(".gitmodules")]
+
+          if blocked:
+              print("BLOCKED: submodule changes detected.")
+              print("Do not add submodules. Everything lives in this repo.")
+              print(f"Files: {blocked}")
+              sys.exit(1)
+
+          print("PASS: no submodule sprawl.")
