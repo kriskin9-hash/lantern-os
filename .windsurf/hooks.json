@@ -1,42 +1,14 @@
 {
-  "pre_read_code": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Validate-FileAccess.ps1",
-    "block_on_failure": false
-  },
-  "post_read_code": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Log-FileRead.ps1",
-    "block_on_failure": false
-  },
-  "pre_write_code": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Validate-FileWrite.ps1",
-    "block_on_failure": true
-  },
-  "post_write_code": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Log-FileWrite.ps1",
-    "block_on_failure": false
-  },
   "pre_run_command": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Validate-DemoSafety.ps1",
-    "block_on_failure": true
-  },
-  "post_run_command": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Log-CommandExecution.ps1",
-    "block_on_failure": false
+    "enabled": true,
+    "description": "Review command before local execution"
   },
   "pre_mcp_tool_use": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Validate-McpTool.ps1",
-    "block_on_failure": true
+    "enabled": true,
+    "description": "Review MCP tool call before execution"
   },
-  "post_mcp_tool_use": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Log-McpToolUse.ps1",
-    "block_on_failure": false
-  },
-  "pre_user_prompt": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Validate-PromptSafety.ps1",
-    "block_on_failure": false
-  },
-  "post_cascade_response": {
-    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.windsurf\\hooks\\Log-CascadeResponse.ps1",
-    "block_on_failure": false
+  "pre_write_code": {
+    "enabled": true,
+    "description": "Review code changes before writing to disk"
   }
 }

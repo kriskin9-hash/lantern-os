@@ -1,0 +1,73 @@
+# Unified Lantern OS + HFF Requirements
+# Modernized: Python 3.12, latest stable versions
+# Generated: 2025
+
+# Core Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+gunicorn==21.2.0
+
+# HTTP & Networking
+requests==2.31.0
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Security & Cryptography
+cryptography==41.0.7
+PyJWT==2.8.1
+python-dotenv==1.0.0
+
+# Data & Database
+SQLAlchemy==2.0.23
+psycopg2-binary==2.9.9
+redis==5.0.1
+pydantic==2.5.1
+
+# AI/ML & Language Models
+anthropic==0.7.13
+openai==1.6.1
+langchain==0.1.1
+sentence-transformers==2.2.2
+
+# Speech & Audio
+vosk==0.3.45
+pydub==0.25.1
+librosa==0.10.0
+
+# Discord Integration
+discord.py==2.3.2
+PyGithub==2.1.1
+
+# Testing & Quality
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+black==23.12.1
+flake8==6.1.0
+mypy==1.7.1
+
+# Logging & Monitoring
+python-json-logger==2.0.7
+structlog==23.2.0
+
+# Task Queue (optional)
+celery==5.3.4
+
+# CLI & Development
+click==8.1.7
+typer==0.9.0
+rich==13.7.0
+
+# Data Processing
+pandas==2.1.3
+numpy==1.26.2
+pyarrow==14.0.1
+
+# File Processing
+pillow==10.1.0
+PyPDF2==3.16.0
+python-docx==0.8.11
+
+# Documentation (if needed)
+sphinx==7.2.6
+sphinx-rtd-theme==2.0.0

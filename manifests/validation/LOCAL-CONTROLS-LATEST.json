@@ -1,24 +1,25 @@
-﻿{
-    "generatedAt":  "2026-05-31T13:46:49.0236250-04:00",
-    "root":  "D:\\tmp\\lantern-os",
-    "garageExists":  true,
-    "accessXPath":  "C:\\Program Files\\WindowsApps\\SUPSI.AccessX_1.4.0.0_x64__bzz41p7kqy1nr\\AccessX.exe",
-    "accessXExists":  true,
-    "dashboard":  {
-                      "url":  "http://localhost:8765/dashboard/index-v2.html",
-                      "ok":  false,
-                      "statusCode":  null,
-                      "error":  "The operation has timed out."
-                  },
-    "mcp":  {
-                "url":  "http://127.0.0.1:8787/health",
-                "ok":  true,
-                "statusCode":  200
-            },
-    "lantern":  {
-                    "url":  "http://127.0.0.1:5173/api/lantern/health",
-                    "ok":  false,
-                    "statusCode":  null,
-                    "error":  "Unable to connect to the remote server"
-                }
+{
+    "generatedAt": "2026-05-31T13:46:49.0236250-04:00",
+    "root": "${REPO_ROOT}",
+    "garageExists": true,
+    "accessXPath": "C:\\Program Files\\WindowsApps\\SUPSI.AccessX_1.4.0.0_x64__bzz41p7kqy1nr\\AccessX.exe",
+    "accessXExists": true,
+    "dashboard": {
+        "url": "http://localhost:8765/dashboard/index-v2.html",
+        "ok": false,
+        "statusCode": null,
+        "error": "The operation has timed out."
+    },
+    "mcp": {
+        "url": "http://127.0.0.1:8787/health",
+        "ok": true,
+        "statusCode": 200
+    },
+    "lantern": {
+        "url": "http://127.0.0.1:5173/api/lantern/health",
+        "ok": false,
+        "statusCode": null,
+        "error": "Unable to connect to the remote server"
+    },
+    "ragIndex": "manifests/TMP-REPO-RAG-INDEX.json"
 }

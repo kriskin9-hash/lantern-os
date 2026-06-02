@@ -52,6 +52,20 @@
       "failurePolicy": "warn"
     },
     {
+      "id": "post-ingestion-purge",
+      "name": "Post-Ingestion Purge",
+      "script": "scripts/Invoke-PostIngestionPurge.ps1",
+      "args": ["-ReportPdfRetentionDays", "7", "-MaxReceiptsPerClass", "30"],
+      "enabled": true,
+      "priority": 5,
+      "intervalMinutes": 245,
+      "runAfter": ["sync-rag-pdf"],
+      "group": "purge",
+      "receiptClass": "post_ingestion_purge",
+      "failurePolicy": "warn",
+      "note": "Runs after sync-rag-pdf (240 min). Purges reports/PDF/ older than 7 days, evidence receipts beyond 30/class, and superseded kalshi snapshots."
+    },
+    {
       "id": "style-convergence-reports",
       "name": "Style Convergence (Reports)",
       "script": "scripts/Invoke-StyleConvergence.ps1",
@@ -82,6 +96,7 @@
     "evidence":   { "description": "Receipt and evidence generation" },
     "discovery":  { "description": "Asset and repo scanning" },
     "publish":    { "description": "PDF and RAG flat-file publishing" },
+    "purge":      { "description": "Post-ingestion data purge and retention enforcement" },
     "style":      { "description": "Mookman 4 style enforcement" },
     "health":     { "description": "System health and disk/git checks" }
   },

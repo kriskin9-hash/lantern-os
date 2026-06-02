@@ -1,1 +1,0 @@
-{"timestamp":"2026-05-31T20:10:00Z","slotId":"deepseek-v3-agent-slot-004","event":"slot_created","model":"deepseek-chat","provider":"deepseek","status":"awaiting_green_light","monthlyBudget":100,"notes":"DeepSeek V3 slot initialized. Free tier: 5M tokens. Paid: $0.28/$0.56 per 1M input/output tokens"}

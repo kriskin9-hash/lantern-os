@@ -4,10 +4,14 @@
       "enabled": true,
       "mode": "test",
       "publishableKey": "pk_test_YOUR_ACTUAL_KEY_HERE",
-      "secretKey": "sk_test_YOUR_ACTUAL_KEY_HERE", 
+      "secretKey": "sk_test_YOUR_ACTUAL_KEY_HERE",
       "webhookSecret": "whsec_YOUR_WEBHOOK_SECRET_HERE",
       "defaultCurrency": "USD",
-      "connectedAccountId": null
+      "connectedAccountId": null,
+      "priceIds": {
+        "supporter": "price_1QQQQQQQQQQQQQ",
+        "pilot": "price_2QQQQQQQQQQQQQ"
+      }
     },
     "paypal": {
       "enabled": false,

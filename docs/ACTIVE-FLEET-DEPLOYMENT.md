@@ -15,7 +15,7 @@ The active agent fleet processing system has been implemented and needs to be de
 ### Step 1: Copy Files to Orchestrator Repository
 ```powershell
 # Copy active fleet script
-Copy-Item "d:/tmp/lantern-os/scripts/Start-ActiveAgentFleet.ps1" "C:/Users/alexp/Documents/gm-agent-orchestrator/scripts/"
+Copy-Item "$env:REPO_ROOT/scripts/Start-ActiveAgentFleet.ps1" "$env:ORCHESTRATOR_REPO_PATH/scripts/"
 
 # Copy configuration (already created)
 # config/active-processing.json already exists in orchestrator
@@ -23,7 +23,7 @@ Copy-Item "d:/tmp/lantern-os/scripts/Start-ActiveAgentFleet.ps1" "C:/Users/alexp
 
 ### Step 2: Test Active Fleet Processing
 ```powershell
-cd "C:\Users\alexp\Documents\gm-agent-orchestrator"
+cd "$env:ORCHESTRATOR_REPO_PATH"
 
 # Start MCP server with no-auth (if not already running)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-OrchMcpServer.ps1 -NoAuth
@@ -49,7 +49,7 @@ $testInput = "Test task: optimize dollhouse convergence"
 
 ### Step 5: Commit Changes to Orchestrator
 ```powershell
-cd "C:\Users\alexp\Documents\gm-agent-orchestrator"
+cd "$env:ORCHESTRATOR_REPO_PATH"
 
 git add scripts/Start-ActiveAgentFleet.ps1 config/active-processing.json
 git commit -m "feat: Add active agent fleet processing with chat handoff integration

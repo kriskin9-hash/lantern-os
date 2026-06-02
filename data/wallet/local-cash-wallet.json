@@ -2,7 +2,7 @@
   "name": "Lantern Local Cash Wallet",
   "generatedAt": "2026-05-31T15:30:00-04:00",
   "repo": "https://github.com/alex-place/lantern-os",
-  "localRoot": "C:\\tmp\\lantern-os",
+  "localRoot": "${REPO_ROOT}",
   "currency": "USD",
   "type": "local_ledger_not_bank_or_crypto_wallet",
   "clearedCashUsd": 0,
@@ -48,5 +48,6 @@
     "Do not create new offers during the 11-day sprint.",
     "Record outreach, objections, invoices, and cleared cash as ledger events.",
     "Keep secrets and private payment credentials out of Git."
-  ]
+  ],
+  "ragIndex": "manifests/TMP-REPO-RAG-INDEX.json"
 }

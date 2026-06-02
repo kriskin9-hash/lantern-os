@@ -5,15 +5,7 @@
   "description": "Local-first Lantern OS garage full-stack app.",
   "scripts": {
     "start": "node server.js",
-    "start:local": "node server.js",
-    "start:cloud": "node cloud-server.js",
-    "start:cost-dashboard": "node service-automation/cost-transparency-server.js",
-    "check": "node --check server.js && node --check cloud-server.js && node --check public/app.js && node --check public/courtney.js && node --check public/dreamer-dashboard.js",
     "validate": "node validate.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2",
-    "pdf-parse": "^1.1.1"
   },
   "engines": {
     "node": ">=20"

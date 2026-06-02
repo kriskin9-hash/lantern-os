@@ -2509,7 +2509,7 @@ python .\scripts\Test-ConvergenceAgentFleet.py --write-json .\manifests\validati
 ```json
 {
     "generatedAt": "2026-05-30T13:59:20.7716656-04:00",
-    "root": "D:\\tmp\\lantern-os",
+    "root": "${REPO_ROOT}",
     "mode": "local",
     "method": "Lantern OS 12-step convergence loop",
     "designedRingSlots": 36,

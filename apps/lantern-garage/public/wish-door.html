@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <title>The Wish Door — Lantern Dreamer</title>
+  <link rel="stylesheet" href="styles.css?v=20260531-wish-door-v1">
+  <script defer src="wish-door.js?v=20260531-wish-door-v1"></script>
+</head>
+<body data-style="dreamer-notebook">
+  <a class="skip-link" href="#main">Skip to the door</a>
+  <main id="main" class="shell dreamer-shell" tabindex="-1">
+    <header class="hero os-hero compact-hero">
+      <p class="eyebrow">Lantern Dreamer</p>
+      <h1>The Wish Door</h1>
+      <p class="subtitle">Step through. Write what you want to become true. No proof needed here — only hope, intention, and the courage to name it.</p>
+      <nav class="dreamer-nav" aria-label="Dreamer sections">
+        <a href="/courtney.html">The Well</a>
+        <a href="/wish-door.html" aria-current="page">The Wish Door</a>
+        <a href="/">Back to the Garage</a>
+      </nav>
+    </header>
+
+    <section class="dreamer-grid" aria-label="Wish door">
+      <article class="panel dreamer-compose">
+        <h2>What do you wish for?</h2>
+        <form id="wishForm" class="dreamer-form">
+          <label for="wishName">Name your wish</label>
+          <input id="wishName" name="name" maxlength="120" placeholder="A home, a healing, a horizon...">
+          <label for="wishMood">The feeling around it</label>
+          <input id="wishMood" name="mood" maxlength="40" placeholder="hopeful, urgent, tender, fierce...">
+          <label for="wishText">The wish itself</label>
+          <textarea id="wishText" name="text" rows="8" maxlength="2000" placeholder="I wish... What would change if this came true? Who would you become?"></textarea>
+          <label for="wishTags">Small names for the feeling</label>
+          <input id="wishTags" name="tags" maxlength="160" placeholder="family, work, health, love, craft">
+          <button type="submit">Knock on the door</button>
+        </form>
+        <p class="dreamer-status" id="wishStatus" aria-live="polite"></p>
+      </article>
+
+      <article class="panel dreamer-recall">
+        <h2>Wishes behind the door <span class="muted" id="wishCount">0 wishes</span></h2>
+        <p class="muted" id="wishPath">the door</p>
+        <ul class="dreamer-entries" id="wishEntries" aria-label="Wish entries"></ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

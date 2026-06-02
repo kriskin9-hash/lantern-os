@@ -1,266 +1,173 @@
-# Lantern OS
+# Lantern OS + Suzie Orchestrator
 
-Status: pre-v1.0.0 staging
-Scope: local-first operating repo, dashboard, reports, manifests, validation gates, and AWS-safe mirror bridge
-Style spine: `docs/ORION-MOOKMANREPORT4-STYLE.md`
-Truth boundary: local MCP status, dirty source worktrees, private folders, boot mutation, and live worker counts require operator-machine evidence
-
----
-
-## Simple Answer
-
-Lantern OS is the clean control plane for the Windows/local-first Lantern line.
-
-This repository is not a dump of legacy framework content or every prior artifact. It is the place where promoted Lantern work becomes readable, validated, public-safe, and ready for the next operator step.
-
-Repo = evidence store. Dashboard = fast access. AWS bridge = read-only/public mirror until health checks prove otherwise.
+**Status:** TRL 4 (Field Validation)  
+**Last Updated:** 2026-06-01  
+**Repo Contract:** See `docs/REPO-CONTRACT.md`
 
 ---
 
-## Open Lantern
+## What This Repo Contains
 
-Primary local dashboard:
+### Lantern OS — Local-First AI Chat for Families
+Privacy-first AI chat stack: desktop, browser, and dashboard surfaces.
+- **Desktop:** Offline-first app with Vosk STT (no cloud speech-to-text)
+- **Browser:** Same chat experience without install
+- **Dashboard:** Local Flask service + Claude/Gemini/Codex routing
+- **Voice Curator:** Public domain music library (CC-licensed + synthetic)
+- **Kids Edition:** Age-gated, parental review, no external bridges
 
-```text
-http://127.0.0.1:4177
+**Not included:** Cloud-hosted deployment, medical/legal advice surfaces, autonomous escalation.
+
+### Suzie Orchestrator — AI Agent Management
+Windows-first control plane for supervising 1–40 AI agents across local worktrees, GitHub, and MCP tool surfaces.
+- **Slot Management:** Manage 8+ concurrent agent slots (Claude, Codex, Gemini, GPT, Ollama)
+- **Task Queue:** Filesystem-based queue (being modernized to Redis for 400-agent scalability)
+- **Token Quota:** Per-agent fallback routing when primary provider quota exhausted
+- **MCP Boundary:** Safe tool allowlist — agents cannot escape sandbox
+
+**Modernization:** Suzie 2.0 (Rust + Redis + PostgreSQL + Kubernetes) targets 400 agents across 20 operators. See `SUZIE-2.0-PLAN.md`.
+
+---
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+# Python packages
+pip install discord.py aiohttp flask vosk pydub
+
+# System packages (macOS/Linux)
+brew install portaudio openssl
+
+# Windows: install ffmpeg, portaudio from binaries
 ```
 
-This is the front door for interaction: first-class chat, RAG memory, wallet truth, local controls, outreach, reports, devices, diagnostics, cloud mirrors, and Arc Reactor Mining Lab converge here. No setup screen or secondary launcher is required when the dashboard is already running. No separate mining dashboard, no shortcut sprawl, no fake surfaces.
+### 2. Start Lantern
 
-Windows tester download path:
-
-```text
-https://github.com/alex-place/lantern-os/releases/latest
+```bash
+cd apps/lantern-desktop
+python lantern_desktop.py
 ```
 
-Use `lantern-desktop-tester-latest.zip` for the current tester lane. The install wiki is `docs/wiki/WINDOWS-TESTER-INSTALL.md`. Do not claim an `.exe` is ready unless that release asset exists on GitHub. `Lantern-OS-Free-Setup.exe` and `Lantern-OS-Founder-20-Setup.exe` are future installer asset names only until they are attached to a release.
+### 3. Start Suzie (Agent Orchestrator)
 
----
-
-## What It Actually Does
-
-| Lane | Purpose | Current state |
-|---|---|---|
-| Local cockpit | Open operator surfaces for app, garage, RAG, wallet, boot gates, and reports | present |
-| RAG Dollhouse | Keep source-labeled flat memory and receipts | present |
-| Release gates | Prevent v1 claims before proof and operator approval | active |
-| MCP split | Separate remote docs from local-only health and worker proof | active |
-| AWS bridge | Serve a public-safe cloud runtime without local PowerShell, MCP, or private state mutation | pending operator deploy |
-| Agent contact | Tell agents what to inspect first and what to hold | active |
-| Orion style | Convert flat docs and CSS into human-readable technical sheets | active style pass |
-
----
-
-## Evidence / Source Discipline
-
-Lantern OS promotes material only when it has a purpose, source path, claim summary, validation status, blockers, rollback notes, operator approval status, and a human-readable first screen.
-
-Legacy scans, prior framework packets, external repos, and local working trees are evidence sources only. They do not define this repo's public identity, and they must not be copied in bulk into the front page. Dirty source worktrees are treated as evidence to inspect, not state to overwrite or reset.
-
-Core maps:
-
-```text
-manifests/foundry-shareholder-repos.md
-docs/wiki/ALEX-PLACE.md
-docs/ORION-MOOKMANREPORT4-STYLE.md
+```bash
+cd gm-agent-orchestrator
+pwsh -NoExit -Command { & .\Start-GmAgentOrchestrator.ps1 }
 ```
 
-Remote control plane:
+### 4. Start Discord Bot (Optional)
 
-```text
-https://github.com/alex-place/lantern-os
+```bash
+export DISCORD_BOT_TOKEN="your-token-here"
+export LANTERN_DISCORD_GUILD_ID="your-guild-id"
+cd src/discord_lounge_bot
+pwsh -NoExit -Command { & ..\..\scripts\Start-DiscordBotWatchdog.ps1 }
 ```
 
 ---
 
-## Proven / Held / Local-Only
+## Repository Structure
 
-| State | Meaning |
-|---|---|
-| Proven in repo | File exists here and can be reviewed through GitHub or local checkout |
-| Held local-only | Requires the operator machine: MCP health, dirty worktrees, private folders, local queue/active/failed state, live worker counts |
-| Design contract | Describes intended system shape, not live proof |
-| Public-safe | Avoids private identity, raw dumps, unsafe fabrication details, and fake live-state claims |
-| AWS-held | A cloud endpoint is not verified until `/`, `/api/health`, and `/api/cloud-mirrors` pass |
-
-Nothing becomes v1.0.0 merely because it exists elsewhere. Promotion requires the convergence loop in `docs/CONVERGENCE-LOOP.md` and operator approval.
-
----
-
-## Initial Surfaces
-
-| Surface | Path |
-|---|---|
-| Canonical Lantern dashboard | `http://127.0.0.1:4177` |
-| Lantern Garage app | `apps/lantern-garage/` |
-| Cloud mirror manifest | `manifests/cloud-mirrors.json` |
-| AWS cloud runtime | `apps/lantern-garage/cloud-server.js` |
-| AWS container recipe | `apps/lantern-garage/Dockerfile` |
-| Redirected legacy surfaces | `surfaces/shareholder-index/index.html`, `surfaces/tony-garage/index.html`, `surfaces/lantern-desktop/index.html` |
-| Agent initial-contact surface | `manifests/LANTERN-OS-AGENT-INITIAL-CONTACT-SURFACES.md` |
-| Arc Reactor status | `data/arc-reactor/status.json` |
-| Arc Reactor Mining Lab | `docs/ARC-REACTOR-MINING-LAB.md` |
-| Flat Lantern RAG Dollhouse | `skills/lantern-rag-dollhouse/references/LANTERN-OS-RAG-DOLLHOUSE.flat.md` |
-| Orion / Mookman Report 4 style | `docs/ORION-MOOKMANREPORT4-STYLE.md` |
-
----
-
-## One Dashboard
-
-Lantern OS uses one dashboard with internal cards and formatted document views. Do not add a new public dashboard for every product lane. Internal cards/routes should be backed by real files, validation receipts, or live APIs.
-
-The dashboard should always make chat first-class, keep cloud tunnel/mirror status visible, and route Markdown through the formatted Lantern reader instead of dropping operators into raw text docs.
-
----
-
-## Cloud Mirrors and AWS Bridge
-
-`master` is the canonical worktree and deploy branch until v1.0.0. Cloud URLs are mirrors of the same Lantern OS dashboard, not separate products or extra dashboards.
-
-Mirror policy:
-
-- Local primary: `http://127.0.0.1:4177`
-- AWS/service mirrors live in `manifests/cloud-mirrors.json`
-- AWS uses `apps/lantern-garage/cloud-server.js` and `apps/lantern-garage/Dockerfile`
-- Local Windows uses `apps/lantern-garage/server.js`
-- A mirror can be listed as `candidate`, `configured`, or `verified`; the UI must show that status plainly
-- No AWS URL is verified until `/`, `/api/health`, and `/api/cloud-mirrors` pass on that URL
-
-Execution boundary: until v1.0.0, executable work must stay in the AWS-safe deploy/check lane or the Kalshi public-data research lane. See `docs/EXECUTION-BOUNDARIES.md`.
-
-Cloud command boundary: `POST /api/command` is the single command entrypoint, but the AWS runtime holds local commands and points operators back to local Lantern Garage. See `docs/LANTERN-COMMAND-ENTRYPOINT.md`.
-
----
-
-## Brand Guidelines
-
-Lantern OS should feel like a local operator cockpit: calm, evidence-backed, warm, and usable under pressure.
-
-Brand rules:
-
-- One front door: use `http://127.0.0.1:4177` as the local interaction URL.
-- Local first: default to localhost, repo-backed files, and explicit operator control before cloud or tunnels.
-- Truth first: cards appear only when backed by files, validation receipts, or live APIs.
-- No fake dashboards: use one dashboard with internal cards/routes.
-- No secret collection: never ask for seed phrases, private keys, Apple ID credentials, exchange passwords, or hidden signing permissions.
-- Plain language: say what is ready, held, blocked, or experimental.
-- Visual style: light cockpit surface, deep ink text, Lantern teal `#08756f`, steel blue `#1e5f89`, amber warnings `#9f5a07`, and rose risk `#9a3d55`.
-
----
-
-## Arc Reactor Mining Lab
-
-Mining Lab is a safe, legal, local-first package for inventorying owned hardware, routing hardware into viable lanes, validating wallets in read-only mode, and producing receipts.
-
-Mining boundaries:
-
-- CPU routes to Monero learning/P2Pool checks.
-- GPU routes stay experimental for RVN or ETC.
-- BTC/LTC/DOGE/KAS require owned or separately justified dedicated hardware.
-- ETH is wallet/claim/read-only only, not a mining lane.
-- No wallet cracking, brute force, hidden signing, or fake one-shot ROI claims.
-
----
-
-## Release Rule
-
-Before adding new surfaces, run the loop and fix the first 2-4 open issues it finds. Expansion is allowed only after the leading blockers are handled or explicitly marked held by the operator.
-
-Fleet execution uses the 12x3 convergence-ring contract in `manifests/CONVERGENCE-LOOP-AGENT-FLEET.md`: 12 loop steps, 3 agent roles per step, 36 designed ring slots, and a 64-worker elastic pool target. This is a design and receipt contract, not live-worker proof.
-
-MCP work is split by `manifests/MCP-WORK-SPLIT.md`. Remote docs can validate contracts and receipts, but local-only MCP health, dirty worktrees, private folders, and live worker counts still require operator-machine evidence.
-
----
-
-## Receptionist Routing
-
-Use `docs/LANTERN-OS-RECEPTIONIST-CALL-LIST.md` for public-safe call routing. It uses organization switchboards and public program contacts only. Do not add personal phone numbers, scraped direct dials, or unverified private numbers.
-
----
-
-## Printable Reports
-
-Quick front page:
-
-```text
-artifacts/SUPER-JARVIS-LANTERN-OS-FRONT-PAGE.pdf
 ```
-
-Master convergence PDF:
-
-```text
-artifacts/COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf
-```
-
-Public bounty radar:
-
-```text
-artifacts/PUBLIC-PUZZLE-MATH-BOUNTY-RADAR-2026-05-30.pdf
+├── apps/
+│   ├── lantern-desktop/          # Tkinter desktop app + Vosk STT
+│   ├── lantern-browser/          # Flask + HTML/JS web UI
+│   └── lantern-kids/             # Age-gated variant (parental review)
+├── services/
+│   ├── lantern-dashboard/        # Flask control plane
+│   ├── audit-verification-api/   # Cryptographic audit chain
+│   └── discord-lounge-bot/       # Discord integration
+├── gm-agent-orchestrator/        # Suzie: slot/queue/token management
+├── src/
+│   ├── hff-api/                  # Shared Flask utilities
+│   └── voice_curator/            # Public domain music library
+├── scripts/
+│   ├── Start-DiscordBotWatchdog.ps1     # 24/7 bot monitoring
+│   ├── Start-GmAgentOrchestrator.ps1    # Orchestrator supervisor
+│   └── ... (135+ support scripts)
+├── docs/
+│   ├── REPO-CONTRACT.md          # What belongs in this repo
+│   ├── LINEAR-WORKFLOW.md        # Operator training for sprints
+│   └── ARCHITECTURE.md           # System design
+├── tests/
+│   ├── test_lantern_desktop.py
+│   ├── test_suzie_orchestrator.py
+│   └── ...
+└── docker/
+    ├── Dockerfile.lantern        # Lantern container
+    └── Dockerfile.suzie          # Orchestrator container
 ```
 
 ---
 
-## Non-Goals For This Repo
+## Active Product Streams
 
-- No unattended bootloader edits.
-- No partition or disk mutation scripts.
-- No unreviewed generated artifact dump.
-- No claim that v1.0.0 is ready before the operator says so.
-- No skeleton-only milestones.
-- No treating offline/local/server-farm Foundry tokens as cloud-metered, "Lite", or per-token rated.
-- No raw filepath spam above the first human-relevant explanation.
-- No bulk promotion of legacy framework content into the Lantern OS front page.
+| Stream | TRL | Status | Owner |
+|--------|-----|--------|-------|
+| Lantern Desktop Chat | 4 | Shipped | (unassigned) |
+| Lantern Browser Chat | 4 | Shipped | (unassigned) |
+| Vosk STT Integration | 4 | Active | (unassigned) |
+| Discord Bot + MCP | 4 | Just shipped | Founder |
+| Suzie Orchestrator Core | 4 | Active (Phase 1 modernization) | Founder |
+| Dashboard Three-View | 4 | Active | (unassigned) |
 
----
-
-## First Command
-
-Run the convergence loop:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-LanternConvergenceLoop.ps1
-```
-
-Validate the convergence fleet count contract:
-
-```powershell
-python .\scripts\Test-ConvergenceAgentFleet.py --write-json .\manifests\validation\CONVERGENCE-FLEET-LATEST.json
-```
+For complete stream list, see `docs/STREAMS.md`.
 
 ---
 
-## Garage Command
+## Contributor Guide
 
-Open the Movie 1 operator cockpit:
+### For Operators
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Open-TonyGarage.ps1
-```
+1. **Read this README** — understand Lanterns + Suzie roles
+2. **Check `CONTRIBUTING.md`** — git workflow, commit message style
+3. **Join Linear workspace** — backlog lives there, not GitHub issues
+4. **Claim a task** — see `docs/LINEAR-WORKFLOW.md` for how
+5. **Work locally** on `cleanup/*` or `feature/*` branch
+6. **Push and open PR** — Founder reviews Friday
+7. **Merge once approved** — Linear status → Done
 
-If the browser shows stale styling, reopen through the launcher or refresh with cache bypass. The garage surface cache-busts its CSS, image, and document links.
+### For Founders
 
----
-
-## Local Controls Command
-
-Open the local control bridge and validate dashboard/MCP/Lantern health:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-LanternLocalControls.ps1
-```
+- Architecture decisions: see `docs/ARCHITECTURE.md`
+- IP strategy: see memory file `/MEMORY.md`
+- Roadmap: Suzie 2.0 plan, Lantern Kids scale-up, 20-operator foundry model
 
 ---
 
-## Full-Stack App Command
+## Known Limitations (v1.0)
 
-Start the in-house Lantern Garage app:
+| Limitation | Impact | Roadmap |
+|-----------|--------|---------|
+| Filesystem task queue | O(N) claim ops, race conditions | Suzie 2.0: Redis (Q3 2026) |
+| JSON state files | No indexing, bottleneck at 40+ agents | Suzie 2.0: PostgreSQL (Q3 2026) |
+| Single-node deployment | No distributed consensus | Suzie 2.0: Kubernetes (Q3 2026) |
+| Parental review in Kids mode | Manual, not automated | Lantern Kids v2 (Q3 2026) |
+| Vosk STT latency | ~500ms on Starlink | Accept trade-off: offline-first |
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-LanternGarageApp.ps1
-```
+---
 
-Then open:
+## Support & Resources
 
-```text
-http://127.0.0.1:4177
-```
+- **Getting started:** Run `python apps/lantern-desktop/lantern_desktop.py`
+- **Troubleshooting:** Check `~/.lantern/logs/` for error logs
+- **Operator onboarding:** See `docs/LINEAR-WORKFLOW.md`
+- **Architecture questions:** See `docs/ARCHITECTURE.md`
+- **Issues & backlog:** Linear workspace (not GitHub)
+
+---
+
+## License
+
+- **Lantern OS core** — AGPL (source-available)
+- **Lantern Kids** — Proprietary (parental consent gating)
+- **Suzie Orchestrator** — AGPL (source-available, self-host tier)
+- **Third-party dependencies** — See `LICENSE.md` for full attribution
+
+---
+
+**Last Updated:** 2026-06-01  
+**Reviewed:** Phase A (Discord + Linear setup), Phase C Phase 0 (top-level cleanup)  
+**Next Review:** 2026-06-07 (end of Cycle 1 cleanup)

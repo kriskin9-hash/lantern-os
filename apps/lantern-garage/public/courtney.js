@@ -38,14 +38,6 @@ function tagsFromInput(value) {
     .slice(0, 10);
 }
 
-function linksFromInput(value) {
-  return String(value || "")
-    .split(",")
-    .map((link) => link.trim())
-    .filter(Boolean)
-    .slice(0, 20);
-}
-
 function renderEntries(data) {
   const entries = data.entries || [];
   const list = $("dreamerEntries");
@@ -78,94 +70,62 @@ function renderEntries(data) {
     if (entry.mood) mood.textContent = `mood: ${entry.mood}`;
     const text = document.createElement("p");
     text.textContent = entry.text || "";
-    const meta = document.createElement("small");
-    meta.className = "dreamer-entry-meta";
-    const metaParts = [];
-    if (entry.ternaryId) metaParts.push(`matrix: ${entry.ternaryId}`);
-    if (Array.isArray(entry.links) && entry.links.length) metaParts.push(`links: ${entry.links.join(", ")}`);
-    if (Array.isArray(entry.tags) && entry.tags.length) metaParts.push(`#${entry.tags.join(" #")}`);
-    if (!metaParts.length) metaParts.push("private local entry");
-    meta.textContent = metaParts.join(" | ");
     item.appendChild(heading);
     if (entry.name) item.appendChild(name);
     if (entry.mood) item.appendChild(mood);
     item.appendChild(text);
-    item.appendChild(meta);
+    if (entry.tags && entry.tags.length) {
+      const tagLine = document.createElement("div");
+      tagLine.className = "dreamer-entry-tags";
+      tagLine.textContent = entry.tags.join(" · ");
+      item.appendChild(tagLine);
+    }
     list.appendChild(item);
   });
 }
 
-async function refreshEntries(query = "") {
-  const params = new URLSearchParams({ user: DREAMER_USER, limit: "100" });
-  if (query) params.set("q", query);
-  const data = await api(`/api/dreamer?${params.toString()}`);
-  renderEntries(data);
+async function loadEntries() {
+  try {
+    const data = await api(`/api/dreamer?user=${encodeURIComponent(DREAMER_USER)}`);
+    renderEntries(data);
+  } catch (error) {
+    setStatus(`Could not reach the well: ${error.message}`);
+  }
 }
 
 async function saveEntry(event) {
   event.preventDefault();
   const text = $("dreamerText").value.trim();
   if (!text) {
-    setStatus("The well waits for a thread. Write what came to you.");
+    setStatus("Write something before dropping it in.");
     return;
   }
-  const result = await api("/api/dreamer", {
-    method: "POST",
-    body: JSON.stringify({
-      user: DREAMER_USER,
-      kind: $("dreamerKind").value,
-      name: $("dreamerName").value.trim() || undefined,
-      mood: $("dreamerMood").value.trim() || undefined,
-      text,
-      tags: tagsFromInput($("dreamerTags").value),
-      links: linksFromInput($("dreamerLinks").value),
-      source: "courtney-web",
-    }),
-  });
-  $("dreamerText").value = "";
-  $("dreamerName").value = "";
-  $("dreamerMood").value = "";
-  $("dreamerLinks").value = "";
-  $("dreamerTags").value = "";
-  setStatus(`A ${result.record.kind} dropped in the well at ${new Date(result.record.recordedAt).toLocaleTimeString()}.`);
-  await refreshEntries($("recallQuery").value.trim());
-}
-
-async function recallEntries(event) {
-  event.preventDefault();
-  await refreshEntries($("recallQuery").value.trim());
-  setStatus("The well rippled.");
-}
-
-let notebookPollTimer = null;
-const NOTEBOOK_POLL_MS = 10000;
-
-function startNotebookPolling() {
-  if (notebookPollTimer) clearInterval(notebookPollTimer);
-  notebookPollTimer = setInterval(() => {
-    if (document.visibilityState === "visible") {
-      refreshEntries($("recallQuery").value.trim()).catch(() => {});
-    }
-  }, NOTEBOOK_POLL_MS);
-}
-
-function stopNotebookPolling() {
-  if (notebookPollTimer) { clearInterval(notebookPollTimer); notebookPollTimer = null; }
+  const body = {
+    user: DREAMER_USER,
+    kind: $("dreamerKind").value,
+    name: $("dreamerName").value.trim(),
+    mood: $("dreamerMood").value.trim(),
+    text,
+    tags: tagsFromInput($("dreamerTags").value),
+  };
+  try {
+    setStatus("Dropping into the well...");
+    await api("/api/dreamer", { method: "POST", body: JSON.stringify(body) });
+    $("dreamerForm").reset();
+    setStatus("Saved to your private local notebook.");
+    await loadEntries();
+  } catch (error) {
+    setStatus(`Save failed: ${error.message}`);
+  }
 }
 
 function init() {
-  $("dreamerForm").addEventListener("submit", (event) => saveEntry(event).catch((error) => setStatus(error.message)));
-  $("recallForm").addEventListener("submit", (event) => recallEntries(event).catch((error) => setStatus(error.message)));
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      refreshEntries($("recallQuery").value.trim()).catch(() => {});
-      startNotebookPolling();
-    } else {
-      stopNotebookPolling();
-    }
-  });
-  refreshEntries().catch((error) => setStatus(error.message));
-  startNotebookPolling();
+  $("dreamerForm").addEventListener("submit", saveEntry);
+  loadEntries();
 }
 
-init();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

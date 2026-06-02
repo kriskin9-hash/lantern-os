@@ -12,13 +12,13 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
-COPY requirements-discord-bot.txt .
+COPY ops/requirements-discord-bot.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements-discord-bot.txt
 
 # Copy bot source
-COPY ../src/discord_lounge_bot/bot.py .
+COPY src/discord_lounge_bot/bot.py .
 
 # Create non-root user
 RUN useradd -m discordbot && chown -R discordbot:discordbot /app

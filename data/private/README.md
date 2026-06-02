@@ -6,11 +6,10 @@ Raw PIID, PII, patient-style context, private social/feed exports, private walle
 
 Do not commit raw private data to Git.
 
-Recommended local-only paths inside this repo (gitignored):
+Recommended local-only path:
 
 ```text
 C:\tmp\lantern-os\data\private\piid-vault\
-C:\tmp\lantern-os\data\private\patient-packets\
 ```
 
 Recommended rules:

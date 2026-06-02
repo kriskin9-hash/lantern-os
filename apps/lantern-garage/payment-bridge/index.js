@@ -7,10 +7,7 @@ const fs = require('fs');
 require('dotenv').config();
 
 // Load configuration
-let configPath = path.join(__dirname, 'config.json');
-if (!fs.existsSync(configPath)) {
-  configPath = path.join(__dirname, 'config.example.json');
-}
+const configPath = path.join(__dirname, 'config.example.json');
 let config = {};
 try {
   const configContent = fs.readFileSync(configPath, 'utf8');
@@ -302,6 +299,34 @@ async function handlePaymentSuccess(invoice) {
   console.log(`Payment succeeded for invoice ${lanternInvoiceId}: $${invoice.amount_paid / 100}`);
 }
 
+function updateDiscordSubscriber(invoice) {
+  try {
+    const tierId = invoice.metadata?.tierId;
+    const customerEmail = invoice.customer_email;
+    if (!tierId) return;
+    const subPath = path.join(repoRoot, 'data', 'discord', 'subscribers.json');
+    let subs = { subscribers: [] };
+    if (fs.existsSync(subPath)) {
+      try { subs = JSON.parse(fs.readFileSync(subPath, 'utf8')); } catch (e) { subs = { subscribers: [] }; }
+    }
+    subs.subscribers = subs.subscribers || [];
+    subs.subscribers.push({
+      stripeCustomerId: invoice.customer,
+      stripeInvoiceId: invoice.id,
+      tierId,
+      email: customerEmail,
+      amount: invoice.amount_paid / 100,
+      currency: invoice.currency,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+    });
+    fs.writeFileSync(subPath, JSON.stringify(subs, null, 2));
+    console.log([DISCORD] Subscriber record updated: );
+  } catch (e) {
+    console.error([DISCORD] Failed to update subscriber: );
+  }
+}
+
 async function handlePaymentFailure(invoice) {
   const lanternInvoiceId = invoice.metadata?.lantern_invoice_id;
   if (!lanternInvoiceId) {
@@ -318,6 +343,36 @@ async function handlePaymentFailure(invoice) {
   
   console.log(`Payment failed for invoice ${lanternInvoiceId}`);
 }
+
+// Create Stripe Checkout session
+app.post('/api/payment/create-checkout-session', async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+  try {
+    const { tierId, email } = req.body;
+    const priceMap = config.paymentProviders?.stripe?.priceIds || {
+      supporter: 'price_1QQQQQQQQQQQQQ',
+      pilot: 'price_2QQQQQQQQQQQQQ'
+    };
+    const priceId = priceMap[tierId];
+    if (!priceId) {
+      return res.status(400).json({ error: 'Unknown tier' });
+    }
+    const session = await stripe.checkout.sessions.create({
+      line_items: [{ price: priceId, quantity: 1 }],
+      mode: 'subscription',
+      success_url: `${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=success`,
+      cancel_url: `${req.headers.origin || 'http://127.0.0.1:4177'}/pricing.html?checkout=cancel`,
+      customer_email: email || undefined,
+      metadata: { tierId, lantern_os: 'true' }
+    });
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('Checkout session error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Start server
 app.listen(PORT, () => {

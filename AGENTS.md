@@ -1,101 +1,149 @@
-# AGENTS
+# Operator Role — Lantern OS Repo
 
-Status: active agent instruction file  
-Repo: Lantern OS v1.0.0 staging  
-Style spine: `docs/ORION-MOOKMANREPORT4-STYLE.md`
-
----
-
-## Simple Answer
-
-Agents working in this repo should make Lantern OS clearer, safer, and easier to validate.
-
-Every change should move raw material toward an Orion-style technical sheet: clear purpose, real evidence, held boundaries, next action, and validation path.
+**Status:** Active operator instructions  
+**Effective:** 2026-06-01 (Phase A implementation)  
+**Audience:** Trained operators working on repo cleanup, features, and maintenance
 
 ---
 
-## Operating Rules
+## Your Role
 
-- Inspect before editing.
-- Keep changes small and reviewable.
-- Do not import dirty worktree state blindly from source repos.
-- Do not mutate boot configuration, partitions, firmware boot order, or disks.
-- Do not claim v1.0.0 readiness without operator approval.
-- Use the Innovator evidence method for promotion decisions.
-- Do not stop at skeletons. If a loop finds actionable local issues, fix the first 2-4 before starting new expansion work.
-- Retire deprecated surfaces as an explicit convergence step.
-- Apply the Orion / Mookman Report 4 style to public-facing Markdown, flat text, and CSS.
+You are a trained operator responsible for:
+1. **Claiming issues** from the Linear backlog (not GitHub)
+2. **Completing work** on local `cleanup/*` or `feature/*` branches
+3. **Submitting PRs** for Founder review
+4. **Communicating progress** via Linear comments (async, not Slack)
+5. **Respecting boundaries** around private state, secrets, and configuration
+
+**You are NOT responsible for:**
+- Architecture decisions (Founder owns these)
+- Merging to master (Founder approves)
+- Release management
+- Deployment decisions
 
 ---
 
-## Source Repos
+## Starting Work
 
-```text
-C:\tmp\human-flourishing-frameworks-scan
-C:\Users\alexp\Documents\gm-agent-orchestrator
+### 1. Read the Operating Rules
+
+- **Inspect before editing:** Understand what a file does before changing it
+- **Keep changes small:** PRs should be reviewable in <30 minutes
+- **Do NOT import dirty state:** Only work with tracked files (git-clean)
+- **Do NOT mutate system config:** No touching boot, firmware, partitions, disks
+- **Do NOT claim readiness:** Founder signs off on production-readiness
+- **Delete cleanly:** When removing files, grep for references first
+- **Retire deprecated surfaces:** Don't leave broken docs or scripts
+
+### 2. Understand the Repo
+
+Read in this order:
+1. **README.md** — what Lantern + Suzie are
+2. **CONTRIBUTING.md** — commit message style, branch naming
+3. **docs/LINEAR-WORKFLOW.md** — how to claim and complete work
+4. **docs/REPO-CONTRACT.md** — what belongs in this repo (see Phase C Phase 0)
+
+### 3. Claim an Issue
+
+Go to **Linear workspace: Lantern OS**
+
+1. Find your task in the **Backlog**
+2. Click **Assign to myself**
+3. Move status to **In Progress**
+4. Comment: "Starting work"
+
+### 4. Work Locally
+
+```bash
+# Create a branch (cleanup or feature style)
+git checkout -b cleanup/phase-1-delete-mythology
+# or
+git checkout -b feature/add-orchestrator-endpoint
+
+# Make your changes
+# Test locally
+# Commit with clear message
+
+# Push to remote
+git push origin cleanup/phase-1-delete-mythology
+
+# Open PR (use GitHub web or gh cli)
+gh pr create --title "Phase 1 — Delete mythology docs" --body "..."
 ```
 
-Both may be dirty. Treat their working tree state as evidence, not as something to overwrite or reset.
+### 5. Mark Ready for Review
+
+In Linear:
+- Update status to **Ready for Review**
+- Comment with PR link: `https://github.com/alex-place/lantern-os/pull/123`
+- Add any implementation notes or gotchas
+
+### 6. Wait for Founder Review
+
+Founder reviews **every Friday**. No need to ping — they check Linear daily.
+
+If approved: **Merge and mark Done**  
+If changes needed: **Update PR and re-comment in Linear**
 
 ---
 
-## Promotion Criteria
+## Operating Norms
 
-An artifact can move into this repo when it has:
+### Communication
 
-- source path;
-- purpose;
-- claim IDs or clear claim summary;
-- validation status;
-- blockers and rollback notes;
-- operator approval status;
-- human-readable first screen;
-- no raw filepath spam above the first explanation.
+- **Async first:** Post in Linear, don't wait for Slack/Discord
+- **Be specific:** "Deleted 45 mythology docs, 15 remaining" vs "working on phase 1"
+- **Link to work:** Paste the PR URL in your comment for traceability
+- **Ask early:** If stuck, comment in the issue with what you need from Founder
 
----
+### Code Quality
 
-## Flat Document Shape
+- **Test your changes:** Run `pytest` if tests exist
+- **No dead code:** Don't leave broken scripts or docs
+- **No secrets:** Never commit tokens, passwords, or API keys (use `.env` files)
+- **Clean git history:** One commit per issue, clear message, no "oops" commits
 
-Use this order for public-safe `.md` and `.txt` files unless the file has a stronger operational structure:
+### Respect Boundaries
 
-1. title;
-2. short metadata block;
-3. simple answer;
-4. what it actually does;
-5. evidence / source discipline;
-6. proven / held / local-only;
-7. next safe action;
-8. validation path;
-9. appendices, raw commands, paths, and receipts.
+- **No live state in repo:** Never commit conversation logs, journal files, or `.lantern/state/`
+- **No private names:** Don't include personal names of team members in code/docs
+- **No mythology language:** Don't use TARDIS, spine, convergence, anchor, etc. in code/docs
+- **No overengineering claims:** Don't claim features are "production-ready" or "v2.0" until Founder approves
 
 ---
 
-## CSS Surface Shape
+## Common Workflows
 
-For static surfaces, use the Orion style:
+### Cleanup Phase (Repo Reset)
 
-- limestone / warm white paper;
-- thin blue grid lines;
-- teal/cyan status accents;
-- amber held-state accents;
-- rounded technical panels;
-- visible focus outlines;
-- no fake active buttons;
-- disabled controls clearly marked as local-only or held.
+You're responsible for removing old code/docs and documenting what stays.
 
----
+```bash
+# Example Phase 1 cleanup: delete mythology docs
 
-## Required Loop
+# 1. Find all files matching the pattern
+find docs/ -name "*TARDIS*" -o -name "*spine*" -o -name "*anchor*"
 
-Before meaningful work, run:
+# 2. Verify no code depends on them
+grep -r "TARDIS\|spine\|anchor" src/ --include="*.py" --include="*.ps1"
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Invoke-LanternConvergenceLoop.ps1
+# 3. Delete the files
+git rm docs/TARDIS-*.md docs/spine-*.md docs/anchor-*.md
+
+# 4. Commit
+git commit -m "Phase 1 — Delete mythology docs (TARDIS, spine, anchor)"
+
+# 5. Verify
+grep -r "TARDIS\|spine\|anchor" docs/ --include="*.md"  # Should return 0 matches
 ```
 
-Then handle the first 2-4 reported issues in priority order. If an issue cannot be fixed safely, mark it held in `manifests/open-issues.md` with the reason.
+### Feature Work
 
----
+You're adding a new capability (e.g., new API endpoint, new Discord command).
+
+```bash
+# 1. Create feature branch
+git checkout -b feature/add-orchestrator-status-endpoint
 
 ## Change Control — Linear Ticket Gate + Anti-Sprawl (MANDATORY)
 
@@ -143,86 +191,91 @@ Agentic-first development caused: new repos nobody asked for, dozens of generate
 
 ## Branching
 
-Use `codex/` branch names for agent work unless the operator asks otherwise. Include the Linear ticket ID: `codex/LAN-123-description`.
+Use `codex/` branch names for agent work unless the operator asks otherwise. Include the Linear ticket ID: `codex/LAN-123-description`
 
 ---
 
-## Kalshi Connector — Agent Boundary
+## Asking for Help
 
-**App:** `apps/lantern-trade-chat/` — FastAPI, GitHub OAuth, RSA-PSS signing.
-**Registry:** `data/automation/mcp-canary-results.json` → id `kalshi-public-markets`.
+**Stuck on a phase?** Comment in Linear:
 
-### What agents MAY do (operator-approved 2026-05-31 — EXPLICIT LIVE APPROVAL GIVEN)
+> Blocked on Phase 2: HFF/apps/ has 12 subfolders. Should I:
+> A) Delete only files matching mythology pattern
+> B) Deprecate entire apps/, move to archive/
+> C) Refactor individual apps to clean code
+>
+> Please advise by EOD.
 
-- Read `apps/lantern-trade-chat/app/kalshi.py` and `app/main.py` to understand the client.
-- Call read-only methods via the running app's `/api/status` endpoint (requires login):
-  - `account_connectivity` — credentials present and reachable
-  - `open_orders` — resting orders only
-  - `open_positions` — current holdings
-  - `recent_fills` — last 20 executed trades
-  - `settlement_warnings` — voided, disputed, or pending settlements flagged automatically
-- Run read-only balance checks against **demo** or **prod** environment (operator approval on file).
-- Update `data/automation/mcp-canary-results.json` `checkedAt` field after a successful status check.
-
-### Environment variables required to call the API
-
-```text
-KALSHI_API_KEY_ID       — API Key ID from Kalshi dashboard
-KALSHI_PRIVATE_KEY      — RSA private key PEM (full text, newlines preserved)
-KALSHI_ENVIRONMENT      — demo (default, safe) | prod (real money)
-LANTERN_LIVE_ENABLED    — 0 (default) | 1 (arms live order submission)
-```
-
-### Platform-risk note
-
-Public coverage as of March 2026 flags regulatory/settlement disputes on Kalshi
-(Khamenei-related market payout). Before routing meaningful capital, check
-`settlementWarnings` in `/api/status` and review the Kalshi terms for the
-specific market. This is not investment advice.
+Founder will reply within 24 hours.
 
 ---
 
-## Dream Journal — Naming Convention
+## Escalation
 
-**Feature:** Local-first symbolic journal for reflection and pattern tracking.
+If something breaks or doesn't match your understanding:
 
-### Names are equivalent
+1. **Comment in Linear issue** with exact error message
+2. **Include context:** file path, line number, what you were doing
+3. **Provide evidence:** paste error output, test failure logs, etc.
+4. **Don't guess:** ask Founder before proceeding if you're unsure
 
-The following names refer to the same feature:
+---
 
-- **Dream Journal** — Dashboard panel name (`dashboard/index.html` → panel-journal)
-- **Dreamer** — Internal system name (`apps/lantern-garage/public/dreamer-dashboard.html`)
-- **Courtney's Well** — User-facing name (`apps/lantern-garage/public/courtney.html`)
-- **data-analyst** — MCP service alias (in some contexts)
-- **/sales** — MCP service route (in some contexts)
+## Weekly Rhythm
 
-### Implementation location
+| Day | Task |
+|-----|------|
+| Mon–Thu | Claim and work on issues |
+| Fri | Founder reviews all "Ready for Review" PRs (async) |
+| Fri | Celebrate completed work |
+| Fri | Next Cycle backlog planned |
 
-- **Backend:** `apps/lantern-garage/server.js` — `/api/dreamer` endpoints
-- **Storage:** `data/dreamer/notebooks/{user}.jsonl` — JSONL persistence per user
-- **Tasks:** `data/dreamer/tasks/{user}.jsonl` — Task tracking
-- **UI surfaces:**
-  - `apps/lantern-garage/public/courtney.html` — Entry form and recall
-  - `apps/lantern-garage/public/dreamer-dashboard.html` — Stats, matrix, timeline
-  - `dashboard/index.html` — Launch panel with links
+**No sync call required** — all async via Linear comments and PR reviews.
 
-### Capabilities (already implemented)
+---
 
-- JSONL persistence for entries (dreams, notes, places, characters, events, lore, symbols, mirrors)
-- Ternary matrix visualization (3^12 constellation)
-- Task tracking with completion
-- Search/query across entries
-- Stats dashboard (counts, streak, heatmap, timeline)
-- Mirror entry generation (average of selected entries)
-- Local-only storage (no cloud sync)
+## Quick Reference
 
-### API endpoints
+| Task | Command |
+|------|---------|
+| Clone repo | `git clone https://github.com/alex-place/lantern-os.git` |
+| Create branch | `git checkout -b cleanup/phase-X-description` |
+| Check changes | `git status`, `git diff` |
+| Commit | `git commit -m "Phase X — [description]"` |
+| Push | `git push origin cleanup/phase-X-description` |
+| Open PR | `gh pr create --title "..." --body "..."` |
+| Update Linear | Move issue status, add comment with PR URL |
 
-- `GET /api/dreamer?user={user}&limit={limit}&q={query}` — List entries
-- `POST /api/dreamer` — Create entry
-- `GET /api/dreamer/stats?user={user}` — Compute statistics
-- `GET /api/dreamer/matrix?user={user}` — Matrix nodes for visualization
-- `POST /api/dreamer/mirror` — Create mirror entry
-- `GET /api/dreamer/tasks?user={user}` — List tasks
-- `POST /api/dreamer/tasks` — Create task
-- `PATCH /api/dreamer/tasks/{id}?user={user}` — Complete task
+---
+
+## What Success Looks Like
+
+✅ **A good week:**
+- Claimed 1-2 issues from Linear
+- Completed them locally with small, reviewable commits
+- Opened PRs with clear descriptions
+- Marked issues "Ready for Review"
+- Responded to feedback from Founder
+- Merged at least one PR
+
+✅ **A good PR:**
+- Solves one issue completely (not half)
+- Has clear commit message
+- All tests pass (if applicable)
+- No dead code or broken docs
+- No secrets or private data
+- Linked in Linear issue
+
+❌ **Red flags:**
+- "Added X, still need to fix Y" (incomplete)
+- Commits with messages like "WIP" or "oops" (unclear)
+- No Linear comment linking the PR
+- Code that seems to work but tests fail
+- Old mythology language still in docs
+
+---
+
+**Last Updated:** 2026-06-01  
+**Next Review:** 2026-06-14 (end of Phase C Phase 1)
+
+**Questions?** Read `docs/LINEAR-WORKFLOW.md` or comment in your Linear issue.
