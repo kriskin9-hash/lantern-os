@@ -1,0 +1,14 @@
+{
+  "name": "lantern-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lantern OS — Dream Journal",
+  "scripts": {
+    "start": "node apps/lantern-garage/cloud-server.js",
+    "dev": "node apps/lantern-garage/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {}
+}

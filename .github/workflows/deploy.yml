@@ -10,82 +10,84 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  deploy-aws:
-    name: Deploy to AWS ECS
+  # ── GitHub Pages ────────────────────────────────────────────────────────────
+  deploy-pages:
+    name: Deploy to GitHub Pages
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify deployment prerequisites
+      - name: Build pages bundle
         run: |
-          echo "Checking Dockerfile..."
-          test -f apps/lantern-garage/Dockerfile || (echo "Dockerfile missing" && exit 1)
-          echo "✓ Dockerfile present"
+          mkdir -p _site
 
-          echo "Checking package.json..."
-          test -f apps/lantern-garage/package.json || (echo "package.json missing" && exit 1)
-          echo "✓ package.json present"
+          # Copy surfaces (shareholder index, dashboards, etc.)
+          cp -r surfaces/. _site/
 
-          echo "Checking health endpoint exists..."
-          grep -r "/api/health" apps/lantern-garage/ > /dev/null || echo "⚠ /api/health not found in code"
-          echo "✓ Deployment prerequisites verified"
+          # Copy Dream Journal UI into /dream path
+          mkdir -p _site/dream
+          cp apps/lantern-garage/public/index.html _site/dream/index.html
 
-      - name: Build Docker image
-        run: |
-          echo "[1/4] Building Docker image for lantern-garage..."
-          docker build -f apps/lantern-garage/Dockerfile \
-            -t lantern-garage:latest \
-            -t 528081867536.dkr.ecr.us-east-1.amazonaws.com/lantern-os:${{ github.sha }} \
-            apps/lantern-garage/
-          echo "✓ Docker image built"
+          # Root redirect → /dream
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Lantern OS — Dream Journal</title>
+            <meta http-equiv="refresh" content="0;url=/lantern-os/dream/">
+          </head>
+          <body>
+            <p>Redirecting to <a href="/lantern-os/dream/">Dream Journal</a>…</p>
+          </body>
+          </html>
+          HTML
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+          echo "✓ Pages bundle ready"
+          ls -la _site/
+
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Push image to Amazon ECR
+  # ── Railway ─────────────────────────────────────────────────────────────────
+  deploy-railway:
+    name: Trigger Railway deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Railway deploy hook
+        if: ${{ secrets.RAILWAY_DEPLOY_HOOK != '' }}
         run: |
-          echo "[2/4] Pushing image to ECR..."
-          docker push 528081867536.dkr.ecr.us-east-1.amazonaws.com/lantern-os:${{ github.sha }}
-          echo "✓ Image pushed: 528081867536.dkr.ecr.us-east-1.amazonaws.com/lantern-os:${{ github.sha }}"
+          echo "Triggering Railway deploy..."
+          curl -s -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK }}" \
+            --fail-with-body \
+            && echo "✓ Railway deploy triggered" \
+            || echo "⚠ Railway webhook returned error (non-fatal)"
+        continue-on-error: true
 
-      - name: Update ECS service
+      - name: Skip (no hook configured)
+        if: ${{ secrets.RAILWAY_DEPLOY_HOOK == '' }}
         run: |
-          echo "[3/4] Updating ECS service..."
-          aws ecs update-service \
-            --cluster lantern-cluster \
-            --service lantern-service \
-            --force-new-deployment \
-            --region us-east-1
-          echo "✓ ECS service updated"
+          echo "⚠ RAILWAY_DEPLOY_HOOK secret not set."
+          echo "Railway auto-deploys via its GitHub integration when connected."
+          echo "Add secret RAILWAY_DEPLOY_HOOK to enable explicit webhook trigger."
 
-      - name: Wait for service stability
-        run: |
-          echo "[4/4] Waiting for service stability..."
-          aws ecs wait services-stable \
-            --cluster lantern-cluster \
-            --services lantern-service \
-            --region us-east-1
-          echo "✓ Service is stable"
-
-      - name: Summary
+  # ── Summary ─────────────────────────────────────────────────────────────────
+  summary:
+    name: Deploy summary
+    needs: [deploy-pages, deploy-railway]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print deploy targets
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "✓ Deployed to AWS ECS Fargate"
+          echo "✓ GitHub Pages: https://alex-place.github.io/lantern-os/"
+          echo "✓ Dream Journal UI: https://alex-place.github.io/lantern-os/dream/"
+          echo "✓ Railway: connect at https://railway.app (auto-deploy from master)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Image: 528081867536.dkr.ecr.us-east-1.amazonaws.com/lantern-os:${{ github.sha }}"
-          echo "Cluster: lantern-cluster"
-          echo "Service: lantern-service"
-          echo ""
-          echo "Current status: LIVE ✓"
