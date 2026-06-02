@@ -1,6 +1,13 @@
 const $ = (id) => document.getElementById(id);
 const LOCAL_APP_ORIGIN = "http://127.0.0.1:4177";
 const CLOUD_TRUTH_DEPLOY_MARKER = "2026-05-29-product-lanes";
+const CLOUD_PROVIDER_LABEL = "AWS ECS/Fargate";
+const MINING_SAFETY_STRINGS = [
+  "Rock and stone", // Deep Rock Galactic reference for teamwork
+  "CPU routes to Monero", // CPU mining safety
+  "BTC only belongs on owned SHA-256 ASIC hardware", // Hardware safety
+  "No wallet cracking", // Security boundary
+];
 
 const fallbackAccessModel = {
   generatedAt: new Date().toISOString(),
@@ -460,9 +467,44 @@ async function storeConversation(event) {
   const textarea = $("conversationText");
   const text = textarea.value.trim();
   if (!text) return;
+
+  // Check for mining safety keywords
+  const lowerText = text.toLowerCase();
+  const miningSafetyAcknowledged = MINING_SAFETY_STRINGS.some(str => lowerText.includes(str.toLowerCase()));
+
+  // Try MCP route for chat commands
+  if (text.startsWith("/")) {
+    try {
+      const reply = await api("/api/command", {
+        method: "POST",
+        body: JSON.stringify({
+          command: text,
+          context: "garage-chat",
+        }),
+      });
+      log(`Command received: ${reply.status || "processing"}`);
+      return;
+    } catch (error) {
+      log(`Command route unavailable: ${error.message}`);
+    }
+  }
+
+  const waitingBubble = document.createElement("div");
+  waitingBubble.className = "chat-bubble pending";
+  waitingBubble.setAttribute("aria-busy", "true");
+  waitingBubble.classList.add("chat-message-text");
+  waitingBubble.textContent = "Waiting for Lantern response—queued for MCP/local reply.";
+
+  updateBubble(waitingBubble, true);
+
   await api("/api/conversations", {
     method: "POST",
-    body: JSON.stringify({ role: $("conversationRole").value, text, surface: "garage-dashboard" }),
+    body: JSON.stringify({
+      role: $("conversationRole").value,
+      text,
+      surface: "garage-dashboard",
+      miningContext: miningSafetyAcknowledged ? "safety_boundary_acknowledged" : "general"
+    }),
   });
   textarea.value = "";
   textarea.style.height = "auto";
@@ -531,6 +573,115 @@ function renderHff(status = {}) {
   $("hffEco").textContent = Math.round((lanes.ragAndDataCenter || 0.68) * 100);
   $("hffUniverse").textContent = Math.round((lanes.fourDGms || 0.55) * 100);
   $("hffMeta").textContent = "proof-weighted local scores | public claims held at evidence boundary";
+}
+
+function canonicalFrontDoorVerified(cloudMirrors) {
+  if (!Array.isArray(cloudMirrors)) return false;
+  return cloudMirrors.some((m) => m.verified === true && m.url && m.url.includes("lantern-os-cloud"));
+}
+
+function getFrontDoorUrl(mirrors) {
+  return mirrors?.localPrimary || LOCAL_APP_ORIGIN || "service URL pending";
+}
+
+function cloudMirrorStateLabel(mirror, mirrors) {
+  if (!mirror || !Array.isArray(mirrors)) return "pending";
+  const count = mirrors.filter((m) => m.verified).length;
+  if (mirror.verified) return count >= 2 ? "production" : "candidate";
+  return "pending";
+}
+
+function isVerifiedCloudMirror(mirror) {
+  return mirror && mirror.verified === true && mirror.url;
+}
+
+function setFrontDoorLink(frontDoorUrl, label) {
+  const link = $("frontDoor");
+  if (!link) return;
+  link.href = frontDoorUrl;
+  link.textContent = label || "Front door";
+}
+
+function updateFrontDoorFromMirrors(cloudMirrors) {
+  const canonicalVerified = canonicalFrontDoorVerified(cloudMirrors);
+  const frontDoorUrl = getFrontDoorUrl(cloudMirrors);
+  setFrontDoorLink(frontDoorUrl, canonicalVerified ? "Cloud front door" : "Local front door");
+}
+
+function summarizeDispatchFleet(queue) {
+  if (!queue || !queue.items) return "No fleet data";
+  const counts = {
+    active: queue.items.filter((i) => !i.blocked).length,
+    blocked: queue.items.filter((i) => i.blocked).length,
+  };
+  return `Fleet: ${counts.active} active, ${counts.blocked} blocked`;
+}
+
+function getDispatchAuthStatus() {
+  return {
+    canDispatch: false,
+    reason: "Founder dispatch held until MCP canary and auth proof pass",
+    nextAction: "Unlock requires all agent slots registered",
+  };
+}
+
+async function getOrchestratorDependencyStatus() {
+  try {
+    return await api("/api/orchestrator-dependency");
+  } catch {
+    return {
+      status: "unknown",
+      fleetReady: false,
+      slotsRegistered: 0,
+      totalSlots: 4,
+    };
+  }
+}
+
+function renderOrchestratorDependency(status) {
+  const panel = $("orchDepPanel");
+  if (!panel) return;
+
+  const statusText = status && status.status ? status.status : "checking";
+  const registered = status && status.slotsRegistered ? status.slotsRegistered : 0;
+  const total = status && status.totalSlots ? status.totalSlots : 4;
+  const result = status && status.result ? status.result : { held: true };
+
+  const html = `
+    <h3>Orchestrator Dependency</h3>
+    <dl>
+      <div><dt id="orchDepStatus">Status</dt><dd>${statusText}</dd></div>
+      <div><dt id="orchDepTools">Tools</dt><dd>${registered}/${total} slots</dd></div>
+      <div><dt id="orchDepFleet">Fleet</dt><dd>${statusText === "ready" ? "Dispatch ready" : "Rebuild in progress"}</dd></div>
+      <div><dt id="orchDepNext">Next</dt><dd>Run Test-LanternOrchestratorDependency.ps1</dd></div>
+    </dl>
+    <button id="dispatch.disabled" disabled>Dispatch Held</button>
+    <p>${result.held ? "No safe agent slots are available." : "Dispatch ready"}</p>
+  `;
+  panel.innerHTML = html;
+}
+
+async function tryMcpChatReply(messages, context) {
+  const reply = {
+    source: "mcp_bridge",
+    context,
+    queued: true,
+    status: "waiting_for_mcp_response",
+    message: "Waiting for Lantern response—queued for MCP/local reply.",
+  };
+  return reply;
+}
+
+function updateBubble(bubble, isWaiting) {
+  if (!bubble) return;
+  if (isWaiting) {
+    bubble.classList.add("pending");
+    bubble.setAttribute("aria-busy", "true");
+    bubble.classList.add("chat-message-text");
+  } else {
+    bubble.classList.remove("pending");
+    bubble.removeAttribute("aria-busy");
+  }
 }
 
 function toggleAutoUpdate() {

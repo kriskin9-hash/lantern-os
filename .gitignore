@@ -3,6 +3,7 @@
 *.tmp
 __pycache__/
 .venv/
+*.egg-info/
 
 # Secrets and local environment
 .env

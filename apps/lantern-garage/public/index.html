@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="styles.css?v=20260529-product-lanes">
   <script defer src="app.js?v=20260529-product-lanes"></script>
 </head>
-<body>
+<body data-style="plain-dashboard">
   <a class="skip-link" href="#main">Skip to controls</a>
   <main id="main" class="shell" tabindex="-1">
     <header class="hero os-hero">
@@ -19,9 +19,9 @@
         <a class="local-url" href="http://127.0.0.1:4177">http://127.0.0.1:4177</a>
       </div>
       <section class="reactor" aria-label="Arc Reactor status">
-        <div class="reactor-core"><span id="movie1">--</span></div>
         <p id="phase">Loading reactor...</p>
         <p class="user-capacity" id="userCapacity">Dozens-ready: checking...</p>
+        <p class="current-model-strip">Current Model: Baseline v1</p>
       </section>
     </header>
 
@@ -37,7 +37,7 @@
         </div>
       </div>
       <div class="chat-mirror-bar">
-        <span id="chatMirrorSummary">Primary: http://127.0.0.1:4177</span>
+        <span id="chatMirrorSummary">Primary: http://127.0.0.1:4177 | <code>20260530-kalshi-packet</code></span>
         <span id="chatMirrorLinks"></span>
       </div>
       <div class="chat-messages" id="chatMessages">
