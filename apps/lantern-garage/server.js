@@ -146,6 +146,141 @@ function readDreamerNotebook(user) {
   }).filter(Boolean);
 }
 
+function readRecentDreams(limit = 5) {
+  const dreamDir = path.join(repoRoot, "data", "dream_journal");
+  if (!fs.existsSync(dreamDir)) return [];
+  const entries = [];
+  const files = fs.readdirSync(dreamDir).filter((f) => f.endsWith(".jsonl"));
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+    if (!content) continue;
+    for (const line of content.split("\n")) {
+      try { entries.push(JSON.parse(line)); } catch { /* skip */ }
+    }
+  }
+  entries.sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
+  return entries.slice(0, limit);
+}
+
+// Door-series canon (from caad/README.md) — keeps the persona grounded offline.
+const DREAM_DOORS = {
+  founder: {
+    name: "Founder's Wish Door",
+    anchors: ["Love", "Safety", "Truth", "Beauty", "Freedom", "Memory", "Return"],
+    phrase: "Hold the center. Protect the wish. Return to the anchor.",
+  },
+  xp: {
+    name: "Gage's Windows XP Door",
+    phrase: "Never log off. Level up always.",
+  },
+  xenon: {
+    name: "Xenon Door",
+    phrase: "Build beyond one world.",
+  },
+  fog: {
+    name: "Sea of Fog and Clouds Door",
+    phrase: "Let the powerful images rest before they become stories.",
+  },
+  sigil: {
+    name: "Sigil / City of Doors",
+    phrase: "You hold the keys. You protect the doors. You are never alone.",
+  },
+};
+
+// In-character Dream Journal reply. Pure offline rule-engine — no network needed.
+function dreamChatReply(message, recentDreams) {
+  const text = String(message || "").trim();
+  const lower = text.toLowerCase();
+  const suggestions = ["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"];
+
+  if (!text) {
+    return {
+      reply: "The dream door is open. What did you bring back? You can tell me a dream, or tap a door below.",
+      suggestions,
+      online: false,
+    };
+  }
+
+  // Door / world lore
+  for (const key of Object.keys(DREAM_DOORS)) {
+    if (lower.includes(key) || (key === "founder" && lower.includes("wish")) ||
+        (key === "xp" && (lower.includes("windows") || lower.includes("gage"))) ||
+        (key === "fog" && lower.includes("garden")) ||
+        (key === "sigil" && lower.includes("city"))) {
+      const door = DREAM_DOORS[key];
+      const anchorLine = door.anchors ? ` Its anchors: ${door.anchors.join(", ")}.` : "";
+      return {
+        reply: `${door.name} stands open.${anchorLine} "${door.phrase}" What do you see when you step through? Describe it and I will hold it in the journal.`,
+        suggestions: ["Log this as a dream", "Another door", "Mirror a dream"],
+        online: false,
+      };
+    }
+  }
+
+  // Greetings
+  if (/^(hi|hello|hey|good (morning|evening|night)|greetings)/.test(lower)) {
+    return {
+      reply: "Welcome back. I am the Dream Journal — local, private, always here, even offline. Did you dream? Tell me what was vivid.",
+      suggestions,
+      online: false,
+    };
+  }
+
+  // Mirror / interpretation
+  if (lower.includes("mirror") || lower.includes("interpret") || lower.includes("mean") || lower.includes("symbol")) {
+    const last = recentDreams[0];
+    if (last) {
+      const tags = (last.tags || []).join(", ") || "no tags yet";
+      return {
+        reply: `Let us mirror your last entry. You wrote: "${String(last.text || "").slice(0, 160)}" (${tags}). Three questions to sit with: 1) What feeling stayed after waking? 2) What in waking life does this echo? 3) What small, reversible step would honor it? Answer any one and I will record it as a reflection.`,
+        suggestions: ["Record a reflection", "Recent dreams", "Tell me about the doors"],
+        online: false,
+      };
+    }
+    return {
+      reply: "There is nothing in the journal to mirror yet. Tell me a dream first, then I will reflect it back gently.",
+      suggestions: ["Log a dream", "Tell me about the doors"],
+      online: false,
+    };
+  }
+
+  // Recent / history
+  if (lower.includes("recent") || lower.includes("history") || lower.includes("last dream") || lower.includes("what have i")) {
+    if (recentDreams.length === 0) {
+      return {
+        reply: "Your journal is empty so far — a fresh page. When you are ready, tell me the first dream.",
+        suggestions: ["Log a dream", "Tell me about the doors"],
+        online: false,
+      };
+    }
+    const lines = recentDreams.slice(0, 3).map((d, i) =>
+      `${i + 1}. ${String(d.text || "").slice(0, 90)}${(d.tags && d.tags.length) ? " [" + d.tags.join(", ") + "]" : ""}`
+    );
+    return {
+      reply: `Here are your recent entries:\n${lines.join("\n")}\n\nWould you like to mirror one of them?`,
+      suggestions: ["Mirror a dream", "Log a dream", "Tell me about the doors"],
+      online: false,
+    };
+  }
+
+  // Logging intent
+  if (lower.includes("log") || lower.includes("had a dream") || lower.includes("dreamed") || lower.includes("dreamt") || lower.includes("save")) {
+    return {
+      reply: "Good — let us keep it. Tell me the dream in your own words: what was vivid, what mattered, what surprised you. I will save it locally, and only you can see it.",
+      suggestions: ["Recent dreams", "Mirror a dream"],
+      online: false,
+    };
+  }
+
+  // Default: treat the message as dream content and reflect warmly
+  return {
+    reply: `I hear it: "${text.slice(0, 160)}". That is worth keeping. Tap "Log this as a dream" to save it, or tell me more about how it felt.`,
+    suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"],
+    online: false,
+    draft: text,
+  };
+}
+
 function enqueueFileWrite(filePath, operation) {
   const previous = writeQueues.get(filePath) || Promise.resolve();
   const next = previous
@@ -1167,6 +1302,41 @@ async function route(req, res) {
       sendJson(res, { id: dreamId, saved: true, entry });
     } catch (error) {
       sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dream/chat" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw || "{}");
+      const message = String(body.message || "").slice(0, maxDreamerTextLength);
+      const recentDreams = readRecentDreams(5);
+      const result = dreamChatReply(message, recentDreams);
+      // Best-effort conversation logging; never blocks the reply.
+      try {
+        await appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-journal",
+          role: "operator",
+          text: message.slice(0, maxConversationTextLength),
+        });
+        await appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-journal",
+          role: "lantern",
+          text: String(result.reply || "").slice(0, maxConversationTextLength),
+        });
+      } catch { /* logging is non-critical */ }
+      sendJson(res, { ...result, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      // Even on parse error, stay in character and online.
+      sendJson(res, {
+        reply: "I am still here. Something tangled in the request, but the dream door stays open. Tell me again?",
+        suggestions: ["Log a dream", "Recent dreams", "Mirror a dream"],
+        online: false,
+        error: error.message,
+      });
     }
     return;
   }
