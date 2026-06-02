@@ -4,16 +4,9 @@
 __pycache__/
 .venv/
 
-# Real-money runtime data: never commit live trade history or live receipts.
-data/kalshi/kalshi-live-ledger.jsonl
-manifests/evidence/kalshi-live-order-receipt-*.md
-
 # Secrets and local environment
 .env
 .env.*
-.env.local
-!.env.example
-!**/.env.example
 *.pem
 *.key
 *.p12
@@ -25,22 +18,18 @@ secrets/
 data/private/**
 !data/private/
 !data/private/README.md
-data/operator-notes/agent-dispatch-state.json
 private/**
 .local-private/**
 
 # Large promoted artifacts should be added intentionally with manifest updates.
 artifacts/*
 !artifacts/.gitkeep
-!artifacts/Lantern-OS-Courtney-Setup.exe
-!artifacts/lantern-os-courtney-installer-2026-05-30.zip
 # Node modules
 node_modules/
 **/node_modules/
 
-# Trading runtime artifacts (live ledger is written at runtime)
-data/kalshi/kalshi-live-ledger.jsonl
-apps/lantern-trade-chat/.venv/
+# Discord subscriber data (local only, not in Git)
+data/discord/subscribers.json
 
-# Python build artifacts
-*.egg-info/
+# Dreamer notebooks — private user data (local only)
+data/dreamer/notebooks/*.jsonl

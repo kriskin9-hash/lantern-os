@@ -5,28 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Lantern OS</title>
-  <link rel="stylesheet" href="styles.css?v=20260529-plain-console-20260530-kalshi-packet">
-  <script defer src="app.js?v=20260529-plain-console-20260530-kalshi-packet"></script>
+  <link rel="stylesheet" href="styles.css?v=20260529-product-lanes">
+  <script defer src="app.js?v=20260529-product-lanes"></script>
 </head>
-<body data-style="plain-dashboard">
+<body>
   <a class="skip-link" href="#main">Skip to controls</a>
   <main id="main" class="shell" tabindex="-1">
-    <header class="hero os-hero compact-hero">
+    <header class="hero os-hero">
       <div>
-        <p class="eyebrow">Lantern OS Local + Cloud Dashboard</p>
-        <h1>Lantern Cloud OS</h1>
+        <p class="eyebrow">Lantern OS Local Dashboard</p>
+        <h1>Lantern OS</h1>
+        <p class="subtitle">First-class dashboard for dozens of users: always-on links, public proof, auth lanes, founder-only gates, validator health, agent queue, RAG memory, cash truth, local controls, and cloud mirrors.</p>
+        <a class="local-url" href="http://127.0.0.1:4177">http://127.0.0.1:4177</a>
       </div>
+      <section class="reactor" aria-label="Arc Reactor status">
+        <div class="reactor-core"><span id="movie1">--</span></div>
+        <p id="phase">Loading reactor...</p>
+        <p class="user-capacity" id="userCapacity">Dozens-ready: checking...</p>
+      </section>
     </header>
 
     <article class="panel chat-panel chat-primary" id="chatPanel">
-      <div class="current-model-strip" aria-label="Current Lantern model">
-        <span id="currentModelVersion">Current Model: Baseline v1</span>
-        <span id="currentModelMeta">Local chat first. AWS cloud URL pending verification.</span>
-      </div>
       <div class="chat-header">
         <div>
-          <span class="chat-title">Lantern Cloud Chat</span>
-          <p class="chat-subtitle">Local-first chat with cloud mirror awareness.</p>
+          <span class="chat-title">Lantern OS Chat</span>
+          <p class="chat-subtitle">First-class local conversation with cloud mirror awareness.</p>
         </div>
         <div class="chat-status-row">
           <span class="chat-status" id="chatStatus">local</span>
@@ -34,7 +37,7 @@
         </div>
       </div>
       <div class="chat-mirror-bar">
-        <span id="chatMirrorSummary">Front door loading...</span>
+        <span id="chatMirrorSummary">Primary: http://127.0.0.1:4177</span>
         <span id="chatMirrorLinks"></span>
       </div>
       <div class="chat-messages" id="chatMessages">
@@ -44,9 +47,6 @@
       <form id="conversationForm" class="chat-input-bar">
         <input type="hidden" id="conversationRole" value="operator">
         <textarea id="conversationText" name="text" rows="1" maxlength="4000" placeholder="Message Lantern OS..." class="chat-textarea"></textarea>
-        <button type="button" id="voiceInput" class="chat-voice" aria-label="Dictate message" aria-pressed="false" title="Dictate message">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg>
-        </button>
         <button type="submit" class="chat-send" aria-label="Send">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
         </button>
@@ -54,29 +54,36 @@
     </article>
 
     <section class="actions" aria-label="Primary controls">
-      <button id="refresh" type="button" title="Pull live status from local files and APIs">Refresh</button>
-      <button id="runLoop" type="button" title="Run the Lantern convergence check">Run Check</button>
-      <button id="nearTermKalshiBlock" type="button" title="Run paper-only Kalshi block for markets closing within 20 minutes">Near 20m Paper Block</button>
-      <button id="flatRagIngest" type="button" title="Rebuild the evidence/RAG source list">Sync Evidence</button>
-      <button id="autoUpdate" type="button" aria-pressed="false" title="Toggle 30 second read-only refresh">Live Refresh</button>
-      <button id="localControls" type="button" title="Open the Windows local controls bridge">Open Controls</button>
-      <a target="_blank" rel="noopener noreferrer" href="/demo-1000.html">Demo $1000</a>
-      <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/LANTERN-DESKTOP-TESTER.md">Desktop Tester</a>
-      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/lantern-desktop-tester-latest.zip">Download ZIP</a>
-      <a target="_blank" rel="noopener noreferrer" href="/view?path=manifests/LANTERN-BASELINE-MODEL-v1.md">Baseline v1</a>
-      <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md">Orch Dep</a>
-      <a target="_blank" rel="noopener noreferrer" href="/imagniverse" title="Imagniverse: Status cube/tesseract">Imagniverse</a>
-      <a target="_blank" rel="noopener noreferrer" href="/art.html">Art Matrix</a>
-      <a target="_blank" rel="noopener noreferrer" href="/outreach.html">Outreach</a>
-      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/LANTERN-OS-WHITEPAPER-v0.1.pdf" title="Open the operator whitepaper PDF">Operator Brief</a>
-      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ADS-ARCHITECTURE-REVIEW-v0.1.pdf" title="Open the architecture TLDR PDF">Ad TLDR</a>
-      <a target="_blank" rel="noopener noreferrer" href="/view?path=reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md" title="Open the formatted Tony arc model">Tony Arc</a>
-      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-MKII-CONVERGENCE-UPDATE-2026-05-26.pdf" title="Open the MK II operator PDF">MK II Operator</a>
+      <button id="refresh" type="button" data-control-kind="real-action">Refresh Status</button>
+      <button id="runLoop" type="button" data-control-kind="held-action">Converge Loop</button>
+      <button id="flatRagIngest" type="button" data-control-kind="real-action">Ingest Repos</button>
+      <button id="autoUpdate" type="button" aria-pressed="false" data-control-kind="real-action">Auto Update</button>
+      <button id="localControls" type="button" data-control-kind="held-action">Local Controls</button>
+      <a target="_blank" rel="noopener noreferrer" href="/pricing.html" data-control-kind="live-link">Pricing</a>
+      <a target="_blank" rel="noopener noreferrer" href="/pitch.html" data-control-kind="live-link">Pitch</a>
+      <a target="_blank" rel="noopener noreferrer" href="/proof.html" data-control-kind="live-link">Proof</a>
+      <a target="_blank" rel="noopener noreferrer" href="/wish-door.html" data-control-kind="live-link">Wish Door</a>
+      <a target="_blank" rel="noopener noreferrer" href="/outreach.html" data-control-kind="live-link">Outreach</a>
+      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/LANTERN-OS-WHITEPAPER-v0.1.pdf" data-control-kind="live-link">Whitepaper</a>
+      <a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ADS-ARCHITECTURE-REVIEW-v0.1.pdf" data-control-kind="live-link">ADS</a>
+    </section>
+
+    <section class="link-dock" aria-label="Always-on product links">
+      <a target="_blank" rel="noopener noreferrer" href="/api/health">Health</a>
+      <a target="_blank" rel="noopener noreferrer" href="/api/status">Status JSON</a>
+      <a target="_blank" rel="noopener noreferrer" href="/api/access-model">Access Model</a>
+      <a target="_blank" rel="noopener noreferrer" href="/api/cloud-mirrors">Mirror JSON</a>
+      <a target="_blank" rel="noopener noreferrer" href="/api/action-capabilities">Control Truth</a>
+      <a target="_blank" rel="noopener noreferrer" href="/api/operator-feedback">Memory Feedback</a>
+      <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/V1-READINESS-GATES.md">Readiness Gates</a>
+      <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/INNOVATOR-EVIDENCE-METHOD.md">Evidence Method</a>
+      <a target="_blank" rel="noopener noreferrer" href="/view?path=manifests/open-issues.md">Open Issues</a>
+      <a target="_blank" rel="noopener noreferrer" href="/view?path=manifests/cloud-mirrors.json">Cloud Mirrors</a>
     </section>
 
     <section class="grid" aria-label="System panels">
       <article class="panel">
-        <h2>Proof Movies</h2>
+        <h2>Power</h2>
         <dl>
           <div><dt>Movie 1</dt><dd id="m1">--</dd></div>
           <div><dt>Movie 2</dt><dd id="m2">--</dd></div>
@@ -92,24 +99,6 @@
           <div><dt>Pending</dt><dd id="pending">--</dd></div>
           <div><dt>Invoices</dt><dd id="invoices">--</dd></div>
         </dl>
-      </article>
-
-      <article class="panel">
-        <h2>Near-Term Kalshi Ticket</h2>
-        <dl>
-          <div><dt>Mode</dt><dd id="kalshiBlockMode">paper only</dd></div>
-          <div><dt>Orders</dt><dd id="kalshiBlockOrders">--</dd></div>
-          <div><dt>Risk</dt><dd id="kalshiBlockRisk">--</dd></div>
-          <div><dt>Real spend</dt><dd id="kalshiBlockSpend">$0.00</dd></div>
-        </dl>
-        <ul id="kalshiBlockList" class="compact-list">
-          <li>Press Near 20m Paper Block to load current tickets.</li>
-        </ul>
-        <textarea id="kalshiBlockPacket" rows="6" readonly aria-label="Near-term Kalshi manual order packet">Run the paper block to generate a manual review packet.</textarea>
-        <button id="copyKalshiBlockPacket" type="button">Copy packet</button>
-        <button id="checkKalshiPaperPl" type="button">Check paper P/L</button>
-        <p id="kalshiPaperPlSummary">Paper P/L not checked yet.</p>
-        <a id="kalshiBlockReceipt" target="_blank" rel="noopener noreferrer" href="/view?path=manifests/evidence/kalshi-near-term-paper-block-receipt-2026-05-30.md">Open receipt</a>
       </article>
 
       <article class="panel">
@@ -130,56 +119,25 @@
         </dl>
       </article>
 
-      <article class="panel dependency-panel">
-        <h2>Orchestrator Dependency</h2>
-        <dl>
-          <div><dt>Status</dt><dd id="orchDepStatus">unvalidated</dd></div>
-          <div><dt>MCP Tools</dt><dd id="orchDepTools">--</dd></div>
-          <div><dt>Fleet</dt><dd id="orchDepFleet">--</dd></div>
-          <div><dt>Next</dt><dd id="orchDepNext">Run dependency validation.</dd></div>
-        </dl>
-      </article>
-
       <article class="panel mirror-panel">
-        <h2>Cloud URLs</h2>
+        <h2>Cloud Mirrors</h2>
         <dl>
-          <div><dt>Front Door</dt><dd id="mirrorPrimary">http://127.0.0.1:4177</dd></div>
+          <div><dt>Primary</dt><dd id="mirrorPrimary">http://127.0.0.1:4177</dd></div>
           <div><dt>Mirrors</dt><dd id="mirrorCount">--</dd></div>
-          <div><dt>Deploy</dt><dd id="mirrorDeploy">master -> AWS ECS Fargate</dd></div>
+          <div><dt>Deploy</dt><dd id="mirrorDeploy">master -> Render</dd></div>
         </dl>
         <ul id="mirrorList" class="compact-list mirror-list"></ul>
       </article>
 
-      <article class="panel better-panel">
-        <h2>BETTER iPhone</h2>
+      <article class="panel access-panel">
+        <h2>Access Lanes</h2>
         <dl>
-          <div><dt>BetterSafe</dt><dd>Support packets, redaction, and next safe action.</dd></div>
-          <div><dt>BetterFun</dt><dd>Play, learning, making, and joy without extraction.</dd></div>
-          <div><dt>Gate</dt><dd>PWA/Shortcut-first; no native permission claim yet.</dd></div>
+          <div><dt>Public</dt><dd id="publicLane">always-on proof + docs</dd></div>
+          <div><dt>$0 Auth</dt><dd id="authZeroLane">notes + saved workspace</dd></div>
+          <div><dt>$20</dt><dd id="authTwentyLane">operator queue + reports</dd></div>
+          <div><dt>$200</dt><dd id="authTwoHundredLane">pilot workspace + review</dd></div>
+          <div><dt>Founder</dt><dd id="founderLane">local controls held</dd></div>
         </dl>
-        <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/BETTER-IPHONE-APP-CONCEPT.md">Open BETTER Contract</a>
-      </article>
-      <article class="panel dreamer-panel">
-        <h2>Courtney's Well</h2>
-        <dl>
-          <div><dt>Mode</dt><dd>Private symbolic sandbox</dd></div>
-          <div><dt>Storage</dt><dd>Local threads only</dd></div>
-          <div><dt>Discord</dt><dd>!dream, !note, !recall</dd></div>
-          <div><dt>The View</dt><dd>Patterns, not prophecies</dd></div>
-        </dl>
-        <a target="_blank" rel="noopener noreferrer" href="/courtney.html">Visit the Well</a>
-        <a target="_blank" rel="noopener noreferrer" href="/dreamer-dashboard.html">See the View</a>
-      </article>
-
-      <article class="panel imagniverse-panel">
-        <h2>Imagniverse <span class="badge badge-candidate" style="background:var(--amber);color:#fff;font-size:0.7rem;padding:2px 7px;border-radius:6px;vertical-align:middle;">HELD</span></h2>
-        <dl>
-          <div><dt>Mode</dt><dd>Visual imagination workspace</dd></div>
-          <div><dt>Storage</dt><dd>Local-first boards and collections</dd></div>
-          <div><dt>Status</dt><dd>Concept defined, scaffold only</dd></div>
-        </dl>
-        <a target="_blank" rel="noopener noreferrer" href="/imagniverse.html">Open Imagniverse</a>
-        <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/IMAGNIVERSE-SPEC.md">View Spec</a>
       </article>
 
       <article class="panel mining-lab-panel" id="miningLabPanel" hidden>
@@ -191,6 +149,21 @@
           <div><dt>ETH</dt><dd id="miningEth">--</dd></div>
         </dl>
         <a target="_blank" rel="noopener noreferrer" href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Open Mining Lab</a>
+      </article>
+    </section>
+
+    <section class="control-truth" aria-label="Button truth map">
+      <article class="truth-card truth-action">
+        <h2>Real Buttons</h2>
+        <p id="realButtons">Refresh, RAG ingest, notes, chat, and auto-update change local app state now.</p>
+      </article>
+      <article class="truth-card truth-link">
+        <h2>Live Links</h2>
+        <p id="liveLinks">Links open route-backed docs, PDFs, JSON health, and mirror receipts.</p>
+      </article>
+      <article class="truth-card truth-held">
+        <h2>Held Controls</h2>
+        <p id="heldControls">Founder dispatch, PowerShell loops, boot mutation, and local controls need local proof before enabling.</p>
       </article>
     </section>
 
@@ -212,7 +185,7 @@
     <section class="evidence-strip" aria-label="Evidence matrix">
       <article class="evidence-panel fleet-panel">
         <div class="evidence-header">
-          <h2>Fleet Status</h2>
+          <h2>Agent Fleet</h2>
           <span class="badge badge-live" id="fleetBadge">CHECKING</span>
         </div>
         <table class="evidence-table" id="fleetTable">
@@ -222,6 +195,31 @@
         <div class="evidence-footer">
           <span id="fleetCounts">Q:-- A:-- D:-- F:--</span>
           <button type="button" id="dispatchAll" class="action-chip">Dispatch All</button>
+        </div>
+      </article>
+      <article class="evidence-panel validator-panel">
+        <div class="evidence-header">
+          <h2>Validators</h2>
+          <span class="badge badge-live" id="validatorBadge">CHECKING</span>
+        </div>
+        <table class="evidence-table">
+          <thead><tr><th>Validator</th><th>State</th><th>Next action</th></tr></thead>
+          <tbody id="validatorBody"><tr><td colspan="3" class="muted">Loading...</td></tr></tbody>
+        </table>
+        <div class="evidence-footer">
+          <span id="validatorCounts">0 pass | 0 held</span>
+        </div>
+      </article>
+      <article class="evidence-panel feedback-panel">
+        <div class="evidence-header">
+          <h2>Memory Feedback</h2>
+          <span class="badge badge-candidate" id="feedbackBadge">CHECKING</span>
+        </div>
+        <ul id="feedbackMemory" class="compact-list feedback-list">
+          <li class="muted">Loading operator notes and restart memory...</li>
+        </ul>
+        <div class="evidence-footer">
+          <span id="feedbackMeta">0 memories applied</span>
         </div>
       </article>
       <article class="evidence-panel hff-panel">
@@ -243,7 +241,7 @@
 
     <section class="wide">
       <article class="panel flat-rag-panel">
-        <h2>RAG Dollhouse</h2>
+        <h2>Flat RAG House</h2>
         <dl>
           <div><dt>Sources</dt><dd id="flatSources">--</dd></div>
           <div><dt>Records</dt><dd id="flatRecords">--</dd></div>
@@ -280,11 +278,6 @@
         <h2>Pages</h2>
         <ul class="page-list">
           <li><a target="_blank" rel="noopener noreferrer" href="/outreach.html">Outreach Program</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=docs/LANTERN-DESKTOP-TESTER.md">Desktop Tester Instructions</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/lantern-desktop-tester-latest.zip">Desktop Tester ZIP</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/view?path=manifests/LANTERN-BASELINE-MODEL-v1.md">Baseline Model v1 Receipt</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/imagniverse">Imagniverse — Status Cube</a></li>
-          <li><a target="_blank" rel="noopener noreferrer" href="/art.html">20 Panel Art Matrix</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/view?path=skills/lantern-rag-dollhouse/references/LANTERN-OS-ALL-IN-ONE-CHURCH-FUNDRAISING-CALL-PACKET-2026-05-28.md">Outreach Source Note</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/view?path=reports/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.md">Arc Reactor 12-Step Model</a></li>
           <li><a target="_blank" rel="noopener noreferrer" href="/repo/artifacts/ARC-REACTOR-12-STEP-CONVERGENCE-MODEL.pdf">Arc Reactor PDF</a></li>

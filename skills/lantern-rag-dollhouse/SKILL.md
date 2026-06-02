@@ -54,7 +54,27 @@ scripts/Add-ExternalRagCacheItem.ps1
 Store compressed claims, source URLs, dates, rights state, evidence class, and
 confidence. Do not store raw article dumps or long copyrighted passages.
 
+## Purge Lane (post-ingestion)
+
+After `Sync-RagAndPdf.ps1` ingests markdown into the flat RAG file, the
+derived PDFs in `reports/PDF/` become re-generatable and can be aged out.
+Run `scripts/Invoke-PostIngestionPurge.ps1` (batch job `post-ingestion-purge`,
+interval 245 min, `runAfter: sync-rag-pdf`) to enforce:
+
+| Target | Rule |
+|--------|------|
+| `reports/PDF/*.pdf` | Delete if older than 7 days (re-derivable from markdown) |
+| `manifests/evidence/*.json/.md` | Keep newest 30 per class prefix, drop the rest |
+| `data/kalshi/*-2026-*-*.json` | Delete dated snapshots older than 7 days (superseded by `-latest.json`) |
+
+Status Cube row (purge lane):
+
+| `x` | `y` | `z` | `t` |
+|-----|-----|-----|-----|
+| `reports/PDF/`, `manifests/evidence/`, `data/kalshi/` | purge lane | re-derivable only; never purge source markdown or `-latest.json` | receipt written to `manifests/evidence/purge-{stamp}.json` |
+
 ## Boundaries
 
 Do not pretend metadata-only repos have been cloned. Do not mutate source repos
 while building the dollhouse. Do not import dirty source state blindly.
+Do not purge source markdown — only derived PDFs and superseded snapshots.

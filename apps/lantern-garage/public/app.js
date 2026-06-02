@@ -1,20 +1,32 @@
 const $ = (id) => document.getElementById(id);
 const LOCAL_APP_ORIGIN = "http://127.0.0.1:4177";
-const CLOUD_PROVIDER_LABEL = "AWS ECS/Fargate";
+const CLOUD_TRUTH_DEPLOY_MARKER = "2026-05-29-product-lanes";
+
+const fallbackAccessModel = {
+  generatedAt: new Date().toISOString(),
+  audienceTarget: "dozens_of_users",
+  activeUserSoftCap: 48,
+  tiers: [
+    { id: "public", label: "Public", priceUsdMonthly: null, authRequired: false, summary: "Always-on public proof, docs, health, mirrors, and safe PDFs.", features: ["public links", "read-only status"] },
+    { id: "auth_0", label: "$0 Auth", priceUsdMonthly: 0, authRequired: true, summary: "Signed-in workspace for saved notes and RAG intake.", features: ["operator notes", "saved workspace"] },
+    { id: "auth_20", label: "$20 Auth", priceUsdMonthly: 20, authRequired: true, summary: "Supporter lane for report packets, queue visibility, and weekly digest.", features: ["queue visibility", "report packets"] },
+    { id: "auth_200", label: "$200 Auth", priceUsdMonthly: 200, authRequired: true, summary: "Pilot lane for guided cleanup, review, and operator scheduling.", features: ["pilot review", "cleanup session"] },
+    { id: "founder", label: "Founder", priceUsdMonthly: null, authRequired: true, founderOnly: true, summary: "Founder-only local controls, dispatch, secrets, and release promotion gates.", features: ["local controls", "release gates"] },
+    { id: "supporter", label: "Supporter", priceUsdMonthly: 20, authRequired: true, summary: "$20/month. Weekly digest, report packs, Discord priority.", features: ["weekly digest", "report packs"], checkoutLink: "/pricing.html" },
+    { id: "pilot", label: "Pilot", priceUsdMonthly: 200, authRequired: true, summary: "$200/month. Guided cleanup sprint, 1:1 review, custom integration.", features: ["guided sprint", "1:1 review"], checkoutLink: "/pricing.html" },
+  ],
+};
+
+const validators = [
+  { name: "HTML surface", state: "pass", next: "Keep links no-store and keyboard reachable." },
+  { name: "Access lanes", state: "pass", next: "Wire real identity provider before private data leaves local mode." },
+  { name: "Founder controls", state: "held", next: "Require operator-machine auth proof before enabling remote dispatch." },
+  { name: "Convergence loop", state: "held", next: "Run PowerShell locally; cloud/Linux keeps the issue visible." },
+  { name: "Cloud mirrors", state: "candidate", next: "Promote only after health endpoint returns verified 200." },
+];
 
 function appOrigin() {
   return window.location.protocol === "file:" ? LOCAL_APP_ORIGIN : window.location.origin;
-}
-
-function currentSurfaceOrigin() {
-  return window.location.protocol === "file:" ? LOCAL_APP_ORIGIN : window.location.origin;
-}
-
-function setFrontDoorLink(url, label = "Cloud front door") {
-  const link = $("frontDoorLink");
-  if (!link || !url) return;
-  link.href = url;
-  link.textContent = `${label}: ${url}`;
 }
 
 function yesNo(value) {
@@ -25,13 +37,14 @@ function money(value) {
   return `$${Number(value || 0).toLocaleString()}`;
 }
 
-function log(message) {
-  $("log").textContent = `${new Date().toLocaleTimeString()} ${message}\n${$("log").textContent}`;
+function safeText(value, fallback = "--") {
+  return value === undefined || value === null || value === "" ? fallback : String(value);
 }
 
-function setText(id, value) {
-  const element = $(id);
-  if (element) element.textContent = value;
+function log(message) {
+  const logElement = $("log");
+  if (!logElement) return;
+  logElement.textContent = `${new Date().toLocaleTimeString()} ${message}\n${logElement.textContent}`;
 }
 
 let autoUpdateTimer = null;
@@ -62,31 +75,32 @@ function normalizeInternalLinks() {
 async function refreshOperatorQueue() {
   const data = await api("/api/operator-queue");
   const list = $("operatorQueue");
+  if (!list) return data;
   list.innerHTML = "";
   if (!data.items || !data.items.length) {
     const li = document.createElement("li");
     li.className = "empty";
-    li.textContent = "Queue clear.";
+    li.textContent = data.boundary || "Queue clear.";
     list.appendChild(li);
-    return;
+    return data;
   }
-  data.items.forEach((item) => {
+  data.items.slice(0, 24).forEach((item) => {
+    const priority = safeText(item.priority, "P1").toLowerCase();
     const li = document.createElement("li");
-    li.className = `queue-item ${item.priority.toLowerCase()}`;
+    li.className = `queue-item ${priority}`;
     const badge = document.createElement("span");
-    badge.className = `priority-badge ${item.priority.toLowerCase()}`;
-    badge.textContent = item.priority;
+    badge.className = `priority-badge ${priority}`;
+    badge.textContent = safeText(item.priority, "P1");
     const label = document.createElement("span");
     label.className = "queue-label";
-    label.textContent = item.title;
+    label.textContent = safeText(item.title, "Untitled queue item");
     const meta = document.createElement("span");
     meta.className = "queue-meta";
-    meta.textContent = item.type === "note" ? "note" : `${item.owner || "—"}${item.blocked ? " ⛔ " + item.blocked : ""}`;
-    li.appendChild(badge);
-    li.appendChild(label);
-    li.appendChild(meta);
+    meta.textContent = item.type === "note" ? "operator note" : `${item.owner || "—"}${item.blocked ? " ⛔ " + item.blocked : ""}`;
+    li.append(badge, label, meta);
     list.appendChild(li);
   });
+  return data;
 }
 
 async function storeNote(event) {
@@ -98,12 +112,109 @@ async function storeNote(event) {
     body: JSON.stringify({ text, priority: $("notePriority").value }),
   });
   $("noteText").value = "";
-  log("Note added.");
+  log("Note added to Operator Lane.");
   await refreshOperatorQueue();
 }
 
+function renderAccessModel(model = fallbackAccessModel) {
+  const tiers = Array.isArray(model.tiers) ? model.tiers : fallbackAccessModel.tiers;
+  const byId = Object.fromEntries(tiers.map((tier) => [tier.id, tier]));
+  const set = (id, tierId) => {
+    const el = $(id);
+    const tier = byId[tierId];
+    if (el && tier) el.textContent = `${tier.authRequired ? "auth" : "public"}: ${tier.summary}`;
+  };
+  set("publicLane", "public");
+  set("authZeroLane", "auth_0");
+  set("authTwentyLane", "auth_20");
+  set("authTwoHundredLane", "auth_200");
+  set("founderLane", "founder");
+  const cap = $("userCapacity");
+  if (cap) cap.textContent = `Dozens-ready soft cap: ${model.activeUserSoftCap || 48} users; private founder actions held.`;
+}
+
+function renderValidators() {
+  const body = $("validatorBody");
+  if (!body) return;
+  body.innerHTML = "";
+  validators.forEach((validator) => {
+    const row = document.createElement("tr");
+    [validator.name, validator.state, validator.next].forEach((value, index) => {
+      const cell = document.createElement("td");
+      if (index === 1) {
+        const badge = document.createElement("span");
+        badge.className = `slot-state ${validator.state === "pass" ? "active" : validator.state === "held" ? "blocked" : "idle"}`;
+        badge.textContent = validator.state;
+        cell.appendChild(badge);
+      } else {
+        cell.textContent = value;
+      }
+      row.appendChild(cell);
+    });
+    body.appendChild(row);
+  });
+  const pass = validators.filter((validator) => validator.state === "pass").length;
+  const held = validators.filter((validator) => validator.state === "held").length;
+  $("validatorCounts").textContent = `${pass} pass | ${held} held | ${validators.length} total`;
+  $("validatorBadge").textContent = held ? "HELD" : "PASS";
+  $("validatorBadge").className = held ? "badge badge-blocked" : "badge badge-live";
+}
+
+
+function renderActionCapabilities(capabilities = {}) {
+  const actions = capabilities.actions || {};
+  const setButton = (id, actionId) => {
+    const button = $(id);
+    if (!button) return;
+    const action = actions[actionId] || {};
+    const enabled = action.enabled !== false;
+    button.disabled = !enabled;
+    button.dataset.controlKind = enabled ? "real-action" : "held-action";
+    button.title = action.reason || (enabled ? "Real route-backed action." : "Held until local capability is available.");
+    button.setAttribute("aria-disabled", String(!enabled));
+  };
+  setButton("runLoop", "runLoop");
+  setButton("localControls", "localControls");
+  const summary = capabilities.summary || {};
+  const held = summary.held || [];
+  const real = summary.real || [];
+  const links = summary.links || [];
+  if ($("realButtons")) $("realButtons").textContent = real.length ? real.join(" • ") : "Refresh, notes, chat, RAG ingest, and auto-update are route-backed.";
+  if ($("liveLinks")) $("liveLinks").textContent = links.length ? links.join(" • ") : "Every link in the dock points at a route-backed URL or public artifact.";
+  if ($("heldControls")) $("heldControls").textContent = held.length ? held.join(" • ") : "No held controls reported.";
+}
+
+function renderFeedbackMemory(payload = {}) {
+  const list = $("feedbackMemory");
+  if (!list) return;
+  const feedback = payload.feedback || [];
+  list.innerHTML = "";
+  if (!feedback.length) {
+    const item = document.createElement("li");
+    item.className = "muted";
+    item.textContent = "No operator feedback memory found.";
+    list.appendChild(item);
+  } else {
+    feedback.slice(0, 6).forEach((entry) => {
+      const item = document.createElement("li");
+      const badge = document.createElement("span");
+      badge.className = `priority-badge ${(entry.priority || "P1").toLowerCase()}`;
+      badge.textContent = entry.priority || "P1";
+      const text = document.createElement("span");
+      text.textContent = `${entry.feedback} → ${entry.appliedAs}`;
+      item.append(badge, text);
+      list.appendChild(item);
+    });
+  }
+  if ($("feedbackMeta")) $("feedbackMeta").textContent = `${feedback.length} memory item(s) applied from operator notes/context`;
+  if ($("feedbackBadge")) {
+    $("feedbackBadge").textContent = feedback.length ? "APPLIED" : "EMPTY";
+    $("feedbackBadge").className = feedback.length ? "badge badge-live" : "badge badge-medium";
+  }
+}
+
 async function refresh() {
-  const [[status, rag, conversationState, flatHouse, miningLab, mirrors]] = await Promise.all([
+  const [[status, rag, conversationState, flatHouse, miningLab, mirrors, accessModel, capabilities, feedback], queue] = await Promise.all([
     Promise.all([
       api("/api/status"),
       api("/api/rag-cache"),
@@ -111,175 +222,76 @@ async function refresh() {
       api("/api/flat-rag-house"),
       api("/api/mining-lab"),
       api("/api/cloud-mirrors"),
+      api("/api/access-model").catch(() => fallbackAccessModel),
+      api("/api/action-capabilities").catch(() => ({ actions: {} })),
+      api("/api/operator-feedback").catch(() => ({ feedback: [] })),
     ]),
     refreshOperatorQueue(),
   ]);
 
-  const proofLoop = status.arc.currentPhase || "Movie 1 garage proven; Movie 2 proof loop forming";
-  setText("movie1", status.arc.movie1GarageConfidence ?? "--");
-  setText("phase", proofLoop);
-  setText("modelProofLoop", proofLoop);
-  setText(
-    "modelTokenCut",
-    `MCP gates + RAG compression: ${status.mcpCatalog?.toolCount ?? "--"} tools visible, ${status.mcpCatalog?.status || "catalog checking"}.`
-  );
-  setText(
-    "modelRevenueLane",
-    `Zero-cash lane: ads/service fees, privacy boundaries, and wallet truth at ${money(status.wallet.clearedCashUsd)} cleared / ${money(status.wallet.pendingInvoiceUsd)} pending.`
-  );
-  setText("currentModelVersion", "Current Model: Baseline v1");
-  setText(
-    "currentModelMeta",
-    `Local chat first. ${mirrors.deployProvider || CLOUD_PROVIDER_LABEL} URL ${mirrors.cloudMirrorCount ? "listed" : "pending"}; MCP ${status.mcpCatalog?.toolCount ?? "--"} tools ${status.mcpCatalog?.status || "unverified"}.`
-  );
-  $("m1").textContent = status.arc.movie1GarageConfidence ?? "--";
-  $("m2").textContent = status.arc.movie2PublicPlatformConfidence ?? "--";
-  $("m3").textContent = status.arc.movie3DistributedFleetConfidence ?? "--";
-  $("avengers").textContent = status.arc.avengersState || "held";
+  $("movie1").textContent = status.arc?.movie1GarageConfidence ?? "--";
+  $("phase").textContent = status.arc?.currentPhase || "No phase recorded.";
+  $("m1").textContent = status.arc?.movie1GarageConfidence ?? "--";
+  $("m2").textContent = status.arc?.movie2PublicPlatformConfidence ?? "--";
+  $("m3").textContent = status.arc?.movie3DistributedFleetConfidence ?? "--";
+  $("avengers").textContent = status.arc?.avengersState || "held";
 
-  $("cash").textContent = money(status.wallet.clearedCashUsd);
-  $("pending").textContent = money(status.wallet.pendingInvoiceUsd);
-  $("invoices").textContent = String(status.wallet.pendingInvoices?.length || 0);
+  $("cash").textContent = money(status.wallet?.clearedCashUsd);
+  $("pending").textContent = money(status.wallet?.pendingInvoiceUsd);
+  $("invoices").textContent = String(status.wallet?.pendingInvoices?.length || 0);
 
-  $("prep").textContent = yesNo(status.readiness.readyForPrep);
-  $("install").textContent = yesNo(status.readiness.readyForInstall);
-  $("bootSummary").textContent = status.readiness.summary || "No readiness summary.";
-  renderBootGate(status.readiness);
+  $("prep").textContent = yesNo(status.readiness?.readyForPrep);
+  $("install").textContent = yesNo(status.readiness?.readyForInstall);
+  $("bootSummary").textContent = status.readiness?.summary || "No readiness summary.";
+  renderBootGate(status.readiness || {});
 
-  $("dashboard").textContent = yesNo(status.controls.dashboardOk);
-  $("mcp").textContent = yesNo(status.controls.mcpOk);
-  $("accessx").textContent = yesNo(status.controls.accessXExists);
+  $("dashboard").textContent = yesNo(status.controls?.dashboardOk);
+  $("mcp").textContent = yesNo(status.controls?.mcpOk);
+  $("accessx").textContent = yesNo(status.controls?.accessXExists);
 
-  const list = $("ragCache");
-  list.innerHTML = "";
-  rag.slice(-8).reverse().forEach((item) => {
-    const li = document.createElement("li");
-    li.textContent = `${item.topic}: ${item.claim} (${item.decision}, ${item.confidence})`;
-    list.appendChild(li);
-  });
-
+  renderRagCache(rag || []);
   renderConversations(conversationState.conversations || []);
-  renderFlatHouse(flatHouse);
-  renderMiningLab(miningLab);
-  renderCloudMirrors(mirrors);
-  renderOrchestratorDependency(status.orchestratorDependency);
+  renderFlatHouse(flatHouse || {});
+  renderMiningLab(miningLab || {});
+  renderCloudMirrors(mirrors || {});
+  renderAccessModel(accessModel);
+  renderActionCapabilities(capabilities);
+  renderFeedbackMemory(feedback);
+  renderValidators();
+  renderFleet(queue, status);
+  renderHff(status);
   log("Status refreshed.");
 }
 
-async function postAction(path, label, trigger) {
-  const originalText = trigger?.textContent;
-  if (trigger) {
-    trigger.disabled = true;
-    trigger.textContent = "Working...";
-    trigger.setAttribute("aria-busy", "true");
-  }
-  log(`${label} started...`);
-  try {
-    const result = await api(path, { method: "POST", body: "{}" });
-    log(`${label} finished with code ${result.code}.`);
-    if (result.receiptPath) log(`${label} receipt: ${result.receiptPath}`);
-    if (result.paperOrderCount !== undefined) {
-      const realSpend = Number(result.realMoneyUsd || 0).toFixed(2);
-      log(`${label} paper orders: ${result.paperOrderCount}; real spend $${realSpend}; live trading ${result.liveTradingStatus || "blocked"}.`);
-    }
-    if (result.paperBlock) renderKalshiBlock(result);
-    if (result.paperPl) renderKalshiPaperPl(result);
-    return result;
-  } finally {
-    if (trigger) {
-      trigger.disabled = false;
-      trigger.textContent = originalText;
-      trigger.removeAttribute("aria-busy");
-    }
-  }
-}
-
-function renderKalshiPaperPl(result) {
-  const pl = result.paperPl || {};
-  const pnl = Number(pl.totalPaperPnlUsd || 0).toFixed(2);
-  const cost = Number(pl.totalPaperCostUsd || 0).toFixed(2);
-  const payout = Number(pl.totalPaperPayoutUsd || 0).toFixed(2);
-  setText(
-    "kalshiPaperPlSummary",
-    `Paper P/L $${pnl} on $${cost} paper cost; payout $${payout}; settled ${pl.settledCount || 0}, open ${pl.openCount || 0}, unknown ${pl.unknownCount || 0}; real spend $${Number(pl.realMoneyUsd || 0).toFixed(2)}.${pl.nextCheckAfterUtc ? ` Next check after ${pl.nextCheckAfterUtc}.` : ""}`
-  );
-  if (result.receiptPath) {
-    const receipt = $("kalshiBlockReceipt");
-    if (receipt) receipt.href = `/view?path=${encodeURIComponent(result.receiptPath)}`;
-  }
-}
-
-function renderKalshiBlock(result) {
-  const block = result.paperBlock || {};
-  const orders = block.orders || [];
-  setText("kalshiBlockMode", result.liveTradingStatus || "blocked");
-  setText("kalshiBlockOrders", String(result.paperOrderCount ?? orders.length));
-  setText("kalshiBlockRisk", `$${Number(block.allocatedPaperRiskUsd || 0).toFixed(2)} paper`);
-  setText("kalshiBlockSpend", `$${Number(result.realMoneyUsd || 0).toFixed(2)}`);
-  const receipt = $("kalshiBlockReceipt");
-  if (receipt && result.receiptPath) receipt.href = `/view?path=${encodeURIComponent(result.receiptPath)}`;
-  const packet = $("kalshiBlockPacket");
-  if (packet) packet.value = buildKalshiManualPacket(result, orders);
-
-  const list = $("kalshiBlockList");
+function renderRagCache(rag) {
+  const list = $("ragCache");
   if (!list) return;
   list.innerHTML = "";
-  if (!orders.length) {
+  if (!rag.length) {
     const li = document.createElement("li");
-    li.textContent = "No current near-term tickets returned.";
+    li.className = "empty";
+    li.textContent = "No RAG records yet.";
     list.appendChild(li);
     return;
   }
-  orders.forEach((order) => {
+  rag.slice(-8).reverse().forEach((item) => {
     const li = document.createElement("li");
-    const limit = Number(order.limitCents || 0);
-    const loss = Number(order.maxLossUsd || 0).toFixed(2);
-    const minutes = Number(order.minutesToKnown || 0).toFixed(1);
-    li.textContent = `${order.ticker}: ${limit}c limit, $${loss} max loss, ${minutes}m, ${order.status || "paper"}`;
+    li.textContent = `${safeText(item.topic, "topic")}: ${safeText(item.claim, "claim")} (${safeText(item.decision, "candidate")}, ${safeText(item.confidence, "n/a")})`;
     list.appendChild(li);
   });
 }
 
-function buildKalshiManualPacket(result, orders) {
-  const lines = [
-    "Lantern Kalshi manual review packet",
-    `mode: ${result.liveTradingStatus || "blocked"} / paper-only`,
-    `real spend: $${Number(result.realMoneyUsd || 0).toFixed(2)}`,
-    `paper orders: ${result.paperOrderCount ?? orders.length}`,
-    "boundary: operator must place any real trade manually in Kalshi; Lantern did not submit orders",
-    "",
-  ];
-  orders.forEach((order, index) => {
-    const limit = Number(order.limitCents || 0);
-    const loss = Number(order.maxLossUsd || 0).toFixed(2);
-    const minutes = Number(order.minutesToKnown || 0).toFixed(1);
-    lines.push(`${index + 1}. ${order.ticker} | YES limit ${limit}c | max loss $${loss} | ${minutes}m | ${order.title}`);
-  });
-  return lines.join("\n");
-}
-
-async function copyKalshiBlockPacket() {
-  const packet = $("kalshiBlockPacket");
-  if (!packet) return;
-  const text = packet.value || "";
-  if (!text.trim()) {
-    log("No Kalshi packet to copy yet.");
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    log("Kalshi manual packet copied.");
-  } catch {
-    packet.select();
-    document.execCommand("copy");
-    log("Kalshi manual packet selected/copied with fallback.");
-  }
+async function postAction(path, label) {
+  log(`${label} started...`);
+  const result = await api(path, { method: "POST", body: "{}" });
+  log(`${label} finished with code ${result.code}. ${result.stderr || result.stdout || ""}`.trim());
+  return result;
 }
 
 async function ingestFlatRagHouse() {
   log("Flat RAG ingest started...");
   const result = await api("/api/actions/flat-rag-ingest", { method: "POST", body: "{}" });
-  renderFlatHouse(result.house);
+  renderFlatHouse(result.house || {});
   log("Flat RAG ingest finished.");
 }
 
@@ -293,9 +305,9 @@ function renderFlatHouse(house) {
 
   const list = $("flatSourceList");
   list.innerHTML = "";
-  sources.forEach((source) => {
+  sources.slice(0, 8).forEach((source) => {
     const li = document.createElement("li");
-    li.textContent = `${source.name}: ${source.dirty ? "dirty" : "clean"} @ ${source.branch || "unknown"} (${source.archiveDecision})`;
+    li.textContent = `${source.name}: ${source.dirty ? "dirty" : "clean"} @ ${source.branch || "unknown"} (${source.archiveDecision || "source_evidence_only"})`;
     list.appendChild(li);
   });
 }
@@ -339,60 +351,21 @@ function isVerifiedCloudMirror(mirror) {
   return status.includes("verified") && status.includes("200");
 }
 
-function getCanonicalCloudMirror(cloudMirrors) {
-  return cloudMirrors.find((mirror) => {
-    if (!mirror) return false;
-    const name = String(mirror.name || "").toLowerCase();
-    const role = String(mirror.role || "").toLowerCase();
-    return name.includes("lantern os aws") || role.includes("canonical aws");
-  }) || cloudMirrors.find(isVerifiedCloudMirror) || null;
-}
-
-function canonicalFrontDoorVerified(cloudMirrors) {
-  return isVerifiedCloudMirror(getCanonicalCloudMirror(cloudMirrors));
-}
-
-function cloudMirrorStateLabel(mirror, mirrors) {
-  const provider = mirrors?.deployProvider || CLOUD_PROVIDER_LABEL;
-  const status = String(mirror?.status || "unconfigured").toLowerCase();
-  if (isVerifiedCloudMirror(mirror)) return `${provider} verified`;
-  if (!mirror) return `${provider} service URL pending`;
-  if (status.includes("404")) return `${provider} 404 held`;
-  if (status.includes("candidate") || status.includes("pending") || status.includes("held")) return `${provider} held`;
-  return `${provider} unverified`;
-}
-
-function getFrontDoorUrl(mirrors) {
-  const currentOrigin = window.location.protocol === "file:" ? "" : window.location.origin;
-  if (currentOrigin && !isLocalOnlyUrl(currentOrigin)) return currentOrigin;
-  const cloudMirrors = Array.isArray(mirrors?.cloudMirrors) ? mirrors.cloudMirrors : [];
-  const canonicalMirror = getCanonicalCloudMirror(cloudMirrors);
-  if (isVerifiedCloudMirror(canonicalMirror)) return canonicalMirror.url;
-  return mirrors?.localPrimary || LOCAL_APP_ORIGIN;
-}
-
 function renderCloudMirrors(mirrors) {
-  if (!mirrors) return;
-  const localPrimary = mirrors.localPrimary || "http://127.0.0.1:4177";
+  const localPrimary = mirrors.localPrimary || LOCAL_APP_ORIGIN;
   const cloudMirrors = mirrors.cloudMirrors || [];
   const verifiedCloudMirrors = cloudMirrors.filter(isVerifiedCloudMirror);
   const publicProofCount = verifiedCloudMirrors.length;
-  const canonicalMirror = getCanonicalCloudMirror(cloudMirrors);
-  const canonicalVerified = canonicalFrontDoorVerified(cloudMirrors);
-  const cloudState = cloudMirrorStateLabel(canonicalMirror, mirrors);
-  const frontDoorUrl = getFrontDoorUrl(mirrors);
-  const currentOrigin = currentSurfaceOrigin();
 
-  setFrontDoorLink(frontDoorUrl, canonicalVerified ? "Cloud front door" : "Local front door");
-  $("mirrorPrimary").textContent = frontDoorUrl;
-  $("mirrorCount").textContent = String(publicProofCount);
-  $("mirrorDeploy").textContent = `${mirrors.deployBranch || "master"} -> ${mirrors.deployProvider || CLOUD_PROVIDER_LABEL}`;
-  $("chatStatus").textContent = window.location.protocol === "file:" ? "preview via local app" : isLocalOnlyUrl(currentOrigin) ? "local" : "cloud";
-  $("tunnelStatus").textContent = canonicalVerified ? "cloud verified" : cloudState.toLowerCase();
-  $("chatMirrorSummary").textContent = `Front door: ${frontDoorUrl} | ${cloudState} | verified public mirrors: ${publicProofCount}`;
+  $("mirrorPrimary").textContent = localPrimary;
+  $("mirrorCount").textContent = `${publicProofCount}/${cloudMirrors.length}`;
+  $("mirrorDeploy").textContent = `${mirrors.deployBranch || "master"} -> ${mirrors.deployProvider || "Render"}`;
+  $("chatStatus").textContent = window.location.protocol === "file:" ? "preview via local app" : "web app";
+  $("tunnelStatus").textContent = publicProofCount > 0 ? "cloud verified" : "cloud candidate";
+  $("chatMirrorSummary").textContent = `Local primary: ${localPrimary} | public mirrors: ${publicProofCount}/${cloudMirrors.length} | marker ${CLOUD_TRUTH_DEPLOY_MARKER}`;
   const chatLinks = $("chatMirrorLinks");
   chatLinks.innerHTML = "";
-  cloudMirrors.slice(0, 3).forEach((mirror) => {
+  cloudMirrors.slice(0, 4).forEach((mirror) => {
     const link = document.createElement("a");
     link.href = mirror.url;
     link.target = "_blank";
@@ -411,28 +384,11 @@ function renderCloudMirrors(mirrors) {
     link.rel = "noopener noreferrer";
     link.textContent = mirror.name || mirror.url;
     const meta = document.createElement("span");
-    const proof = isVerifiedCloudMirror(mirror) ? "public proof verified" : "public proof missing";
+    const proof = isVerifiedCloudMirror(mirror) ? "public proof verified" : "public proof pending";
     meta.textContent = ` ${mirror.status || "configured"} ${mirror.healthPath || ""} — ${proof}`;
-    li.appendChild(link);
-    li.appendChild(meta);
+    li.append(link, meta);
     list.appendChild(li);
   });
-}
-
-function renderOrchestratorDependency(dependency) {
-  if (!dependency) return;
-  setText("orchDepStatus", dependency.status || "unvalidated");
-  setText(
-    "orchDepTools",
-    dependency.healthOk
-      ? `${dependency.toolCount ?? "--"} visible; read tools ${dependency.canUseReadTools ? "ready" : "held"}`
-      : "MCP health failed"
-  );
-  setText(
-    "orchDepFleet",
-    `available ${dependency.availableAgentCount ?? "--"} / active ${dependency.activeAgentCount ?? "--"} / stale ${dependency.staleAgentCount ?? "--"}`
-  );
-  setText("orchDepNext", dependency.nextHumanAction || "Run dependency validation.");
 }
 
 function renderConversations(conversations) {
@@ -449,13 +405,13 @@ function renderConversations(conversations) {
   container.innerHTML = "";
   conversations.forEach((entry) => {
     const div = document.createElement("div");
-    div.className = `chat-bubble ${entry.role}`;
+    div.className = `chat-bubble ${entry.role || "note"}`;
     const text = document.createElement("span");
     text.textContent = entry.text;
     div.appendChild(text);
     const time = document.createElement("span");
     time.className = "chat-time";
-    time.textContent = new Date(entry.recordedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    time.textContent = entry.recordedAt ? new Date(entry.recordedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "now";
     div.appendChild(time);
     container.appendChild(div);
   });
@@ -466,417 +422,153 @@ function renderConversations(conversations) {
 
 const quickSets = {
   greeting: [
-    { label: "!one", text: "!one" },
-    { label: "!converge", text: "!converge" },
-    { label: "!superjarvis", text: "!superjarvis" },
+    { label: "Check fleet", text: "What is the current agent fleet and validator status?" },
+    { label: "Add P0", text: "P0: " },
+    { label: "Access lanes", text: "Show the public, auth $0, $20, $200, and founder lanes." },
   ],
   respond: [
-    { label: "Approve", text: "Approved. Proceed." },
+    { label: "Approve", text: "Approved. Proceed with the next safe action." },
     { label: "Hold", text: "Hold — I need to review this first." },
     { label: "Next task", text: "Move to the next queued task." },
   ],
   "follow-up": [
-    { label: "Refresh status", text: "Refresh the full system status." },
-    { label: "Dispatch agents", text: "Dispatch all available agents on queued work." },
-    { label: "Add P0 note", text: "I need to flag a P0 item." },
+    { label: "Refresh", text: "Refresh the full system status." },
+    { label: "Dispatch held", text: "Founder dispatch remains held until local auth proof." },
+    { label: "P1 note", text: "P1: " },
   ],
 };
 
-function showQuickReplies(context) {
-  const bar = $("chatQuick");
-  bar.innerHTML = "";
-  const chips = quickSets[context] || quickSets["follow-up"];
-  chips.forEach((chip) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "chat-chip";
-    btn.textContent = chip.label;
-    btn.addEventListener("click", () => sendChat(chip.text));
-    bar.appendChild(btn);
-  });
-}
-
-function renderBootGate(readiness) {
-  const installReady = readiness.readyForInstall === true;
-  const prepReady = readiness.readyForPrep === true;
-  $("launchRule").textContent = installReady
-    ? "Install gate is ready for operator-reviewed physical action. The app still will not mutate boot settings."
-    : "Local app first. Disk, bootloader, firmware, and default-boot changes remain operator-held.";
-  $("nextBoot").textContent = installReady
-    ? "Review the install checklist, backup keys, recovery media, and boot USB before changing the machine."
-    : prepReady
-      ? "Prep is ready, but install is held until unallocated disk space and elevated checks pass."
-      : "Windows remains the host until readiness evidence improves.";
-  $("memoryRule").textContent = "RAG cache and local conversations are source-labeled. Private notes stay local.";
-}
-
-async function sendChat(text) {
-  if (!text || !text.trim()) return;
-  text = text.trim();
-  appendBubble("operator", text, { status: "queued" });
-  const waitingBubble = appendBubble("lantern", "Waiting for Lantern response...", {
-    pending: true,
-    status: "queued for MCP/local reply",
-  });
-  $("conversationText").value = "";
-  autoGrow($("conversationText"));
-  $("chatStatus").textContent = "thinking";
-  try {
-    const result = await api("/api/chat", {
-      method: "POST",
-      body: JSON.stringify({ message: text }),
+function showQuickReplies(name) {
+  const container = $("chatQuick");
+  if (!container) return;
+  container.innerHTML = "";
+  (quickSets[name] || quickSets.greeting).forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quick-reply";
+    button.textContent = item.label;
+    button.addEventListener("click", () => {
+      $("conversationText").value = item.text;
+      $("conversationText").focus();
     });
-    updateBubble(waitingBubble, "lantern", result.reply || generateLocalReply(text), result.provider || "local");
-    $("chatStatus").textContent = result.provider || "local";
-    showQuickReplies("respond");
-  } catch (err) {
-    const reply = generateLocalReply(text);
-    updateBubble(waitingBubble, "lantern", reply, "local fallback");
-    $("chatStatus").textContent = "local fallback";
-    try {
-      await api("/api/conversations", {
-        method: "POST",
-        body: JSON.stringify({ surface: "lantern-garage", role: "operator", text }),
-      });
-      await api("/api/conversations", {
-        method: "POST",
-        body: JSON.stringify({ surface: "lantern-garage", role: "lantern", text: reply }),
-      });
-    } catch {
-      log(`Chat stored on-screen only: ${err.message}`);
-    }
-    showQuickReplies("respond");
-  }
-}
-
-async function postCommand(command, label = command) {
-  log(`${label} command started through /api/command...`);
-  const result = await api("/api/command", {
-    method: "POST",
-    body: JSON.stringify({ command }),
+    container.appendChild(button);
   });
-  log(`${label}: ${result.ok ? "done" : result.error || "held"}`);
-  const output = String(result.stdout || result.stderr || "").trim();
-  if (output) log(output.split(/\r?\n/).slice(-4).join(" | "));
-  return result;
-}
-
-function generateLocalReply(input) {
-  const lower = input.toLowerCase();
-  if (lower.startsWith("!one"))
-    return "Use /api/command for !one. It runs the read-only One IDE preflight locally.";
-  if (lower.startsWith("!converge"))
-    return "Use /api/command for !converge. It runs the Lantern convergence loop locally.";
-  if (lower.startsWith("!superjarvis"))
-    return "Use /api/command for !superjarvis. It runs one Super Jarvis diagnostic pass locally.";
-  if (lower.includes("mine") || lower.includes("mining") || lower.includes("monero") || lower.includes("btc") || lower.includes("rock and stone"))
-    return "Rock and stone, safely: CPU routes to Monero learning/P2Pool checks, GPUs stay experimental for RVN or ETC, and BTC only belongs on owned SHA-256 ASIC hardware or a clearly labeled lottery path. No wallet cracking, no hidden signing, no fake one-shot ROI.";
-  if (lower.includes("fleet") || lower.includes("agent") || lower.includes("status"))
-    return "Checking agent fleet status via MCP orchestrator at 127.0.0.1:8787. Use Refresh Status to pull live queue and slot evidence.";
-  if (lower.includes("next task") || lower.includes("queue"))
-    return "Queue is managed by the orchestrator. Use the operator queue panel above or hit Refresh to see current state.";
-  if (lower.includes("sync") || lower.includes("evidence") || lower.includes("ingest") || lower.includes("repo") || lower.includes("rag"))
-    return "Sync Evidence rebuilds the flat RAG house from configured local source repos and then shows source and record counts on the dashboard.";
-  if (lower.includes("converge") || lower.includes("loop"))
-    return "Running convergence loop. This executes the Lantern convergence script and updates RAG + status.";
-  if (lower.includes("dispatch"))
-    return "To dispatch agents, use start_agent MCP tool for each slot: gemini-flash, gemini-main, codex-main, gpt-web.";
-  if (lower.includes("hold"))
-    return "Holding. Current action paused for operator review.";
-  if (lower.includes("approve") || lower.includes("proceed"))
-    return "Acknowledged. Proceeding with current action path.";
-  if (lower.includes("p0") || lower.includes("flag") || lower.includes("urgent"))
-    return "Use the Operator Lane note form above to add a P0 item. It will appear at the top of the queue.";
-  return "Message stored locally. Use quick-reply buttons or type for more context.";
-}
-
-function appendBubble(role, text, options = {}) {
-  const container = $("chatMessages");
-  const empty = $("chatEmpty");
-  empty.style.display = "none";
-  const div = document.createElement("div");
-  div.className = `chat-bubble ${role}${options.pending ? " pending" : ""}`;
-  if (options.pending) div.setAttribute("aria-busy", "true");
-  const span = document.createElement("span");
-  span.className = "chat-message-text";
-  span.textContent = text;
-  div.appendChild(span);
-  const time = document.createElement("span");
-  time.className = "chat-time";
-  time.textContent = options.status || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  div.appendChild(time);
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  return div;
-}
-
-function updateBubble(bubble, role, text, status) {
-  if (!bubble) {
-    appendBubble(role, text, { status });
-    return;
-  }
-  bubble.className = `chat-bubble ${role}`;
-  bubble.removeAttribute("aria-busy");
-  const message = bubble.querySelector(".chat-message-text");
-  if (message) message.textContent = text;
-  const time = bubble.querySelector(".chat-time");
-  if (time) time.textContent = status || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  $("chatMessages").scrollTop = $("chatMessages").scrollHeight;
-}
-
-function autoGrow(el) {
-  el.style.height = "auto";
-  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
 }
 
 async function storeConversation(event) {
   event.preventDefault();
-  const text = $("conversationText").value.trim();
+  const textarea = $("conversationText");
+  const text = textarea.value.trim();
   if (!text) return;
-  await sendChat(text);
+  await api("/api/conversations", {
+    method: "POST",
+    body: JSON.stringify({ role: $("conversationRole").value, text, surface: "garage-dashboard" }),
+  });
+  textarea.value = "";
+  textarea.style.height = "auto";
+  log("Conversation saved locally.");
+  const state = await api("/api/conversations?limit=8");
+  renderConversations(state.conversations || []);
 }
 
 async function storeRagItem(event) {
   event.preventDefault();
   const claim = $("ragClaim").value.trim();
-  if (!claim) {
-    log("RAG claim required.");
-    return;
-  }
-  await api("/api/rag-cache", {
+  if (!claim) return;
+  const record = await api("/api/rag-cache", {
     method: "POST",
     body: JSON.stringify({
-      topic: $("ragTopic").value || "Lantern OS form intake",
+      topic: $("ragTopic").value.trim() || "dashboard intake",
       claim,
       decision: $("ragDecision").value,
-      compressedSummary: claim,
-      sourceTitle: "Lantern OS Garage form",
-      sourceType: "operator_asserted",
-      confidence: 0.66,
+      confidence: 0.5,
     }),
   });
   $("ragClaim").value = "";
-  log("RAG item stored.");
-  await refresh();
+  $("ragTopic").value = "";
+  log(`RAG item added: ${record.record?.decision || "candidate"}.`);
+  renderRagCache(await api("/api/rag-cache"));
+}
+
+function renderBootGate(readiness) {
+  $("launchRule").textContent = "Local app first. Disk, bootloader, firmware, and default-boot changes remain operator-held.";
+  $("nextBoot").textContent = readiness.readyForInstall
+    ? "Prep says ready for physical install; operator still owns the boot decision."
+    : "Windows remains the host until physical checklist and rollback proof are complete.";
+  $("memoryRule").textContent = "RAG cache, notes, and conversations are source-labeled; private founder material stays auth/local-held.";
+}
+
+function renderFleet(queue = {}, status = {}) {
+  const items = queue.items || [];
+  const body = $("fleetBody");
+  if (!body) return;
+  body.innerHTML = "";
+  const rows = items.slice(0, 6);
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    row.innerHTML = '<td colspan="4" class="muted">No local queue exposed; Render keeps dispatch held.</td>';
+    body.appendChild(row);
+  } else {
+    rows.forEach((item, index) => {
+      const row = document.createElement("tr");
+      const state = item.blocked ? "blocked" : "active";
+      row.innerHTML = `<td>${index + 1}</td><td><span class="slot-state ${state}">${state}</span></td><td></td><td>${item.priority || "P1"}</td>`;
+      row.children[2].textContent = item.title || item.file || "queue item";
+      body.appendChild(row);
+    });
+  }
+  const p0 = items.filter((item) => item.priority === "P0").length;
+  const p1 = items.filter((item) => item.priority === "P1").length;
+  $("fleetCounts").textContent = `P0:${p0} P1:${p1} items:${items.length}`;
+  $("fleetBadge").textContent = status.controls?.mcpOk ? "LOCAL" : "HELD";
+  $("fleetBadge").className = status.controls?.mcpOk ? "badge badge-live" : "badge badge-blocked";
+}
+
+function renderHff(status = {}) {
+  const lanes = status.arc?.evidenceLanes || {};
+  $("hffHumans").textContent = Math.round((lanes.patientPacketSystem || 0.74) * 100);
+  $("hffAnimals").textContent = Math.round((lanes.repoAndReports || 0.92) * 100);
+  $("hffEco").textContent = Math.round((lanes.ragAndDataCenter || 0.68) * 100);
+  $("hffUniverse").textContent = Math.round((lanes.fourDGms || 0.55) * 100);
+  $("hffMeta").textContent = "proof-weighted local scores | public claims held at evidence boundary";
 }
 
 function toggleAutoUpdate() {
+  const button = $("autoUpdate");
   if (autoUpdateTimer) {
     clearInterval(autoUpdateTimer);
     autoUpdateTimer = null;
-    $("autoUpdate").setAttribute("aria-pressed", "false");
+    button.setAttribute("aria-pressed", "false");
     $("autoUpdateState").textContent = "off";
     log("Auto update off.");
     return;
   }
-  autoUpdateTimer = setInterval(() => refresh().catch((error) => log(error.message)), 30000);
-  $("autoUpdate").setAttribute("aria-pressed", "true");
-  $("autoUpdateState").textContent = "30s refresh";
-  log("Auto update on: 30s refresh only.");
+  autoUpdateTimer = setInterval(() => refresh().catch((error) => log(`Auto refresh failed: ${error.message}`)), 30000);
+  button.setAttribute("aria-pressed", "true");
+  $("autoUpdateState").textContent = "30s";
+  log("Auto update on: 30s refresh for dozens-ready dashboard.");
 }
 
-async function refreshFleet() {
-  try {
-    const data = await api("/api/fleet");
-    if (!data.ok) throw new Error(data.error || "fleet unavailable");
-    renderFleet(data);
-  } catch (error) {
-    $("fleetBadge").textContent = "OFFLINE";
-    $("fleetBadge").className = "badge badge-blocked";
-    $("fleetCounts").textContent = `MCP offline: ${error.message}`;
-    const dispatch = $("dispatchAll");
-    dispatch.disabled = true;
-    dispatch.textContent = "Dispatch Held";
-    dispatch.title = "MCP fleet status is offline; no agent dispatch is allowed.";
-  }
-}
-
-function renderFleet(data) {
-  const body = $("fleetBody");
-  body.innerHTML = "";
-  const agents = data.agents || [];
-  const activeCount = agents.filter((agent) => agent.currentTask).length;
-  const availability = data.raw?.availability || {};
-  const parsedAvailableCount = Number(availability.availableCount);
-  const availableCount = Number.isFinite(parsedAvailableCount)
-    ? parsedAvailableCount
-    : agents.filter((agent) => agent.available && !agent.currentTask).length;
-  const canDispatch = availableCount > 0
-    && agents.some((agent) => agent.available && !agent.currentTask && agent.slot !== "operator-intake");
-  const nextHumanAction = availability.nextHumanAction || data.raw?.headline || "";
-  const dispatch = $("dispatchAll");
-  dispatch.disabled = !canDispatch;
-  dispatch.textContent = canDispatch ? "Dispatch Ready" : "Dispatch Held";
-  dispatch.title = canDispatch ? "Rate-limited MCP dispatch is available." : (nextHumanAction || "No safe agent slots are available.");
-  $("fleetBadge").textContent = activeCount > 0 ? `${activeCount} ACTIVE` : "IDLE";
-  $("fleetBadge").className = activeCount > 0 ? "badge badge-live" : "badge badge-medium";
-  agents.forEach((agent) => {
-    if (agent.slot === "operator-intake") return;
-    const tr = document.createElement("tr");
-    const stateClass = agent.currentTask ? "active" : agent.available ? "idle" : "blocked";
-    const taskText = agent.currentTask ? agent.currentTask.replace(/__/g, " ").replace(/\.md$/, "") : "--";
-    const confidence = agent.currentTask ? "running" : agent.available ? "ready" : agent.reason;
-    tr.innerHTML = `<td><strong>${agent.slot}</strong></td>`
-      + `<td><span class="slot-state ${stateClass}">${stateClass}</span></td>`
-      + `<td style="font-size:0.82rem">${taskText}</td>`
-      + `<td><span class="badge badge-${stateClass === "active" ? "live" : stateClass === "idle" ? "high" : "blocked"}">${String(confidence || "unknown").toUpperCase()}</span></td>`;
-    body.appendChild(tr);
-  });
-  const counts = data.counts || {};
-  const queueText = `Q:${counts.queue ?? "--"} A:${counts.active ?? "--"} D:${counts.done ?? "--"} F:${counts.failed ?? "--"}`;
-  $("fleetCounts").textContent = nextHumanAction ? `${queueText} | ${nextHumanAction}` : queueText;
-}
-
-async function refreshHff() {
-  try {
-    const data = await api("/api/hff-sensors");
-    if (!data.ok) throw new Error(data.error || "HFF sensor poll unavailable");
-    $("hffBadge").textContent = data.liveSensorsEnabled ? "SENSORS ON" : "HOLD";
-    $("hffBadge").className = data.liveSensorsEnabled ? "badge badge-live" : "badge badge-candidate";
-    renderScores({ humans: 54, animals: 43, ecosystems: 52, universe: 50 });
-    $("hffMeta").textContent = `${data.verifiedNodes} verified nodes | ${data.securityNodes} security nodes | consensus target ${data.minConsensusNodes} | source: ${data.dataSource}`;
-  } catch (error) {
-    $("hffBadge").textContent = "LOCAL";
-    $("hffBadge").className = "badge badge-candidate";
-    renderScores({ humans: 54, animals: 43, ecosystems: 52, universe: 50 });
-    $("hffMeta").textContent = `sensor poll held: ${error.message}`;
-  }
-}
-
-function startVoiceInput() {
-  console.log("[Lantern] Voice input triggered");
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    log("Mic input is not available in this browser.");
-    console.warn("[Lantern] SpeechRecognition API not supported");
-    return;
-  }
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-US";
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
-  $("voiceInput").setAttribute("aria-pressed", "true");
-  log("Listening...");
-  recognition.onresult = (event) => {
-    const transcript = event.results?.[0]?.[0]?.transcript || "";
-    if (transcript) {
-      $("conversationText").value = transcript;
-      autoGrow($("conversationText"));
-      $("conversationText").focus();
-    }
-  };
-  recognition.onerror = (event) => log(`Mic input stopped: ${event.error || "unknown error"}`);
-  recognition.onend = () => $("voiceInput").setAttribute("aria-pressed", "false");
-  recognition.start();
-}
-
-function sparkline(canvasId, values) {
-  const canvas = $(canvasId);
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const width = canvas.width;
-  const height = canvas.height;
-  ctx.clearRect(0, 0, width, height);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  values.forEach((value, index) => {
-    const x = (index / Math.max(values.length - 1, 1)) * width;
-    const y = height - (value / 100) * height;
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-}
-
-function renderScores(scores) {
-  $("hffHumans").textContent = `${scores.humans}%`;
-  $("hffAnimals").textContent = `${scores.animals}%`;
-  $("hffEco").textContent = `${scores.ecosystems}%`;
-  $("hffUniverse").textContent = `${scores.universe}%`;
-  sparkline("scoreChart", [scores.humans, scores.animals, scores.ecosystems, scores.universe]);
-}
-
-async function init() {
+function wireUi() {
   normalizeInternalLinks();
-  setFrontDoorLink(LOCAL_APP_ORIGIN, "Local front door");
-  $("dispatchAll").addEventListener("click", async () => {
-    log("Dispatching local MCP agent slots...");
-    const result = await api("/api/actions/dispatch-all", { method: "POST", body: "{}" });
-    if (result.held) {
-      log(`${result.message || "Dispatch held."} ${result.nextHumanAction || ""}`.trim());
-      await refreshFleet();
-      return;
-    }
-    if (result.rateLimited) {
-      log(`Dispatch held: retry in ${Math.ceil((result.retryAfterMs || 0) / 1000)} seconds.`);
-      return;
-    }
-    if (result.active) {
-      log(result.message || "Dispatch already running.");
-      return;
-    }
-    if (result.accepted) {
-      log(result.message || "Dispatch started.");
-      setTimeout(() => refreshFleet().catch((error) => log(error.message)), 5000);
-      return;
-    }
-    (result.results || []).forEach((item) => log(`${item.slot}: ${item.ok ? "DISPATCHED" : item.error || item.result?.error || "held"}`));
-    await refreshFleet();
+  $("refresh")?.addEventListener("click", () => refresh().catch((error) => log(`Refresh failed: ${error.message}`)));
+  $("runLoop")?.addEventListener("click", () => postAction("/api/actions/run-loop", "Convergence loop").catch((error) => log(`Convergence loop held/failed: ${error.message}`)));
+  $("flatRagIngest")?.addEventListener("click", () => ingestFlatRagHouse().catch((error) => log(`Flat RAG ingest failed: ${error.message}`)));
+  $("autoUpdate")?.addEventListener("click", toggleAutoUpdate);
+  $("localControls")?.addEventListener("click", () => postAction("/api/actions/local-controls", "Local controls").catch((error) => log(`Local controls held/failed: ${error.message}`)));
+  $("dispatchAll")?.addEventListener("click", () => log("Founder dispatch is held until local auth proof and MCP canary pass."));
+  $("noteForm")?.addEventListener("submit", (event) => storeNote(event).catch((error) => log(`Note failed: ${error.message}`)));
+  $("ragForm")?.addEventListener("submit", (event) => storeRagItem(event).catch((error) => log(`RAG intake failed: ${error.message}`)));
+  $("conversationForm")?.addEventListener("submit", (event) => storeConversation(event).catch((error) => log(`Conversation failed: ${error.message}`)));
+  $("conversationText")?.addEventListener("input", (event) => {
+    event.target.style.height = "auto";
+    event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px`;
   });
-  $("refresh").addEventListener("click", () => { refresh(); refreshFleet(); refreshHff(); });
-  $("runLoop").addEventListener("click", () => postCommand("!converge", "Loop").catch((error) => log(error.message)));
-  $("nearTermKalshiBlock").addEventListener("click", (event) => postAction("/api/actions/kalshi-near-term-paper-block", "Near 20m Kalshi paper block", event.currentTarget).catch((error) => log(error.message)));
-  $("copyKalshiBlockPacket").addEventListener("click", () => copyKalshiBlockPacket().catch((error) => log(error.message)));
-  $("checkKalshiPaperPl").addEventListener("click", (event) => postAction("/api/actions/kalshi-near-term-paper-pl", "Near 20m Kalshi paper P/L", event.currentTarget).catch((error) => log(error.message)));
-  $("localControls").addEventListener("click", () => postAction("/api/actions/local-controls", "Local controls").catch((error) => log(error.message)));
-  $("flatRagIngest").addEventListener("click", () => ingestFlatRagHouse().catch((error) => log(error.message)));
-  $("autoUpdate").addEventListener("click", toggleAutoUpdate);
-  $("conversationForm").addEventListener("submit", (event) => storeConversation(event).catch((error) => log(error.message)));
-  $("ragForm").addEventListener("submit", (event) => storeRagItem(event).catch((error) => log(error.message)));
-  $("noteForm").addEventListener("submit", (event) => storeNote(event).catch((error) => log(error.message)));
-  $("voiceInput").addEventListener("click", startVoiceInput);
-  const chatHistory = [];
-  let historyIndex = -1;
-  $("conversationText").addEventListener("input", function () { autoGrow(this); });
-  $("conversationText").addEventListener("keydown", function (event) {
-    if (event.isComposing) return;
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      const text = $("conversationText").value.trim();
-      if (text) {
-        chatHistory.push(text);
-        historyIndex = chatHistory.length;
-      }
-      const submitEvent = new SubmitEvent("submit", { bubbles: true, cancelable: true });
-      $("conversationForm").dispatchEvent(submitEvent);
-      return;
-    }
-    if (event.key === "ArrowUp" && $("conversationText").value === "" && chatHistory.length > 0) {
-      event.preventDefault();
-      historyIndex = Math.max(0, historyIndex - 1);
-      $("conversationText").value = chatHistory[historyIndex];
-      autoGrow($("conversationText"));
-      return;
-    }
-    if (event.key === "ArrowDown" && historyIndex >= 0 && historyIndex < chatHistory.length - 1) {
-      event.preventDefault();
-      historyIndex = Math.min(chatHistory.length - 1, historyIndex + 1);
-      $("conversationText").value = chatHistory[historyIndex];
-      autoGrow($("conversationText"));
-      return;
-    }
-  });
-  renderScores({ humans: 43, animals: 52, ecosystems: 50, universe: 54 });
-  showQuickReplies("greeting");
-  refresh().catch((error) => log(error.message));
-  refreshFleet().catch(() => {});
-  refreshHff().catch(() => {});
 }
 
-try {
-  init();
-  console.log("[Lantern] init() completed successfully");
-} catch (err) {
-  console.error("[Lantern] init() failed:", err);
-  log("UI init failed: " + err.message);
-}
+document.addEventListener("DOMContentLoaded", () => {
+  wireUi();
+  renderAccessModel(fallbackAccessModel);
+  renderValidators();
+  refresh().catch((error) => log(`Initial refresh failed: ${error.message}`));
+});

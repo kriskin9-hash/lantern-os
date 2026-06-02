@@ -20,8 +20,8 @@ services:
   # Lantern Garage Web Application
   lantern-garage:
     build:
-      context: ../apps/lantern-garage
-      dockerfile: ../../ops/Dockerfile-lantern-garage
+      context: ..
+      dockerfile: ops/Dockerfile-lantern-garage
     container_name: lantern-garage-cloud
     ports:
       - "4177:4177"
@@ -45,8 +45,8 @@ services:
   # Discord Lounge Bot
   discord-bot:
     build:
-      context: ../src/discord_lounge_bot
-      dockerfile: ../../ops/Dockerfile-discord-bot
+      context: ..
+      dockerfile: ops/Dockerfile-discord-bot
     container_name: discord-lounge-bot-cloud
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}

@@ -1,0 +1,35 @@
+# Discord Bot v2 Dockerfile
+# Generated: 2026-05-31
+# Purpose: Containerize Discord bot v2 with slash commands and role gating
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY src/discord_lounge_bot/requirements_v2.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements_v2.txt
+
+# Copy bot source
+COPY src/discord_lounge_bot/bot_v2.py .
+
+# Create data directories for notebooks and subscribers
+RUN mkdir -p /app/data/dreamer/notebooks /app/data/discord
+
+# Create non-root user
+RUN useradd -m discordbot && chown -R discordbot:discordbot /app
+USER discordbot
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import discord; print('discord package OK')"
+
+# Run the bot
+CMD ["python", "bot_v2.py"]

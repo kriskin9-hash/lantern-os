@@ -1,0 +1,64 @@
+﻿{
+    "receiptId":  "orchestrator-20260601-131546",
+    "generatedAt":  "2026-06-01T13:15:46.6933285-04:00",
+    "evidenceClass":  "batch_orchestrator_run",
+    "dryRun":  false,
+    "summary":  {
+                    "total":  6,
+                    "ok":  2,
+                    "failed":  1,
+                    "skipped":  3,
+                    "passed":  false
+                },
+    "jobs":  [
+                 {
+                     "id":  "health-check",
+                     "status":  "skipped",
+                     "reason":  "script_not_found",
+                     "exitCode":  null,
+                     "durationMs":  0,
+                     "startedAt":  "2026-06-01T13:15:40.5205003-04:00"
+                 },
+                 {
+                     "id":  "convergence-loop",
+                     "status":  "failed",
+                     "reason":  null,
+                     "exitCode":  1,
+                     "durationMs":  3054,
+                     "startedAt":  "2026-06-01T13:15:40.5245118-04:00"
+                 },
+                 {
+                     "id":  "loop-receipt",
+                     "status":  "ok",
+                     "reason":  null,
+                     "exitCode":  0,
+                     "durationMs":  1056,
+                     "startedAt":  "2026-06-01T13:15:43.5945628-04:00"
+                 },
+                 {
+                     "id":  "asset-discovery",
+                     "status":  "skipped",
+                     "reason":  "script_not_found",
+                     "exitCode":  null,
+                     "durationMs":  0,
+                     "startedAt":  "2026-06-01T13:15:44.6539928-04:00"
+                 },
+                 {
+                     "id":  "sync-rag-pdf",
+                     "status":  "skipped",
+                     "reason":  "script_not_found",
+                     "exitCode":  null,
+                     "durationMs":  0,
+                     "startedAt":  "2026-06-01T13:15:44.6579992-04:00"
+                 },
+                 {
+                     "id":  "post-ingestion-purge",
+                     "status":  "ok",
+                     "reason":  null,
+                     "exitCode":  0,
+                     "durationMs":  2027,
+                     "startedAt":  "2026-06-01T13:15:44.6610047-04:00"
+                 }
+             ],
+    "boundary":  "No automated paid API calls. No autonomous action without human review gate."
+}
