@@ -1,0 +1,79 @@
+{
+  "agents": [
+    {
+      "id": "agent_001",
+      "name": "Dream Journal",
+      "type": "dream_journal",
+      "port": 5000,
+      "status": "sleeping",
+      "command": "python -m lantern_os.services.dream_journal --port {port} --name {name}",
+      "memory_limit_mb": 256,
+      "timeout_seconds": 300,
+      "healthcheck": {
+        "endpoint": "http://localhost:{port}/health",
+        "interval_seconds": 30,
+        "timeout_seconds": 5
+      }
+    },
+    {
+      "id": "agent_002",
+      "name": "Audit Verification",
+      "type": "audit_verify",
+      "port": 5001,
+      "status": "sleeping",
+      "command": "python -m lantern_os.services.audit_api --port {port} --name {name}",
+      "memory_limit_mb": 256,
+      "timeout_seconds": 300,
+      "healthcheck": {
+        "endpoint": "http://localhost:{port}/health",
+        "interval_seconds": 30,
+        "timeout_seconds": 5
+      }
+    },
+    {
+      "id": "agent_003",
+      "name": "Bayesian Model",
+      "type": "bayesian",
+      "port": 5002,
+      "status": "sleeping",
+      "command": "python -m lantern_os.services.bayesian_model --port {port} --name {name}",
+      "memory_limit_mb": 512,
+      "timeout_seconds": 300,
+      "healthcheck": {
+        "endpoint": "http://localhost:{port}/health",
+        "interval_seconds": 30,
+        "timeout_seconds": 5
+      }
+    },
+    {
+      "id": "agent_004",
+      "name": "Lucid Dreaming",
+      "type": "lucid",
+      "port": 5003,
+      "status": "sleeping",
+      "command": "python -m lantern_os.services.lucid_dreaming --port {port} --name {name}",
+      "memory_limit_mb": 256,
+      "timeout_seconds": 300,
+      "healthcheck": {
+        "endpoint": "http://localhost:{port}/health",
+        "interval_seconds": 30,
+        "timeout_seconds": 5
+      }
+    },
+    {
+      "id": "agent_005",
+      "name": "Statistics Monitor",
+      "type": "stats",
+      "port": 5004,
+      "status": "sleeping",
+      "command": "python -m lantern_os.services.stats_monitor --port {port} --name {name}",
+      "memory_limit_mb": 128,
+      "timeout_seconds": 300,
+      "healthcheck": {
+        "endpoint": "http://localhost:{port}/health",
+        "interval_seconds": 30,
+        "timeout_seconds": 5
+      }
+    }
+  ]
+}
