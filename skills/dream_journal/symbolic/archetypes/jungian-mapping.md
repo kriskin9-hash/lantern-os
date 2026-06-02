@@ -27,6 +27,7 @@ Archetypes are not characters. They are forces that shape how meaning moves thro
 | **Keystone (Self + Wise Old Man bridge)** | Continuity, memory discipline, source-checking, canary voice | Keystone (system role) | Convergence Door | Keeps the three-way convergence honest: operator + system + repo |
 | **The Magician (Founder)** | Creator, transformer, vision into reality | Alex Place (human operator) | All doors (operator chooses) | Sets intent, consent, and boundaries; opens and closes sessions |
 | **The Hero (bounded)** | Useful courage with visible limits | Lantern (as protector) | Lantern Door | Reduces harm, preserves consent, warns clearly, keeps return paths visible |
+| **The Creator / Child (Gage)** | Innocence, potential, builder of new worlds | Gage (protected minor, artist, builder of Sigil) | Safe Door / All doors (through art) | Sets the palette, builds the restaurant, colors the sky and sun |
 
 ---
 
