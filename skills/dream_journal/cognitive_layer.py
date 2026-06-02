@@ -28,7 +28,7 @@ class BayesianFallacyDetector:
             "hasty_generalization": 0.35,
             "circular_reasoning": 0.18,
         }
-        self.threshold = 0.60
+        self.threshold = 0.30
 
     def detect(self, text: str) -> List[Dict]:
         text_lower = text.lower()
@@ -52,7 +52,7 @@ class BayesianFallacyDetector:
         if fallacy == "hasty_generalization" and ("always" in text or "never" in text or "everyone" in text):
             return 0.68
         if fallacy == "circular_reasoning" and "because" in text and text.count("because") > 1:
-            return 0.65
+            return 1.0
         return 0.35
 
     def _get_note(self, fallacy: str) -> str:
