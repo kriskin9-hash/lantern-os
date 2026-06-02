@@ -271,13 +271,14 @@ async def cmd_status(interaction: discord.Interaction):
 async def cmd_help(interaction: discord.Interaction):
     tier = get_user_tier(interaction.user)
     embed = discord.Embed(title="Lantern OS Commands", color=0x2563eb)
-    embed.add_field(name="Public", value="`/status`, `/help`, `/subscribe`", inline=False)
+    embed.add_field(name="Public", value="`/status`, `/help`, `/subscribe`, `/music`, `/art`, `/movies`", inline=False)
     if tier in (ROLE_SUPPORTER, ROLE_PILOT, ROLE_FOUNDER):
         embed.add_field(name="Supporter+", value="`/dream`, `/note`, `/wish`, `/recall`, `/mirror`, `/wallet`, `/odds`, `/talk`", inline=False)
     if tier in (ROLE_PILOT, ROLE_FOUNDER):
         embed.add_field(name="Pilot+", value="`/converge`, `/rag-status`, `/queue`, `/place`, `/character`, `/symbol`", inline=False)
     if tier == ROLE_FOUNDER:
         embed.add_field(name="Founder", value="`/dispatch`, `/controls`, `/boot-check`, `/release-gate`", inline=False)
+    embed.add_field(name="🎵 Music & Voice", value="`/sing`, `/nextsong`, `/stop`, `/leave` — Frank Sinatra from Internet Archive", inline=False)
     embed.set_footer(text=f"Your tier: {tier.title()}")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
