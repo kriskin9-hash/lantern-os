@@ -120,6 +120,43 @@ if ($machines.remoteWorkerRules -and $machines.remoteWorkerRules.forbidSharedNet
     Add-Problem $problems "warning" "shared_worktree_rule_not_enforced" "remoteWorkerRules.forbidSharedNetworkWorktrees should be true."
 }
 
+# --- Diversity check: each step should have >=2 different agents ---
+$stepAgents = @{}
+foreach ($slot in @($agents.slots | Where-Object { $_.enabled })) {
+    $step = [int]$slot.step
+    if (-not $stepAgents.ContainsKey($step)) { $stepAgents[$step] = New-Object System.Collections.Generic.HashSet[string] }
+    $stepAgents[$step].Add([string]$slot.agent) | Out-Null
+}
+for ($step = 1; $step -le 12; $step++) {
+    $agentsInStep = if ($stepAgents.ContainsKey($step)) { @($stepAgents[$step]) } else { @() }
+    if ($agentsInStep.Count -lt 2) {
+        Add-Problem $problems "error" "step_monoculture" "Step $step has only $($agentsInStep.Count) agent type(s). Each step needs >=2 for redundancy."
+    }
+    elseif ($agentsInStep.Count -lt 3) {
+        Add-Problem $problems "warning" "step_under_diversity" "Step $step has $($agentsInStep.Count) agent types. Ideal = 3 per step."
+    }
+}
+
+$agentCounts = @{}
+foreach ($slot in @($agents.slots | Where-Object { $_.enabled })) {
+    $agent = [string]$slot.agent
+    if (-not $agentCounts.ContainsKey($agent)) { $agentCounts[$agent] = 0 }
+    $agentCounts[$agent]++
+}
+$totalEnabled = @($agents.slots | Where-Object { $_.enabled }).Count
+if ($agentCounts.Count -lt 2) {
+    Add-Problem $problems "error" "fleet_monoculture" "Fleet has only $($agentCounts.Count) agent type(s). Minimum healthy diversity = 2."
+}
+elseif ($agentCounts.Count -lt 4) {
+    Add-Problem $problems "warning" "fleet_under_diversity" "Fleet has $($agentCounts.Count) agent types. Target = 4 (claude, codex, gemini, devin)."
+}
+foreach ($kv in $agentCounts.GetEnumerator()) {
+    $ratio = if ($totalEnabled -gt 0) { $kv.Value / $totalEnabled } else { 0 }
+    if ($ratio -gt 0.40) {
+        Add-Problem $problems "warning" "agent_imbalanced" "Agent '$($kv.Key)' holds $(($ratio*100).ToString('F0'))% of slots. Target max = 40%."
+    }
+}
+
 $status = [pscustomobject]@{
     generatedAt = (Get-Date).ToString("o")
     root = $Root

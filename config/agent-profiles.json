@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "description": "Lantern OS Agent Profiles — First-class diverse agent fleet. Each profile maps to a real CLI tool with auth, capabilities, and fallback chains.",
+  "profiles": [
+    {
+      "id": "claude-primary",
+      "agent": "claude",
+      "provider": "anthropic",
+      "model": "claude-opus",
+      "taskBudget": "high",
+      "requiredEnvVars": ["ANTHROPIC_API_KEY"],
+      "capabilities": ["architecture_decisions", "complex_analysis", "documentation", "code_review", "strategic_planning", "safety-review", "git", "validation"],
+      "fallbackChain": ["codex-primary", "gemini-primary", "devin-primary"],
+      "cliCommand": ["claude", "--dangerously-skip-permissions"],
+      "maxTokens": 200000,
+      "parallelTasks": 3
+    },
+    {
+      "id": "codex-primary",
+      "agent": "codex",
+      "provider": "openai",
+      "model": "gpt-4-turbo",
+      "taskBudget": "high",
+      "requiredEnvVars": ["OPENAI_API_KEY"],
+      "capabilities": ["feature_implementation", "bug_fixes", "code_generation", "test_writing", "refactoring", "git", "validation"],
+      "fallbackChain": ["gemini-primary", "devin-primary", "claude-primary"],
+      "cliCommand": ["codex"],
+      "maxTokens": 128000,
+      "parallelTasks": 2
+    },
+    {
+      "id": "gemini-primary",
+      "agent": "gemini",
+      "provider": "google",
+      "model": "gemini-pro",
+      "taskBudget": "medium",
+      "requiredEnvVars": ["GOOGLE_API_KEY"],
+      "capabilities": ["content_analysis", "documentation_generation", "problem_decomposition", "validation", "research", "git"],
+      "fallbackChain": ["devin-primary", "claude-primary", "codex-primary"],
+      "cliCommand": ["gemini"],
+      "maxTokens": 100000,
+      "parallelTasks": 2
+    },
+    {
+      "id": "devin-primary",
+      "agent": "devin",
+      "provider": "cognition",
+      "model": "devin",
+      "taskBudget": "high",
+      "requiredEnvVars": ["DEVIN_API_KEY"],
+      "capabilities": ["deep_engineering_work", "complex_debugging", "performance_optimization", "system_design", "integration", "git", "validation"],
+      "fallbackChain": ["claude-primary", "codex-primary", "gemini-primary"],
+      "cliCommand": ["devin"],
+      "maxTokens": 150000,
+      "parallelTasks": 2
+    },
+    {
+      "id": "super-jarvis-default",
+      "agent": "super-jarvis",
+      "provider": "mcp",
+      "taskBudget": "low",
+      "requiredEnvVars": ["MCP_SERVER_URL"],
+      "capabilities": ["convergence", "validation", "git", "safety-check"],
+      "fallbackChain": ["claude-primary", "codex-primary", "gemini-primary"],
+      "cliCommand": ["powershell", "-File", "scripts/orchestration/Invoke-OrchestratorAgentAction.ps1"],
+      "maxTokens": 50000,
+      "parallelTasks": 1
+    },
+    {
+      "id": "super-jarvis-primary",
+      "agent": "super-jarvis",
+      "provider": "mcp",
+      "taskBudget": "medium",
+      "requiredEnvVars": ["MCP_SERVER_URL", "DISCORD_BOT_TOKEN"],
+      "capabilities": ["convergence", "validation", "git", "dispatch", "safety-check", "evidence-recording"],
+      "fallbackChain": ["super-jarvis-default", "claude-primary"],
+      "cliCommand": ["powershell", "-File", "scripts/orchestration/Invoke-OrchestratorAgentAction.ps1"],
+      "maxTokens": 50000,
+      "parallelTasks": 1
+    }
+  ]
+}

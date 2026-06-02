@@ -23,10 +23,14 @@ Think of it as a secure, intelligent journal that gets smarter the more you use 
 
 ## Quick Start (5 minutes)
 
-### 1. Open Lantern Garage
-Open your browser to **http://127.0.0.1:4177**
+### 1. Open Dream Journal
+Choose your surface:
 
-You should see the Lantern Garage dashboard with your wallet, navigation menu, and a "Dreamer" section on the left.
+**Web (local file):** Open `surfaces/dream-journal/index.html` in your browser. No server required. Data saves to browser localStorage and can be exported as JSONL.
+
+**Discord:** Type `/dream` in any channel where Lantern bot is present, or use `!dream` in text channels.
+
+**Lantern Garage:** Open your browser to **http://127.0.0.1:4177** for the full dashboard with analytics.
 
 ### 2. Create Your First Entry
 Click **Dreamer** or **New Entry** and you'll see a form with:

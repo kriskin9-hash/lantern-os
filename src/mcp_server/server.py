@@ -56,20 +56,73 @@ except ImportError:
 
 app = FastAPI(title="Lantern OS MCP Server", version="1.0.0")
 
+# ── Fleet status — loaded from file, not hardcoded ──
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_FLEET_STATUS_PATH = _REPO_ROOT / "data" / "status" / "super-jarvis-fleet.json"
+_AGENTS_CONFIG_PATH = _REPO_ROOT / "config" / "agents.json"
+
+def _load_fleet_status() -> Dict[str, Any]:
+    """Load fleet status from data/status/super-jarvis-fleet.json.
+    Returns honest counts: designed slots from config, active slots from status file.
+    Never fabricates live worker counts."""
+    designed_slots = 36  # from agents.json designedRingSlots
+    active_slots = 0
+    sleeping_slots = 0
+    claim_boundary = "design contract only; live worker counts require local orchestrator evidence"
+
+    # Load designed slot count from agents config
+    try:
+        if _AGENTS_CONFIG_PATH.exists():
+            agents_cfg = json.loads(_AGENTS_CONFIG_PATH.read_text(encoding="utf-8"))
+            designed_slots = agents_cfg.get("designedRingSlots", designed_slots)
+            claim_boundary = agents_cfg.get("fleetClaimBoundary", claim_boundary)
+    except Exception as exc:
+        logger.warning("Could not read agents config: %s", exc)
+
+    # Load live status from fleet status file
+    try:
+        if _FLEET_STATUS_PATH.exists():
+            fleet = json.loads(_FLEET_STATUS_PATH.read_text(encoding="utf-8"))
+            active_slots = fleet.get("activeSlots", 0)
+            sleeping_slots = fleet.get("sleepingSlots", designed_slots)
+            claim_boundary = fleet.get("fleetClaimBoundary", claim_boundary)
+    except Exception as exc:
+        logger.warning("Could not read fleet status file: %s", exc)
+
+    return {
+        "designed_ring_slots": designed_slots,
+        "active_slots": active_slots,
+        "sleeping_slots": sleeping_slots,
+        "claim_boundary": claim_boundary,
+    }
+
+_STARTED_AT = datetime.now(timezone.utc).isoformat()
+
 # ── In-memory state (replace with Redis/DB in production) ──
 _task_queue: List[Dict[str, Any]] = []
+
+# Skills registry — real skills with deployed code only.
+# super_jarvis_fleet is NOT a skill; it is the agent fleet. See data/status/super-jarvis-fleet.json.
 _skills_db: Dict[str, Dict[str, Any]] = {
     "dream_journal": {"enabled": True, "version": "1.0.0"},
     "archive_curator": {"enabled": True, "version": "1.0.0"},
     "voice_curator": {"enabled": True, "version": "1.0.0"},
     "kalshi_bridge": {"enabled": False, "version": "0.1.0"},
 }
-_boot_status = {
-    "status": "online",
-    "slots_online": 3,
-    "started_at": datetime.now(timezone.utc).isoformat(),
-    "version": "1.0.0",
-}
+
+def _build_boot_status() -> Dict[str, Any]:
+    """Build boot status from real fleet state, not hardcoded slot counts."""
+    fleet = _load_fleet_status()
+    return {
+        "status": "online",
+        "active_slots": fleet["active_slots"],
+        "sleeping_slots": fleet["sleeping_slots"],
+        "designed_ring_slots": fleet["designed_ring_slots"],
+        "claim_boundary": fleet["claim_boundary"],
+        "started_at": _STARTED_AT,
+        "version": "1.0.0",
+    }
+
 _mcp_sessions: Dict[str, asyncio.Queue] = {}
 
 # ── SSE / MCP Protocol Helpers ──
@@ -143,10 +196,12 @@ def _tool_dispatch_work(agent: str, task: str) -> Dict[str, Any]:
 
 
 def _tool_boot_check() -> Dict[str, Any]:
-    return _boot_status
+    """Check orchestrator boot status. Reports honest slot counts from fleet status file."""
+    return _build_boot_status()
 
 
 def _tool_list_skills() -> Dict[str, Any]:
+    """List available skills. Does not include fleet agents — see fleet_status for agent fleet."""
     return {
         "skills": [
             {"name": k, **v}
@@ -157,12 +212,40 @@ def _tool_list_skills() -> Dict[str, Any]:
 
 
 def _tool_get_status() -> Dict[str, Any]:
+    """Overall system status with honest fleet counts loaded from fleet status file."""
+    fleet = _load_fleet_status()
+    started = datetime.fromisoformat(_STARTED_AT)
+    uptime = int((datetime.now(timezone.utc) - started).total_seconds())
     return {
         "status": "healthy",
-        "uptime_seconds": 0,  # Would calculate from boot time in prod
+        "uptime_seconds": uptime,
         "queue_depth": len(_task_queue),
-        "slots_online": _boot_status["slots_online"],
+        "active_slots": fleet["active_slots"],
+        "designed_ring_slots": fleet["designed_ring_slots"],
+        "claim_boundary": fleet["claim_boundary"],
         "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _tool_fleet_status() -> Dict[str, Any]:
+    """Read the agent fleet status directly from data/status/super-jarvis-fleet.json.
+    Returns designed ring slot count, active vs sleeping slots, and the claim boundary.
+    Active slots = 0 means all agents are in sleep/design mode, not live workers."""
+    fleet = _load_fleet_status()
+    # Also return raw slot list if available
+    slots_preview: List[Dict[str, Any]] = []
+    try:
+        if _FLEET_STATUS_PATH.exists():
+            raw = json.loads(_FLEET_STATUS_PATH.read_text(encoding="utf-8"))
+            slots_preview = raw.get("slots", [])[:5]  # first 5 for preview
+    except Exception:
+        pass
+    return {
+        **fleet,
+        "slots_preview": slots_preview,
+        "fleet_status_file": str(_FLEET_STATUS_PATH),
+        "file_exists": _FLEET_STATUS_PATH.exists(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -176,6 +259,7 @@ TOOLS_REGISTRY = {
     "boot_check": _tool_boot_check,
     "list_skills": _tool_list_skills,
     "get_status": _tool_get_status,
+    "fleet_status": _tool_fleet_status,
 }
 
 
@@ -287,10 +371,13 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
 @app.get("/health")
 async def health():
     start = time.time()
+    fleet = _load_fleet_status()
     result = {
         "status": "online",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "slots_online": _boot_status["slots_online"],
+        "active_slots": fleet["active_slots"],
+        "designed_ring_slots": fleet["designed_ring_slots"],
+        "claim_boundary": fleet["claim_boundary"],
         "queue_depth": len(_task_queue),
         "response_time_ms": round((time.time() - start) * 1000, 2),
     }
