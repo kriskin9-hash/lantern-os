@@ -1140,6 +1140,140 @@ async function route(req, res) {
     return;
   }
 
+  // Dream Journal API Routes
+  if (url.pathname === "/api/dream/create" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const dreamId = `dream_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const entry = {
+        id: dreamId,
+        timestamp: new Date().toISOString(),
+        kind: body.kind || "dream",
+        text: body.text || body.content || "",
+        lucidity: body.lucidity || 0,
+        emotions: body.emotions || [],
+        tags: (body.tags || []).slice(0, 10),
+        symbols: body.symbols || [],
+        linked_goals: body.linked_goals || [],
+        priority: body.priority || "normal",
+        reflection_on: body.reflection_on || [],
+        source: "api"
+      };
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
+      const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
+      fs.appendFileSync(monthFile, JSON.stringify(entry) + "\n");
+      sendJson(res, { id: dreamId, saved: true, entry });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dream/stats" && req.method === "GET") {
+    try {
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      let entries = [];
+      if (fs.existsSync(dreamDir)) {
+        const files = fs.readdirSync(dreamDir).filter(f => f.endsWith(".jsonl"));
+        for (const file of files) {
+          const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+          if (content) {
+            entries.push(...content.split("\n").map(line => {
+              try { return JSON.parse(line); } catch { return null; }
+            }).filter(e => e));
+          }
+        }
+      }
+      const stats = {
+        total_entries: entries.length,
+        entries_by_kind: {},
+        top_emotions: {},
+        top_tags: {},
+        top_symbols: {},
+        total_lucidity: 0,
+        avg_lucidity: 0
+      };
+      for (const entry of entries) {
+        stats.entries_by_kind[entry.kind || "dream"] = (stats.entries_by_kind[entry.kind || "dream"] || 0) + 1;
+        for (const emotion of (entry.emotions || [])) {
+          stats.top_emotions[emotion] = (stats.top_emotions[emotion] || 0) + 1;
+        }
+        for (const tag of (entry.tags || [])) {
+          stats.top_tags[tag] = (stats.top_tags[tag] || 0) + 1;
+        }
+        for (const symbol of (entry.symbols || [])) {
+          stats.top_symbols[symbol] = (stats.top_symbols[symbol] || 0) + 1;
+        }
+        stats.total_lucidity += entry.lucidity || 0;
+      }
+      if (entries.length > 0) stats.avg_lucidity = (stats.total_lucidity / entries.length).toFixed(2);
+      sendJson(res, stats);
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/dream/search" && req.method === "GET") {
+    try {
+      const query = url.searchParams.get("text") || "";
+      const tags = (url.searchParams.get("tags") || "").split(",").filter(t => t);
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      let results = [];
+      if (fs.existsSync(dreamDir)) {
+        const files = fs.readdirSync(dreamDir).filter(f => f.endsWith(".jsonl"));
+        for (const file of files) {
+          const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+          if (content) {
+            results.push(...content.split("\n").map(line => {
+              try { return JSON.parse(line); } catch { return null; }
+            }).filter(e => e && (
+              (query === "" || (e.text || "").toLowerCase().includes(query.toLowerCase())) &&
+              (tags.length === 0 || tags.some(t => (e.tags || []).includes(t)))
+            )));
+          }
+        }
+      }
+      sendJson(res, { query, tags, count: results.length, results: results.slice(0, 50) });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/dream/read/") && req.method === "GET") {
+    try {
+      const id = url.pathname.replace("/api/dream/read/", "");
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      let found = null;
+      if (fs.existsSync(dreamDir)) {
+        const files = fs.readdirSync(dreamDir).filter(f => f.endsWith(".jsonl"));
+        for (const file of files) {
+          const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+          if (content) {
+            for (const line of content.split("\n")) {
+              try {
+                const entry = JSON.parse(line);
+                if (entry.id === id) { found = entry; break; }
+              } catch { }
+            }
+          }
+          if (found) break;
+        }
+      }
+      if (found) {
+        sendJson(res, found);
+      } else {
+        sendJson(res, { error: "not_found" }, 404);
+      }
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
   if (url.pathname === "/hub") {
     const hubPath = path.resolve(repoRoot, "central-hub.html");
     sendFile(res, hubPath);
