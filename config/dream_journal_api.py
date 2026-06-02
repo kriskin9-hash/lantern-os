@@ -9,7 +9,11 @@ import json
 import os
 from pathlib import Path
 
-from skills.dream_journal import DreamAgent
+try:
+    from skills.dream_journal import DreamAgent
+    HAS_DREAM_AGENT = True
+except ImportError:
+    HAS_DREAM_AGENT = False
 
 app = Flask(__name__)
 
@@ -17,11 +21,33 @@ app = Flask(__name__)
 DREAMS_DIR = Path("/app/data/dreams")
 DREAMS_DIR.mkdir(parents=True, exist_ok=True)
 
-dream_agent = DreamAgent(data_dir=str(DREAMS_DIR))
+if HAS_DREAM_AGENT:
+    try:
+        dream_agent = DreamAgent(data_dir=str(DREAMS_DIR))
+    except Exception:
+        dream_agent = None
+else:
+    dream_agent = None
 
 def get_dream_file(year_month):
     """Get path to monthly dream journal file"""
     return DREAMS_DIR / f"dreams_{year_month}.jsonl"
+
+@app.route("/", methods=["GET"])
+def index():
+    """Root endpoint - service info"""
+    return jsonify({
+        "service": "dream-journal",
+        "status": "ready",
+        "endpoints": [
+            "/health",
+            "/dreams/log",
+            "/dreams/recent",
+            "/dreams/mirror-prompt",
+            "/dreams/stats",
+            "/dreams/agent/mirror"
+        ]
+    }), 200
 
 @app.route("/health", methods=["GET"])
 def health():
@@ -157,6 +183,9 @@ def agent_mirror():
     SDK-backed agent is unavailable, the response is held instead of pretending
     that a template is the Dreamer.
     """
+    if not HAS_DREAM_AGENT or dream_agent is None:
+        return jsonify({"error": "Dream agent not available", "held": True}), 503
+    
     data = request.get_json() or {}
     text = data.get("content") or data.get("text")
 
@@ -175,16 +204,19 @@ def agent_mirror():
     if not text:
         return jsonify({"error": "Missing content, text, or valid dream_id"}), 400
 
-    result = dream_agent.mirror(str(text))
-    status = 503 if result.held else 200
-    return jsonify({
-        "reply": result.reply,
-        "source": result.source,
-        "agent_runtime": result.agent_runtime,
-        "held": result.held,
-        "fallacies": result.fallacies,
-        "recent_count": result.recent_count,
-    }), status
+    try:
+        result = dream_agent.mirror(str(text))
+        status = 503 if result.held else 200
+        return jsonify({
+            "reply": result.reply,
+            "source": result.source,
+            "agent_runtime": result.agent_runtime,
+            "held": result.held,
+            "fallacies": result.fallacies,
+            "recent_count": result.recent_count,
+        }), status
+    except Exception as e:
+        return jsonify({"error": str(e), "held": True}), 503
 
 @app.route("/dreams/stats", methods=["GET"])
 def dream_stats():
