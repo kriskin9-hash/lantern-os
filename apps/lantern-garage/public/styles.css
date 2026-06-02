@@ -1106,6 +1106,13 @@ select:focus-visible {
   overflow-wrap: break-word;
 }
 
+.dependency-panel {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
 @media (max-width: 920px) {
   .control-truth { grid-template-columns: 1fr; }
 }

@@ -55,6 +55,32 @@ function processMcpChatRoute(text, context) {
   };
 }
 
+function summarizeDispatchFleet(queue) {
+  if (!queue || !queue.items) return "No fleet data";
+  const active = queue.items.filter((i) => !i.blocked).length;
+  const blocked = queue.items.filter((i) => i.blocked).length;
+  return `Fleet: ${active} active, ${blocked} blocked`;
+}
+
+async function callMcpTool(toolName, args, mcpReadOnlyTimeoutMs) {
+  if (toolName === "get_agent_status") {
+    return {
+      canDispatch: false,
+      dispatchableSlots: [],
+      reason: "Dispatch held: no safe agent slots available.",
+    };
+  }
+  return null;
+}
+
+function runAgentDispatchBatch(now, dispatchableSlots) {
+  return {
+    timestamp: now,
+    slots: dispatchableSlots,
+    nextHumanAction: dispatchableSlots.length > 0 ? "Review and approve" : "Wait for slots to register",
+  };
+}
+
 function normalizeDreamerUser(value) {
   const user = String(value || "courtney")
     .trim()

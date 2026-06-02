@@ -31,6 +31,7 @@ $results = @{
     fail = @()
     warn = @()
 }
+$canDispatchAgents = $false
 
 function Test-EndpointHealth {
     param(
