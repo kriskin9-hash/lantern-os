@@ -148,9 +148,9 @@ This document covers the local and cloud runtime behavior, deployment gates, and
 
 ---
 
-## Localhost-only Lantern chat surface Policy
+## Localhost-only Lantern chat surface
 
-**Purpose:** The local chat interface (`http://127.0.0.1:4177`) is the primary control surface and must remain localhost-only.
+**Purpose:** The localhost-only Lantern chat surface (`http://127.0.0.1:4177`) is the primary control surface and must remain localhost-only.
 
 **Why:** Prevents accidental remote execution, maintains operator veto, ensures all network traffic is loggable and inspectable.
 
