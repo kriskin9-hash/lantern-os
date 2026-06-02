@@ -21,9 +21,18 @@ import sys
 import json
 import uuid
 import asyncio
+import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("lantern.mcp")
 
 # FastAPI + SSE
 try:
@@ -34,7 +43,7 @@ try:
     FASTAPI_AVAILABLE = True
 except ImportError as e:
     FASTAPI_AVAILABLE = False
-    print(f"[FATAL] fastapi/uvicorn not installed: {e}")
+    logger.critical("fastapi/uvicorn not installed: %s", e)
     sys.exit(1)
 
 # Optional: OpenAI Agents SDK for native MCP server support
@@ -255,12 +264,13 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
                     "isError": False,
                 },
             }
-        except Exception as e:
+        except Exception as exc:
+            logger.exception("Tool '%s' failed with args %s", tool_name, tool_args)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "content": [{"type": "text", "text": f"Error: {e}"}],
+                    "content": [{"type": "text", "text": f"Error: {exc}"}],
                     "isError": True,
                 },
             }
@@ -276,12 +286,15 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.get("/health")
 async def health():
-    return {
+    start = time.time()
+    result = {
         "status": "online",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "slots_online": _boot_status["slots_online"],
         "queue_depth": len(_task_queue),
+        "response_time_ms": round((time.time() - start) * 1000, 2),
     }
+    return result
 
 
 @app.get("/sse")
@@ -303,13 +316,20 @@ async def messages_endpoint(request: Request):
     session_id = request.query_params.get("session_id", "")
     try:
         body = await request.json()
-    except Exception:
-        body = {}
+    except json.JSONDecodeError as exc:
+        logger.warning("Invalid JSON from session %s: %s", session_id, exc)
+        return JSONResponse({"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}}, status_code=400)
+    except Exception as exc:
+        logger.warning("Unexpected request error from session %s: %s", session_id, exc)
+        return JSONResponse({"jsonrpc": "2.0", "error": {"code": -32603, "message": "Internal error"}}, status_code=500)
+
+    if not body:
+        logger.warning("Empty body from session %s", session_id)
+        return JSONResponse({"jsonrpc": "2.0", "error": {"code": -32600, "message": "Invalid Request"}}, status_code=400)
 
     if isinstance(body, list):
         # Batch request
         results = [_handle_jsonrpc(req) for req in body]
-        # Fire-and-forget responses back to client via SSE
         for resp in results:
             await _send_to_session(session_id, resp)
         return JSONResponse({"status": "batch processed"})
@@ -334,6 +354,6 @@ async def root():
 if __name__ == "__main__":
     port = int(os.getenv("MCP_SERVER_PORT", "8771"))
     host = os.getenv("MCP_SERVER_HOST", "127.0.0.1")
-    print(f"[MCP] Lantern OS MCP Server starting on http://{host}:{port}")
-    print(f"[MCP] Tools: {list(TOOLS_REGISTRY.keys())}")
+    logger.info("Lantern OS MCP Server starting on http://%s:%s", host, port)
+    logger.info("Tools available: %s", list(TOOLS_REGISTRY.keys()))
     uvicorn.run(app, host=host, port=port, log_level="info")

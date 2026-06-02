@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lantern Dream Journal — User Guide</title>
+  <style>
+    @media print {
+      body { font-size: 11pt; line-height: 1.5; }
+      h1 { page-break-before: always; }
+      h1:first-of-type { page-break-before: avoid; }
+    }
+    body {
+      font-family: Georgia, serif;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      color: #222;
+      line-height: 1.6;
+    }
+    h1 { font-size: 1.6rem; border-bottom: 2px solid #7b68ee; padding-bottom: 0.3rem; margin-top: 2rem; }
+    h2 { font-size: 1.2rem; color: #444; margin-top: 1.5rem; }
+    h3 { font-size: 1rem; color: #555; }
+    code, pre { font-family: Consolas, monospace; background: #f4f4f4; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.9em; }
+    pre { padding: 0.75rem; overflow-x: auto; }
+    blockquote { border-left: 3px solid #7b68ee; margin: 0; padding-left: 1rem; color: #444; font-style: italic; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.95rem; }
+    th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+    th { background: #f8f8f8; }
+    .meta { color: #666; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .cover { text-align: center; padding: 3rem 1rem; }
+    .cover h1 { border: none; font-size: 2rem; margin-bottom: 0.5rem; }
+    .cover p { color: #666; }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <h1>Lantern Dream Journal</h1>
+    <p>Complete User Guide</p>
+    <p class="meta">Version 1.0.0 &middot; 2026-06-02 &middot; Production Ready</p>
+  </div>
+
+  <h1>What Dream Journal Does</h1>
+  <p>Dream Journal is a private, local-first system for capturing, analyzing, and understanding your dreams. Everything runs on your machine. Nothing is sent anywhere without your permission.</p>
+  <p><strong>Three ways to use it:</strong></p>
+  <ul>
+    <li><strong>Web surface:</strong> Open <code>surfaces/dream-journal/index.html</code> in any browser. No server. Data stays in browser localStorage.</li>
+    <li><strong>Discord:</strong> Type <code>/dream</code> or <code>!dream</code> in any channel where Lantern bot is present.</li>
+    <li><strong>Garage dashboard:</strong> Full analytics at <code>http://127.0.0.1:4177</code>.</li>
+  </ul>
+
+  <h1>Quick Start (5 minutes)</h1>
+  <h2>1. Open Dream Journal</h2>
+  <p>Choose the surface that fits your workflow. The web surface works immediately with no setup.</p>
+
+  <h2>2. Create Your First Entry</h2>
+  <p>Every entry has:</p>
+  <ul>
+    <li><strong>Dream text</strong> — What you remember</li>
+    <li><strong>Lucidity</strong> — 0 to 10, how aware you were</li>
+    <li><strong>Emotions</strong> — awe, fear, joy, curiosity, sadness, love</li>
+    <li><strong>Tags</strong> — Keywords for search and patterns</li>
+    <li><strong>Linked goals</strong> — Connect dreams to life direction</li>
+  </ul>
+
+  <h2>3. Review & Reflect</h2>
+  <p>Use the <strong>Generate Mirror Prompt</strong> button to copy an AI-ready prompt that analyzes your recent dreams for patterns, symbols, and waking-life connections.</p>
+
+  <h1>Entry Types</h1>
+  <table>
+    <tr><th>Type</th><th>Use for</th></tr>
+    <tr><td>Dream</td><td>Actual dreams. Include sensory images, emotions, actions.</td></tr>
+    <tr><td>Note</td><td>Waking thoughts, reflections, insights about dreams.</td></tr>
+    <tr><td>Place</td><td>Recurring dream locations and their qualities.</td></tr>
+    <tr><td>Character</td><td>People or beings from dreams. Track how they evolve.</td></tr>
+    <tr><td>Event</td><td>Significant dream moments or multi-dream narratives.</td></tr>
+    <tr><td>Lore</td><td>Consistent dream world rules, geography, mythology.</td></tr>
+    <tr><td>Symbol</td><td>Recurring images. Track meaning evolution over time.</td></tr>
+    <tr><td>Mirror</td><td>Synthesis entries connecting multiple dreams.</td></tr>
+  </table>
+
+  <h1>Understanding the Scales</h1>
+  <h2>Lucidity (0 to 10)</h2>
+  <table>
+    <tr><th>Score</th><th>Meaning</th></tr>
+    <tr><td>0</td><td>Completely non-lucid. Dream feels real.</td></tr>
+    <tr><td>3</td><td>Slight awareness. Something seems odd.</td></tr>
+    <tr><td>5</td><td>Partial lucidity. Know you're dreaming, limited control.</td></tr>
+    <tr><td>7</td><td>High lucidity. Can control movement, speech, some environment.</td></tr>
+    <tr><td>10</td><td>Full lucidity. Complete awareness and control.</td></tr>
+  </table>
+
+  <h2>Emotions</h2>
+  <p>Tag what you actually felt. Dreams are complex — tag both <code>wonder</code> and <code>fear</code> if both were present.</p>
+
+  <h2>Tags</h2>
+  <p>Be consistent. Use <code>flying</code> always, not sometimes <code>flight</code>. Consistency makes the tag cloud and search powerful.</p>
+
+  <h1>Best Practices</h1>
+  <h2>Daily Recording</h2>
+  <p><strong>Best time:</strong> Within 5 minutes of waking. Write 2-5 sentences. Fragments count:</p>
+  <blockquote>Falling. Water. Felt safe.</blockquote>
+
+  <h2>Weekly Review (15 min)</h2>
+  <ol>
+    <li>Look at recent entries</li>
+    <li>Notice emotions and tags</li>
+    <li>Create one mirror entry with an insight</li>
+  </ol>
+
+  <h2>Monthly Deep Dive (30 min)</h2>
+  <ol>
+    <li>Identify 2-3 recurring symbols</li>
+    <li>Check lucidity trends</li>
+    <li>Record findings in a lore or mirror entry</li>
+  </ol>
+
+  <h1>Privacy & Storage</h1>
+  <p><strong>Everything stays local.</strong></p>
+  <ul>
+    <li>Web surface: Data in browser localStorage. Export as JSONL anytime.</li>
+    <li>Discord: Data saved to <code>data/dreamer/notebooks/&lt;user&gt;.jsonl</code> on the host machine.</li>
+    <li>Structured skill: <code>data/dream_journal/dreams_YYYY-MM.jsonl</code></li>
+  </ul>
+  <p><strong>Backup:</strong> Copy the <code>data/dream_journal/</code> folder. That's it.</p>
+  <p><strong>No deletion:</strong> Entries are append-only. Your original memories are part of your history.</p>
+
+  <h1>Discord Commands</h1>
+  <table>
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td><code>/dream &lt;text&gt;</code></td><td>Save a dream via slash command (any server, any channel)</td></tr>
+    <tr><td><code>!dream &lt;text&gt;</code></td><td>Save a dream via text command</td></tr>
+    <tr><td><code>!note &lt;text&gt;</code></td><td>Save a waking note</td></tr>
+    <tr><td><code>!mirror</code></td><td>Create a mirror entry from recent facets</td></tr>
+    <tr><td><code>!recall [query]</code></td><td>Search your notebook</td></tr>
+    <tr><td><code>!lantern-status</code></td><td>Bot health and command list</td></tr>
+  </table>
+
+  <h1>API Reference</h1>
+  <pre>curl -X POST http://127.0.0.1:4177/api/dream/create \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"dream","text":"...","lucidity":0.8,"tags":["flying"]}'</pre>
+
+  <h1>Getting Help</h1>
+  <p>Issues: <code>github.com/alex-place/lantern-os/issues</code></p>
+  <p>Community: Lantern OS Discord</p>
+
+  <p style="margin-top:3rem;color:#666;font-size:0.9rem;text-align:center;">
+    Made with intention by Alex Place<br>
+    Part of Lantern OS: a personal operating system for memory, reflection, and becoming.
+  </p>
+</body>
+</html>

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-31T20:45:00-04:00",
+  "generatedAt": "2026-06-02T13:40:00-04:00",
   "root": "D:\\tmp",
   "indexVersion": "1.0.0",
   "repos": [
@@ -13,33 +13,32 @@
     {
       "localFolder": "D:\\tmp\\human-flourishing-frameworks-scan",
       "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
-      "ragState": "local_inspected",
-      "dirtyCount": 9,
-      "notes": "HFF main repo."
+      "ragState": "not_yet_cloned",
+      "notes": "Local copy removed. Re-clone if needed."
     },
     {
       "localFolder": "D:\\tmp\\hff-master-clean",
       "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
-      "ragState": "local_inspected",
-      "notes": "HFF mirror."
+      "ragState": "not_yet_cloned",
+      "notes": "Local copy removed. Re-clone if needed."
     },
     {
       "localFolder": "D:\\tmp\\hff-lantern-recovery",
       "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
-      "ragState": "local_inspected",
-      "notes": "HFF mirror."
+      "ragState": "not_yet_cloned",
+      "notes": "Local copy removed. Re-clone if needed."
     },
     {
       "localFolder": "D:\\tmp\\hff-public-site",
       "githubOrigin": "https://github.com/human-flourishing-frameworks/hff-public-site.git",
-      "ragState": "local_inspected",
-      "notes": "HFF public site."
+      "ragState": "not_yet_cloned",
+      "notes": "Local copy removed. Re-clone if needed."
     },
     {
       "localFolder": "D:\\tmp\\hff-seven-validate",
       "githubOrigin": "https://github.com/human-flourishing-frameworks/human-flourishing-frameworks.git",
-      "ragState": "local_inspected",
-      "notes": "HFF mirror."
+      "ragState": "not_yet_cloned",
+      "notes": "Local copy removed. Re-clone if needed."
     },
     {
       "localFolder": "D:\\tmp\\lantern-symbolic-sandbox",

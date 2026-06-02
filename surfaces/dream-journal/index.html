@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lantern Dream Journal</title>
+  <style>
+    :root {
+      --bg: #1a1520;
+      --surface: #252030;
+      --border: #3a3048;
+      --text: #e8e0f0;
+      --muted: #a090b8;
+      --accent: #7b68ee;
+      --accent2: #ff8c42;
+      --success: #4caf7d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      line-height: 1.6;
+    }
+    header { text-align: center; margin-bottom: 2rem; }
+    header h1 { margin: 0; font-size: 1.75rem; letter-spacing: -0.5px; }
+    header p { color: var(--muted); margin: 0.25rem 0 0; font-size: 0.95rem; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.4rem; }
+    textarea, input[type="text"], input[type="number"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-family: inherit;
+    }
+    textarea { min-height: 140px; resize: vertical; }
+    .row { display: flex; gap: 1rem; margin-bottom: 1rem; }
+    .col { flex: 1; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .tag {
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 0.3rem 0.8rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tag.active { background: var(--accent); border-color: var(--accent); }
+    .tag:hover { border-color: var(--accent); }
+
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    button.primary:hover { opacity: 0.9; }
+
+    .hint { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+    #status { margin-top: 0.75rem; font-size: 0.9rem; min-height: 1.4rem; }
+    #status.ok { color: var(--success); }
+    #status.err { color: #e57373; }
+
+    .recent { margin-top: 1.5rem; }
+    .recent h2 { font-size: 1.1rem; margin-bottom: 0.75rem; }
+    .entry {
+      background: var(--bg);
+      border-left: 3px solid var(--accent2);
+      border-radius: 0 8px 8px 0;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .entry .meta { font-size: 0.8rem; color: var(--muted); }
+    .entry .content { margin-top: 0.25rem; white-space: pre-wrap; }
+
+    .actions { display: flex; gap: 0.5rem; margin-top: 1.5rem; flex-wrap: wrap; }
+    .actions a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .actions a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Lantern Dream Journal</h1>
+    <p>Local-first. Privacy-preserving. Append-only.</p>
+  </header>
+
+  <div class="card">
+    <label for="dreamText">Dream</label>
+    <textarea id="dreamText" placeholder="Describe what you remember..."></textarea>
+    <p class="hint">Tip: Include symbols, places, characters, and how it felt.</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="col">
+        <label for="lucidity">Lucidity (0-10)</label>
+        <input id="lucidity" type="number" min="0" max="10" step="0.5" value="0">
+      </div>
+      <div class="col">
+        <label>Emotions</label>
+        <div class="tag-list" id="emotions">
+          <span class="tag" data-val="awe">awe</span>
+          <span class="tag" data-val="fear">fear</span>
+          <span class="tag" data-val="joy">joy</span>
+          <span class="tag" data-val="curiosity">curiosity</span>
+          <span class="tag" data-val="sadness">sadness</span>
+          <span class="tag" data-val="love">love</span>
+        </div>
+      </div>
+    </div>
+    <label for="tags">Tags (comma-separated)</label>
+    <input id="tags" type="text" placeholder="door, river, stars, flying...">
+    <label for="goals" style="margin-top:0.75rem">Linked Goals</label>
+    <input id="goals" type="text" placeholder="lantern-revenue, spain-route...">
+  </div>
+
+  <button class="primary" id="saveBtn">Save to Notebook</button>
+  <div id="status"></div>
+
+  <div class="recent">
+    <h2>Recent Dreams</h2>
+    <div id="entries"></div>
+  </div>
+
+  <div class="actions">
+    <a href="../index.html">Back to Surfaces</a>
+    <a href="#" id="exportBtn">Export JSONL</a>
+    <a href="#" id="mirrorBtn">Generate Mirror Prompt</a>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'lantern_dream_journal_v1';
+
+    function loadEntries() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }
+    function saveEntries(entries) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+    function render() {
+      const entries = loadEntries();
+      const container = document.getElementById('entries');
+      container.innerHTML = entries.slice().reverse().map(e => `
+        <div class="entry">
+          <div class="meta">${new Date(e.timestamp).toLocaleString()} &middot; Lucidity ${e.lucidity}/10 &middot; ${(e.emotions||[]).join(', ')||'no emotions tagged'}</div>
+          <div class="content">${escapeHtml(e.content)}</div>
+        </div>
+      `).join('');
+    }
+    function escapeHtml(t) {
+      const d = document.createElement('div');
+      d.textContent = t;
+      return d.innerHTML;
+    }
+
+    document.querySelectorAll('#emotions .tag').forEach(tag => {
+      tag.addEventListener('click', () => tag.classList.toggle('active'));
+    });
+
+    document.getElementById('saveBtn').addEventListener('click', () => {
+      const content = document.getElementById('dreamText').value.trim();
+      if (!content) {
+        const s = document.getElementById('status');
+        s.textContent = 'Write something first.'; s.className = 'err';
+        return;
+      }
+      const emotions = [...document.querySelectorAll('#emotions .tag.active')].map(t => t.dataset.val);
+      const entry = {
+        id: 'dream_' + Date.now(),
+        timestamp: new Date().toISOString(),
+        content,
+        lucidity: parseFloat(document.getElementById('lucidity').value) || 0,
+        emotions,
+        tags: document.getElementById('tags').value.split(',').map(s => s.trim()).filter(Boolean),
+        linked_goals: document.getElementById('goals').value.split(',').map(s => s.trim()).filter(Boolean),
+        source: 'web_surface',
+      };
+      const entries = loadEntries();
+      entries.push(entry);
+      saveEntries(entries);
+      render();
+      document.getElementById('dreamText').value = '';
+      document.getElementById('tags').value = '';
+      document.getElementById('goals').value = '';
+      document.querySelectorAll('#emotions .tag').forEach(t => t.classList.remove('active'));
+      const s = document.getElementById('status');
+      s.textContent = 'Dream saved locally.'; s.className = 'ok';
+      setTimeout(() => { s.textContent = ''; s.className = ''; }, 3000);
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const entries = loadEntries();
+      const blob = new Blob(entries.map(e => JSON.stringify(e) + '\n'), { type: 'application/jsonl' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `dreams_${new Date().toISOString().slice(0,7)}.jsonl`;
+      a.click();
+    });
+
+    document.getElementById('mirrorBtn').addEventListener('click', (e) => {
+      e.preventDefault();
+      const entries = loadEntries();
+      if (!entries.length) { alert('No dreams to mirror yet.'); return; }
+      const ids = entries.map(e => e.id).slice(-10);
+      const prompt = `Mirror of ${ids.length} recent dream facets:\n\n` +
+        entries.slice(-5).map(e => `- ${e.content.slice(0, 120)}...`).join('\n') +
+        `\n\nAnalyze recurring symbols, emotional arcs, and waking-life connections. Be honest about what is uncertain.`;
+      navigator.clipboard.writeText(prompt).then(() => alert('Mirror prompt copied to clipboard.'));
+    });
+
+    render();
+  </script>
+</body>
+</html>

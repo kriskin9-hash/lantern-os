@@ -1,30 +1,40 @@
 """
 Lantern Discord Lounge Bot
 
-Status-only bot for one allowlisted channel:
-- posts startup status in the configured channel;
+Server-agnostic, channel-agnostic bot:
+- listens to commands in any channel it can see;
 - replies to !lantern-status with a safe health summary;
-- ignores all other channels.
+- slash commands work in any guild / any channel.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import logging
 import os
 import json
 import re
 import shutil
 import sys
+import time
+import traceback
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("lantern.bot")
 
 try:
     import discord
     from discord import app_commands
 except Exception as exc:
-    print(f"[FATAL] Missing dependency 'discord.py': {exc}")
-    print("Install with: pip install discord.py")
+    logger.critical("Missing dependency 'discord.py': %s", exc)
     sys.exit(1)
 
 
@@ -51,21 +61,27 @@ except Exception:
     image_pack = None
 
 if not TOKEN:
-    print("[FATAL] Missing DISCORD_BOT_TOKEN")
-    sys.exit(1)
-if not GUILD_ID:
-    print("[FATAL] Missing LANTERN_DISCORD_GUILD_ID")
-    sys.exit(1)
-if not CHANNEL_ID:
-    print("[FATAL] Missing LANTERN_DISCORD_CHANNEL_ID")
+    logger.critical("Missing DISCORD_BOT_TOKEN")
     sys.exit(1)
 
-try:
-    GUILD_ID_INT = int(GUILD_ID)
-    CHANNEL_ID_INT = int(CHANNEL_ID)
-except ValueError:
-    print("[FATAL] Guild/channel IDs must be numeric Discord snowflakes.")
-    sys.exit(1)
+GUILD_ID_INT: int | None = None
+CHANNEL_ID_INT: int | None = None
+
+if GUILD_ID:
+    try:
+        GUILD_ID_INT = int(GUILD_ID)
+    except ValueError:
+        logger.warning("LANTERN_DISCORD_GUILD_ID is not a valid numeric ID — slash commands will sync globally only")
+else:
+    logger.warning("LANTERN_DISCORD_GUILD_ID not set — slash commands will sync globally only")
+
+if CHANNEL_ID:
+    try:
+        CHANNEL_ID_INT = int(CHANNEL_ID)
+    except ValueError:
+        logger.warning("LANTERN_DISCORD_CHANNEL_ID is not a valid numeric ID — startup/pulse messages disabled")
+else:
+    logger.warning("LANTERN_DISCORD_CHANNEL_ID not set — startup/pulse messages disabled")
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -76,6 +92,63 @@ intents.voice_states = True
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
+# --------------------------------------------------------------------------- #
+# Health pulse state
+# --------------------------------------------------------------------------- #
+HEALTH_PULSE_INTERVAL_SEC = 300   # 5 minutes — local log pulse
+CHANNEL_PULSE_INTERVAL_SEC = 1800  # 30 minutes — Discord channel pulse
+_health_state = {
+    "started_at": time.time(),
+    "pulse_count": 0,
+    "last_pulse": 0.0,
+    "last_channel_pulse": 0.0,
+    "uptime_sec": 0.0,
+    "latency_ms": 0.0,
+}
+
+
+def _update_health() -> None:
+    """Refresh derived health metrics."""
+    now = time.time()
+    _health_state["uptime_sec"] = now - _health_state["started_at"]
+    _health_state["last_pulse"] = now
+    _health_state["pulse_count"] += 1
+
+
+def _uptime_str() -> str:
+    total = int(_health_state["uptime_sec"])
+    h, rem = divmod(total, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}h {m}m {s}s"
+
+
+async def health_pulse_loop() -> None:
+    """Background task: log pulse every 5 min, post to channel every 30 min."""
+    await client.wait_until_ready()
+    while not client.is_closed():
+        await asyncio.sleep(HEALTH_PULSE_INTERVAL_SEC)
+        if client.is_closed():
+            break
+
+        _update_health()
+        latency_ms = round(client.latency * 1000, 1) if client.latency else 0.0
+        _health_state["latency_ms"] = latency_ms
+
+        logger.info("Pulse #%s | uptime=%s | latency=%sms", _health_state['pulse_count'], _uptime_str(), latency_ms)
+
+        now = time.time()
+        if CHANNEL_ID_INT and now - _health_state["last_channel_pulse"] >= CHANNEL_PULSE_INTERVAL_SEC:
+            channel = client.get_channel(CHANNEL_ID_INT)
+            if channel:
+                try:
+                    await channel.send(
+                        f":heartbeat: Lantern pulse #{_health_state['pulse_count']} | "
+                        f"uptime {_uptime_str()} | latency {latency_ms}ms"
+                    )
+                    _health_state["last_channel_pulse"] = now
+                except Exception:
+                    logger.exception("Failed to send channel pulse")
+
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -85,11 +158,26 @@ def status_text() -> str:
     return (
         "Lantern lounge bot online.\n"
         f"- time: {now_utc()}\n"
-        f"- guild: {GUILD_ID_INT}\n"
-        f"- channel: {CHANNEL_ID_INT}\n"
+        f"- guild: {GUILD_ID_INT if GUILD_ID_INT else 'not set'}\n"
+        f"- channel: {CHANNEL_ID_INT if CHANNEL_ID_INT else 'not set'}\n"
         f"- local status endpoint: {STATUS_URL}\n"
-        "- commands: !lantern-status, !lantern-voice-check, !dream, !note, !place, !character, !event, !lore, !symbol, !mirror, !recall, !odds, !one\n"
+        f"- uptime: {_uptime_str()}\n"
+        f"- pulses: {_health_state['pulse_count']}\n"
+        f"- latency: {_health_state['latency_ms']}ms\n"
+        "- commands: !lantern-status, !lantern-pulse, !lantern-voice-check, !dream, !note, !place, !character, !event, !lore, !symbol, !mirror, !recall, !odds, !one\n"
         "- slash commands: /dream"
+    )
+
+
+def pulse_text() -> str:
+    return (
+        f"Lantern pulse #{_health_state['pulse_count']}\n"
+        f"- uptime: {_uptime_str()}\n"
+        f"- latency: {_health_state['latency_ms']}ms\n"
+        f"- last pulse: {datetime.fromtimestamp(_health_state['last_pulse'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') if _health_state['last_pulse'] else 'never'}\n"
+        f"- started: {datetime.fromtimestamp(_health_state['started_at'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\n"
+        f"- channel pulse interval: {CHANNEL_PULSE_INTERVAL_SEC // 60}min\n"
+        f"- log pulse interval: {HEALTH_PULSE_INTERVAL_SEC // 60}min"
     )
 
 
@@ -265,46 +353,60 @@ def format_odds(limit: int = 5) -> str:
 @tree.command(name="dream", description="Save a dream to your private Lantern notebook")
 @app_commands.describe(text="Describe your dream")
 async def slash_dream(interaction: discord.Interaction, text: str):
-    if interaction.channel_id != CHANNEL_ID_INT:
-        await interaction.response.send_message("This command only works in the Lantern channel.", ephemeral=True)
-        return
     try:
         append_notebook_entry(interaction.user, "dream", text)
         await interaction.response.send_message("Dream saved to your private local Lantern notebook.", ephemeral=True)
     except ValueError:
         await interaction.response.send_message("Write something after `/dream`.", ephemeral=True)
+    except Exception:
+        logger.exception("Failed to save dream for user %s", interaction.user)
+        await interaction.response.send_message("Failed to save dream. The team has been notified.", ephemeral=True)
 
 
 @client.event
 async def on_ready():
-    print(f"[READY] Logged in as {client.user} at {now_utc()}")
-    channel = client.get_channel(CHANNEL_ID_INT)
-    if channel is None:
-        print("[WARN] Configured channel was not found in cache. Check bot permissions and IDs.")
-        return
+    logger.info("Logged in as %s at %s", client.user, now_utc())
+    _health_state["started_at"] = time.time()
+    _health_state["pulse_count"] = 0
+    _health_state["last_pulse"] = 0.0
+    _health_state["last_channel_pulse"] = 0.0
+
+    # Start background health pulse
+    client.loop.create_task(health_pulse_loop())
+    logger.info("Health pulse loop started")
+
+    if CHANNEL_ID_INT:
+        channel = client.get_channel(CHANNEL_ID_INT)
+        if channel:
+            try:
+                await channel.send(status_text())
+            except Exception:
+                logger.exception("Failed to send startup status message")
+        else:
+            logger.warning("Primary channel not found in cache — startup status skipped")
+
     try:
-        guild = discord.Object(id=GUILD_ID_INT)
-        tree.copy_global_to(guild=guild)
-        await tree.sync(guild=guild)
-        print(f"[READY] Slash commands synced to guild {GUILD_ID_INT}")
-    except Exception as exc:
-        print(f"[WARN] Failed to sync slash commands: {exc}")
-    try:
-        await channel.send(status_text())
-    except Exception as exc:
-        print(f"[WARN] Failed to send startup status message: {exc}")
+        if GUILD_ID_INT:
+            guild = discord.Object(id=GUILD_ID_INT)
+            tree.copy_global_to(guild=guild)
+            await tree.sync(guild=guild)
+            logger.info("Slash commands synced to guild %s", GUILD_ID_INT)
+        await tree.sync()
+        logger.info("Slash commands synced globally")
+    except Exception:
+        logger.exception("Failed to sync slash commands")
 
 
 @client.event
 async def on_message(message: discord.Message):
     if message.author.bot:
         return
-    if message.channel.id != CHANNEL_ID_INT:
-        return
     raw_content = message.content.strip()
     content = raw_content.lower()
     if content == "!lantern-status":
         await message.reply(status_text())
+    elif content == "!lantern-pulse":
+        await message.reply(pulse_text())
     elif content == "!lantern-voice-check":
         await message.reply(voice_status_text())
     elif content.startswith("!dream "):
@@ -360,8 +462,9 @@ async def on_message(message: discord.Message):
             mirror_text = f"Mirror of {len(ids)} facets"
             record = append_notebook_entry(message.author, "mirror", mirror_text)
             await message.reply(f"Mirrored {len(ids)} facets into a new mirror entry.")
-        except Exception as exc:
-            await message.reply(f"Mirror failed: {exc}")
+        except Exception:
+            logger.exception("Mirror failed for user %s", message.author)
+            await message.reply("Mirror failed. The team has been notified.")
     elif content == "!recall" or content.startswith("!recall "):
         query = raw_content[len("!recall"):].strip()
         await message.reply(format_recall(recall_notebook_entries(message.author, query)))
@@ -414,8 +517,9 @@ async def on_message(message: discord.Message):
                 f"Open `index.html` locally to preview.\n"
                 f"`image-prompts.txt` contains the 20 scene descriptions for generation."
             )
-        except Exception as exc:
-            await message.reply(f"Pack generation failed: {exc}")
+        except Exception:
+            logger.exception("Pack generation failed")
+            await message.reply("Pack generation failed. The team has been notified.")
     elif content == "!lantern-join-lounge":
         await connect_to_lounge(message)
     elif content == "!lantern-leave-lounge":
@@ -479,7 +583,7 @@ def _start_playback(voice_client, source_url):
 
 def _after_playback(error, voice_client):
     if error:
-        print(f"[WARN] Playback error: {error}")
+        logger.warning("Playback error: %s", error)
         return
     if not voice_client or not voice_client.is_connected():
         return
@@ -491,13 +595,18 @@ def _after_playback(error, voice_client):
                 discord.FFmpegPCMAudio(url),
                 after=lambda err: _after_playback(err, voice_client),
             )
-        except Exception as exc:
-            print(f"[WARN] Loop playback failed: {exc}")
+        except Exception:
+            logger.exception("Loop playback failed")
 
+
+@client.event
+async def on_error(event_method: str, /, *args, **kwargs):
+    """Global Discord event error handler — logs full traceback."""
+    logger.exception("Unhandled exception in event %s", event_method)
 
 def main():
-    print("[INFO] Starting Lantern Discord lounge bot...")
-    print("[INFO] No secrets are printed. Stop with Ctrl+C.")
+    logger.info("Starting Lantern Discord lounge bot...")
+    logger.info("No secrets are printed. Stop with Ctrl+C.")
     client.run(TOKEN)
 
 
