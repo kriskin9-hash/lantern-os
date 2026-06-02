@@ -104,6 +104,7 @@ Also see:
 | Negative Outcomes Future Possibilities | `negative-outcomes-future-possibilities-convergence-2026-05-09.md` | Risk exploration | live |
 | Operator Chat History | `operator-chat-history-convergence-2026-05-09.md` | Narrative record | live |
 | **Restaurant at the End of Time** | **`restaurant-at-the-end-of-time.md`** | **Full cosmology: Garden → Table → Lantern → Convergence → City of Doors → Restaurant → Return** | **live** |
+| **World Lore (complete story)** | **`world-lore.md`** | **Consolidated narrative of the full Lantern OS cosmology, all characters, and three anchors** | **live** |
 
 ---
 
