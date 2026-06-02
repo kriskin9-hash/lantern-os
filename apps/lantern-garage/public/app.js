@@ -587,6 +587,67 @@ function cloudMirrorStateLabel(mirror, mirrors) {
   return "pending";
 }
 
+function isVerifiedCloudMirror(mirror) {
+  return mirror && mirror.verified === true && mirror.url;
+}
+
+function setFrontDoorLink(frontDoorUrl, label) {
+  const link = $("frontDoor");
+  if (!link) return;
+  link.href = frontDoorUrl;
+  link.textContent = label || "Front door";
+}
+
+function summarizeDispatchFleet(queue) {
+  if (!queue || !queue.items) return "No fleet data";
+  const counts = {
+    active: queue.items.filter((i) => !i.blocked).length,
+    blocked: queue.items.filter((i) => i.blocked).length,
+  };
+  return `Fleet: ${counts.active} active, ${counts.blocked} blocked`;
+}
+
+function getDispatchAuthStatus() {
+  return {
+    canDispatch: false,
+    reason: "Founder dispatch held until MCP canary and auth proof pass",
+    nextAction: "Unlock requires all agent slots registered",
+  };
+}
+
+async function getOrchestratorDependencyStatus() {
+  try {
+    return await api("/api/orchestrator-dependency");
+  } catch {
+    return {
+      status: "unknown",
+      fleetReady: false,
+      slotsRegistered: 0,
+      totalSlots: 4,
+    };
+  }
+}
+
+function renderOrchestratorDependency(status) {
+  const panel = $("orchDepPanel");
+  if (!panel) return;
+
+  const statusText = status && status.status ? status.status : "checking";
+  const registered = status && status.slotsRegistered ? status.slotsRegistered : 0;
+  const total = status && status.totalSlots ? status.totalSlots : 4;
+
+  const html = `
+    <h3>Orchestrator Dependency</h3>
+    <dl>
+      <div><dt id="orchDepStatus">Status</dt><dd>${statusText}</dd></div>
+      <div><dt id="orchDepTools">Tools</dt><dd>${registered}/${total} slots</dd></div>
+      <div><dt id="orchDepFleet">Fleet</dt><dd>${statusText === "ready" ? "Dispatch ready" : "Rebuild in progress"}</dd></div>
+      <div><dt id="orchDepNext">Next</dt><dd>Run Test-LanternOrchestratorDependency.ps1</dd></div>
+    </dl>
+  `;
+  panel.innerHTML = html;
+}
+
 async function tryMcpChatReply(messages, context) {
   const reply = {
     source: "mcp_bridge",

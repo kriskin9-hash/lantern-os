@@ -36,6 +36,25 @@ function get_mcp_feature_overview() {
   };
 }
 
+function processMcpChatRoute(text, context) {
+  const lower = text.toLowerCase();
+  const wantsFleet = lower.includes("fleet") || lower.includes("agent");
+  const mcpReadOnlyTimeoutMs = 30000;
+
+  if (wantsFleet && context && context.mode === "read_only") {
+    return {
+      status: "read_only_denied",
+      reason: "Read-only chat path only; dispatch requires founder auth",
+    };
+  }
+
+  return {
+    status: "routed_to_mcp",
+    wantsFleet,
+    timeoutMs: mcpReadOnlyTimeoutMs,
+  };
+}
+
 function normalizeDreamerUser(value) {
   const user = String(value || "courtney")
     .trim()

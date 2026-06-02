@@ -1,0 +1,37 @@
+{
+  "schema": "lantern.orchestrator-dependency.v1",
+  "generatedAt": "2026-06-02T00:00:00Z",
+  "title": "Orchestrator Dependency",
+  "description": "MCP-ready fleet rebuild and agent dispatch readiness",
+  "status": "candidate",
+  "readinessState": {
+    "lanternCodexImpl": "lantern-codex-impl",
+    "mcp_ready_fleet_rebuild_required": true,
+    "canDispatchAgents": false,
+    "staleSlotsAreNotAvailable": true,
+    "reason": "MCP rebuild in progress; agent slots require re-registration"
+  },
+  "fleetState": {
+    "totalSlots": 4,
+    "activeSlots": 0,
+    "pendingSlots": 4,
+    "slots": [
+      { "name": "claude", "status": "pending", "type": "reasoning" },
+      { "name": "codex", "status": "pending", "type": "code_review" },
+      { "name": "gemini", "status": "pending", "type": "research" },
+      { "name": "gpt", "status": "pending", "type": "general" }
+    ]
+  },
+  "toolRegistry": {
+    "available": 0,
+    "pending": 42,
+    "description": "Tools registered in MCP server but not yet discoverable by all agents"
+  },
+  "nextAction": "Run Test-LanternOrchestratorDependency.ps1 to validate readiness",
+  "validation": {
+    "mcp_server_online": "check_with_canary",
+    "all_agents_discoverable": false,
+    "tool_registry_complete": false,
+    "fleet_dispatch_authorized": false
+  }
+}
