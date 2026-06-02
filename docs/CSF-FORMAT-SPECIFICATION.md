@@ -487,6 +487,7 @@ Expected output: ratio, time, memory CSV + matplotlib chart.
 | v0.1 | 2026-05-20 | Initial design notes |
 | v0.2 | 2026-05-28 | Three-layer architecture formalized |
 | **v1.0** | **2026-06-02** | **This document — publication draft** |
+| v0.3 | 2026-05-28 | `CSF_Format_Specification_v0.3_Observation_Delta_Stream.docx` — Observation Delta Stream design notes |
 
 ---
 
