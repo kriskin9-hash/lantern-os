@@ -81,6 +81,12 @@ function runAgentDispatchBatch(now, dispatchableSlots) {
   };
 }
 
+async function prefilteredFleetDispatch(req) {
+  const mcpReadOnlyTimeoutMs = 30000;
+  const result = await callMcpTool("get_agent_status", {}, mcpReadOnlyTimeoutMs);
+  return result;
+}
+
 function normalizeDreamerUser(value) {
   const user = String(value || "courtney")
     .trim()
