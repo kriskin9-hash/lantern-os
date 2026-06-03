@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import random
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -23,6 +24,15 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "config"
 DATA_DIR = REPO_ROOT / "data"
+
+# Agent hooks + CSF cache enforcement
+sys.path.insert(0, str(REPO_ROOT / "src"))
+try:
+    from agent_tool_hooks import ToolHookRegistry, run_with_hooks
+    from csf_cache_manager import CsfCacheManager, csf_cached
+    _AGENT_HOOKS_AVAILABLE = True
+except Exception:
+    _AGENT_HOOKS_AVAILABLE = False
 
 
 @dataclass
@@ -280,7 +290,15 @@ class UnifiedAgentConnector:
             if isinstance(health, str) and health.startswith("unhealthy"):
                 continue
             try:
-                return self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens)
+                if _AGENT_HOOKS_AVAILABLE:
+                    registry = ToolHookRegistry(agent_id=f"unified_connector:{persona.id}")
+                    return registry.run(
+                        "stream",
+                        {"provider": prov_name, "message": message, "persona": persona.id, "temperature": temperature, "max_tokens": max_tokens},
+                        fn=lambda: self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens),
+                    )
+                else:
+                    return self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens)
             except Exception as exc:
                 last_error = f"{prov_name}: {exc}"
                 self._health[prov_name] = {"status": f"unhealthy: {exc}", "at": datetime.now(timezone.utc).isoformat()}

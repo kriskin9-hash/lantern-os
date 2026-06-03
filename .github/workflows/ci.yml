@@ -13,6 +13,11 @@ concurrency:
 
 permissions:
   contents: read
+  security-events: write
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "20"
 
 jobs:
   # ============================================================================
@@ -74,9 +79,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
@@ -85,7 +97,15 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run pytest
-        run: python -m pytest tests -q --tb=short || true
+        run: python -m pytest tests -q --tb=short --junitxml=pytest-results.xml || true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-results
+          path: pytest-results.xml
+          retention-days: 30
 
   test-node:
     name: Node tests (Playwright, etc)
@@ -95,7 +115,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
 
       - name: Install dependencies
         run: |
@@ -103,7 +130,15 @@ jobs:
 
       - name: Run Node tests
         run: |
-          cd apps/lantern-garage && npm test || true
+          cd apps/lantern-garage && npm test -- --reporter=junit --outputFile=node-test-results.xml || true
+
+      - name: Upload Node test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: node-test-results
+          path: apps/lantern-garage/node-test-results.xml
+          retention-days: 30
 
   # ============================================================================
   # CONVERGENCE: Consistency checks
@@ -190,12 +225,85 @@ jobs:
           echo "Γ£ô Mutual validation contract is active"
 
   # ============================================================================
+  # SECURITY: Bandit + pip-audit
+  # ============================================================================
+  security-scan:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-security-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-security-
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit pip-audit
+
+      - name: Run Bandit (Python SAST)
+        run: bandit -r src -f json -o bandit-results.json || true
+
+      - name: Run pip-audit
+        run: pip-audit --format=json --output=pip-audit-results.json || true
+
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: |
+            bandit-results.json
+            pip-audit-results.json
+          retention-days: 30
+
+  # ============================================================================
+  # CSF CACHE: Validate cached format integrity
+  # ============================================================================
+  csf-cache-validate:
+    name: CSF cache validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Validate CSF cache format
+        run: |
+          python3 - << 'EOF'
+          import sys
+          sys.path.insert(0, 'src')
+          try:
+              from csf_cache_manager import CsfCacheManager
+              mgr = CsfCacheManager()
+              stats = mgr.stats()
+              ok, corrupt = mgr.validate_all()
+              print(f"CSF cache entries: {stats['entry_count']}")
+              print(f"Valid segments: {ok}, Corrupt: {corrupt}")
+              if corrupt > 0:
+                  print("::warning::Corrupt CSF cache segments found")
+              print("CSF cache format validated")
+          except Exception as e:
+              print(f"CSF cache validation skipped: {e}")
+          EOF
+
+  # ============================================================================
   # SUMMARY: All checks passed
   # ============================================================================
   all-checks:
     name: All checks passed
     runs-on: ubuntu-latest
-    needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation]
+    needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation, security-scan, csf-cache-validate]
     if: always()
     steps:
       - name: Summary

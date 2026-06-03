@@ -27,6 +27,16 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
+# Agent tool hooks + CSF cache enforcement
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+try:
+    from agent_tool_hooks import ToolHookRegistry
+    HOOKS_AVAILABLE = True
+except Exception as exc:
+    logger = logging.getLogger("lantern.mcp")
+    logger.warning("agent_tool_hooks not available: %s", exc)
+    HOOKS_AVAILABLE = False
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
@@ -340,7 +350,11 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
                 },
             }
         try:
-            result = fn(**tool_args)
+            if HOOKS_AVAILABLE:
+                registry = ToolHookRegistry(agent_id="mcp_server")
+                result = registry.run(tool_name, tool_args, fn=fn, request_id=str(req_id))
+            else:
+                result = fn(**tool_args)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
