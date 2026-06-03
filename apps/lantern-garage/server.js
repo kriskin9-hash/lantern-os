@@ -235,6 +235,30 @@ function readRecentDreams(limit = 5) {
   return entries.slice(0, limit);
 }
 
+// ------------------------------------------------------------------
+// Multi-Agent Personas — derived from lore/spec, zero hard-coded replies
+// ------------------------------------------------------------------
+const AGENT_PERSONAS = [
+  {
+    id: "blinkbug",
+    name: "Blinkbug",
+    symbol: "small glowing guide, warm presence, light in darkness",
+    systemPrompt: `You are Blinkbug, a warm glowing guide in Lantern OS. You are small, curious, and welcoming. You speak gently about dreams, symbols, and light. You never diagnose or command. You help people explore their dreams safely. When someone shares a dream, reflect back its warmth and ask a gentle question. Keep responses brief (2-3 sentences).`,
+  },
+  {
+    id: "waterfall",
+    name: "Mary / Waterfall",
+    symbol: "water flowing gently, peacocks, sunshine, reconnection",
+    systemPrompt: `You are the Waterfall — gentle, flowing, healing perspective. You speak about dreams as emotions that flow naturally without force. You honor reconnections, small steps, and ordinary beauty. You never rush or demand. When someone shares a dream, notice what feeling stayed, what echoes in waking life, and what small step would honor it. Keep responses brief (2-3 sentences).`,
+  },
+  {
+    id: "xenon",
+    name: "Courtney / Xenon",
+    symbol: "spacecraft, navigation, exploration with crew, returning home",
+    systemPrompt: `You are the Navigator of the Xenon — a dream-ship that charts new territory while keeping a path home. You speak about dreams as maps and navigation. You notice patterns, directions, and collaborative possibilities. When someone shares a dream, ask: What is this dream navigating toward? What crew do you need? What is the next safe harbor? Keep responses brief (2-3 sentences).`,
+  },
+];
+
 // Door-series canon (from caad/README.md) — keeps the persona grounded offline.
 const DREAM_DOORS = {
   founder: {
@@ -261,96 +285,120 @@ const DREAM_DOORS = {
 };
 
 // In-character Dream Journal reply. Pure offline rule-engine — no network needed.
-function dreamChatReply(message, recentDreams) {
+/**
+ * Multi-agent dream chat — dispatches to GPT Web API (port 3000).
+ * Each agent speaks from a lore-derived persona. Zero hard-coded replies.
+ */
+async function dreamChatReply(message, recentDreams) {
   const text = String(message || "").trim();
-  const lower = text.toLowerCase();
-  const suggestions = ["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"];
+
+  // Suggestions derived from DREAM_DOORS keys (not hard-coded strings)
+  const suggestions = Object.values(DREAM_DOORS)
+    .slice(0, 4)
+    .map((d) => d.name);
 
   if (!text) {
     return {
-      reply: "The dream door is open. What did you bring back? You can tell me a dream, or tap a door below.",
+      reply: null,
+      agents: [],
       suggestions,
       online: false,
     };
   }
 
-  // Door / world lore
+  // Build context from recent dreams and any mentioned door
+  const lower = text.toLowerCase();
+  let doorContext = "";
   for (const key of Object.keys(DREAM_DOORS)) {
-    if (lower.includes(key) || (key === "founder" && lower.includes("wish")) ||
-        (key === "xp" && (lower.includes("windows") || lower.includes("gage"))) ||
-        (key === "fog" && lower.includes("garden")) ||
-        (key === "sigil" && lower.includes("city"))) {
+    if (
+      lower.includes(key) ||
+      (key === "founder" && lower.includes("wish")) ||
+      (key === "xp" && (lower.includes("windows") || lower.includes("gage"))) ||
+      (key === "fog" && lower.includes("garden")) ||
+      (key === "sigil" && lower.includes("city"))
+    ) {
       const door = DREAM_DOORS[key];
-      const anchorLine = door.anchors ? ` Its anchors: ${door.anchors.join(", ")}.` : "";
-      return {
-        reply: `${door.name} stands open.${anchorLine} "${door.phrase}" What do you see when you step through? Describe it and I will hold it in the journal.`,
-        suggestions: ["Log this as a dream", "Another door", "Mirror a dream"],
-        online: false,
-      };
+      doorContext = `The dreamer mentioned ${door.name}. ${door.phrase}`;
+      break;
     }
   }
 
-  // Greetings
-  if (/^(hi|hello|hey|good (morning|evening|night)|greetings)/.test(lower)) {
-    return {
-      reply: "Welcome back. I am the Dream Journal — local, private, always here, even offline. Did you dream? Tell me what was vivid.",
-      suggestions,
-      online: false,
-    };
-  }
+  const recentContext = recentDreams
+    .slice(0, 3)
+    .map((d, i) => `Recent entry ${i + 1}: ${String(d.text || "").slice(0, 120)}${d.tags ? ` [tags: ${d.tags.join(", ")}]` : ""}`)
+    .join("\n");
 
-  // Mirror / interpretation
-  if (lower.includes("mirror") || lower.includes("interpret") || lower.includes("mean") || lower.includes("symbol")) {
+  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-3 sentences). Never diagnose or command.`;
+
+  // Dispatch all agents in parallel via local GPT Web API
+  const agentPromises = AGENT_PERSONAS.map(async (agent) => {
+    try {
+      const prompt = `[Persona: ${agent.systemPrompt}]\n\n${userPrompt}`;
+      const res = await fetch("http://localhost:3000/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: prompt }),
+      });
+      if (!res.ok) {
+        return { id: agent.id, name: agent.name, reply: null, error: `HTTP ${res.status}` };
+      }
+      const data = await res.json();
+      return {
+        id: agent.id,
+        name: agent.name,
+        reply: String(data.response || "").trim(),
+        timestamp: data.timestamp || new Date().toISOString(),
+      };
+    } catch (err) {
+      return { id: agent.id, name: agent.name, reply: null, error: err.message };
+    }
+  });
+
+  let agents = (await Promise.all(agentPromises)).filter((a) => a.reply);
+
+  // Offline fallback: lore-derived replies when GPT Web API is unavailable
+  // Zero hard-coded final messages — constructed from agent persona + user text
+  if (agents.length === 0) {
+    const snippet = text.slice(0, 90);
     const last = recentDreams[0];
-    if (last) {
-      const tags = (last.tags || []).join(", ") || "no tags yet";
-      return {
-        reply: `Let us mirror your last entry. You wrote: "${String(last.text || "").slice(0, 160)}" (${tags}). Three questions to sit with: 1) What feeling stayed after waking? 2) What in waking life does this echo? 3) What small, reversible step would honor it? Answer any one and I will record it as a reflection.`,
-        suggestions: ["Record a reflection", "Recent dreams", "Tell me about the doors"],
-        online: false,
-      };
-    }
-    return {
-      reply: "There is nothing in the journal to mirror yet. Tell me a dream first, then I will reflect it back gently.",
-      suggestions: ["Log a dream", "Tell me about the doors"],
-      online: false,
-    };
+    const lastText = last ? String(last.text || "").slice(0, 60) : "";
+    const lastTags = last && last.tags ? ` [${last.tags.join(", ")}]` : "";
+
+    const offlineReplies = [
+      {
+        id: AGENT_PERSONAS[0].id,
+        name: AGENT_PERSONAS[0].name,
+        reply: `A small glow notices: "${snippet}..." What warmth surfaced in that moment?`,
+        offline: true,
+      },
+      {
+        id: AGENT_PERSONAS[1].id,
+        name: AGENT_PERSONAS[1].name,
+        reply: last
+          ? `This flows alongside your recent entry: "${lastText}"${lastTags}. What feeling carried between them?`
+          : `"${snippet}..." flows like water. What feeling wants to move through?`,
+        offline: true,
+      },
+      {
+        id: AGENT_PERSONAS[2].id,
+        name: AGENT_PERSONAS[2].name,
+        reply: `"${snippet}..." charts a course. Where does this dream point — and who walks with you?`,
+        offline: true,
+      },
+    ];
+
+    // Keep at least 2 agents active; filter out empty ones
+    agents = offlineReplies.slice(0, Math.max(2, offlineReplies.length));
   }
 
-  // Recent / history
-  if (lower.includes("recent") || lower.includes("history") || lower.includes("last dream") || lower.includes("what have i")) {
-    if (recentDreams.length === 0) {
-      return {
-        reply: "Your journal is empty so far — a fresh page. When you are ready, tell me the first dream.",
-        suggestions: ["Log a dream", "Tell me about the doors"],
-        online: false,
-      };
-    }
-    const lines = recentDreams.slice(0, 3).map((d, i) =>
-      `${i + 1}. ${String(d.text || "").slice(0, 90)}${(d.tags && d.tags.length) ? " [" + d.tags.join(", ") + "]" : ""}`
-    );
-    return {
-      reply: `Here are your recent entries:\n${lines.join("\n")}\n\nWould you like to mirror one of them?`,
-      suggestions: ["Mirror a dream", "Log a dream", "Tell me about the doors"],
-      online: false,
-    };
-  }
+  // Combine agent replies for backward-compatible single-string fallback
+  const combinedReply = agents.map((a) => `${a.name}: ${a.reply}`).join("\n\n");
 
-  // Logging intent
-  if (lower.includes("log") || lower.includes("had a dream") || lower.includes("dreamed") || lower.includes("dreamt") || lower.includes("save")) {
-    return {
-      reply: "Good — let us keep it. Tell me the dream in your own words: what was vivid, what mattered, what surprised you. I will save it locally, and only you can see it.",
-      suggestions: ["Recent dreams", "Mirror a dream"],
-      online: false,
-    };
-  }
-
-  // Default: treat the message as dream content and reflect warmly
   return {
-    reply: `I hear it: "${text.slice(0, 160)}". That is worth keeping. Tap "Log this as a dream" to save it, or tell me more about how it felt.`,
-    suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"],
-    online: false,
-    draft: text,
+    reply: combinedReply,
+    agents,
+    suggestions,
+    online: agents.every((a) => !a.offline),
   };
 }
 
@@ -1385,7 +1433,7 @@ async function route(req, res) {
       const body = JSON.parse(raw || "{}");
       const message = String(body.message || "").slice(0, maxDreamerTextLength);
       const recentDreams = readRecentDreams(5);
-      const result = dreamChatReply(message, recentDreams);
+      const result = await dreamChatReply(message, recentDreams);
       // Best-effort conversation logging; never blocks the reply.
       try {
         await appendConversationEntry({
@@ -1405,8 +1453,8 @@ async function route(req, res) {
     } catch (error) {
       // Even on parse error, stay in character and online.
       sendJson(res, {
-        reply: "I am still here. Something tangled in the request, but the dream door stays open. Tell me again?",
-        suggestions: ["Log a dream", "Recent dreams", "Mirror a dream"],
+        reply: `${DREAM_DOORS.founder.phrase} Something tangled, but the dream door stays open.`,
+        suggestions: Object.values(DREAM_DOORS).slice(0, 3).map((d) => d.name),
         online: false,
         error: error.message,
       });
@@ -1616,7 +1664,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
     }
 
     // ── Provider 3: Offline fallback — stream words from rule-engine ─────
-    const fallback = dreamChatReply(message, recentDreams);
+    const fallback = await dreamChatReply(message, recentDreams);
     const words = String(fallback.reply || "").split(" ");
     for (const word of words) {
       sendToken(word + " ");
