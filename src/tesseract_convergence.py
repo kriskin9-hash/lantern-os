@@ -194,6 +194,13 @@ class TesseractEngine:
             ctx.persona = "xenon"
         elif any(k in lower for k in ["wish", "protect", "founder", "waynesville"]):
             ctx.persona = "founder"
+        # Ingest operator lore into context for persona alignment
+        try:
+            from skills.operator_lore import get_lore_engine
+            lore = get_lore_engine()
+            ctx.lore_hints.append(lore.build_convergence_context(message, limit=3))
+        except Exception:
+            pass
         return ctx
 
     def _surface_load_dreams(self, ctx: ConvergenceContext) -> ConvergenceContext:
