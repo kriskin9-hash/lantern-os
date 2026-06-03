@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Cache-Control" no-store">
-  <title>Dream Journal by Lantern OS</title>
+  <title>Dream Journal — Orion by Lantern OS</title>
+  <link rel="stylesheet" href="dream-journal.css?v=20260602-orion-v1">
   <style>
     * {
       margin: 0;
@@ -480,16 +481,58 @@
     }
   </style>
 </head>
-<body data-style="plain-dashboard">
-  <div class="container">
-    <header>
-      <div class="lantern-icon">🔆</div>
+<body>
+  <div class="dream-shell">
+    <header class="dream-hero">
+      <div class="hero-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <p class="eyebrow">Lantern OS</p>
       <h1>Dream Journal</h1>
-      <p class="tagline">by Lantern OS</p>
-      <p class="subtitle">Your dreams. Your space. Always private. Cloud tunnel ready. Current Model: Baseline v1.</p>
+      <p class="byline">Orion Edition</p>
+      <p class="tagline">Remember your dreams.<br>Reflect on what they mean.</p>
+      <p class="subtagline">A private dream-journaling space with guided prompts, saved notes, notebook recall, and a Discord companion.</p>
+      <div class="privacy-badge" role="img" aria-label="Privacy shield">
+        <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Your dreams. Your space. Always private.</span>
+      </div>
+      <nav class="dream-nav" aria-label="Dreamer sections">
+        <a href="/" aria-current="page">Journal</a>
+        <a href="/courtney.html">The Well</a>
+        <a href="/wish-door.html">Wish Door</a>
+      </nav>
     </header>
 
-    <div id="message"></div>
+    <section class="features-strip" aria-label="Features">
+      <article class="feature-card">
+        <div class="icon">&#128211;</div>
+        <h3>Save Dreams</h3>
+        <p>Capture dreams before they fade.</p>
+      </article>
+      <article class="feature-card">
+        <div class="icon">&#128172;</div>
+        <h3>Follow Prompts</h3>
+        <p>Guided questions to help you reflect.</p>
+      </article>
+      <article class="feature-card">
+        <div class="icon">&#128220;</div>
+        <h3>Revisit Patterns</h3>
+        <p>Find meaning in your memories over time.</p>
+      </article>
+      <article class="feature-card">
+        <div class="icon">&#128126;</div>
+        <h3>Discord Companion</h3>
+        <p>Journal inside our community and keep your dreams alive.</p>
+      </article>
+      <article class="feature-card">
+        <div class="icon">&#128682;</div>
+        <h3>ImaginVerses</h3>
+        <p>Step through doors to new worlds you build with friends.</p>
+      </article>
+    </section>
+
+    <div class="container">
+      <div id="message"></div>
 
     <section id="chat-section">
       <h2>Talk to your Dream Journal</h2>
@@ -580,13 +623,15 @@
       <div class="entries" id="entriesList"></div>
     </section>
 
-    <footer>
-      <p>Dream Journal is saved locally on your device. Your privacy is protected.</p>
+    <footer class="dream-footer">
+      <p>Dream Journal Orion — CSF v0.7 Symbolic Qutrit Edition</p>
+      <p class="creator">Created by Alex Place</p>
       <div class="footer-note">
         <strong>Lantern Principle:</strong> Visible enough to trust. Small enough not to burn the house down.
       </div>
     </footer>
   </div>
+</div>
 
   <script>
     const API = {
