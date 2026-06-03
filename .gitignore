@@ -48,6 +48,21 @@ data/dream_journal/*.jsonl
 
 # Deployment weight reduction (static site deploy)
 .git/
+
+# === Anti-bloat additions (2026-06-03) ===
+# Temporary / one-off artifacts
+*.md.bak
+*HANDOFF*
+*DEPLOYMENT-REPORT*
+*PROGRESS-TRACKING*
+.tmp-*/
+archive/**/worktrees/**
+
+# Old versioned files
+* -v2*
+* -v3*
+*old*
+*backup*
 .claude/
 artifacts/
 data/dream_journal/
