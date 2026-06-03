@@ -19,6 +19,78 @@ const maxDreamerTextLength = 2000;
 const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
 const writeQueues = new Map();
 
+// ── Unified Agent Connector (spawns Python bridge) ────────────────────
+function unifiedAgentStream(message, persona, provider, context) {
+  return new Promise((resolve, reject) => {
+    const pyPath = path.join(repoRoot, "src", "unified_agent_connector.py");
+    const args = [
+      pyPath,
+      "--action", "stream",
+      "--message", message,
+    ];
+    if (persona) args.push("--persona", persona);
+    if (provider) args.push("--provider", provider);
+    if (context) args.push("--context", context);
+
+    const proc = spawn("python", args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => { stdout += d.toString(); });
+    proc.stderr.on("data", (d) => { stderr += d.toString(); });
+    proc.on("close", (code) => {
+      if (code === 0) {
+        resolve(stdout);
+      } else {
+        reject(new Error(stderr || `exit ${code}`));
+      }
+    });
+    proc.stdin.end();
+  });
+}
+
+function unifiedAgentHealth() {
+  return new Promise((resolve) => {
+    const pyPath = path.join(repoRoot, "src", "unified_agent_connector.py");
+    const proc = spawn("python", [pyPath, "--action", "health"], { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    proc.stdout.on("data", (d) => { stdout += d.toString(); });
+    proc.on("close", () => {
+      try { resolve(JSON.parse(stdout)); } catch { resolve({}); }
+    });
+    proc.stdin.end();
+  });
+}
+
+function unifiedAgentInspect() {
+  return new Promise((resolve) => {
+    const pyPath = path.join(repoRoot, "src", "unified_agent_connector.py");
+    const proc = spawn("python", [pyPath, "--action", "inspect"], { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    proc.stdout.on("data", (d) => { stdout += d.toString(); });
+    proc.on("close", () => {
+      try { resolve(JSON.parse(stdout)); } catch { resolve({}); }
+    });
+    proc.stdin.end();
+  });
+}
+
+function unifiedAgentGreet(recentDreams) {
+  return new Promise((resolve) => {
+    const pyPath = path.join(repoRoot, "src", "unified_agent_connector.py");
+    const args = [pyPath, "--action", "greet"];
+    if (recentDreams && recentDreams.length) {
+      args.push("--context", JSON.stringify(recentDreams.slice(0, 3)));
+    }
+    const proc = spawn("python", args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    proc.stdout.on("data", (d) => { stdout += d.toString(); });
+    proc.on("close", () => {
+      try { resolve(JSON.parse(stdout)); } catch { resolve({ greeting: stdout.trim(), persona: "unknown", source: "python_fallback" }); }
+    });
+    proc.stdin.end();
+  });
+}
+
 function tryMcpChatReply(messages, context) {
   return {
     source: "mcp_bridge",
@@ -471,7 +543,7 @@ async function dreamChatReply(message, recentDreams) {
       if (reply) {
         return { reply, agent: agent.name, suggestions, online: true };
       }
-    } catch { /* fall through */ }
+    } catch (err) { console.error("Anthropic API error:", err.message); /* fall through */ }
   }
 
   // Provider 2: OpenAI
@@ -515,7 +587,7 @@ async function dreamChatReply(message, recentDreams) {
       if (reply) {
         return { reply, agent: agent.name, suggestions, online: true };
       }
-    } catch { /* fall through */ }
+    } catch (err) { console.error("OpenAI API error:", err.message); /* fall through */ }
   }
 
   // Provider 3: Ollama
@@ -561,7 +633,7 @@ async function dreamChatReply(message, recentDreams) {
     if (reply) {
       return { reply, agent: agent.name, suggestions, online: true };
     }
-  } catch { /* fall through */ }
+  } catch (err) { console.error("Ollama API error:", err.message); /* fall through */ }
 
   // Provider 3: Offline persona fallback
   const snippet = text.slice(0, 90);
@@ -1577,6 +1649,43 @@ async function route(req, res) {
     return;
   }
 
+  // ── Agentic Workspace — Unified Connector Endpoints ──────────────────
+  if (url.pathname === "/api/dream/greet" && req.method === "GET") {
+    try {
+      const recentDreams = readRecentDreams(5);
+      const greet = await unifiedAgentGreet(recentDreams);
+      sendJson(res, { ...greet, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      sendJson(res, {
+        greeting: "The dream door is open. Tell me what you brought back from sleep.",
+        persona: "Blinkbug",
+        source: "offline_fallback",
+        error: error.message,
+      });
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/agent/health" && req.method === "GET") {
+    try {
+      const health = await unifiedAgentHealth();
+      sendJson(res, { health, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 500);
+    }
+    return;
+  }
+
+  if (url.pathname === "/api/agent/inspect" && req.method === "GET") {
+    try {
+      const inspect = await unifiedAgentInspect();
+      sendJson(res, { inspect, generatedAt: new Date().toISOString() });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 500);
+    }
+    return;
+  }
+
   // Dream Journal API Routes
   if (url.pathname === "/api/dream/create" && req.method === "POST") {
     try {
@@ -1600,7 +1709,7 @@ async function route(req, res) {
       const dreamDir = path.join(repoRoot, "data", "dream_journal");
       if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
       const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
-      fs.appendFileSync(monthFile, JSON.stringify(entry) + "\n");
+      await appendJsonlQueued(monthFile, entry);
 
       // CSF v0.7 symbolic compression (best-effort, non-blocking)
       let csfResult = null;
@@ -1716,7 +1825,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
     };
 
     // Log user message (best-effort, non-blocking)
-    appendConversationEntry({
+    await appendConversationEntry({
       recordedAt: new Date().toISOString(),
       surface: "dream-chat-stream",
       role: "operator",
@@ -1783,7 +1892,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
         });
 
         // Log the full reply
-        appendConversationEntry({
+        await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
           role: "lantern",
@@ -1854,7 +1963,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
           req2.write(payload);
           req2.end();
         });
-        appendConversationEntry({
+        await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
           role: "lantern",
@@ -1933,7 +2042,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
         });
 
         if (ollamaOk) {
-          appendConversationEntry({
+          await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
             role: "lantern",
@@ -1955,7 +2064,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
       sendToken(word + " ");
       await new Promise((r) => setTimeout(r, 28)); // typewriter pacing
     }
-    appendConversationEntry({
+    await appendConversationEntry({
       recordedAt: new Date().toISOString(),
       surface: "dream-chat-stream",
       role: "lantern",

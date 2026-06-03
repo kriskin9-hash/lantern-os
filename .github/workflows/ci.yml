@@ -86,7 +86,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run pytest
-        run: python -m pytest tests -q --tb=short || true
+        run: python -m pytest tests -q --tb=short
 
   test-node:
     name: Node tests (Playwright, etc)
@@ -104,7 +104,7 @@ jobs:
 
       - name: Run Node tests
         run: |
-          cd apps/lantern-garage && npm test || true
+          cd apps/lantern-garage && npm test
 
   # ============================================================================
   # DREAM JOURNAL v0: Dedicated test suite
@@ -268,12 +268,18 @@ jobs:
   all-checks:
     name: All checks passed
     runs-on: ubuntu-latest
-    needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation]
+    needs: [validate-repo, test-python, test-node, dreamer-journal-api-tests, dreamer-journal-python-tests, dreamer-journal-e2e-tests, regression-tests, convergence-check, integration-checks, convergence-loop-validation]
     if: always()
     steps:
       - name: Summary
         run: |
           if [ "${{ needs.validate-repo.result }}" = "success" ] && \
+             [ "${{ needs.test-python.result }}" = "success" ] && \
+             [ "${{ needs.test-node.result }}" = "success" ] && \
+             [ "${{ needs.dreamer-journal-api-tests.result }}" = "success" ] && \
+             [ "${{ needs.dreamer-journal-python-tests.result }}" = "success" ] && \
+             [ "${{ needs.dreamer-journal-e2e-tests.result }}" = "success" ] && \
+             [ "${{ needs.regression-tests.result }}" = "success" ] && \
              [ "${{ needs.convergence-check.result }}" = "success" ] && \
              [ "${{ needs.integration-checks.result }}" = "success" ] && \
              [ "${{ needs.convergence-loop-validation.result }}" = "success" ]; then
@@ -285,5 +291,5 @@ jobs:
             exit 0
           else
             echo "ΓÜá Some checks failed or skipped. Review logs above."
-            exit 0
+            exit 1
           fi

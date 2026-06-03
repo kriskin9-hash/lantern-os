@@ -1,0 +1,80 @@
+# Headless Lantern OS — auto-start, no frills
+# Usage: docker-compose -f docker-compose.headless.yml up -d
+# All services restart unless-stopped.
+# No dashboard. No GUI. Just APIs and compression workers.
+
+services:
+  # Core CSF compression service (Rust binary)
+  csf-worker:
+    build:
+      context: ./src/csf_rust
+      dockerfile: Dockerfile
+    image: lantern-os/csf:v0.8
+    container_name: lantern-csf
+    restart: unless-stopped
+    volumes:
+      - ./data/archives:/data/archives
+      - ./data/logs:/data/logs
+    environment:
+      - CSF_POLICY=trusted
+      - CSF_THREADS=4
+      - CSF_LOG_LEVEL=info
+    command: ["server", "--bind", "0.0.0.0:9000", "--data-dir", "/data/archives"]
+    healthcheck:
+      test: ["CMD", "/app/csf", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # CADD validation worker (Rust binary)
+  cadd-worker:
+    build:
+      context: ./src/cadd_rust
+      dockerfile: Dockerfile
+    image: lantern-os/cadd:v0.2
+    container_name: lantern-cadd
+    restart: unless-stopped
+    volumes:
+      - ./assets/brand:/assets/brand
+      - ./assets/incoming:/assets/incoming:ro
+    environment:
+      - CADD_BRAND_DIR=/assets/brand
+      - CADD_LOG_LEVEL=info
+    command: ["watch", "/assets/incoming", "--brand-dir", "/assets/brand"]
+    depends_on:
+      - csf-worker
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Reverse proxy (Caddy — lightweight, no Nginx bloat)
+  proxy:
+    image: caddy:2-alpine
+    container_name: lantern-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - csf-worker
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  caddy_data:
+  caddy_config:

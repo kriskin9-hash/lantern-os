@@ -131,8 +131,8 @@ try {
   // Exempt standard build/cache dirs
   const exempt = new Set(["node_modules", "__pycache__", ".pytest_cache", "test-results", ".tmp.drivedownload", ".tmp.driveupload"]);
   unknownTop = [...untrackedDirs].filter((d) => !exempt.has(d) && !d.startsWith("."));
-} catch {
-  // git not available — skip this gate locally
+} catch (e) {
+  assert("git available for anti-sprawl", false, e.message);
 }
 assert("No unapproved top-level directories", unknownTop.length === 0,
   unknownTop.length ? `new untracked dirs: ${unknownTop.join(", ")}` : "");

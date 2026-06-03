@@ -328,7 +328,7 @@ def start_heartbeat(
                     },
                     timeout=3
                 )
-            except:
+            except Exception:
                 pass
 
             import time
