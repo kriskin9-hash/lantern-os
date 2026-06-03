@@ -1,0 +1,54 @@
+name: Anti-Sprawl Gate
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  anti-sprawl:
+    name: Check for repo sprawl
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect new top-level directories
+        shell: bash
+        run: |
+          NEW_DIRS=$(git diff --name-only --diff-filter=A origin/master...HEAD | cut -d/ -f1 | sort | uniq)
+          TOP_LEVEL_NEW=$(echo "$NEW_DIRS" | grep -vE '^(src|apps|services|docs|tests|scripts|config|data|ops|integrations|skills|docker|manifests|\.github)$' || true)
+
+          if [ -n "$TOP_LEVEL_NEW" ]; then
+            echo "❌ New top-level directories detected:"
+            echo "$TOP_LEVEL_NEW"
+            echo ""
+            echo "Anti-sprawl rule: New top-level directories require explicit approval."
+            exit 1
+          fi
+          echo "✅ No new top-level directories"
+
+      - name: Detect excessive new files
+        shell: bash
+        run: |
+          NEW_FILE_COUNT=$(git diff --name-only --diff-filter=A origin/master...HEAD | wc -l)
+          echo "New files in PR: $NEW_FILE_COUNT"
+
+          if [ "$NEW_FILE_COUNT" -gt 25 ]; then
+            echo "❌ Too many new files ($NEW_FILE_COUNT). Max allowed: 25 per PR."
+            echo "Please split this into smaller PRs."
+            exit 1
+          fi
+          echo "✅ File count within limits"
+
+      - name: Detect excessive new markdown files
+        shell: bash
+        run: |
+          NEW_MD_COUNT=$(git diff --name-only --diff-filter=A origin/master...HEAD | grep -E '\.md$' | wc -l)
+          echo "New markdown files: $NEW_MD_COUNT"
+
+          if [ "$NEW_MD_COUNT" -gt 4 ]; then
+            echo "❌ Too many new markdown files ($NEW_MD_COUNT). Max: 4 per PR."
+            exit 1
+          fi
+          echo "✅ Markdown count within limits"
