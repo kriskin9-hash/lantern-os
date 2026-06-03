@@ -73,6 +73,35 @@ python src/mcp_server/server.py
 python apps/lantern-discord-radio/bot.py
 ```
 
+## Deployed URLs
+
+| Environment | URL | Description |
+|-------------|-----|-------------|
+| **GitHub Pages** | https://alex-place.github.io/lantern-os/ | Static UI (pitch, proof, pricing, wish-door, dream-journal) |
+| **Repository** | https://github.com/alex-place/lantern-os | Source code, issues, PRs |
+
+## IDE Integration (Windsurf / Cascade MCP)
+
+The Lantern OS MCP server is linked to Windsurf/Cascade via a stdio bridge.
+
+1. Start the MCP server (port 8771):
+   ```bash
+   python src/mcp_server/server.py
+   ```
+2. Windsurf reads `.windsurf/mcp.json` and connects through `scripts/mcp_stdio_bridge.py`.
+3. Exposed tools: `queue_status`, `task_intake`, `dispatch_work`, `boot_check`, `list_skills`, `get_status`, `fleet_status`.
+
+## User Guides
+
+| Workstream | Guide | Description |
+|------------|-------|-------------|
+| **Tesseract Convergence** | `manifests/TESSERACT-ARCHITECTURE.md` | 4-layer hypercube (Surface, Interface, Convergence, Core) — personas, slots, connector, dollhouse CSF, convergence engine, inspector |
+| **Unified Agent Connector** | `src/unified_agent_connector.py` docstring | Multi-provider AI streaming with health checks — OpenAI, Anthropic, Google, Mistral |
+| **CSF Dollhouse** | `src/cadd_dollhouse_csf.py` docstring | Convergence-Fitted Searchable Binary format for memory archives and segment building |
+| **Agent Inspector** | `scripts/agent_inspector.py` docstring | Health and self-monitoring daemon with tesseract layer checks |
+| **MCP Connector** | `docs/MCP-CONNECTOR.md` | Local-first MCP connector, RAG-house indexing, safety contract |
+| **Dream Journal** | `apps/lantern-garage/public/dream-journal.html` | Freeform RP chat interface with localStorage + JSONL export |
+
 ## Backlog
 
 Linear is the source of truth for the backlog. GitHub Issues are intake only and may lag behind Linear.
