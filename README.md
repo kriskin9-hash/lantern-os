@@ -48,6 +48,26 @@ Railway auto-deploys from `master`. The `railway.json` and `cloud-server.js` han
 
 Static surfaces are deployed from the `gh-pages` branch via the GitHub Actions workflow in `.github/workflows/`.
 
+## Running Services
+
+| Service | Port | Status | URL | Process |
+|---------|------|--------|-----|---------|
+| **Lantern Garage** | `4177` | Running | http://127.0.0.1:4177 | `node apps/lantern-garage/server.js` |
+| **GPT Web API** | `3000` | Running | http://127.0.0.1:3000 | `node integrations/gm-agent-orchestrator/tools/gpt-web-api/server.js` |
+| **Discord Radio Bot** | N/A | Needs token | — | `python apps/lantern-discord-radio/bot.py` |
+
+Start all:
+```bash
+# Terminal 1 — Garage
+npm start --prefix apps/lantern-garage
+
+# Terminal 2 — GPT Web API
+npm start --prefix integrations/gm-agent-orchestrator/tools/gpt-web-api
+
+# Terminal 3 — Discord Bot (requires token)
+python apps/lantern-discord-radio/bot.py
+```
+
 ## Backlog
 
 Linear is the source of truth for the backlog. GitHub Issues are intake only and may lag behind Linear.
