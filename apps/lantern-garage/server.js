@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { spawn, spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
@@ -111,16 +112,88 @@ function generateEntryId() {
   });
 }
 
-function generateTernaryId(seed) {
-  const map = { "0": "o", "1": "i", "2": "z" };
-  const base3 = Math.abs(seed.split("").reduce((a, c) => a + c.charCodeAt(0), 0))
-    .toString(3).padStart(12, "0");
-  return base3.replace(/[012]/g, (d) => map[d]);
+/**
+ * Qutrit-Flavored Ternary ID System
+ * Bidirectional: encode + decode with amplitude/phase flavor cycling
+ */
+
+const QUTRIT_MAP = {
+  "a": { digit: "0", flavor: "low" },
+  "o": { digit: "0", flavor: "mid" },
+  "x": { digit: "0", flavor: "high" },
+  "b": { digit: "1", flavor: "low" },
+  "i": { digit: "1", flavor: "mid" },
+  "y": { digit: "1", flavor: "high" },
+  "c": { digit: "2", flavor: "low" },
+  "z": { digit: "2", flavor: "mid" },
+  "w": { digit: "2", flavor: "high" },
+};
+
+const REVERSE_MAP = {};
+Object.keys(QUTRIT_MAP).forEach((char) => {
+  REVERSE_MAP[char] = QUTRIT_MAP[char].digit;
+});
+
+/**
+ * Generate Qutrit ID
+ * Produces a 12-character base-3 ID with embedded amplitude/phase flavor
+ */
+function generateQutritId(seed) {
+  const hash = crypto
+    .createHash("sha256")
+    .update(String(seed))
+    .digest("hex");
+
+  const buffer = Buffer.from(hash.slice(0, 20), "hex");
+  let num = BigInt("0x" + buffer.toString("hex"));
+
+  let base3 = "";
+  for (let i = 0; i < 12; i++) {
+    base3 = (num % 3n) + base3;
+    num = num / 3n;
+  }
+  base3 = base3.padStart(12, "0").slice(-12);
+
+  // Apply flavor cycling (low/mid/high)
+  return base3
+    .split("")
+    .map((digit, index) => {
+      const flavor = index % 3; // 0=low, 1=mid, 2=high
+      const mapKey = ["low", "mid", "high"][flavor];
+      const entry = Object.values(QUTRIT_MAP).find(
+        (e) => e.digit === digit && e.flavor === mapKey
+      );
+      return entry
+        ? Object.keys(QUTRIT_MAP).find((k) => QUTRIT_MAP[k] === entry)
+        : digit;
+    })
+    .join("");
+}
+
+/**
+ * Decode Qutrit ID back to base-3 digits
+ */
+function decodeQutritId(qutritId) {
+  if (typeof qutritId !== "string" || qutritId.length !== 12) {
+    throw new Error("Invalid Qutrit ID: must be exactly 12 characters");
+  }
+
+  let base3 = "";
+  for (const char of qutritId) {
+    const digit = REVERSE_MAP[char.toLowerCase()];
+    if (digit === undefined) {
+      throw new Error(`Invalid character in Qutrit ID: ${char}`);
+    }
+    base3 += digit;
+  }
+
+  return base3; // Returns 12-digit base-3 string
 }
 
 async function appendDreamerEntry(user, entry) {
+  const entryId = generateEntryId();
   const record = {
-    id: generateEntryId(),
+    id: entryId,
     kind: String(entry.kind || "note").slice(0, 40),
     name: String(entry.name || "").slice(0, 120),
     mood: String(entry.mood || "").slice(0, 40),
@@ -128,7 +201,7 @@ async function appendDreamerEntry(user, entry) {
     tags: Array.isArray(entry.tags) ? entry.tags.map((t) => String(t).slice(0, 40)).slice(0, 10) : [],
     links: Array.isArray(entry.links) ? entry.links.map((t) => String(t).slice(0, 40)).slice(0, 20) : [],
     recordedAt: new Date().toISOString(),
-    ternaryId: generateTernaryId(generateEntryId() + String(entry.text || "")),
+    ternaryId: generateQutritId(entryId + "|" + String(entry.text || "")),
     private: true,
   };
   const filePath = dreamerNotebookPath(user);
