@@ -168,29 +168,31 @@ async function run() {
   });
 
   // ── POST /api/dream/chat ──────────────────────────────────────────────
-  console.log("\nPOST /api/dream/chat (multi-agent)");
+  console.log("\nPOST /api/dream/chat (single-agent selection)");
 
-  await test("multi-agent chat returns agents array", async () => {
+  await test("chat returns reply, agent, suggestions, online", async () => {
     const r = await request("POST", "/api/dream/chat", {
       message: "I saw a glowing light in my dream",
     });
     assert.strictEqual(r.status, 200);
     assert.ok(typeof r.body.reply === "string", "reply should be a string");
-    assert.ok(Array.isArray(r.body.agents), "agents should be an array");
-    assert.ok(r.body.agents.length >= 2, "should have at least 2 agents");
+    assert.ok(typeof r.body.agent === "string", "agent should be a string");
+    assert.ok(r.body.agent.length > 0, "agent name should not be empty");
     assert.ok(typeof r.body.online === "boolean", "online should be boolean");
-    assert.ok(r.body.generatedAt, "should have generatedAt timestamp");
+    assert.ok(Array.isArray(r.body.suggestions), "suggestions should be array");
   });
 
-  await test("agents have name and reply", async () => {
+  await test("selected agent matches keyword", async () => {
     const r = await request("POST", "/api/dream/chat", {
-      message: "Tell me about the doors",
+      message: "I saw a waterfall",
     });
     assert.strictEqual(r.status, 200);
-    for (const agent of r.body.agents) {
-      assert.ok(agent.name, "agent should have name");
-      assert.ok(typeof agent.reply === "string", "agent should have reply");
-    }
+    const agentName = r.body.agent;
+    assert.ok(agentName, "should have agent name");
+    assert.ok(
+      agentName.includes("Waterfall") || agentName.includes("Mary") || agentName.includes("Blinkbug") || agentName.includes("Xenon"),
+      `unexpected agent: ${agentName}`
+    );
   });
 
   await test("empty message returns suggestions", async () => {

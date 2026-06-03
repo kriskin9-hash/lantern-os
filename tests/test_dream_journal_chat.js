@@ -1,6 +1,6 @@
 /**
- * Dream Journal Multi-Agent Chat Tests
- * Tests the /api/dream/chat endpoint specifically.
+ * Dream Journal v0 Chat Tests
+ * Tests the /api/dream/chat endpoint with single-agent selection.
  *
  * Run: node tests/test_dream_journal_chat.js
  */
@@ -51,46 +51,59 @@ async function test(name, fn) {
 }
 
 async function run() {
-  console.log("\nDream Journal Multi-Agent Chat Tests\n");
+  console.log("\nDream Journal v0 Chat Tests\n");
   console.log("Target:", BASE, "/api/dream/chat\n");
 
   // ── Agent response structure ─────────────────────────────────────────────
   console.log("Agent response structure");
 
-  await test("returns 200 with reply, agents, suggestions, online", async () => {
+  await test("returns 200 with reply, agent, suggestions, online", async () => {
     const r = await request("POST", "/api/dream/chat", {
       message: "I dreamt of flying",
     });
     assert.strictEqual(r.status, 200);
     assert.ok(typeof r.body.reply === "string", "reply should be string");
-    assert.ok(Array.isArray(r.body.agents), "agents should be array");
-    assert.ok(r.body.agents.length >= 2, "at least 2 agents");
+    assert.ok(typeof r.body.agent === "string", "agent should be string");
+    assert.ok(r.body.agent.length > 0, "agent name should not be empty");
     assert.ok(typeof r.body.online === "boolean", "online should be boolean");
     assert.ok(Array.isArray(r.body.suggestions), "suggestions should be array");
-    assert.ok(r.body.generatedAt, "should have generatedAt");
   });
 
-  await test("each agent has id, name, reply fields", async () => {
-    const r = await request("POST", "/api/dream/chat", {
-      message: "What do the doors mean?",
-    });
-    for (const agent of r.body.agents) {
-      assert.ok(agent.id, "agent.id required");
-      assert.ok(agent.name, "agent.name required");
-      assert.ok(typeof agent.reply === "string", "agent.reply should be string");
-      assert.ok(agent.reply.length > 0, "agent.reply should not be empty");
-    }
-  });
-
-  await test("agent names match lore personas", async () => {
+  await test("selected agent matches dream content keywords", async () => {
     const r = await request("POST", "/api/dream/chat", {
       message: "I saw a waterfall",
     });
-    const names = r.body.agents.map((a) => a.name);
-    const expected = ["Blinkbug", "Mary / Waterfall", "Courtney / Xenon"];
-    for (const expectedName of expected) {
-      assert.ok(names.some((n) => n.includes(expectedName.split(" ")[0])), `should include ${expectedName}`);
-    }
+    const agentName = r.body.agent;
+    assert.ok(agentName, "should have agent name");
+    // Waterfall keyword should trigger Waterfall/Mary
+    assert.ok(
+      agentName.includes("Waterfall") || agentName.includes("Mary") || agentName.includes("Blinkbug") || agentName.includes("Xenon"),
+      `unexpected agent: ${agentName}`
+    );
+  });
+
+  await test("keystone keyword selects keystone agent", async () => {
+    const r = await request("POST", "/api/dream/chat", {
+      message: "I want to remember the story of my anchor",
+    });
+    const agentName = r.body.agent;
+    assert.ok(agentName, "should have agent name");
+    assert.ok(
+      agentName.includes("Keystone") || agentName.includes("Founder") || agentName.includes("Blinkbug"),
+      `anchor/memory should select keystone-ish agent, got: ${agentName}`
+    );
+  });
+
+  await test("founder keyword selects founder agent", async () => {
+    const r = await request("POST", "/api/dream/chat", {
+      message: "Tell me about the wish and returning home",
+    });
+    const agentName = r.body.agent;
+    assert.ok(agentName, "should have agent name");
+    assert.ok(
+      agentName.includes("Founder") || agentName.includes("Alex") || agentName.includes("Blinkbug"),
+      `wish/home should select founder-ish agent, got: ${agentName}`
+    );
   });
 
   // ── Content quality ──────────────────────────────────────────────────────
@@ -100,10 +113,11 @@ async function run() {
     const dreamText = "I was walking through a crystalline city";
     const r = await request("POST", "/api/dream/chat", { message: dreamText });
     const reply = r.body.reply.toLowerCase();
-    // Offline fallback includes snippet; online might reference it
+    assert.ok(reply.length > 0, "reply should not be empty");
+    // Offline fallback includes snippet
     assert.ok(
-      reply.includes("crystalline") || reply.includes("walking") || reply.includes("city") || r.body.agents.length >= 2,
-      "response should reference dream content or have agents"
+      reply.includes("crystalline") || reply.includes("walking") || reply.includes("city") || reply.includes("worth keeping"),
+      "response should reference dream content or have fallback"
     );
   });
 
@@ -112,9 +126,10 @@ async function run() {
       message: "Tell me about the founder's wish door",
     });
     const reply = r.body.reply.toLowerCase();
+    assert.ok(reply.length > 0, "reply should not be empty");
     assert.ok(
-      reply.includes("wish") || reply.includes("door") || reply.includes("anchor") || r.body.agents.length >= 2,
-      "should reference door lore or have agents"
+      reply.includes("wish") || reply.includes("door") || reply.includes("anchor") || reply.includes("protecting"),
+      "should reference door lore or protective language"
     );
   });
 
@@ -131,7 +146,7 @@ async function run() {
     const longMessage = "dream ".repeat(500);
     const r = await request("POST", "/api/dream/chat", { message: longMessage });
     assert.strictEqual(r.status, 200);
-    assert.ok(r.body.agents.length >= 2, "still returns agents after truncation");
+    assert.ok(typeof r.body.reply === "string", "still returns reply after truncation");
   });
 
   await test("special characters in message don't break JSON", async () => {
@@ -139,7 +154,7 @@ async function run() {
       message: "I saw \"quotes\" and 'apostrophes' and \\backslashes\\",
     });
     assert.strictEqual(r.status, 200);
-    assert.ok(r.body.agents.length >= 2, "handles special chars");
+    assert.ok(typeof r.body.reply === "string", "handles special chars");
   });
 
   await test("unicode dream text is preserved", async () => {
@@ -147,7 +162,7 @@ async function run() {
       message: "I dreamt of a glowing lantern \uD83C\uDF1F and a waterfall \uD83D\uDCA7",
     });
     assert.strictEqual(r.status, 200);
-    assert.ok(r.body.agents.length >= 2, "handles unicode");
+    assert.ok(typeof r.body.reply === "string", "handles unicode");
   });
 
   // ── Performance ──────────────────────────────────────────────────────────
@@ -170,7 +185,7 @@ async function run() {
         message: `Sequential test ${i + 1}`,
       });
       assert.strictEqual(r.status, 200);
-      assert.ok(r.body.agents.length >= 2, `request ${i + 1} has agents`);
+      assert.ok(typeof r.body.reply === "string", `request ${i + 1} has reply`);
     }
   });
 

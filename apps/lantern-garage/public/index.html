@@ -306,6 +306,16 @@
       margin-top: 0.5rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
+    .bubble-wrapper { margin-bottom: 0.8rem; }
+    .bubble-label {
+      font-size: 0.7rem;
+      color: #9a8fb8;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.2rem;
+      margin-left: 0.5rem;
+    }
     .bubble-caption {
       font-size: 0.8rem;
       color: #9a8fb8;
@@ -789,19 +799,28 @@
       return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
-    function makeBubble(role) {
+    function makeBubble(role, label) {
       const log = document.getElementById('chatLog');
+      const wrapper = document.createElement('div');
+      wrapper.className = `bubble-wrapper ${role}`;
+      if (label) {
+        const nameTag = document.createElement('div');
+        nameTag.className = 'bubble-label';
+        nameTag.textContent = label;
+        wrapper.appendChild(nameTag);
+      }
       const b = document.createElement('div');
       b.className = `bubble ${role}`;
-      log.appendChild(b);
+      wrapper.appendChild(b);
+      log.appendChild(wrapper);
       log.scrollTop = log.scrollHeight;
       return b;
     }
 
     // Simulate streaming for offline fallback
-    async function streamOffline(text, suggestions, image, caption) {
+    async function streamOffline(text, suggestions, image, caption, agentLabel) {
       if (image) addImageBubble('lantern', image, caption);
-      const b = makeBubble('lantern');
+      const b = makeBubble('lantern', agentLabel || 'Dream Journal');
       b.innerHTML = '<span class="cursor"></span>';
       const log = document.getElementById('chatLog');
       const tokens = text.split(/(\s+)/);
@@ -832,7 +851,8 @@
       renderSuggestions([]);
 
       const log = document.getElementById('chatLog');
-      const b = makeBubble('lantern');
+      let currentAgent = 'Dream Journal';
+      const b = makeBubble('lantern', currentAgent + ' is typing...');
       b.innerHTML = '<span class="cursor"></span>';
 
       try {
@@ -867,6 +887,14 @@
               suggestions = ev.suggestions || [];
               if (ev.draft)   lastDraft = ev.draft;
               if (ev.online !== undefined) setStatus(ev.online);
+              if (ev.agent) {
+                currentAgent = ev.agent;
+                const wrapper = b.parentElement;
+                if (wrapper) {
+                  const label = wrapper.querySelector('.bubble-label');
+                  if (label) label.textContent = currentAgent;
+                }
+              }
             }
           }
         }
@@ -877,7 +905,7 @@
         b.remove();
         setStatus(false);
         const local = offlineReply(msg);
-        await streamOffline(local.reply, local.suggestions, local.image, local.caption);
+        await streamOffline(local.reply, local.suggestions, local.image, local.caption, 'Dream Journal (offline)');
         if (local.draft) lastDraft = local.draft || msg;
       } finally {
         chatInput.disabled = false;

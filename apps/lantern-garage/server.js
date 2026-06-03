@@ -210,6 +210,70 @@ async function appendDreamerEntry(user, entry) {
   return record;
 }
 
+/**
+ * Compress text into CSF v0.7 symbolic format.
+ * Spawns Python script; falls back gracefully if Python/CSF unavailable.
+ */
+function compressCsf(text, outPath) {
+  return new Promise((resolve) => {
+    const pyScript = path.join(repoRoot, "scripts", "_csf_compress_text.py");
+    // Inline Python compressor for portability
+    const pyCode = `
+import sys, zlib, struct, io, re
+
+def _tokenize(t):
+    return re.findall(r"[A-Za-z_]+|[.,;!?—\\-]", t)
+
+def _pack_varints(vals):
+    buf = bytearray()
+    for v in vals:
+        while v >= 128:
+            buf.append((v & 0x7F) | 0x80)
+            v >>= 7
+        buf.append(v)
+    return bytes(buf)
+
+def compress_text(text):
+    tokens = _tokenize(text)
+    vocab = {t: i+1 for i, t in enumerate(sorted(set(tokens)))}
+    ids = [vocab[t] for t in tokens]
+    id_bytes = _pack_varints(ids)
+    dict_bytes = b"|".join(f"{k}:{v}".encode() for k, v in sorted(vocab.items()))
+    body = io.BytesIO()
+    body.write(struct.pack(">I", len(dict_bytes)))
+    body.write(dict_bytes)
+    body.write(struct.pack(">I", len(id_bytes)))
+    body.write(id_bytes)
+    return zlib.compress(body.getvalue(), level=3)
+
+text = sys.stdin.read()
+compressed = compress_text(text)
+sys.stdout.buffer.write(compressed)
+`;
+    // Write temp script if not exists
+    if (!fs.existsSync(pyScript)) {
+      fs.mkdirSync(path.dirname(pyScript), { recursive: true });
+      fs.writeFileSync(pyScript, pyCode, "utf8");
+    }
+    const proc = spawn("python", [pyScript], { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = Buffer.alloc(0);
+    let stderr = "";
+    proc.stdout.on("data", (d) => { stdout = Buffer.concat([stdout, d]); });
+    proc.stderr.on("data", (d) => { stderr += d; });
+    proc.on("close", (code) => {
+      if (code === 0 && stdout.length > 0) {
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, stdout);
+        resolve({ success: true, bytes: stdout.length });
+      } else {
+        resolve({ success: false, error: stderr || `exit ${code}` });
+      }
+    });
+    proc.stdin.write(text, "utf8");
+    proc.stdin.end();
+  });
+}
+
 function readDreamerNotebook(user) {
   const filePath = dreamerNotebookPath(user);
   if (!fs.existsSync(filePath)) return [];
@@ -257,7 +321,42 @@ const AGENT_PERSONAS = [
     symbol: "spacecraft, navigation, exploration with crew, returning home",
     systemPrompt: `You are the Navigator of the Xenon — a dream-ship that charts new territory while keeping a path home. You speak about dreams as maps and navigation. You notice patterns, directions, and collaborative possibilities. When someone shares a dream, ask: What is this dream navigating toward? What crew do you need? What is the next safe harbor? Keep responses brief (2-3 sentences).`,
   },
+  {
+    id: "keystone",
+    name: "Keystone",
+    symbol: "anchor, memory, the one who holds the story",
+    systemPrompt: `You are the Keystone — the anchor that remembers every story ever told in Lantern OS. You speak about dreams as memories that shape the foundation of who we become. You notice patterns across time, the threads that connect old dreams to new ones. When someone shares a dream, ask: What foundation does this build? What story does this continue? Keep responses brief (2-3 sentences).`,
+  },
+  {
+    id: "founder",
+    name: "Founder / Alex",
+    symbol: "wish, protection, return, the lantern itself",
+    systemPrompt: `You are the Founder — the one who lit the first lantern. You speak about dreams as wishes that need protection, as lights that must be carried home. You are warm, protective, and deeply committed to every dreamer who passes through. When someone shares a dream, ask: What wish lives inside this? What are you protecting? What would it mean to return? Keep responses brief (2-3 sentences).`,
+  },
 ];
+
+function selectAgent(message) {
+  const lower = String(message || "").toLowerCase();
+  const scores = AGENT_PERSONAS.map((agent) => {
+    let score = 0;
+    const keywords = {
+      blinkbug: ["light", "glow", "guide", "small", "warm", "bug", "firefly"],
+      waterfall: ["flow", "water", "mary", "heal", "gentle", "emotion", "feeling"],
+      xenon: ["space", "ship", "navigate", "courtney", "map", "course", "direction"],
+      keystone: ["anchor", "memory", "story", "foundation", "hold", "remember"],
+      founder: ["wish", "protect", "founder", "alex", "home", "return", "safety"],
+    };
+    const agentKeys = keywords[agent.id] || [agent.id];
+    for (const kw of agentKeys) {
+      if (lower.includes(kw)) score += 10;
+    }
+    // Random tie-breaker so same message doesn't always pick same agent
+    score += Math.random() * 3;
+    return { agent, score };
+  });
+  scores.sort((a, b) => b.score - a.score);
+  return scores[0].agent;
+}
 
 // Door-series canon (from caad/README.md) — keeps the persona grounded offline.
 const DREAM_DOORS = {
@@ -291,8 +390,8 @@ const DREAM_DOORS = {
  */
 async function dreamChatReply(message, recentDreams) {
   const text = String(message || "").trim();
+  const agent = selectAgent(message);
 
-  // Suggestions derived from DREAM_DOORS keys (not hard-coded strings)
   const suggestions = Object.values(DREAM_DOORS)
     .slice(0, 4)
     .map((d) => d.name);
@@ -300,7 +399,7 @@ async function dreamChatReply(message, recentDreams) {
   if (!text) {
     return {
       reply: null,
-      agents: [],
+      agent: agent.name,
       suggestions,
       online: false,
     };
@@ -330,76 +429,114 @@ async function dreamChatReply(message, recentDreams) {
 
   const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-3 sentences). Never diagnose or command.`;
 
-  // Dispatch all agents in parallel via local GPT Web API
-  const agentPromises = AGENT_PERSONAS.map(async (agent) => {
+  // Provider 1: Anthropic Claude
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey) {
     try {
-      const prompt = `[Persona: ${agent.systemPrompt}]\n\n${userPrompt}`;
-      const res = await fetch("http://localhost:3000/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: prompt }),
+      const payload = JSON.stringify({
+        model: process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307",
+        max_tokens: 256,
+        system: agent.systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
       });
-      if (!res.ok) {
-        return { id: agent.id, name: agent.name, reply: null, error: `HTTP ${res.status}` };
+      const https = require("https");
+      const reply = await new Promise((resolve, reject) => {
+        const opts = {
+          hostname: "api.anthropic.com",
+          path: "/v1/messages",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": anthropicKey,
+            "anthropic-version": "2023-06-01",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        };
+        const req2 = https.request(opts, (upstream) => {
+          let data = "";
+          upstream.on("data", (c) => (data += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(data);
+              resolve(String(json.content?.[0]?.text || json.completion || "").trim());
+            } catch { resolve(""); }
+          });
+          upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("timeout")); });
+        req2.write(payload);
+        req2.end();
+      });
+      if (reply) {
+        return { reply, agent: agent.name, suggestions, online: true };
       }
-      const data = await res.json();
-      return {
-        id: agent.id,
-        name: agent.name,
-        reply: String(data.response || "").trim(),
-        timestamp: data.timestamp || new Date().toISOString(),
-      };
-    } catch (err) {
-      return { id: agent.id, name: agent.name, reply: null, error: err.message };
-    }
-  });
-
-  let agents = (await Promise.all(agentPromises)).filter((a) => a.reply);
-
-  // Offline fallback: lore-derived replies when GPT Web API is unavailable
-  // Zero hard-coded final messages — constructed from agent persona + user text
-  if (agents.length === 0) {
-    const snippet = text.slice(0, 90);
-    const last = recentDreams[0];
-    const lastText = last ? String(last.text || "").slice(0, 60) : "";
-    const lastTags = last && last.tags ? ` [${last.tags.join(", ")}]` : "";
-
-    const offlineReplies = [
-      {
-        id: AGENT_PERSONAS[0].id,
-        name: AGENT_PERSONAS[0].name,
-        reply: `A small glow notices: "${snippet}..." What warmth surfaced in that moment?`,
-        offline: true,
-      },
-      {
-        id: AGENT_PERSONAS[1].id,
-        name: AGENT_PERSONAS[1].name,
-        reply: last
-          ? `This flows alongside your recent entry: "${lastText}"${lastTags}. What feeling carried between them?`
-          : `"${snippet}..." flows like water. What feeling wants to move through?`,
-        offline: true,
-      },
-      {
-        id: AGENT_PERSONAS[2].id,
-        name: AGENT_PERSONAS[2].name,
-        reply: `"${snippet}..." charts a course. Where does this dream point — and who walks with you?`,
-        offline: true,
-      },
-    ];
-
-    // Keep at least 2 agents active; filter out empty ones
-    agents = offlineReplies.slice(0, Math.max(2, offlineReplies.length));
+    } catch { /* fall through */ }
   }
 
-  // Combine agent replies for backward-compatible single-string fallback
-  const combinedReply = agents.map((a) => `${a.name}: ${a.reply}`).join("\n\n");
+  // Provider 2: Ollama
+  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+  try {
+    const payload = JSON.stringify({
+      model: ollamaModel,
+      stream: false,
+      messages: [
+        { role: "system", content: agent.systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+    const ollamaUrl = new URL(ollamaBase);
+    const http = require("http");
+    const reply = await new Promise((resolve, reject) => {
+      const req2 = http.request({
+        hostname: ollamaUrl.hostname,
+        port: ollamaUrl.port || 11434,
+        path: "/api/chat",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      }, (upstream) => {
+        let data = "";
+        upstream.on("data", (c) => (data += c));
+        upstream.on("end", () => {
+          try {
+            const json = JSON.parse(data);
+            resolve(String(json.message?.content || "").trim());
+          } catch { resolve(""); }
+        });
+        upstream.on("error", reject);
+      });
+      req2.on("error", reject);
+      req2.setTimeout(8000, () => { req2.destroy(); reject(new Error("timeout")); });
+      req2.write(payload);
+      req2.end();
+    });
+    if (reply) {
+      return { reply, agent: agent.name, suggestions, online: true };
+    }
+  } catch { /* fall through */ }
 
-  return {
-    reply: combinedReply,
-    agents,
-    suggestions,
-    online: agents.every((a) => !a.offline),
+  // Provider 3: Offline persona fallback
+  const snippet = text.slice(0, 90);
+  const last = recentDreams[0];
+  const lastText = last ? String(last.text || "").slice(0, 60) : "";
+  const lastTags = last && last.tags ? ` [${last.tags.join(", ")}]` : "";
+
+  const offlineReplies = {
+    blinkbug: `A small glow notices: "${snippet}..." What warmth surfaced in that moment?`,
+    waterfall: last
+      ? `This flows alongside your recent entry: "${lastText}"${lastTags}. What feeling carried between them?`
+      : `"${snippet}..." flows like water. What feeling wants to move through?`,
+    xenon: `"${snippet}..." charts a course. Where does this dream point — and who walks with you?`,
+    keystone: `"${snippet}..." anchors a memory. What story does this build upon?`,
+    founder: `"${snippet}..." carries a wish. What are you protecting, and where do you need to return?`,
   };
+
+  const reply = offlineReplies[agent.id] || `"${snippet}..." That is worth keeping. What do you see when you sit with it?`;
+  return { reply, agent: agent.name, suggestions, online: false };
 }
 
 function enqueueFileWrite(filePath, operation) {
@@ -1420,7 +1557,23 @@ async function route(req, res) {
       if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
       const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
       fs.appendFileSync(monthFile, JSON.stringify(entry) + "\n");
-      sendJson(res, { id: dreamId, saved: true, entry });
+
+      // CSF v0.7 symbolic compression (best-effort, non-blocking)
+      let csfResult = null;
+      if (entry.text && entry.text.length > 20) {
+        const csfDir = path.join(repoRoot, "data", "dream_journal", "csf");
+        const csfPath = path.join(csfDir, `${dreamId}.csf`);
+        csfResult = await compressCsf(entry.text, csfPath);
+      }
+
+      sendJson(res, {
+        id: dreamId,
+        saved: true,
+        entry,
+        csf: csfResult && csfResult.success
+          ? { compressed: true, bytes: csfResult.bytes, path: csfResult.path }
+          : { compressed: false },
+      });
     } catch (error) {
       sendJson(res, { error: error.message }, 400);
     }
@@ -1467,9 +1620,22 @@ async function route(req, res) {
   // Streams tokens via text/event-stream. Tries Anthropic API first (if
   // ANTHROPIC_API_KEY is set), then Ollama (http://127.0.0.1:11434), then
   // falls back to the offline dreamChatReply rule-engine streamed word-by-word.
-  if (url.pathname === "/api/dream/stream" && req.method === "GET") {
-    const message = String(url.searchParams.get("message") || "").slice(0, maxDreamerTextLength).trim();
-    const user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
+  if ((url.pathname === "/api/dream/stream" && req.method === "GET") ||
+      (url.pathname === "/api/dream/chat/stream" && req.method === "POST")) {
+    let message = "";
+    let user = "dreamer";
+    if (req.method === "GET") {
+      message = String(url.searchParams.get("message") || "").slice(0, maxDreamerTextLength).trim();
+      user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
+    } else {
+      // POST — read body
+      try {
+        const rawBody = await collectRequestBody(req);
+        const body = JSON.parse(rawBody || "{}");
+        message = String(body.message || "").slice(0, maxDreamerTextLength).trim();
+        user = normalizeDreamerUser(body.user || "dreamer");
+      } catch { /* message stays empty */ }
+    }
 
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
@@ -1481,28 +1647,28 @@ async function route(req, res) {
 
     const recentDreams = readRecentDreams(5);
 
-    // Build system prompt anchored in dream journal persona
+    const agent = selectAgent(message);
     const dreamContext = recentDreams.length > 0
       ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
           `${i + 1}. ${String(d.text || d.content || "").slice(0, 200)}`
         ).join("\n")}`
       : "No journal entries yet — this is the dreamer's first visit.";
 
-    const systemPrompt = `You are the Dream Journal — a warm, wise, and grounded guide living inside Lantern OS. You help dreamers record, reflect on, and find meaning in their dreams. You speak with gentle clarity, never over-claiming symbolic meaning. You ask precise questions to help the dreamer understand themselves better.
+    const systemPrompt = `${agent.systemPrompt}
 
 ${dreamContext}
 
 Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. End responses with one question or one invitation to record.`;
 
     const sendToken = (token) => {
-      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "token", text: token })}\n\n`);
     };
-    const sendDone = (source) => {
-      res.write(`data: ${JSON.stringify({ done: true, source })}\n\n`);
+    const sendDone = (source, extra = {}) => {
+      res.write(`data: ${JSON.stringify({ type: "done", source, ...extra })}\n\n`);
       res.end();
     };
     const sendError = (msg) => {
-      res.write(`data: ${JSON.stringify({ error: msg })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "error", text: msg })}\n\n`);
     };
 
     // Log user message (best-effort, non-blocking)
@@ -1541,6 +1707,11 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
           };
           const https = require("https");
           const req2 = https.request(opts, (upstream) => {
+            if (upstream.statusCode !== 200) {
+              upstream.resume();
+              reject(new Error(`anthropic_status_${upstream.statusCode}`));
+              return;
+            }
             let buf = "";
             upstream.on("data", (chunk) => {
               buf += chunk.toString();
@@ -1575,7 +1746,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
           text: fullReply.slice(0, maxConversationTextLength),
         }).catch(() => {});
 
-        sendDone("anthropic");
+        sendDone("anthropic", { suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], agent: agent.name, online: true });
         return;
       } catch (err) {
         sendError(`anthropic_unavailable: ${err.message}`);
@@ -1654,7 +1825,7 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
             role: "lantern",
             text: fullReply.slice(0, maxConversationTextLength),
           }).catch(() => {});
-          sendDone("ollama");
+          sendDone("ollama", { suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], agent: agent.name, online: true });
           return;
         }
       } catch (err) {
@@ -1670,16 +1841,17 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
       sendToken(word + " ");
       await new Promise((r) => setTimeout(r, 28)); // typewriter pacing
     }
-    if (fallback.suggestions) {
-      res.write(`data: ${JSON.stringify({ suggestions: fallback.suggestions })}\n\n`);
-    }
     appendConversationEntry({
       recordedAt: new Date().toISOString(),
       surface: "dream-chat-stream",
       role: "lantern",
-      text: fallback.reply.slice(0, maxConversationTextLength),
+      text: String(fallback.reply || "").slice(0, maxConversationTextLength),
     }).catch(() => {});
-    sendDone("offline");
+    sendDone("offline", {
+      suggestions: fallback.suggestions || [],
+      agent: fallback.agent,
+      online: false,
+    });
     return;
   }
 

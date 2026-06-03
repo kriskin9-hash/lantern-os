@@ -107,6 +107,62 @@ jobs:
           cd apps/lantern-garage && npm test || true
 
   # ============================================================================
+  # DREAM JOURNAL v0: Dedicated test suite
+  # ============================================================================
+  dreamer-journal-api-tests:
+    name: Dream Journal API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install garage deps
+        run: cd apps/lantern-garage && npm ci --prefer-offline
+      - name: Start Lantern Garage
+        run: |
+          cd apps/lantern-garage && npm start &
+          sleep 3
+      - name: Run API tests
+        run: node tests/test_dream_journal_api.js
+      - name: Run Chat tests
+        run: node tests/test_dream_journal_chat.js
+
+  dreamer-journal-python-tests:
+    name: Dream Journal Python Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: python -m pip install pytest
+      - name: Run unit tests
+        run: python -m pytest tests/test_dreamer_journal.py -v
+      - name: Run integration tests
+        run: python -m pytest tests/test_dreamer_integration.py -v
+
+  dreamer-journal-e2e-tests:
+    name: Dream Journal E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Install garage deps
+        run: cd apps/lantern-garage && npm ci --prefer-offline
+      - name: Start Lantern Garage
+        run: |
+          cd apps/lantern-garage && npm start &
+          sleep 3
+      - name: Run E2E tests
+        run: npx playwright test tests/e2e/dreamer-journal.spec.ts --reporter=line
+
+  # ============================================================================
   # CONVERGENCE: Consistency checks
   # ============================================================================
   convergence-check:
