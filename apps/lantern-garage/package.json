@@ -9,8 +9,12 @@
     "start:cloud": "node cloud-server.js",
     "check": "node --check server.js && node --check cloud-server.js",
     "validate": "node validate.js",
-    "test": "node ../../tests/test_cloud_server.js",
-    "test:api": "node ../../tests/test_dream_journal_api.js"
+    "test": "node ../../tests/test_dream_journal_api.js",
+    "test:api": "node ../../tests/test_dream_journal_api.js",
+    "test:chat": "node ../../tests/test_dream_journal_chat.js",
+    "test:ui": "npx playwright test ../../tests/test_dream_journal_ui.spec.js",
+    "test:ui:headed": "npx playwright test ../../tests/test_dream_journal_ui.spec.js --headed",
+    "test:all": "npm run test:api && npm run test:chat && npm run test:ui"
   },
   "engines": {
     "node": ">=20"

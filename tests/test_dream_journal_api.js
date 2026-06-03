@@ -167,6 +167,69 @@ async function run() {
     assert.strictEqual(r.body.error, "not_found");
   });
 
+  // ── POST /api/dream/chat ──────────────────────────────────────────────
+  console.log("\nPOST /api/dream/chat (multi-agent)");
+
+  await test("multi-agent chat returns agents array", async () => {
+    const r = await request("POST", "/api/dream/chat", {
+      message: "I saw a glowing light in my dream",
+    });
+    assert.strictEqual(r.status, 200);
+    assert.ok(typeof r.body.reply === "string", "reply should be a string");
+    assert.ok(Array.isArray(r.body.agents), "agents should be an array");
+    assert.ok(r.body.agents.length >= 2, "should have at least 2 agents");
+    assert.ok(typeof r.body.online === "boolean", "online should be boolean");
+    assert.ok(r.body.generatedAt, "should have generatedAt timestamp");
+  });
+
+  await test("agents have name and reply", async () => {
+    const r = await request("POST", "/api/dream/chat", {
+      message: "Tell me about the doors",
+    });
+    assert.strictEqual(r.status, 200);
+    for (const agent of r.body.agents) {
+      assert.ok(agent.name, "agent should have name");
+      assert.ok(typeof agent.reply === "string", "agent should have reply");
+    }
+  });
+
+  await test("empty message returns suggestions", async () => {
+    const r = await request("POST", "/api/dream/chat", { message: "" });
+    assert.strictEqual(r.status, 200);
+    assert.ok(Array.isArray(r.body.suggestions), "should have suggestions");
+  });
+
+  await test("chat logs conversation to jsonl", async () => {
+    const r = await request("POST", "/api/dream/chat", {
+      message: "API test conversation for logging",
+    });
+    assert.strictEqual(r.status, 200);
+    assert.ok(r.body.reply.length > 0, "reply should not be empty");
+  });
+
+  // ── GET /api/dream/stream ──────────────────────────────────────────────
+  console.log("\nGET /api/dream/stream (SSE)");
+
+  await test("stream returns text/event-stream", async () => {
+    return new Promise((resolve, reject) => {
+      const req = http.request(
+        { hostname: "127.0.0.1", port: 4177, path: "/api/dream/stream?message=test+stream", method: "GET" },
+        (res) => {
+          let data = "";
+          res.on("data", (c) => (data += c));
+          res.on("end", () => {
+            try {
+              assert.ok(data.includes("data:"), "should contain SSE data lines");
+              resolve();
+            } catch (e) { reject(e); }
+          });
+        }
+      );
+      req.on("error", reject);
+      req.end();
+    });
+  });
+
   // ── GET / (HTML dashboard) ──────────────────────────────────────────────
   console.log("\nGET / (dashboard)");
 
