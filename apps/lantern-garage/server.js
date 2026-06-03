@@ -474,7 +474,51 @@ async function dreamChatReply(message, recentDreams) {
     } catch { /* fall through */ }
   }
 
-  // Provider 2: Ollama
+  // Provider 2: OpenAI
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (openaiKey) {
+    try {
+      const payload = JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: agent.systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+      const https = require("https");
+      const reply = await new Promise((resolve, reject) => {
+        const req2 = https.request({
+          hostname: "api.openai.com",
+          path: "/v1/chat/completions",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openaiKey}`,
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        }, (upstream) => {
+          let data = "";
+          upstream.on("data", (c) => (data += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(data);
+              resolve(String(json.choices?.[0]?.message?.content || "").trim());
+            } catch { resolve(""); }
+          });
+          upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("timeout")); });
+        req2.write(payload);
+        req2.end();
+      });
+      if (reply) {
+        return { reply, agent: agent.name, suggestions, online: true };
+      }
+    } catch { /* fall through */ }
+  }
+
+  // Provider 3: Ollama
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
   try {
@@ -1754,7 +1798,77 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
       }
     }
 
-    // ── Provider 2: Ollama (streaming) ────────────────────────────────────
+    // ── Provider 2: OpenAI (streaming) ────────────────────────────────────
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (openaiKey && message) {
+      try {
+        const payload = JSON.stringify({
+          model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+          stream: true,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message },
+          ],
+        });
+        await new Promise((resolve, reject) => {
+          const https = require("https");
+          const req2 = https.request({
+            hostname: "api.openai.com",
+            path: "/v1/chat/completions",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${openaiKey}`,
+              "Content-Length": Buffer.byteLength(payload),
+            },
+          }, (upstream) => {
+            if (upstream.statusCode !== 200) {
+              upstream.resume();
+              reject(new Error(`openai_status_${upstream.statusCode}`));
+              return;
+            }
+            let buf = "";
+            upstream.on("data", (chunk) => {
+              buf += chunk.toString();
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const raw = line.slice(6).trim();
+                if (raw === "[DONE]" || raw === "") continue;
+                try {
+                  const evt = JSON.parse(raw);
+                  const token = evt.choices?.[0]?.delta?.content || "";
+                  if (token) {
+                    fullReply += token;
+                    sendToken(token);
+                  }
+                } catch { /* skip malformed */ }
+              }
+            });
+            upstream.on("end", () => resolve());
+            upstream.on("error", reject);
+          });
+          req2.on("error", reject);
+          req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("openai_timeout")); });
+          req2.write(payload);
+          req2.end();
+        });
+        appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-chat-stream",
+          role: "lantern",
+          text: fullReply.slice(0, maxConversationTextLength),
+        }).catch(() => {});
+        sendDone("openai", { suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], agent: agent.name, online: true });
+        return;
+      } catch (err) {
+        sendError(`openai_unavailable: ${err.message}`);
+        // fall through to Ollama
+      }
+    }
+
+    // ── Provider 3: Ollama (streaming) ────────────────────────────────────
     const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
     const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
     if (message) {

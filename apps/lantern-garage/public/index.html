@@ -678,11 +678,16 @@
 
     let lastDraft = "";
 
-    function setStatus(online) {
+    function setStatus(online, agentName) {
       const dot = document.getElementById('statusDot');
       const text = document.getElementById('statusText');
-      dot.className = 'status-dot' + (online ? '' : ' offline');
-      text.textContent = online ? 'Online' : 'Offline (local)';
+      if (agentName) {
+        dot.className = 'status-dot';
+        text.textContent = agentName + (online ? ' ✨' : ' (local)');
+      } else {
+        dot.className = 'status-dot' + (online ? '' : ' offline');
+        text.textContent = online ? 'Online' : 'Offline (local)';
+      }
     }
 
     function addBubble(role, text) {
@@ -766,33 +771,50 @@
       const text = (message || '').trim();
       const lower = text.toLowerCase();
       const base = ["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"];
+
+      // Match the server's agent selection
+      let agentName = 'Dream Journal';
+      const agentScores = [
+        { name: 'Blinkbug', score: 0, keywords: ['light','glow','guide','small','warm','bug','firefly'] },
+        { name: 'Mary / Waterfall', score: 0, keywords: ['flow','water','mary','heal','gentle','emotion','feeling'] },
+        { name: 'Courtney / Xenon', score: 0, keywords: ['space','ship','navigate','courtney','map','course','direction'] },
+        { name: 'Keystone', score: 0, keywords: ['anchor','memory','story','foundation','hold','remember'] },
+        { name: 'Founder / Alex', score: 0, keywords: ['wish','protect','founder','alex','home','return','safety'] }
+      ];
+      for (const a of agentScores) {
+        for (const kw of a.keywords) if (lower.includes(kw)) a.score += 10;
+        a.score += Math.random() * 3;
+      }
+      agentScores.sort((a,b) => b.score - a.score);
+      agentName = agentScores[0].name;
       for (const door of DOORS) {
         if (door.keywords.some(k => lower.includes(k))) {
           return {
             reply: `${door.name} stands open. "${door.phrase}" What do you see when you step through?`,
             image: door.image,
             caption: `${door.name} — ${door.tagline}`,
-            suggestions: ["Log this as a dream", "Another door", "Mirror a dream"]
+            suggestions: ["Log this as a dream", "Another door", "Mirror a dream"],
+            agent: agentName
           };
         }
       }
       if (lower.includes('doors') || lower.includes('all doors') || lower.includes('which doors')) {
         const list = DOORS.map(d => `<strong>${d.name}</strong> — ${d.tagline}`).join('<br>');
-        return { reply: `These doors stand open:<br><br>${list}<br><br>Which one calls to you?`, suggestions: ["Xenon Door", "Garden Door", "XP Door", "Kingdom of Hearts"] };
+        return { reply: `These doors stand open:<br><br>${list}<br><br>Which one calls to you?`, suggestions: ["Xenon Door", "Garden Door", "XP Door", "Kingdom of Hearts"], agent: agentName };
       }
       if (/^(hi|hello|hey|good (morning|evening|night)|greetings)/.test(lower)) {
-        return { reply: "Welcome back. I am the Dream Journal — local, private, always here, even offline. Did you dream?", suggestions: base };
+        return { reply: "Welcome back. I am the Dream Journal — local, private, always here, even offline. Did you dream?", suggestions: base, agent: agentName };
       }
       if (lower.includes('mirror') || lower.includes('interpret') || lower.includes('mean') || lower.includes('symbol')) {
-        return { reply: "Sit with three questions: 1) What feeling stayed after waking? 2) What in waking life does this echo? 3) What small, reversible step would honor it?", suggestions: ["Record a reflection", "Recent dreams"] };
+        return { reply: "Sit with three questions: 1) What feeling stayed after waking? 2) What in waking life does this echo? 3) What small, reversible step would honor it?", suggestions: ["Record a reflection", "Recent dreams"], agent: agentName };
       }
       if (lower.includes('recent') || lower.includes('history')) {
-        return { reply: "Open the journal below to see your saved entries. Want to mirror one?", suggestions: ["Mirror a dream", "Log a dream"] };
+        return { reply: "Open the journal below to see your saved entries. Want to mirror one?", suggestions: ["Mirror a dream", "Log a dream"], agent: agentName };
       }
       if (lower.includes('log') || lower.includes('dream') || lower.includes('save')) {
-        return { reply: "Good — let us keep it. Tell me the dream in your own words. I will save it locally; only you can see it.", suggestions: ["Recent dreams", "Mirror a dream"] };
+        return { reply: "Good — let us keep it. Tell me the dream in your own words. I will save it locally; only you can see it.", suggestions: ["Recent dreams", "Mirror a dream"], agent: agentName };
       }
-      return { reply: `I hear it: "${text.slice(0, 160)}". That is worth keeping. Tap "Log this as a dream" to save it.`, suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], draft: text };
+      return { reply: `I hear it: "${text.slice(0, 160)}". That is worth keeping. Tap "Log this as a dream" to save it.`, suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], draft: text, agent: agentName };
     }
 
     function escapeHtml(t) {
@@ -820,6 +842,7 @@
     // Simulate streaming for offline fallback
     async function streamOffline(text, suggestions, image, caption, agentLabel) {
       if (image) addImageBubble('lantern', image, caption);
+      setStatus(false, agentLabel || 'Dream Journal');
       const b = makeBubble('lantern', agentLabel || 'Dream Journal');
       b.innerHTML = '<span class="cursor"></span>';
       const log = document.getElementById('chatLog');
@@ -886,7 +909,7 @@
             } else if (ev.type === 'done') {
               suggestions = ev.suggestions || [];
               if (ev.draft)   lastDraft = ev.draft;
-              if (ev.online !== undefined) setStatus(ev.online);
+              if (ev.online !== undefined) setStatus(ev.online, ev.agent);
               if (ev.agent) {
                 currentAgent = ev.agent;
                 const wrapper = b.parentElement;
@@ -903,9 +926,8 @@
 
       } catch (_err) {
         b.remove();
-        setStatus(false);
         const local = offlineReply(msg);
-        await streamOffline(local.reply, local.suggestions, local.image, local.caption, 'Dream Journal (offline)');
+        await streamOffline(local.reply, local.suggestions, local.image, local.caption, local.agent || 'Dream Journal');
         if (local.draft) lastDraft = local.draft || msg;
       } finally {
         chatInput.disabled = false;
