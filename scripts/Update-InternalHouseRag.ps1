@@ -28,8 +28,7 @@ $includeGlobs = @(
     "data/wallet/**/*.json",
     "references/*.md",
     "rag/seeds/*.md",
-    "rag/**/*.md",
-    "caad/art-direction/**/*.md"
+    "rag/**/*.md"
 )
 
 $excludeFragments = @(
@@ -48,20 +47,14 @@ $excludeFragments = @(
 function Test-IncludedPath {
     param([string]$RelativePath)
 
-    $normalized = $RelativePath.Replace("\", "/")
-
     foreach ($fragment in $excludeFragments) {
-        if ($normalized -like "*$fragment*") {
+        if ($RelativePath -like "*$fragment*") {
             return $false
         }
     }
 
     foreach ($glob in $includeGlobs) {
-        # Convert ** glob to regex; single * works with -like already.
-        if ($glob -like "*`**`*") {
-            $rx = "^" + [regex]::Escape($glob).Replace("\*\*", ".*").Replace("\*", "[^/]*").Replace("/", "\/") + "$"
-            if ($normalized -match $rx) { return $true }
-        } elseif ($normalized -like $glob) {
+        if ($RelativePath -like $glob) {
             return $true
         }
     }
@@ -75,7 +68,7 @@ function Get-FileSha256 {
 }
 
 $allFiles = Get-ChildItem -LiteralPath $repoRoot -File -Recurse | ForEach-Object {
-    $relative = $_.FullName.Substring($repoRoot.Length).TrimStart("\", "/").Replace("/", "\")
+    $relative = [System.IO.Path]::GetRelativePath($repoRoot, $_.FullName).Replace("/", "\")
     if (Test-IncludedPath -RelativePath $relative) {
         [pscustomobject]@{
             path = $relative.Replace("\", "/")

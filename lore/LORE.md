@@ -15,7 +15,7 @@ This document preserves meaning, beauty, and imagination without turning them in
 1. **Capture the symbol** in plain language (dreams, metaphors, image language, story fragments)
 2. **Name what it might mean** (implications, connections, themes)
 3. **Name what it must not mean** (boundaries, guardrails, what's out of scope)
-4. **Mark whether it belongs** in sandbox (safe to explore), review (hold for calm review), or candidate doctrine (ready to test operationally)
+4. **Mark whether it belongs** in sandbox (safe to explore), quarantine (hold for review), or candidate doctrine (ready to test operationally)
 5. **Convert only the smallest safe part** into a testable artifact elsewhere (one reversible next action)
 
 ---
@@ -27,7 +27,7 @@ This document preserves meaning, beauty, and imagination without turning them in
 **Rule:** No proof or command claims. Pure imagination and meaning.  
 **Example:** Vision of Lantern OS as a tesseract (20-panel status cube showing all system dimensions at once)
 
-### review/
+### quarantine/
 **Use:** Material that feels powerful, private, risky, confusing, or too literal  
 **Rule:** Hold until calm review. No automation, no agent authority, no external reference.  
 **Example:** Personal reflection on what "founder" means in the context of distributed systems
@@ -95,7 +95,7 @@ The sandbox preserves meaning without making it proof, pressure, permission, or 
 ## How to Use These Lanes in Lantern OS
 
 1. **Capture a new idea** ΓåÆ Add to `lore/symbols/[idea].md`
-2. **Feel uncertain about it** ΓåÆ Move to `lore/review/[idea].md` with timestamp
+2. **Feel uncertain about it** ΓåÆ Move to `lore/quarantine/[idea].md` with timestamp
 3. **Need a framework** ΓåÆ Reference `lore/templates/[form].md`
 4. **Ready to promote** ΓåÆ PR moving to `docs/` or `manifests/` with review comment
 5. **Post-review** ΓåÆ Log decision in `lore/reviews/[date]-promotion-decisions.md`
@@ -119,7 +119,7 @@ The sandbox preserves meaning without making it proof, pressure, permission, or 
 
 - `lore/LORE.md` (this file) ΓÇö Principles and safe exploration framework
 - `lore/symbols/` ΓÇö Metaphors, dreams, image language, naming
-- `lore/review/` ΓÇö Hold-for-review material (private, risky, uncertain)
+- `lore/quarantine/` ΓÇö Hold-for-review material (private, risky, uncertain)
 - `lore/templates/` ΓÇö Worksheets for reflection and review
 - `lore/reviews/` ΓÇö Dated promotion decisions and audits
 - `docs/IMAGNIVERSE.md` ΓÇö Tesseract metaphor, promoted to operational

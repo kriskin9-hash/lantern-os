@@ -1,6 +1,6 @@
 # Symbol Note
 
-Status: sandbox | review | candidate
+Status: sandbox | quarantine | candidate
 
 ## Name
 
