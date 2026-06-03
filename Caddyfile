@@ -1,0 +1,15 @@
+# Lantern OS Headless Reverse Proxy
+# No frills. Just routes to Rust services.
+
+:80 {
+    # Health check endpoint
+    respond /health 200
+
+    # CSF compression API
+    handle_path /csf/* {
+        reverse_proxy csf-worker:9000
+    }
+
+    # Default: nothing
+    respond "Lantern OS — headless mode" 200
+}

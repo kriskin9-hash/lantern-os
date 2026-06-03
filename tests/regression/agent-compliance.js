@@ -112,7 +112,7 @@ assert("No hardcoded secrets in repo",
 // ── Rule 4: Tests must pass (pytest discoverable) ─────────────────────────
 console.log("\n=== Rule 4 — Tests are discoverable ===");
 assert("tests/ directory exists", fs.existsSync(path.join(ROOT, "tests")));
-assert("pytest can discover tests", () => {
+assert("pytest can discover tests", (() => {
   try {
     const { execSync } = require("child_process");
     execSync("python -m pytest --collect-only -q", { cwd: ROOT, stdio: "pipe" });
@@ -120,7 +120,7 @@ assert("pytest can discover tests", () => {
   } catch {
     return false;
   }
-}, "pytest --collect-only failed");
+})(), "pytest --collect-only failed");
 
 // ── Rule 5: No new top-level dirs without Linear ticket ────────────────────
 console.log("\n=== Rule 5 — One repo policy ===");

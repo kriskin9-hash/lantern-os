@@ -114,8 +114,8 @@ class DreamJournalOrchestrator:
             try:
                 data = json.loads(line)
                 self.memory.append(DreamEntry(**data))
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Bad memory line: {e}")
 
     def _save_memory(self):
         """Persist to JSONL."""
