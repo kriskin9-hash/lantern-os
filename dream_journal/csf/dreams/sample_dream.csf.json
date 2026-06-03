@@ -1,0 +1,11 @@
+{
+  "id": "sample_20260603_1640",
+  "user_id": 1,
+  "character": "lantern",
+  "timestamp": "2026-06-03T16:40:00Z",
+  "raw_text": "I walked through thick fog until I found an old wooden door with a lantern hanging above it. I felt both afraid and drawn to open it.",
+  "format": "CSF-raw-v1",
+  "symbols": ["fog", "door", "lantern"],
+  "emotions": ["fear", "longing"],
+  "anchors": ["God Fog Door"]
+}

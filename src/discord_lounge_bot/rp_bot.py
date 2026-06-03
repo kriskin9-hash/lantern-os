@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 
 from .memory_layer import memory_store, SessionMemory
+from dream_journal.crystallization_engine import engine
 
 
 class DreamJournalRPBot(commands.Bot):
@@ -31,6 +32,13 @@ class DreamJournalRPBot(commands.Bot):
             await self._export_session(ctx, user_id)
         else:
             await ctx.send("Unknown action. Use: start, end, export")
+
+    @commands.command(name="crystallize")
+    async def crystallize(self, ctx, *, dream_text: str):
+        """Manually trigger crystallization on a dream."""
+        user_id = ctx.author.id
+        result = await engine.process_new_dream(user_id, dream_text)
+        await ctx.send(f"Crystallization complete. New skill: {result.get('new_skill', {}).get('id', 'none')}")
 
     async def _start_session(self, ctx, user_id: int, args: str):
         session = memory_store.get_or_create(user_id, args or "default")
