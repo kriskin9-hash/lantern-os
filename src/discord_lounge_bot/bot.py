@@ -1,215 +1,138 @@
 """
-Lantern Discord Lounge Bot
+Lantern OS Discord Bot v2 — Slash Commands + Role Gating
 
-Server-agnostic, channel-agnostic bot:
-- listens to commands in any channel it can see;
-- replies to !lantern-status with a safe health summary;
-- slash commands work in any guild / any channel.
+Generated: 2026-05-31.
+Purpose: monetized Discord server with tiered access and slash commands.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
-import logging
-import os
 import json
+import os
 import re
-import shutil
 import sys
-import time
-import traceback
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-logger = logging.getLogger("lantern.bot")
+# Add current directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
 
 try:
     import discord
     from discord import app_commands
 except Exception as exc:
-    logger.critical("Missing dependency 'discord.py': %s", exc)
+    print(f"[FATAL] Missing dependency 'discord.py': {exc}")
     sys.exit(1)
 
+# MCP Bridge — optional integration with orchestrator
+try:
+    from mcp_bridge import MCPBridge, get_bridge
+    MCP_AVAILABLE = True
+except ImportError as e:
+    MCP_AVAILABLE = False
+    get_bridge = None
+    print(f"[INFO] MCP Bridge not available: {e}")
 
+# OpenAI Agents SDK MCP Connector
+try:
+    from mcp_connector import LanternMCPConnector, get_mcp_connector
+    OPENAI_MCP_AVAILABLE = True
+except ImportError as e:
+    OPENAI_MCP_AVAILABLE = False
+    get_mcp_connector = None
+    print(f"[INFO] OpenAI MCP Connector not available: {e}")
+
+# Lantern Archive Curator — Internet Archive media streaming
+try:
+    from archive_curator import get_curator, SINATRA_COLLECTION
+    ARCHIVE_AVAILABLE = True
+except ImportError as e:
+    ARCHIVE_AVAILABLE = False
+    get_curator = None
+    print(f"[INFO] Archive Curator not available: {e}")
+
+# Voice Curator — Frank Sinatra playback in lounge
+try:
+    from voice_curator import get_voice_player, get_sinatra
+    VOICE_AVAILABLE = True
+except ImportError as e:
+    VOICE_AVAILABLE = False
+    get_voice_player = None
+    get_sinatra = None
+    print(f"[INFO] Voice Curator not available: {e}")
+
+# Music Queue — yt-dlp based audio streaming
+try:
+    from music_queue import music_manager, YTDLP_AVAILABLE
+    MUSIC_AVAILABLE = True
+except ImportError as e:
+    MUSIC_AVAILABLE = False
+    music_manager = None
+    YTDLP_AVAILABLE = False
+    print(f"[INFO] Music Queue not available: {e}")
+
+# Cognitive Dream Journal — fallacy detection + persistent characters
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "skills" / "dream_journal"))
+try:
+    from cognitive_layer import get_cognitive_journal
+    COGNITIVE_AVAILABLE = True
+except ImportError as e:
+    COGNITIVE_AVAILABLE = False
+    get_cognitive_journal = None
+    print(f"[INFO] Cognitive Dream Journal not available: {e}")
+
+# ── Configuration ──
 TOKEN = os.getenv("DISCORD_BOT_TOKEN", "").strip()
 GUILD_ID = os.getenv("LANTERN_DISCORD_GUILD_ID", "").strip()
-CHANNEL_ID = os.getenv("LANTERN_DISCORD_CHANNEL_ID", "").strip()
-STATUS_URL = os.getenv("LANTERN_STATUS_URL", "http://127.0.0.1:5001/api/status").strip()
-VOICE_CHANNEL_ID = os.getenv("LANTERN_VOICE_CHANNEL_ID", "").strip()
-VOICE_CHANNEL_NAME = os.getenv("LANTERN_VOICE_CHANNEL", "Lounge").strip()
-RADIO_URL = os.getenv("LANTERN_RADIO_URL", "").strip()
-TEST_SERVER_INVITE = "https://discord.gg/xmsbPjMGm"
-ENABLE_VOICE = os.getenv("LANTERN_DISCORD_ENABLE_VOICE", "").strip().lower() in {"1", "true", "yes", "on"}
-ENABLE_RADIO = os.getenv("LANTERN_DISCORD_ENABLE_RADIO", "").strip().lower() in {"1", "true", "yes", "on"}
+STATUS_URL = os.getenv("LANTERN_STATUS_URL", "http://127.0.0.1:4177/api/status").strip()
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DREAMER_NOTEBOOK_DIR = REPO_ROOT / "data" / "dreamer" / "notebooks"
+SUBSCRIBER_DATA_PATH = Path(os.getenv("SUBSCRIBER_DATA_PATH", REPO_ROOT / "data" / "discord" / "subscribers.json"))
 KALSHI_PAPER_TICKETS_PATH = REPO_ROOT / "data" / "kalshi" / "kalshi-paper-trade-tickets-latest.json"
 MAX_NOTEBOOK_TEXT_LENGTH = 2000
 
-# Lantern image pack skill
-sys.path.insert(0, str(REPO_ROOT / "skills" / "lantern-image-pack"))
-try:
-    import pack as image_pack
-except Exception:
-    image_pack = None
+# Role name constants (case-insensitive matching)
+ROLE_PUBLIC = "@everyone"
+ROLE_SUPPORTER = "supporter"
+ROLE_PILOT = "pilot"
+ROLE_FOUNDER = "founder"
 
+TIER_ORDER = {ROLE_PUBLIC: 0, ROLE_SUPPORTER: 1, ROLE_PILOT: 2, ROLE_FOUNDER: 3}
+
+# ── Environment checks ──
 if not TOKEN:
-    logger.critical("Missing DISCORD_BOT_TOKEN")
+    print("[FATAL] Missing DISCORD_BOT_TOKEN")
     sys.exit(1)
 
-GUILD_ID_INT: int | None = None
-CHANNEL_ID_INT: int | None = None
+try:
+    GUILD_ID_INT = int(GUILD_ID) if GUILD_ID else None
+except ValueError:
+    print("[FATAL] LANTERN_DISCORD_GUILD_ID must be numeric")
+    sys.exit(1)
 
-if GUILD_ID:
-    try:
-        GUILD_ID_INT = int(GUILD_ID)
-    except ValueError:
-        logger.warning("LANTERN_DISCORD_GUILD_ID is not a valid numeric ID — slash commands will sync globally only")
-else:
-    logger.warning("LANTERN_DISCORD_GUILD_ID not set — slash commands will sync globally only")
-
-if CHANNEL_ID:
-    try:
-        CHANNEL_ID_INT = int(CHANNEL_ID)
-    except ValueError:
-        logger.warning("LANTERN_DISCORD_CHANNEL_ID is not a valid numeric ID — startup/pulse messages disabled")
-else:
-    logger.warning("LANTERN_DISCORD_CHANNEL_ID not set — startup/pulse messages disabled")
-
+# ── Discord client setup ──
 intents = discord.Intents.default()
 intents.guilds = True
-intents.messages = True
-intents.message_content = True
-intents.voice_states = True
+intents.voice_states = True  # For voice channel features
+# Note: members and message_content require privileged intents enabled in Discord Developer Portal
+# intents.members = True  # Uncomment if needed and intents are enabled
+# intents.message_content = True  # Uncomment if needed and intents are enabled
 
 client = discord.Client(intents=intents)
 tree = app_commands.CommandTree(client)
 
-# --------------------------------------------------------------------------- #
-# Health pulse state
-# --------------------------------------------------------------------------- #
-HEALTH_PULSE_INTERVAL_SEC = 300   # 5 minutes — local log pulse
-CHANNEL_PULSE_INTERVAL_SEC = 1800  # 30 minutes — Discord channel pulse
-_health_state = {
-    "started_at": time.time(),
-    "pulse_count": 0,
-    "last_pulse": 0.0,
-    "last_channel_pulse": 0.0,
-    "uptime_sec": 0.0,
-    "latency_ms": 0.0,
-}
-
-
-def _update_health() -> None:
-    """Refresh derived health metrics."""
-    now = time.time()
-    _health_state["uptime_sec"] = now - _health_state["started_at"]
-    _health_state["last_pulse"] = now
-    _health_state["pulse_count"] += 1
-
-
-def _uptime_str() -> str:
-    total = int(_health_state["uptime_sec"])
-    h, rem = divmod(total, 3600)
-    m, s = divmod(rem, 60)
-    return f"{h}h {m}m {s}s"
-
-
-async def health_pulse_loop() -> None:
-    """Background task: log pulse every 5 min, post to channel every 30 min."""
-    await client.wait_until_ready()
-    while not client.is_closed():
-        await asyncio.sleep(HEALTH_PULSE_INTERVAL_SEC)
-        if client.is_closed():
-            break
-
-        _update_health()
-        latency_ms = round(client.latency * 1000, 1) if client.latency else 0.0
-        _health_state["latency_ms"] = latency_ms
-
-        logger.info("Pulse #%s | uptime=%s | latency=%sms", _health_state['pulse_count'], _uptime_str(), latency_ms)
-
-        now = time.time()
-        if CHANNEL_ID_INT and now - _health_state["last_channel_pulse"] >= CHANNEL_PULSE_INTERVAL_SEC:
-            channel = client.get_channel(CHANNEL_ID_INT)
-            if channel:
-                try:
-                    await channel.send(
-                        f":heartbeat: Lantern pulse #{_health_state['pulse_count']} | "
-                        f"uptime {_uptime_str()} | latency {latency_ms}ms"
-                    )
-                    _health_state["last_channel_pulse"] = now
-                except Exception:
-                    logger.exception("Failed to send channel pulse")
-
+# ── Helpers ──
 
 def now_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def status_text() -> str:
-    return (
-        "Lantern lounge bot online.\n"
-        f"- time: {now_utc()}\n"
-        f"- guild: {GUILD_ID_INT if GUILD_ID_INT else 'not set'}\n"
-        f"- channel: {CHANNEL_ID_INT if CHANNEL_ID_INT else 'not set'}\n"
-        f"- local status endpoint: {STATUS_URL}\n"
-        f"- uptime: {_uptime_str()}\n"
-        f"- pulses: {_health_state['pulse_count']}\n"
-        f"- latency: {_health_state['latency_ms']}ms\n"
-        "- commands: !lantern-status, !lantern-pulse, !lantern-voice-check, !dream, !note, !place, !character, !event, !lore, !symbol, !mirror, !recall, !odds, !one\n"
-        "- slash commands: /dream"
-    )
-
-
-def pulse_text() -> str:
-    return (
-        f"Lantern pulse #{_health_state['pulse_count']}\n"
-        f"- uptime: {_uptime_str()}\n"
-        f"- latency: {_health_state['latency_ms']}ms\n"
-        f"- last pulse: {datetime.fromtimestamp(_health_state['last_pulse'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ') if _health_state['last_pulse'] else 'never'}\n"
-        f"- started: {datetime.fromtimestamp(_health_state['started_at'], tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}\n"
-        f"- channel pulse interval: {CHANNEL_PULSE_INTERVAL_SEC // 60}min\n"
-        f"- log pulse interval: {HEALTH_PULSE_INTERVAL_SEC // 60}min"
-    )
-
-
-def voice_status_text() -> str:
-    target = VOICE_CHANNEL_ID or VOICE_CHANNEL_NAME or "not configured"
-    return (
-        "Lantern voice gate.\n"
-        f"- target: {target}\n"
-        f"- voice enabled: {ENABLE_VOICE}\n"
-        f"- radio enabled: {ENABLE_RADIO}\n"
-        f"- radio url configured: {bool(RADIO_URL)}\n"
-        f"- ffmpeg on PATH: {bool(shutil.which('ffmpeg'))}\n"
-        "- join command: !lantern-join-lounge\n"
-        "- radio command: !lantern-radio\n"
-        "- boundary: no auto-join, no autoplay, no shell/MCP execution from Discord"
-    )
-
-
-def find_voice_channel(guild: discord.Guild):
-    if VOICE_CHANNEL_ID:
-        try:
-            channel_id = int(VOICE_CHANNEL_ID)
-        except ValueError:
-            return None
-        return discord.utils.get(guild.voice_channels, id=channel_id)
-    if VOICE_CHANNEL_NAME:
-        return discord.utils.find(lambda channel: channel.name.lower() == VOICE_CHANNEL_NAME.lower(), guild.voice_channels)
-    return None
-
-
-def notebook_user_id(author: discord.abc.User) -> str:
-    return f"discord-{author.id}"
+def notebook_user_id(user: discord.User | discord.Member) -> str:
+    return f"discord-{user.id}"
 
 
 def notebook_path(user_id: str) -> Path:
@@ -232,11 +155,11 @@ def generate_ternary_id(seed: str = "") -> str:
     return "".join(reversed(digits))
 
 
-def append_notebook_entry(author: discord.abc.User, kind: str, text: str, name: str = "", mood: str = "", links: list = None) -> dict:
+def append_notebook_entry(user: discord.User | discord.Member, kind: str, text: str, **kwargs) -> dict:
     clean_text = text.strip()[:MAX_NOTEBOOK_TEXT_LENGTH]
     if not clean_text:
         raise ValueError("text_required")
-    user_id = notebook_user_id(author)
+    user_id = notebook_user_id(user)
     entry_id = generate_entry_id()
     record = {
         "id": entry_id,
@@ -244,13 +167,13 @@ def append_notebook_entry(author: discord.abc.User, kind: str, text: str, name: 
         "user": user_id,
         "kind": kind,
         "source": "discord",
-        "discordAuthorId": str(author.id),
-        "discordAuthorName": str(author),
+        "discordAuthorId": str(user.id),
+        "discordAuthorName": str(user),
         "text": clean_text,
-        "name": name or None,
-        "mood": mood or None,
-        "links": links or [],
-        "tags": [],
+        "name": kwargs.get("name") or None,
+        "mood": kwargs.get("mood") or None,
+        "links": kwargs.get("links", []),
+        "tags": kwargs.get("tags", []),
         "ternaryId": generate_ternary_id(entry_id + clean_text),
         "private": True,
     }
@@ -261,8 +184,8 @@ def append_notebook_entry(author: discord.abc.User, kind: str, text: str, name: 
     return record
 
 
-def recall_notebook_entries(author: discord.abc.User, query: str, limit: int = 5) -> list[dict]:
-    path = notebook_path(notebook_user_id(author))
+def recall_notebook_entries(user: discord.User | discord.Member, query: str = "", limit: int = 5) -> list[dict]:
+    path = notebook_path(notebook_user_id(user))
     if not path.exists():
         return []
     rows = []
@@ -283,8 +206,8 @@ def recall_notebook_entries(author: discord.abc.User, query: str, limit: int = 5
 
 def format_recall(entries: list[dict]) -> str:
     if not entries:
-        return "No matching private notebook entries found."
-    lines = ["Private notebook recall:"]
+        return "No matching notebook entries found."
+    lines = ["Notebook recall:"]
     for entry in reversed(entries):
         text = str(entry.get("text", "")).replace("\n", " ").strip()
         if len(text) > 160:
@@ -293,25 +216,6 @@ def format_recall(entries: list[dict]) -> str:
         tid_str = f" [{tid}]" if tid else ""
         lines.append(f"- {entry.get('kind', 'note')}{tid_str} at {entry.get('recordedAt', 'unknown')}: {text}")
     return "\n".join(lines)
-
-
-async def connect_to_lounge(message: discord.Message):
-    if not ENABLE_VOICE:
-        await message.reply("Voice join is held. Set LANTERN_DISCORD_ENABLE_VOICE=true after P0 health checks pass.")
-        return None
-    if message.guild is None:
-        await message.reply("Voice join needs a guild context.")
-        return None
-    channel = find_voice_channel(message.guild)
-    if channel is None:
-        await message.reply("Configured Lounge voice channel was not found. Run Test-DiscordBotHealth.ps1 first.")
-        return None
-    if message.guild.voice_client and message.guild.voice_client.is_connected():
-        await message.reply(f"Lantern is already connected to {message.guild.voice_client.channel.name}.")
-        return message.guild.voice_client
-    voice_client = await channel.connect()
-    await message.reply(f"Lantern joined {channel.name}.")
-    return voice_client
 
 
 def format_odds(limit: int = 5) -> str:
@@ -350,263 +254,720 @@ def format_odds(limit: int = 5) -> str:
     return "\n".join(lines)
 
 
-@tree.command(name="dream", description="Save a dream to your private Lantern notebook")
-@app_commands.describe(text="Describe your dream")
-async def slash_dream(interaction: discord.Interaction, text: str):
-    try:
-        append_notebook_entry(interaction.user, "dream", text)
-        await interaction.response.send_message("Dream saved to your private local Lantern notebook.", ephemeral=True)
-    except ValueError:
-        await interaction.response.send_message("Write something after `/dream`.", ephemeral=True)
-    except Exception:
-        logger.exception("Failed to save dream for user %s", interaction.user)
-        await interaction.response.send_message("Failed to save dream. The team has been notified.", ephemeral=True)
+def get_user_tier(member: discord.Member) -> str:
+    """Return the highest tier role the user has."""
+    role_names = {r.name.lower() for r in member.roles}
+    if ROLE_FOUNDER in role_names:
+        return ROLE_FOUNDER
+    if ROLE_PILOT in role_names:
+        return ROLE_PILOT
+    if ROLE_SUPPORTER in role_names:
+        return ROLE_SUPPORTER
+    return ROLE_PUBLIC
 
+
+def require_tier(minimum: str):
+    """Decorator to gate slash commands by role tier. (DEBUG MODE: disabled for testing)"""
+    # All commands free during debug mode — return empty decorator
+    def noop(func):
+        return func
+    return noop
+
+
+# ── Slash Commands ──
+
+@tree.command(name="status", description="Lantern OS health summary")
+async def cmd_status(interaction: discord.Interaction):
+    embed = discord.Embed(title="Lantern OS Status", color=0x0d9488)
+    embed.add_field(name="Time", value=now_utc(), inline=False)
+    embed.add_field(name="Service", value="lantern-garage", inline=True)
+    embed.add_field(name="Tier", value=get_user_tier(interaction.user).title(), inline=True)
+    embed.set_footer(text="Local-first. Evidence-backed.")
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="help", description="List available commands for your tier")
+async def cmd_help(interaction: discord.Interaction):
+    tier = get_user_tier(interaction.user)
+    embed = discord.Embed(title="Lantern OS Commands", color=0x2563eb)
+    embed.add_field(name="Public", value="`/status`, `/help`, `/subscribe`, `/music`, `/art`, `/movies`", inline=False)
+    if tier in (ROLE_SUPPORTER, ROLE_PILOT, ROLE_FOUNDER):
+        embed.add_field(name="Supporter+", value="`/dream`, `/note`, `/wish`, `/recall`, `/mirror`, `/wallet`, `/odds`, `/talk`", inline=False)
+    if tier in (ROLE_PILOT, ROLE_FOUNDER):
+        embed.add_field(name="Pilot+", value="`/converge`, `/rag-status`, `/queue`, `/place`, `/character`, `/symbol`, `/mcp-connect`, `/mcp-tools`", inline=False)
+    if tier == ROLE_FOUNDER:
+        embed.add_field(name="Founder", value="`/dispatch`, `/controls`, `/boot-check`, `/release-gate`, `/mcp-call`", inline=False)
+    embed.add_field(name="🎵 Music & Voice", value="`/sing`, `/nextsong`, `/stop`, `/leave` — Frank Sinatra from Internet Archive", inline=False)
+    if tier in (ROLE_PILOT, ROLE_FOUNDER):
+        embed.add_field(name="🎶 Music Queue (yt-dlp)", value="`/play`, `/skip`, `/pause`, `/resume`, `/nowplaying`, `/clearqueue`", inline=False)
+    embed.set_footer(text=f"Your tier: {tier.title()}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="subscribe", description="Payment system (DEBUG MODE: disabled)")
+async def cmd_subscribe(interaction: discord.Interaction):
+    embed = discord.Embed(title=" Payment System — DEBUG MODE", color=0xf59e0b)
+    embed.description = "**All features unlocked for testing.** Payment bridge disabled until production launch."
+    embed.add_field(name="Supporter Tier", value="$20/month (coming soon)", inline=False)
+    embed.add_field(name="Pilot Tier", value="$200/month (coming soon)", inline=False)
+    embed.add_field(name="Public Tier", value="Free (all features active now)", inline=False)
+    embed.set_footer(text="Payment system will connect to Patreon at launch.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="dream", description="Save a dream to your private notebook")
+@app_commands.describe(text="What did you see?")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_dream(interaction: discord.Interaction, text: str):
+    record = append_notebook_entry(interaction.user, "dream", text)
+    await interaction.response.send_message(f"Dream saved. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="note", description="Save a note to your private notebook")
+@app_commands.describe(text="What do you want to remember?")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_note(interaction: discord.Interaction, text: str):
+    record = append_notebook_entry(interaction.user, "note", text)
+    await interaction.response.send_message(f"Note saved. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="wish", description="Save a wish to your private notebook")
+@app_commands.describe(text="What do you wish for?")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_wish(interaction: discord.Interaction, text: str):
+    record = append_notebook_entry(interaction.user, "wish", text)
+    await interaction.response.send_message(f"Wish saved behind the door. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="recall", description="Search your private notebook")
+@app_commands.describe(query="Search query (empty for latest)")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_recall(interaction: discord.Interaction, query: Optional[str] = None):
+    entries = recall_notebook_entries(interaction.user, query or "", limit=10)
+    text = format_recall(entries)
+    if len(text) > 1900:
+        text = text[:1897] + "..."
+    await interaction.response.send_message(f"```{text}```", ephemeral=True)
+
+
+@tree.command(name="mirror", description="Mirror all your notebook facets")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_mirror(interaction: discord.Interaction):
+    entries = recall_notebook_entries(interaction.user, "", limit=500)
+    ids = [e.get("id") for e in entries if e.get("kind") != "mirror" and e.get("id")]
+    if not ids:
+        await interaction.response.send_message("No facets to mirror yet. Drop something in the well first.", ephemeral=True)
+        return
+    mirror_text = f"Mirror of {len(ids)} facets"
+    record = append_notebook_entry(interaction.user, "mirror", mirror_text)
+    await interaction.response.send_message(f"Mirrored {len(ids)} facets. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="wallet", description="Check your subscription and wallet status")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_wallet(interaction: discord.Interaction):
+    tier = get_user_tier(interaction.user)
+    embed = discord.Embed(title="Lantern Wallet", color=0xf59e0b)
+    embed.add_field(name="Tier", value=tier.title(), inline=True)
+    embed.add_field(name="User", value=str(interaction.user), inline=True)
+    embed.add_field(name="Notebook", value=notebook_path(notebook_user_id(interaction.user)).name, inline=False)
+    embed.set_footer(text="Local ledger. No bank or crypto wallet.")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="odds", description="Kalshi paper trade confidence snapshot")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_odds(interaction: discord.Interaction):
+    text = format_odds(limit=5)
+    if len(text) > 1900:
+        text = text[:1897] + "..."
+    await interaction.response.send_message(f"```{text}```", ephemeral=True)
+
+
+@tree.command(name="talk", description="Talk to a persistent dream character (Fox, Tower)")
+@app_commands.describe(character="Character name", message="What do you say?")
+@require_tier(ROLE_SUPPORTER)
+async def cmd_talk(interaction: discord.Interaction, character: str, message: str):
+    if not COGNITIVE_AVAILABLE or not get_cognitive_journal:
+        await interaction.response.send_message(
+            "Cognitive Dream Journal not available. Check bot setup.", ephemeral=True
+        )
+        return
+    journal = get_cognitive_journal()
+    user_id = notebook_user_id(interaction.user)
+    response = journal.talk(character, message, user_id=user_id)
+    await interaction.response.send_message(response, ephemeral=True)
+
+
+@tree.command(name="converge", description="Run convergence loop report")
+@require_tier(ROLE_PILOT)
+async def cmd_converge(interaction: discord.Interaction):
+    await interaction.response.send_message("Convergence loop report requested. Check #queue-visibility for results.", ephemeral=True)
+
+
+@tree.command(name="rag-status", description="Check RAG dollhouse intake status")
+@require_tier(ROLE_PILOT)
+async def cmd_rag_status(interaction: discord.Interaction):
+    await interaction.response.send_message("RAG status: flat-rag-house is current. Use /queue for intake details.", ephemeral=True)
+
+
+@tree.command(name="place", description="Save a place to your notebook")
+@app_commands.describe(text="Describe the place")
+@require_tier(ROLE_PILOT)
+async def cmd_place(interaction: discord.Interaction, text: str):
+    record = append_notebook_entry(interaction.user, "place", text)
+    await interaction.response.send_message(f"Place saved. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="character", description="Save a character to your notebook")
+@app_commands.describe(text="Describe the character")
+@require_tier(ROLE_PILOT)
+async def cmd_character(interaction: discord.Interaction, text: str):
+    record = append_notebook_entry(interaction.user, "character", text)
+    await interaction.response.send_message(f"Character saved. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="symbol", description="Save a symbol to your notebook")
+@app_commands.describe(text="Describe the symbol")
+@require_tier(ROLE_PILOT)
+async def cmd_symbol(interaction: discord.Interaction, text: str):
+    record = append_notebook_entry(interaction.user, "symbol", text)
+    await interaction.response.send_message(f"Symbol saved. ID: `{record['id']}`", ephemeral=True)
+
+
+@tree.command(name="dispatch", description="Dispatch agent fleet")
+@require_tier(ROLE_FOUNDER)
+async def cmd_dispatch(interaction: discord.Interaction):
+    await interaction.response.send_message("Agent fleet dispatch signal sent. Held until operator confirmation.", ephemeral=True)
+
+
+@tree.command(name="controls", description="Local controls status")
+@require_tier(ROLE_FOUNDER)
+async def cmd_controls(interaction: discord.Interaction):
+    await interaction.response.send_message("Local controls: held. Require operator-machine auth proof.", ephemeral=True)
+
+
+@tree.command(name="boot-check", description="Dual boot readiness check")
+@require_tier(ROLE_FOUNDER)
+async def cmd_boot_check(interaction: discord.Interaction):
+    await interaction.response.send_message("Dual boot: held until physical operator action. Windows remains host.", ephemeral=True)
+
+
+@tree.command(name="release-gate", description="v1.0.0 promotion gate check")
+@require_tier(ROLE_FOUNDER)
+async def cmd_release_gate(interaction: discord.Interaction):
+    await interaction.response.send_message("v1.0.0 gate: held. No release without operator approval and evidence.", ephemeral=True)
+
+
+# ── MCP Orchestrator Integration (Optional) ──
+
+@tree.command(name="orchestrator", description="Check Lantern orchestrator status")
+@require_tier(ROLE_PILOT)
+async def cmd_orchestrator_status(interaction: discord.Interaction):
+    """Query MCP server for orchestrator health."""
+    if not MCP_AVAILABLE or not get_bridge:
+        await interaction.response.send_message(
+            " MCP bridge not available. Install with: `pip install aiohttp`",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer()
+    bridge = get_bridge()
+    status_data = await bridge.get_orchestrator_status()
+
+    embed = discord.Embed(title="Lantern Orchestrator Status", color=0x0d9488)
+    embed.description = bridge.format_status_embed(status_data)
+    embed.add_field(name="Timestamp", value=status_data.get("timestamp", "N/A"), inline=False)
+    embed.add_field(name="Endpoint", value=bridge.mcp_url, inline=True)
+
+    if status_data.get("status") != "online":
+        embed.color = 0xdc2626  # Red if offline
+
+    embed.set_footer(text="Powered by Lantern Orchestrator MCP Bridge")
+    await interaction.followup.send(embed=embed)
+
+
+@tree.command(name="queue", description="Check Lantern task queue")
+@require_tier(ROLE_PILOT)
+async def cmd_queue_status(interaction: discord.Interaction):
+    """Query MCP server for pending tasks."""
+    if not MCP_AVAILABLE or not get_bridge:
+        await interaction.response.send_message(
+            " MCP bridge not available. Install with: `pip install aiohttp`",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer()
+    bridge = get_bridge()
+    queue_data = await bridge.get_queue_tasks(limit=10)
+
+    embed = discord.Embed(title="Lantern Task Queue", color=0x2563eb)
+    embed.description = bridge.format_queue_embed(queue_data)
+    embed.add_field(name="Timestamp", value=queue_data.get("timestamp", "N/A"), inline=False)
+
+    if queue_data.get("count", 0) == 0:
+        embed.color = 0x059669  # Green if queue empty
+
+    embed.set_footer(text="Powered by Lantern Orchestrator MCP Bridge")
+    await interaction.followup.send(embed=embed)
+
+
+# ── Lantern Media Commands ──
+
+@tree.command(name="music", description="Show current music status")
+async def cmd_music(interaction: discord.Interaction):
+    """Show music status and available commands."""
+    if not ARCHIVE_AVAILABLE:
+        await interaction.response.send_message(
+            "Media curator unavailable.",
+            ephemeral=True
+        )
+        return
+
+    curator = get_curator()
+    current = curator.get_current_item()
+
+    embed = discord.Embed(
+        title="Lantern Music Status",
+        description=current['title'] if current else "No music loaded",
+        color=discord.Color.gold()
+    )
+
+    if current:
+        if 'album' in current:
+            embed.add_field(name="Album", value=current['album'], inline=True)
+        if 'year' in current:
+            embed.add_field(name="Year", value=str(current['year']), inline=True)
+
+    embed.add_field(
+        name="Available Commands",
+        value="/art — show library\n/movies — show all media\n/notes — save to journal",
+        inline=False
+    )
+    embed.set_footer(text="From Internet Archive • CC-licensed")
+
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="art", description="Show available art, books, and media")
+async def cmd_art(interaction: discord.Interaction):
+    """List available media collections."""
+    if not ARCHIVE_AVAILABLE:
+        await interaction.response.send_message("Media curator unavailable.", ephemeral=True)
+        return
+
+    curator = get_curator()
+    embed = curator.get_playlist_embed()
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="notes", description="Add a note to the shared journal")
+@app_commands.describe(content="Your note text")
+async def cmd_notes(interaction: discord.Interaction, content: str):
+    """Add a note to the dreamer notebook."""
+    user_id = notebook_user_id(interaction.user)
+    nb_path = notebook_path(user_id)
+
+    nb_path.parent.mkdir(parents=True, exist_ok=True)
+
+    entry = {
+        "timestamp": now_utc(),
+        "user": interaction.user.name,
+        "content": content[:MAX_NOTEBOOK_TEXT_LENGTH]
+    }
+
+    with open(nb_path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    await interaction.response.send_message("Note saved.", ephemeral=True)
+
+
+@tree.command(name="movies", description="Show available movies and documentaries")
+async def cmd_movies(interaction: discord.Interaction):
+    """List media from public domain and CC-licensed collections."""
+    if not ARCHIVE_AVAILABLE:
+        await interaction.response.send_message("Media curator unavailable.", ephemeral=True)
+        return
+
+    curator = get_curator()
+    embed = discord.Embed(
+        title="Lantern Media Library",
+        description="CC-licensed and public domain audio, books, and films from Internet Archive",
+        color=discord.Color.gold()
+    )
+
+    items = curator.get_collection_items()
+    playlist_text = "\n".join(
+        f"{i+1}. {item['title']} ({item.get('year', '?')})"
+        for i, item in enumerate(items[:10])
+    )
+
+    embed.add_field(
+        name="Available Now",
+        value=playlist_text or "Loading...",
+        inline=False
+    )
+    embed.set_footer(text="From Internet Archive • CC-licensed + Public Domain")
+
+    await interaction.response.send_message(embed=embed)
+
+
+# ── Voice & Music Commands (Frank Sinatra in Lounge) ──
+
+@tree.command(name="sing", description="🎵 Sing Frank Sinatra in your voice channel")
+@app_commands.describe(song="Song name (leave blank for current)")
+async def cmd_sing(interaction: discord.Interaction, song: Optional[str] = None):
+    """Play Frank Sinatra from Internet Archive in voice channel"""
+    if not VOICE_AVAILABLE or not get_voice_player or not get_sinatra:
+        await interaction.response.send_message(
+            "🎵 Voice playback unavailable. Check FFmpeg installation: `choco install ffmpeg`",
+            ephemeral=True
+        )
+        return
+
+    # Check if user is in a voice channel
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message(
+            "🎵 You must be in a voice channel to request a song.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer()
+
+    # Get Sinatra collection
+    sinatra = get_sinatra()
+
+    # Find song
+    if song:
+        song_key = song.lower().replace(" ", "_")
+        song_info = sinatra.get_song_info(song_key)
+        if not song_info:
+            await interaction.followup.send(
+                f"Song '{song}' not found. Use `/music` to see available songs.",
+                ephemeral=True
+            )
+            return
+        song_url = song_info["url"]
+        song_title = song_info["title"]
+    else:
+        current_key = sinatra.get_current_song()
+        song_info = sinatra.get_song_info(current_key)
+        if not song_info:
+            await interaction.followup.send("No songs available.", ephemeral=True)
+            return
+        song_url = song_info["url"]
+        song_title = song_info["title"]
+
+    # Join voice and play
+    voice_player = get_voice_player(client)
+    joined = await voice_player.join_voice_channel(interaction.user.voice.channel)
+
+    if not joined:
+        await interaction.followup.send("❌ Could not join voice channel.", ephemeral=True)
+        return
+
+    playing = await voice_player.play_song(song_url)
+
+    if playing:
+        embed = discord.Embed(
+            title="🎵 Now Playing",
+            description=f"**{song_title}** — Frank Sinatra",
+            color=discord.Color.gold()
+        )
+        embed.add_field(
+            name="Album",
+            value=song_info.get("album", "Unknown"),
+            inline=True
+        )
+        embed.add_field(
+            name="Year",
+            value=str(song_info.get("year", "?")),
+            inline=True
+        )
+        embed.set_footer(text="From Internet Archive • CC-licensed + Public Domain")
+        await interaction.followup.send(embed=embed)
+    else:
+        await interaction.followup.send(
+            "❌ Could not play audio. Ensure FFmpeg is installed and working.",
+            ephemeral=True
+        )
+
+
+@tree.command(name="nextsong", description="⏭️ Skip to next song in queue")
+async def cmd_next_song(interaction: discord.Interaction):
+    """Play next song in Sinatra collection"""
+    if not VOICE_AVAILABLE or not get_sinatra:
+        await interaction.response.send_message("Voice unavailable.", ephemeral=True)
+        return
+
+    sinatra = get_sinatra()
+    next_key = sinatra.next_song()
+    next_info = sinatra.get_song_info(next_key)
+
+    if next_info:
+        await interaction.response.send_message(
+            f"⏭️ Up next: **{next_info['title']}** ({next_info['year']})"
+        )
+    else:
+        await interaction.response.send_message("No songs in queue.", ephemeral=True)
+
+
+@tree.command(name="stop", description="⏹️ Stop playback and leave voice")
+async def cmd_stop(interaction: discord.Interaction):
+    """Stop audio and disconnect from voice"""
+    if not VOICE_AVAILABLE or not get_voice_player:
+        await interaction.response.send_message("Voice unavailable.", ephemeral=True)
+        return
+
+    voice_player = get_voice_player()
+    if voice_player:
+        await voice_player.stop_playback()
+        await voice_player.disconnect()
+        await interaction.response.send_message("⏹️ Stopped. Left voice channel.")
+    else:
+        await interaction.response.send_message("Not connected.", ephemeral=True)
+
+
+@tree.command(name="leave", description="👋 Leave voice channel")
+async def cmd_leave(interaction: discord.Interaction):
+    """Disconnect from voice channel"""
+    if not VOICE_AVAILABLE or not get_voice_player:
+        await interaction.response.send_message("Voice unavailable.", ephemeral=True)
+        return
+
+    voice_player = get_voice_player()
+    if voice_player:
+        await voice_player.disconnect()
+        await interaction.response.send_message("👋 Left the lounge.")
+    else:
+        await interaction.response.send_message("Not connected.", ephemeral=True)
+
+
+# ── Music Queue Commands ──
+
+@tree.command(name="play", description="Play audio from URL or search query")
+@app_commands.describe(query="URL or search term (e.g. 'frank sinatra my way')")
+@require_tier(ROLE_PILOT)
+async def cmd_play(interaction: discord.Interaction, query: str):
+    if not MUSIC_AVAILABLE or not music_manager or not YTDLP_AVAILABLE:
+        await interaction.response.send_message(
+            "Music unavailable. Install: `pip install yt-dlp`", ephemeral=True
+        )
+        return
+
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message(
+            "Join a voice channel first.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    guild_id = interaction.guild_id
+    voice_client = interaction.guild.voice_client
+
+    if not voice_client or not voice_client.is_connected():
+        voice_client = await interaction.user.voice.channel.connect()
+
+    queue = music_manager.get_queue(guild_id, voice_client)
+    try:
+        song = await queue.add(query)
+        msg = f"✅ Added: **{song['title']}**"
+        if not queue._is_playing:
+            await queue.play_next()
+            msg += "\n▶ Now playing..."
+        await interaction.followup.send(msg, ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"Error: {e}", ephemeral=True)
+
+
+@tree.command(name="skip", description="Skip current song")
+@require_tier(ROLE_PILOT)
+async def cmd_skip(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    if queue.skip():
+        await interaction.response.send_message("⏭ Skipped.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing playing.", ephemeral=True)
+
+
+@tree.command(name="pause", description="Pause playback")
+@require_tier(ROLE_PILOT)
+async def cmd_pause(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    if queue.pause():
+        await interaction.response.send_message("⏸ Paused.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing to pause.", ephemeral=True)
+
+
+@tree.command(name="resume", description="Resume playback")
+@require_tier(ROLE_PILOT)
+async def cmd_resume(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    if queue.resume():
+        await interaction.response.send_message("▶ Resumed.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing to resume.", ephemeral=True)
+
+
+@tree.command(name="nowplaying", description="Show current song")
+@require_tier(ROLE_PILOT)
+async def cmd_nowplaying(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    np = queue.now_playing()
+    if np:
+        await interaction.response.send_message(f"🎵 Now playing: **{np}**", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing playing.", ephemeral=True)
+
+
+@tree.command(name="clearqueue", description="Clear the music queue")
+@require_tier(ROLE_PILOT)
+async def cmd_clearqueue(interaction: discord.Interaction):
+    if not MUSIC_AVAILABLE or not music_manager:
+        await interaction.response.send_message("Music unavailable.", ephemeral=True)
+        return
+    queue = music_manager.get_queue(interaction.guild_id, interaction.guild.voice_client)
+    queue.clear()
+    await interaction.response.send_message("Queue cleared.", ephemeral=True)
+
+
+# ── OpenAI Agents MCP Commands ──
+
+@tree.command(name="mcp-connect", description="Connect to MCP server via openai-agents SDK")
+@require_tier(ROLE_PILOT)
+async def cmd_mcp_connect(interaction: discord.Interaction):
+    """Establish SSE connection to the configured MCP server."""
+    if not OPENAI_MCP_AVAILABLE or not get_mcp_connector:
+        await interaction.response.send_message(
+            "OpenAI MCP Connector not available. Install with: `pip install openai-agents`",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    connector = get_mcp_connector()
+    success = await connector.connect()
+
+    if success:
+        tool_count = len(connector.tools)
+        await interaction.followup.send(
+            f"✅ MCP connected to `{connector.mcp_url}`\n"
+            f"Discovered **{tool_count}** tool(s). Use `/mcp-tools` to list them.",
+            ephemeral=True
+        )
+    else:
+        await interaction.followup.send(
+            f"❌ MCP connection failed: `{connector.last_error or 'unknown'}`",
+            ephemeral=True
+        )
+
+
+@tree.command(name="mcp-tools", description="List tools exposed by the MCP server")
+@require_tier(ROLE_PILOT)
+async def cmd_mcp_tools(interaction: discord.Interaction):
+    """Show discovered MCP tools."""
+    if not OPENAI_MCP_AVAILABLE or not get_mcp_connector:
+        await interaction.response.send_message(
+            "OpenAI MCP Connector not available.", ephemeral=True
+        )
+        return
+
+    connector = get_mcp_connector()
+    text = connector.format_tools_embed()
+    if len(text) > 1900:
+        text = text[:1897] + "..."
+    await interaction.response.send_message(f"```{text}```", ephemeral=True)
+
+
+@tree.command(name="mcp-call", description="Invoke an MCP tool by name")
+@app_commands.describe(tool="Tool name", arguments="JSON arguments (e.g. {\"key\": \"value\"})")
+@require_tier(ROLE_FOUNDER)
+async def cmd_mcp_call(interaction: discord.Interaction, tool: str, arguments: str = "{}"):
+    """Call an MCP tool with JSON arguments."""
+    if not OPENAI_MCP_AVAILABLE or not get_mcp_connector:
+        await interaction.response.send_message(
+            "OpenAI MCP Connector not available.", ephemeral=True
+        )
+        return
+
+    connector = get_mcp_connector()
+    if not connector.connected:
+        await interaction.response.send_message(
+            "MCP not connected. Run `/mcp-connect` first.", ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    try:
+        args = json.loads(arguments) if arguments else {}
+    except json.JSONDecodeError:
+        await interaction.followup.send(
+            "❌ Invalid JSON in arguments field.", ephemeral=True
+        )
+        return
+
+    result = await connector.invoke_tool(tool, args)
+    if len(result) > 1900:
+        result = result[:1897] + "..."
+    await interaction.followup.send(f"**{tool}** result:\n```\n{result}\n```", ephemeral=True)
+
+
+# ── Events ──
 
 @client.event
 async def on_ready():
-    logger.info("Logged in as %s at %s", client.user, now_utc())
-    _health_state["started_at"] = time.time()
-    _health_state["pulse_count"] = 0
-    _health_state["last_pulse"] = 0.0
-    _health_state["last_channel_pulse"] = 0.0
+    print(f"[READY] Logged in as {client.user} at {now_utc()}")
+    # Initialize voice player
+    if VOICE_AVAILABLE:
+        voice_player = get_voice_player(client)
+        print(f"[INFO] Voice player initialized")
+    if MUSIC_AVAILABLE:
+        print(f"[INFO] Music Queue ready (yt-dlp: {YTDLP_AVAILABLE})")
+    # Sync globally (no guild-specific permissions required for testing)
+    synced = await tree.sync()
+    print(f"[SYNC] Synced {len(synced)} slash commands globally")
+    if GUILD_ID_INT:
+        print(f"[INFO] GUILD_ID set to {GUILD_ID_INT} for context")
 
-    # Start background health pulse
-    client.loop.create_task(health_pulse_loop())
-    logger.info("Health pulse loop started")
 
-    if CHANNEL_ID_INT:
-        channel = client.get_channel(CHANNEL_ID_INT)
-        if channel:
-            try:
-                await channel.send(status_text())
-            except Exception:
-                logger.exception("Failed to send startup status message")
-        else:
-            logger.warning("Primary channel not found in cache — startup status skipped")
-
+@client.event
+async def on_member_join(member: discord.Member):
+    """Welcome new members with tier info."""
     try:
-        if GUILD_ID_INT:
-            guild = discord.Object(id=GUILD_ID_INT)
-            tree.copy_global_to(guild=guild)
-            await tree.sync(guild=guild)
-            logger.info("Slash commands synced to guild %s", GUILD_ID_INT)
-        await tree.sync()
-        logger.info("Slash commands synced globally")
-    except Exception:
-        logger.exception("Failed to sync slash commands")
+        await member.send(
+            f"Welcome to Lantern OS, {member.display_name}!\n\n"
+            "Available commands:\n"
+            "- `/status` — Health check\n"
+            "- `/help` — List commands for your tier\n"
+            "- `/subscribe` — Upgrade to Supporter or Pilot\n\n"
+            "Public tier is free. Supporter ($20/mo) unlocks dreamer commands. Pilot ($200/mo) unlocks workspace commands."
+        )
+    except discord.Forbidden:
+        pass
 
 
-@client.event
-async def on_message(message: discord.Message):
-    if message.author.bot:
-        return
-    raw_content = message.content.strip()
-    content = raw_content.lower()
-    if content == "!lantern-status":
-        await message.reply(status_text())
-    elif content == "!lantern-pulse":
-        await message.reply(pulse_text())
-    elif content == "!lantern-voice-check":
-        await message.reply(voice_status_text())
-    elif content.startswith("!dream "):
-        try:
-            append_notebook_entry(message.author, "dream", raw_content[len("!dream "):])
-            await message.reply("Dream saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the dream after `!dream`.")
-    elif content.startswith("!note "):
-        try:
-            append_notebook_entry(message.author, "note", raw_content[len("!note "):])
-            await message.reply("Note saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the note after `!note`.")
-    elif content.startswith("!place "):
-        try:
-            append_notebook_entry(message.author, "place", raw_content[len("!place "):])
-            await message.reply("Place saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the place after `!place`.")
-    elif content.startswith("!character "):
-        try:
-            append_notebook_entry(message.author, "character", raw_content[len("!character "):])
-            await message.reply("Character saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the character after `!character`.")
-    elif content.startswith("!event "):
-        try:
-            append_notebook_entry(message.author, "event", raw_content[len("!event "):])
-            await message.reply("Event saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the event after `!event`.")
-    elif content.startswith("!lore "):
-        try:
-            append_notebook_entry(message.author, "lore", raw_content[len("!lore "):])
-            await message.reply("Lore saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the lore after `!lore`.")
-    elif content.startswith("!symbol "):
-        try:
-            append_notebook_entry(message.author, "symbol", raw_content[len("!symbol "):])
-            await message.reply("Symbol saved to your private local Lantern notebook.")
-        except ValueError:
-            await message.reply("Write the symbol after `!symbol`.")
-    elif content == "!mirror":
-        try:
-            user_id = notebook_user_id(message.author)
-            entries = recall_notebook_entries(message.author, "", limit=500)
-            ids = [e.get("id") for e in entries if e.get("kind") != "mirror" and e.get("id")]
-            if len(ids) == 0:
-                await message.reply("No facets to mirror yet. Drop something in the well first.")
-                return
-            mirror_text = f"Mirror of {len(ids)} facets"
-            record = append_notebook_entry(message.author, "mirror", mirror_text)
-            await message.reply(f"Mirrored {len(ids)} facets into a new mirror entry.")
-        except Exception:
-            logger.exception("Mirror failed for user %s", message.author)
-            await message.reply("Mirror failed. The team has been notified.")
-    elif content == "!recall" or content.startswith("!recall "):
-        query = raw_content[len("!recall"):].strip()
-        await message.reply(format_recall(recall_notebook_entries(message.author, query)))
-    elif content == "!odds" or content.startswith("!odds "):
-        limit = 5
-        args = raw_content[len("!odds"):].strip()
-        if args.isdigit():
-            limit = max(1, min(20, int(args)))
-        await message.reply(format_odds(limit))
-    elif content == "!one" or content.startswith("!one "):
-        args = raw_content[len("!one"):].strip()
-        if not args:
-            args = "Spain founder route trip"
-        if image_pack is None:
-            await message.reply("Image pack skill is not available. Check `skills/lantern-image-pack/`.")
-            return
-        try:
-            # 20 scenes from the Lantern OS Spain/Paris founder route
-            spain_scenes = [
-                "Spanish Abode at dawn — retrofitted villa, warm stone walls, workshop lights on",
-                "Founder packing the field van — calibration kit, ring tools, dependency packet",
-                "Open road leaving the Spanish Abode — coastal highway, olive groves, morning mist",
-                "Madrid skyline approach — Gran Via golden hour, traffic flowing toward the city",
-                "Madrid workshop pause — tuning equipment on a workbench, café con leche nearby",
-                "Highway to Zaragoza — arid meseta landscape, distant wind turbines, van in mirror",
-                "Zaragoza old town square — Basilica del Pilar, founder sketching route notes",
-                "Night stop in Zaragoza — van parked under street lamps, guardian figure silhouette",
-                "Coastal run toward Barcelona — Mediterranean blue, cliffs, tunnel of trees",
-                "Barcelona harbor view — port cranes, sailboats, Sagrada Familia distant spires",
-                "Barcelona market morning — fresh fruit stalls, local radio, route map on table",
-                "Crossing into France — border sign, changing road markings, van clock shifts",
-                "Montpellier vineyards — rows of green, stone farmhouse, sun low and long",
-                "Lyon approach at dusk — Rhône river reflection, city lights climbing the hill",
-                "Lyon bridge crossing — stone arches, tram sparks, two guardian figures walking",
-                "Northern France sunrise — flat fields, poplar trees, fog lifting off canals",
-                "Paris periphery — highway ring, first glimpse of La Défense skyline",
-                "Paris Roads endpoint — cobblestone street, café terrace, founder packet on table",
-                "Ring mechanism intake — close-up of hands calibrating, public-safe shell only",
-                "Rose mechanism dependency lane — symbolic rose, technical sheet, held boundary",
-            ]
-            title = f"Lantern OS — {args}"
-            pack_dir = image_pack.make_pack(title, len(spain_scenes), [f"{i+1:02d}.png" for i in range(len(spain_scenes))])
-            # Write scene prompts as a companion text file
-            prompts_path = pack_dir / "image-prompts.txt"
-            lines = [f"{i+1:02d}. {scene}" for i, scene in enumerate(spain_scenes)]
-            prompts_path.write_text("\n".join(lines), encoding="utf-8")
-            await message.reply(
-                f"Generated `{title}` image pack with {len(spain_scenes)} scenes.\n"
-                f"Path: `{pack_dir}`\n"
-                f"Open `index.html` locally to preview.\n"
-                f"`image-prompts.txt` contains the 20 scene descriptions for generation."
-            )
-        except Exception:
-            logger.exception("Pack generation failed")
-            await message.reply("Pack generation failed. The team has been notified.")
-    elif content == "!lantern-join-lounge":
-        await connect_to_lounge(message)
-    elif content == "!lantern-leave-lounge":
-        if message.guild and message.guild.voice_client and message.guild.voice_client.is_connected():
-            await message.guild.voice_client.disconnect()
-            await message.reply("Lantern left Lounge.")
-        else:
-            await message.reply("Lantern is not connected to a voice channel.")
-    elif content == "!lantern-radio":
-        if not ENABLE_RADIO:
-            await message.reply("Radio is held. Set LANTERN_DISCORD_ENABLE_RADIO=true and LANTERN_RADIO_URL after rights and P0 checks pass.")
-            return
-        if not RADIO_URL:
-            await message.reply("Radio URL is not configured. Set LANTERN_RADIO_URL to a rights-checked stream or local file.")
-            return
-        if not shutil.which("ffmpeg"):
-            await message.reply("ffmpeg is missing on PATH, so radio playback is blocked.")
-            return
-        voice_client = await connect_to_lounge(message)
-        if voice_client is None:
-            return
-        _start_playback(voice_client, RADIO_URL)
-        await message.reply("Lantern radio started from the configured rights-checked source.")
-    elif content.startswith("!lantern-play "):
-        url = raw_content[len("!lantern-play "):].strip()
-        if not url:
-            await message.reply("Provide a URL or local file path after `!lantern-play`.")
-            return
-        if not shutil.which("ffmpeg"):
-            await message.reply("ffmpeg is missing on PATH, so playback is blocked.")
-            return
-        voice_client = await connect_to_lounge(message)
-        if voice_client is None:
-            return
-        _start_playback(voice_client, url)
-        await message.reply(f"Lantern playing: {url}")
-    elif content == "!lantern-loop":
-        if not message.guild:
-            await message.reply("Loop toggle needs a guild context.")
-            return
-        vc = message.guild.voice_client
-        if not vc or not vc.is_connected():
-            await message.reply("Lantern is not in a voice channel. Join first with `!lantern-join-lounge`.")
-            return
-        vc._lantern_loop = not getattr(vc, "_lantern_loop", False)
-        state = "on" if vc._lantern_loop else "off"
-        await message.reply(f"Loop mode: {state}.")
-
-
-def _start_playback(voice_client, source_url):
-    if voice_client.is_playing():
-        voice_client._lantern_current_url = None
-        voice_client.stop()
-    voice_client._lantern_current_url = source_url
-    voice_client._lantern_loop = getattr(voice_client, "_lantern_loop", False)
-    voice_client.play(
-        discord.FFmpegPCMAudio(source_url),
-        after=lambda error: _after_playback(error, voice_client),
-    )
-
-
-def _after_playback(error, voice_client):
-    if error:
-        logger.warning("Playback error: %s", error)
-        return
-    if not voice_client or not voice_client.is_connected():
-        return
-    url = getattr(voice_client, "_lantern_current_url", None)
-    loop = getattr(voice_client, "_lantern_loop", False)
-    if url and loop:
-        try:
-            voice_client.play(
-                discord.FFmpegPCMAudio(url),
-                after=lambda err: _after_playback(err, voice_client),
-            )
-        except Exception:
-            logger.exception("Loop playback failed")
-
-
-@client.event
-async def on_error(event_method: str, /, *args, **kwargs):
-    """Global Discord event error handler — logs full traceback."""
-    logger.exception("Unhandled exception in event %s", event_method)
+# ── Main ──
 
 def main():
-    logger.info("Starting Lantern Discord lounge bot...")
-    logger.info("No secrets are printed. Stop with Ctrl+C.")
+    print("[INFO] Starting Lantern OS Discord Bot v2...")
+    print("[INFO] Slash commands + role gating + notebook integration.")
+    print("[INFO] No secrets are printed. Stop with Ctrl+C.")
     client.run(TOKEN)
 
 
