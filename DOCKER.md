@@ -17,9 +17,11 @@ This document reflects the actual Docker setup in the repository.
 ## Recommendation (Compacted State)
 
 ### For Dream Journal V1.0.0
-- Use `apps/lantern-garage/Dockerfile`
-- Keep the image focused on Node.js + minimal dependencies
-- Avoid the heavy `Dockerfile.unified`
+- Use **one container** only: `apps/lantern-garage/Dockerfile`
+- Dream Journal chat + streaming runs inside Lantern Garage
+- No need for separate Dream Journal container in V1
+- Redis is **not required** for basic V1 chat + provider streaming
+- Avoid the heavy `Dockerfile.unified` and scattered Dockerfiles in `ops/` and `services/`
 
 ### Future Direction (CSF-like Compaction)
 - Reduce to **one Dockerfile per major service**
