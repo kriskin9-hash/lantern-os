@@ -1,0 +1,1 @@
+{"timestamp": "2026-06-03T22:48:00.780488+00:00", "agent_id": "unified_connector:lantern", "request_id": "f22ddf2012c8441f", "tool_name": "stream", "args_hash": "dbfe1794f71bc354", "cache_hit": false, "csf_validated": false, "retry_count": 0, "error": "UnifiedAgentConnector.stream.<locals>.<lambda>() got an unexpected keyword argument 'provider'", "duration_ms": 1.9}
