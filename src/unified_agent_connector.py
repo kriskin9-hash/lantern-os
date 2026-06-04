@@ -275,9 +275,15 @@ class UnifiedAgentConnector:
             elif name == "groq":
                 self._req("https://api.groq.com/openai/v1/models", headers={"Authorization": f"Bearer {cfg.api_key or ''}"})
             elif name == "azure":
-                self._req(f"{cfg.base_url or ''}/openai/models?api-version=2024-06-01", headers={"api-key": cfg.api_key or ""})
+                if cfg.base_url:
+                    self._req(f"{cfg.base_url}/openai/models?api-version=2024-06-01", headers={"api-key": cfg.api_key or ""})
+                else:
+                    raise RuntimeError("missing AZURE_BASE_URL")
             elif name == "generic":
-                self._req(f"{cfg.base_url or ''}/models", headers={"Authorization": f"Bearer {cfg.api_key or ''}"} if cfg.api_key else {})
+                if cfg.base_url:
+                    self._req(f"{cfg.base_url}/models", headers={"Authorization": f"Bearer {cfg.api_key or ''}"} if cfg.api_key else {})
+                else:
+                    raise RuntimeError("missing GENERIC_BASE_URL")
             status = "healthy"
         except Exception as exc:
             status = f"unhealthy: {exc}"
