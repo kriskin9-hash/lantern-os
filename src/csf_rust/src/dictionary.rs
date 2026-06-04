@@ -12,9 +12,9 @@ use crate::{CsfError, Result, SecurityPolicy};
 /// Frequency-sorted symbol table with bidirectional lookup.
 #[derive(Debug, Clone, Default)]
 pub struct SymbolicDictionary {
-    token_to_id: HashMap<String, u16>,
-    id_to_token: HashMap<u16, String>,
-    next_id: u16,
+    pub(crate) token_to_id: HashMap<String, u16>,
+    pub(crate) id_to_token: HashMap<u16, String>,
+    pub(crate) next_id: u16,
 }
 
 impl SymbolicDictionary {
@@ -80,7 +80,7 @@ impl SymbolicDictionary {
         Ok(())
     }
 
-    fn to_bytes(&self) -> Result<Vec<u8>> {
+    pub(crate) fn to_bytes(&self) -> Result<Vec<u8>> {
         let mut buf = Vec::with_capacity(2 + self.token_to_id.len() * 16);
         let count = self.token_to_id.len().min(u16::MAX as usize) as u16;
         buf.write_u16::<BigEndian>(count)?;

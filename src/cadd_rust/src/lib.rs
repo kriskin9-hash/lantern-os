@@ -44,6 +44,9 @@ pub enum CaddError {
 
     #[error("manifest error: {0}")]
     Manifest(String),
+
+    #[error("serialization error: {0}")]
+    Serialize(#[from] serde_json::Error),
 }
 
 pub type Result<T> = std::result::Result<T, CaddError>;

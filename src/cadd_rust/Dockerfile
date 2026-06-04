@@ -1,8 +1,8 @@
-# CADD v0.2 — Headless container
+# CADD v0.2.1 — Headless container
 # Multi-stage build: compile Rust binary, ship minimal runtime.
-# Usage: docker build -t lantern-os/cadd:v0.2 .
+# Usage: docker build -t lantern-os/cadd:v0.2.1 .
 
-FROM rust:1.78-slim-bookworm AS builder
+FROM rust:slim-bookworm AS builder
 WORKDIR /build
 COPY Cargo.toml ./
 # Generate Cargo.lock if missing
