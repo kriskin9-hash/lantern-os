@@ -32,11 +32,11 @@ jobs:
           mkdir -p _site
 
           # Copy surfaces (shareholder index, dashboards, etc.)
-          cp -r surfaces/. _site/
+          cp -r surfaces/. _site/ 2>/dev/null || true
 
-          # Copy Dream Journal UI into /dream path
+          # Copy full Dream Journal public bundle into /dream path
           mkdir -p _site/dream
-          cp apps/lantern-garage/public/index.html _site/dream/index.html
+          cp -r apps/lantern-garage/public/. _site/dream/
 
           # Root redirect → /dream
           cat > _site/index.html <<'HTML'
@@ -54,7 +54,7 @@ jobs:
           HTML
 
           echo "✓ Pages bundle ready"
-          ls -la _site/
+          ls -la _site/dream/
 
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v3
@@ -112,6 +112,7 @@ jobs:
           urls = [
               "https://alex-place.github.io/lantern-os/",
               "https://alex-place.github.io/lantern-os/dream/",
+              "https://alex-place.github.io/lantern-os/dream/dream-chat-orion.html",
           ]
           ok = 0
           for url in urls:
@@ -140,5 +141,6 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✓ GitHub Pages: https://alex-place.github.io/lantern-os/"
           echo "✓ Dream Journal UI: https://alex-place.github.io/lantern-os/dream/"
+          echo "✓ Orion Chat: https://alex-place.github.io/lantern-os/dream/dream-chat-orion.html"
           echo "✓ Railway: connect at https://railway.app (auto-deploy from master)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

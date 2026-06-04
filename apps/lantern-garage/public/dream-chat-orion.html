@@ -3,117 +3,464 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dream Journal • Orion</title>
+  <title>Dream Journal · Orion</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --bg: #0a0b10;
-      --surface: #12141c;
-      --accent: #6b5ce8;
-      --text: #e6e8f0;
-      --muted: #7a7f96;
+      --bg: #17151f;
+      --surface: #211e2d;
+      --surface2: #2a2740;
+      --border: #342f4a;
+      --text: #c8c4db;
+      --muted: #7a748f;
+      --accent: #8b7dd8;
+      --accent-hover: #7a6cc4;
+      --accent-dim: #2d2855;
+      --green: #6fcf97;
+      --amber: #f4c87a;
+      --user-bubble: #201d2e;
+      --agent-bubble: #1a1726;
     }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      padding: 16px 24px;
-      border-bottom: 1px solid #1f2230;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .logo {
-      width: 28px;
-      height: 28px;
-      background: var(--accent);
-      border-radius: 50%;
-    }
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      max-width: 780px;
-      margin: 0 auto;
-      width: 100%;
-    }
-    .message {
-      margin-bottom: 16px;
-      max-width: 80%;
-    }
-    .user { align-self: flex-end; text-align: right; }
-    .agent { color: #c8cbda; }
-    #composer {
-      display: flex;
-      gap: 8px;
-      padding: 16px 24px;
-      background: var(--surface);
-      border-top: 1px solid #1f2230;
-    }
-    #message {
-      flex: 1;
-      background: #1a1d27;
-      border: 1px solid #2a2e40;
-      color: var(--text);
-      padding: 14px 16px;
-      border-radius: 8px;
-      font-size: 15px;
-    }
-    button {
-      background: var(--accent);
-      color: white;
-      border: none;
-      padding: 0 24px;
-      border-radius: 8px;
-      cursor: pointer;
-    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 15px; line-height: 1.6; }
+
+    .app { display: flex; flex-direction: column; height: 100vh;
+      max-width: 800px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header { display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+      background: var(--surface); }
+
+    .logo { width: 32px; height: 32px;
+      background: linear-gradient(135deg, #6b5ce8, #9b59b6);
+      border-radius: 50%; display: flex; align-items: center;
+      justify-content: center; font-size: 16px; flex-shrink: 0; }
+
+    .title-block h1 { font-size: 0.95rem; font-weight: 600; }
+    .title-block p { font-size: 0.72rem; color: var(--muted); }
+
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+
+    /* Switch block dropdown */
+    .kind-label { font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+    select.kind-select {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-size: 0.82rem; font-family: inherit;
+      padding: 5px 26px 5px 8px; border-radius: 8px;
+      outline: none; cursor: pointer; appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7094'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      transition: border-color 0.15s; }
+    select.kind-select:focus { border-color: var(--accent); }
+    select.kind-select:hover { border-color: #3a3f60; }
+
+    .status-pill { display: flex; align-items: center; gap: 5px;
+      font-size: 0.72rem; color: var(--muted); white-space: nowrap; }
+    .dot { width: 7px; height: 7px; border-radius: 50%;
+      background: var(--muted); transition: background 0.3s; }
+    .dot.online { background: var(--green); }
+    .dot.thinking { background: var(--accent);
+      animation: pulse 0.8s ease-in-out infinite; }
+    .dot.offline { background: #f87171; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* ── Messages ── */
+    .messages { flex: 1; overflow-y: auto; padding: 24px 20px 16px;
+      display: flex; flex-direction: column; gap: 2px; scroll-behavior: smooth; }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .msg-row { display: flex; flex-direction: column; gap: 3px; margin-bottom: 18px; }
+    .msg-row.user { align-items: flex-end; }
+    .msg-row.agent { align-items: flex-start; }
+
+    .msg-label { font-size: 0.7rem; color: var(--muted); padding: 0 4px;
+      letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
+
+    .bubble { max-width: 88%; padding: 11px 15px; border-radius: 16px;
+      line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+    .msg-row.user .bubble { background: var(--user-bubble);
+      border: 1px solid var(--border); border-bottom-right-radius: 4px; }
+    .msg-row.agent .bubble { background: var(--agent-bubble);
+      border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+
+    .cursor { display: inline-block; width: 2px; height: 1.1em;
+      background: var(--accent); margin-left: 2px;
+      vertical-align: text-bottom; animation: blink 0.7s step-end infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    .suggestions { display: flex; flex-wrap: wrap; gap: 6px;
+      padding: 2px 4px; margin-top: 4px; }
+    .chip { background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-size: 0.8rem; font-family: inherit;
+      padding: 4px 11px; border-radius: 20px; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s; }
+    .chip:hover { background: var(--accent-dim); border-color: var(--accent); }
+
+    .saved-badge { font-size: 0.68rem; color: var(--green); padding: 2px 7px;
+      border-radius: 4px; background: rgba(74,222,128,0.08);
+      border: 1px solid rgba(74,222,128,0.2); margin-top: 4px; }
+
+    /* ── Empty state ── */
+    .empty-state { flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 48px; }
+    .empty-state h2 { font-size: 1.15rem; color: var(--text); font-weight: 500; }
+    .empty-state p { font-size: 0.85rem; max-width: 360px; line-height: 1.55; }
+    .starter-chips { display: flex; flex-wrap: wrap;
+      justify-content: center; gap: 8px; margin-top: 4px; }
+
+    /* ── Input area ── */
+    .input-area { flex-shrink: 0; padding: 12px 16px 18px;
+      border-top: 1px solid var(--border); background: var(--bg); }
+
+    .input-row { display: flex; align-items: flex-end; gap: 8px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 10px 10px 10px 14px;
+      transition: border-color 0.2s; }
+    .input-row:focus-within { border-color: var(--accent); }
+    .input-row textarea { flex: 1; background: none; border: none;
+      color: var(--text); font-family: inherit; font-size: 0.95rem;
+      line-height: 1.5; resize: none; outline: none;
+      min-height: 24px; max-height: 160px; overflow-y: auto; }
+    .input-row textarea::placeholder { color: var(--muted); }
+
+    .send-btn { flex-shrink: 0; width: 36px; height: 36px; border: none;
+      border-radius: 10px; background: var(--accent); color: white;
+      cursor: pointer; display: flex; align-items: center;
+      justify-content: center; transition: background 0.15s, opacity 0.15s; }
+    .send-btn:hover { background: var(--accent-hover); }
+    .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .send-btn svg { width: 16px; height: 16px; }
+
+    .input-meta { display: flex; align-items: center;
+      justify-content: space-between; margin-top: 8px; padding: 0 2px; }
+    .input-meta .hint { font-size: 0.7rem; color: var(--muted); }
+    .input-meta .kind-select { font-size: 0.78rem; padding: 3px 22px 3px 7px; }
   </style>
 </head>
 <body>
+<div class="app">
   <header>
-    <div class="logo"></div>
-    <div>
-      <strong>Dream Journal</strong><br>
-      <span style="font-size:12px; color:var(--muted)">Orion Edition</span>
+    <div class="logo">🌙</div>
+    <div class="title-block">
+      <h1>Dream Journal</h1>
+      <p>Orion · private · local</p>
+    </div>
+    <div class="header-right">
+      <!-- Switch block: entry kind selector -->
+      <span class="kind-label">Mode</span>
+      <select id="kind-header" class="kind-select" title="Entry kind">
+        <option value="dream">Dream</option>
+        <option value="note">Note</option>
+        <option value="symbol">Symbol</option>
+        <option value="mirror">Mirror</option>
+        <option value="event">Event</option>
+        <option value="lore">Lore</option>
+        <option value="character">Character</option>
+        <option value="place">Place</option>
+      </select>
+      <div class="status-pill">
+        <div class="dot" id="dot"></div>
+        <span id="status-label">connecting…</span>
+      </div>
     </div>
   </header>
 
-  <div id="chat"></div>
-
-  <div id="composer">
-    <input id="message" placeholder="Share a dream, a door, or a feeling..." onkeydown="if(event.key==='Enter') sendMessage()">
-    <button onclick="sendMessage()">Send</button>
+  <div class="messages" id="messages">
+    <div class="empty-state" id="empty-state">
+      <div class="icon">🔮</div>
+      <h2>The dream door is open.</h2>
+      <p>Choose an entry kind above, then share a dream, a symbol, or a feeling. Orion is listening.</p>
+      <div class="starter-chips">
+        <button class="chip" onclick="fillInput('I dreamed of ')">I dreamed of…</button>
+        <button class="chip" onclick="fillInput('A symbol appeared: ')">A symbol</button>
+        <button class="chip" onclick="fillInput('I want to remember ')">Quick note</button>
+        <button class="chip" onclick="fillInput('There was a place called ')">A place</button>
+      </div>
+    </div>
   </div>
 
-  <script>
-    const chat = document.getElementById('chat');
-    const input = document.getElementById('message');
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="input" placeholder="Tell me a dream…" rows="1"
+        autocomplete="off" spellcheck="true"></textarea>
+      <button class="send-btn" id="send-btn" title="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+    <div class="input-meta">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <span class="kind-label">Saving as</span>
+        <select id="kind-inline" class="kind-select">
+          <option value="dream">Dream</option>
+          <option value="note">Note</option>
+          <option value="symbol">Symbol</option>
+          <option value="mirror">Mirror</option>
+          <option value="event">Event</option>
+          <option value="lore">Lore</option>
+          <option value="character">Character</option>
+          <option value="place">Place</option>
+        </select>
+      </div>
+      <span class="hint">Enter ↵ to send · Shift+Enter for newline</span>
+    </div>
+  </div>
+</div>
 
-    function addMessage(text, type) {
-      const div = document.createElement('div');
-      div.className = `message ${type}`;
-      div.innerHTML = `<div>${text}</div>`;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
+<script>
+  const messagesEl  = document.getElementById('messages');
+  const inputEl     = document.getElementById('input');
+  const sendBtn     = document.getElementById('send-btn');
+  const dot         = document.getElementById('dot');
+  const statusLabel = document.getElementById('status-label');
+  const emptyState  = document.getElementById('empty-state');
+  const kindHeader  = document.getElementById('kind-header');
+  const kindInline  = document.getElementById('kind-inline');
+
+  let isStreaming = false;
+  let serverOnline = false;
+  const conversationHistory = [];
+
+  // Sync both kind selectors
+  kindHeader.addEventListener('change', () => { kindInline.value = kindHeader.value; });
+  kindInline.addEventListener('change', () => { kindHeader.value = kindInline.value; });
+
+  // ── Local dream chat responses ────────────────────────────────────────────
+  const ORION_REPLIES = {
+    dream: [
+      "That's a vivid one. What feeling stayed with you when you woke up?",
+      "Dreams like that often carry something worth sitting with. What stands out most?",
+      "The images in dreams always mean something to the dreamer. What do you think this one was about?",
+      "I've saved this dream. Would you like to note any symbols or recurring themes?",
+      "Interesting. Flying, falling, searching — what was the main movement or action in the dream?",
+    ],
+    note: [
+      "Got it. I've saved that note. Anything else you want to add while it's fresh?",
+      "Noted. Sometimes writing it twice helps it stick.",
+      "I'll keep this one for you. You can always come back to build on it.",
+      "That's saved. Does it connect to something you've been thinking about?",
+    ],
+    symbol: [
+      "Symbols often mean something specific to the dreamer. What does this one feel like to you?",
+      "That's a powerful symbol. Where did you first encounter it — in a dream, or waking life?",
+      "I've logged this symbol. Recurring symbols are worth watching over time.",
+      "Interesting choice of symbol. What does it protect, or what does it point toward?",
+    ],
+    mirror: [
+      "Reflection is how we see ourselves more clearly. What do you notice looking back?",
+      "Mirrors in dreams often show us what we're not ready to see directly. What feeling does this bring up?",
+      "I've saved this mirror entry. What changed between the original experience and this reflection?",
+    ],
+    event: [
+      "Logged. Events anchor the timeline of your story. When did this happen?",
+      "I've saved this event. Was this a turning point, or more of a stepping stone?",
+      "Recorded. Would you rate this event's significance — high, medium, or low?",
+    ],
+    lore: [
+      "Lore is the hidden structure of a world. What system or rule does this describe?",
+      "I've added this to your lore. How does it connect to what you've already built?",
+      "Lore entries are the bones of the story. What would happen if this rule broke?",
+    ],
+    character: [
+      "Every character carries a piece of the story's soul. What does this one want?",
+      "I've noted this character. What do they fear, and what do they love?",
+      "Interesting. Is this character an ally, a shadow, or something more complicated?",
+    ],
+    place: [
+      "Places hold memory. What's the feeling you get when you think of this one?",
+      "I've recorded this place. Is it somewhere you've actually been, or somewhere you go in dreams?",
+      "Noted. Every place in a story has a secret. What's this one hiding?",
+    ],
+  };
+
+  function localReply(kind) {
+    const pool = ORION_REPLIES[kind] || ORION_REPLIES.dream;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  // ── Server ping ───────────────────────────────────────────────────────────
+  async function ping() {
+    try {
+      const r = await fetch('/api/dreamer?user=orion', { signal: AbortSignal.timeout(2000) });
+      serverOnline = r.ok;
+    } catch { serverOnline = false; }
+    setStatus(serverOnline ? 'online' : 'offline');
+  }
+  ping();
+
+  // ── Auto-grow textarea ────────────────────────────────────────────────────
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  });
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  sendBtn.addEventListener('click', send);
+
+  function fillInput(text) {
+    inputEl.value = text;
+    inputEl.focus();
+    inputEl.dispatchEvent(new Event('input'));
+  }
+
+  function setStatus(state) {
+    dot.className = 'dot' + (state === 'online' ? ' online' : state === 'thinking' ? ' thinking' : state === 'offline' ? ' offline' : '');
+    statusLabel.textContent = { online: 'online', thinking: 'thinking…', offline: 'offline' }[state] ?? state;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+
+  function appendUserBubble(text) {
+    const row = document.createElement('div');
+    row.className = 'msg-row user';
+    row.innerHTML = `<div class="msg-label">You</div><div class="bubble">${escapeHtml(text)}</div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+  }
+
+  function createAgentBubble() {
+    const row = document.createElement('div');
+    row.className = 'msg-row agent';
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = 'Orion';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    const cursor = document.createElement('span');
+    cursor.className = 'cursor';
+    bubble.appendChild(cursor);
+    row.appendChild(label);
+    row.appendChild(bubble);
+    messagesEl.appendChild(row);
+    scrollToBottom();
+    return { row, bubble, cursor };
+  }
+
+  // ── Stream text word-by-word locally ─────────────────────────────────────
+  async function streamText(bubble, cursor, text) {
+    const words = text.split(/(\s+)/);
+    let built = '';
+    for (const word of words) {
+      if (!word) continue;
+      built += word;
+      cursor.remove();
+      bubble.textContent = built;
+      bubble.appendChild(cursor);
+      scrollToBottom();
+      const isPunct = /[.!?,;:]$/.test(word.trim());
+      await new Promise(r => setTimeout(r, isPunct ? 60 + Math.random() * 80 : 20 + Math.random() * 30));
+    }
+    cursor.remove();
+    bubble.textContent = built;
+  }
+
+  // ── Main send handler ─────────────────────────────────────────────────────
+  async function send() {
+    const text = inputEl.value.trim();
+    if (!text || isStreaming) return;
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    const kind = kindInline.value;
+    isStreaming = true;
+    sendBtn.disabled = true;
+
+    appendUserBubble(text);
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+
+    conversationHistory.push({ role: 'user', content: `[${kind}] ${text}` });
+
+    const { row, bubble, cursor } = createAgentBubble();
+    setStatus('thinking');
+
+    let reply = null;
+    let saved = false;
+
+    if (serverOnline) {
+      try {
+        const r = await fetch('/api/dreamer/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: 'orion',
+            kind,
+            text,
+            history: conversationHistory.slice(-10),
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          reply = data.reply || null;
+          saved = !!data.saved;
+        }
+      } catch {}
     }
 
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
+    if (!reply) reply = localReply(kind);
 
-      addMessage(text, 'user');
-      input.value = '';
+    conversationHistory.push({ role: 'assistant', content: reply });
 
-      // Placeholder for real streaming call
-      setTimeout(() => {
-        addMessage("...", 'agent');
-      }, 400);
+    await streamText(bubble, cursor, reply);
+
+    // Suggestions
+    const suggestions = getSuggestions(kind);
+    if (suggestions.length) {
+      const chips = document.createElement('div');
+      chips.className = 'suggestions';
+      for (const s of suggestions) {
+        const btn = document.createElement('button');
+        btn.className = 'chip';
+        btn.textContent = s;
+        btn.onclick = () => fillInput(s + ' ');
+        chips.appendChild(btn);
+      }
+      row.appendChild(chips);
     }
-  </script>
+
+    if (saved) {
+      const badge = document.createElement('div');
+      badge.className = 'saved-badge';
+      badge.textContent = `✓ Saved as ${kind}`;
+      row.appendChild(badge);
+    }
+
+    setStatus(serverOnline ? 'online' : 'offline');
+    isStreaming = false;
+    sendBtn.disabled = false;
+    scrollToBottom();
+  }
+
+  function getSuggestions(kind) {
+    const map = {
+      dream: ['What symbol appeared?', 'How did it end?', 'Log another dream'],
+      note: ['Add more context', 'Turn this into a dream entry', 'Log a symbol'],
+      symbol: ['Where does it appear?', 'What does it protect?', 'Log a related dream'],
+      mirror: ['What changed?', 'Compare to an earlier entry', 'Add a note'],
+      event: ['When did this happen?', 'Log a character involved', 'Mark as significant'],
+      lore: ['Add a rule', 'Log a related place', 'Who knows this lore?'],
+      character: ['What do they want?', 'Log a related event', 'Add a symbol for them'],
+      place: ['What happened here?', 'Log a character from this place', 'Add lore'],
+    };
+    const pool = map[kind] || [];
+    return pool.slice(0, 3);
+  }
+</script>
 </body>
 </html>

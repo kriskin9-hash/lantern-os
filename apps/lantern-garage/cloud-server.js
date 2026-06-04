@@ -93,6 +93,35 @@ function sendHtml(res, html, status = 200) {
   res.end(html);
 }
 
+const dreamerDir = path.join(repoRoot, "data", "dreamer", "notebooks");
+
+function cloudNormUser(u) {
+  return String(u || "orion").toLowerCase().replace(/[^a-z0-9_-]/g, "_").slice(0, 40) || "orion";
+}
+
+function cloudReadNotebook(user) {
+  const p = path.join(dreamerDir, `${user}.jsonl`);
+  try {
+    return fs.readFileSync(p, "utf8").trim().split("\n").filter(Boolean)
+      .map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  } catch { return []; }
+}
+
+async function cloudAppendEntry(user, entry) {
+  const record = {
+    id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36),
+    kind: String(entry.kind || "note").slice(0, 40),
+    text: String(entry.text || "").slice(0, 8000),
+    tags: Array.isArray(entry.tags) ? entry.tags.slice(0, 10) : [],
+    recordedAt: new Date().toISOString(),
+    private: true,
+  };
+  const p = path.join(dreamerDir, `${user}.jsonl`);
+  await fs.promises.mkdir(path.dirname(p), { recursive: true });
+  await fs.promises.appendFile(p, JSON.stringify(record) + "\n", "utf8");
+  return record;
+}
+
 function getMcpFeatureOverview() {
   return {
     name: "Lantern MCP Bridge",
@@ -222,6 +251,8 @@ async function route(req, res) {
     url.pathname === "/api/dream/chat" && req.method === "POST",
     url.pathname === "/api/dream/chat/stream" && req.method === "POST",
     url.pathname === "/api/dream/create" && req.method === "POST",
+    url.pathname === "/api/dreamer" && req.method === "POST",
+    url.pathname === "/api/dreamer/chat" && req.method === "POST",
     url.pathname === "/api/command" && req.method === "POST",
     url.pathname.startsWith("/api/actions/") && req.method === "POST",
   ];
@@ -436,6 +467,48 @@ async function route(req, res) {
       message: "Action held in AWS cloud mode.",
       reason: "The local orchestrator queue is not exposed on AWS cloud mode.",
     }, 403);
+    return;
+  }
+
+  // ── Dreamer endpoints (cloud-compatible) ───────────────────────────────────
+  if (url.pathname === "/api/dreamer" && req.method === "GET") {
+    const user = cloudNormUser(url.searchParams.get("user") || "orion");
+    const entries = cloudReadNotebook(user);
+    sendJson(res, { user, entries, mode: "cloud" });
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const user = cloudNormUser(body.user || "orion");
+      const record = await cloudAppendEntry(user, body);
+      sendJson(res, { saved: true, record });
+    } catch (error) { sendJson(res, { error: error.message }, 400); }
+    return;
+  }
+
+  if (url.pathname === "/api/dreamer/chat" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const user = cloudNormUser(body.user || "orion");
+      const kind = String(body.kind || "dream").slice(0, 40);
+      const text = String(body.text || "").slice(0, 4000);
+      const record = await cloudAppendEntry(user, { kind, text });
+      const fallbacks = {
+        dream: "What a vivid scene — the imagery here is worth sitting with. What feeling stayed with you when you woke?",
+        note: "Noted and held. Patterns like this often surface for a reason. Anything else connecting to this?",
+        symbol: "Symbols return when they have something left to say. What does this one mean to you right now?",
+        mirror: "Mirrors show what we're ready to see. This reflection feels important — what does it reveal?",
+        event: "Moments like this leave a mark. How did it shift something inside you?",
+        lore: "Every mythology has its keepers. What part of this lore feels most alive for you today?",
+        character: "Characters in our inner world often carry messages. What does this one want you to know?",
+        place: "Places in dreams hold their own gravity. What did this space feel like to be in?",
+      };
+      sendJson(res, { saved: true, record, reply: fallbacks[kind] || fallbacks.note });
+    } catch (error) { sendJson(res, { error: error.message }, 400); }
     return;
   }
 
