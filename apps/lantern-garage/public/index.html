@@ -28,6 +28,21 @@
 
     #refresh { margin: 8px 0 16px; padding: 8px 16px; border: 1px solid var(--panel-border); border-radius: 100px; background: var(--panel-bg); color: var(--text-secondary); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     #refresh:hover { background: var(--celestial-ink); color: white; }
+    .export-row { display: flex; gap: 8px; margin: 8px 0 16px; }
+    .export-row button { padding: 6px 14px; border: 1px solid var(--panel-border); border-radius: 100px; background: var(--panel-bg); color: var(--text-secondary); font: inherit; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .export-row button:hover { background: var(--celestial-ink); color: white; }
+    .search-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .search-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--panel-border); border-radius: 100px; background: var(--panel-bg); color: var(--celestial-ink); font: inherit; font-size: 0.85rem; }
+    .search-row button { padding: 8px 16px; border: 1px solid var(--panel-border); border-radius: 100px; background: var(--panel-bg); color: var(--text-secondary); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .search-row button:hover { background: var(--celestial-ink); color: white; }
+    .search-results { margin-bottom: 16px; }
+    .search-entry { padding: 10px 14px; border-radius: 12px; background: rgba(255,255,255,0.5); border: 1px solid var(--panel-border); margin-bottom: 8px; font-size: 0.85rem; }
+    .search-entry .se-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; }
+    .textarea-wrap { position: relative; }
+    #micBtn { position: absolute; right: 10px; top: 10px; background: none; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.5; transition: opacity 0.2s; padding: 2px 4px; }
+    #micBtn:hover { opacity: 1; }
+    #micBtn.recording { opacity: 1; animation: pulse 1s infinite; color: #c0392b; }
+    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
   </style>
 </head>
 <body>
@@ -83,17 +98,24 @@
 
           <section aria-label="Primary controls">
             <button type="button" id="refresh">Refresh</button>
+            <div class="export-row">
+              <button type="button" id="exportJsonl">Export JSONL</button>
+              <button type="button" id="exportCsv">Export CSV</button>
+            </div>
           </section>
 
           <h3 style="margin:20px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">New Entry</h3>
           <form id="entryForm" class="dream-form">
             <label for="text">What do you want to remember?</label>
-            <textarea id="text" name="text" placeholder="Write freely. What was vivid? What mattered? What surprised you?" required></textarea>
+            <div class="textarea-wrap">
+              <textarea id="text" name="text" placeholder="Write freely. What was vivid? What mattered? What surprised you?" required></textarea>
+              <button type="button" id="micBtn" title="Speak your dream" aria-label="Record voice">🎤</button>
+            </div>
 
             <div class="form-row">
               <div>
                 <label for="emotions">Emotions (comma-separated)</label>
-                <input type="text" id="emotions" name="emotions" placeholder="e.g., clarity, wonder, peace, curiosity">
+                <input type="text" id="emotions" name="emotions" placeholder="e.g., clarity, wonder, peace">
               </div>
               <div>
                 <label for="lucidity">Lucidity (0 = asleep, 1 = awake)</label>
@@ -101,11 +123,27 @@
               </div>
             </div>
 
-            <label for="tags">Tags (comma-separated)</label>
-            <input type="text" id="tags" name="tags" placeholder="e.g., lantern, learning, home, family">
+            <div class="form-row">
+              <div>
+                <label for="tags">Tags (comma-separated)</label>
+                <input type="text" id="tags" name="tags" placeholder="e.g., lantern, learning, home">
+              </div>
+              <div>
+                <label for="symbols">Symbols — void · light · mystery</label>
+                <input type="text" id="symbols" name="symbols" placeholder="e.g., door, mirror, water, light">
+              </div>
+            </div>
 
             <button type="submit">Save Entry</button>
           </form>
+
+          <h3 style="margin:24px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">Search Journal</h3>
+          <div class="search-row">
+            <input type="text" id="searchInput" placeholder="Search by text or tag..." aria-label="Search entries">
+            <button type="button" id="searchBtn">Search</button>
+            <button type="button" id="searchClear" title="Clear search">✕</button>
+          </div>
+          <div class="search-results" id="searchResults" style="display:none;"></div>
 
           <h3 style="margin:24px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">Recent Entries</h3>
           <div class="entries" id="entriesList"></div>
@@ -133,9 +171,16 @@
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       },
-
       stats: async () => {
         const res = await fetch('/api/dream/stats');
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      },
+      search: async (q, tags) => {
+        const params = new URLSearchParams();
+        if (q) params.set('text', q);
+        if (tags) params.set('tags', tags);
+        const res = await fetch('/api/dream/search?' + params);
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       }
@@ -171,6 +216,89 @@
       }
     }
 
+    // ── Export ──────────────────────────────────────────────
+    document.getElementById('exportJsonl').addEventListener('click', () => {
+      window.location.href = '/api/dream/export?format=jsonl';
+    });
+    document.getElementById('exportCsv').addEventListener('click', () => {
+      window.location.href = '/api/dream/export?format=csv';
+    });
+
+    // ── Search ──────────────────────────────────────────────
+    async function runSearch() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) { clearSearch(); return; }
+      try {
+        const data = await API.search(q);
+        const el = document.getElementById('searchResults');
+        el.style.display = 'block';
+        if (!data.results || data.results.length === 0) {
+          el.innerHTML = '<div class="empty-state">No entries matched.</div>';
+          return;
+        }
+        el.innerHTML = data.results.map(e => `
+          <div class="search-entry">
+            <div>${e.text ? e.text.slice(0, 200) : '(no text)'}${e.text && e.text.length > 200 ? '…' : ''}</div>
+            <div class="se-meta">${e.kind || 'dream'} · ${e.timestamp ? e.timestamp.slice(0,10) : ''}${(e.tags||[]).length ? ' · ' + e.tags.join(', ') : ''}</div>
+          </div>`).join('');
+      } catch (err) {
+        document.getElementById('searchResults').innerHTML = '<div class="empty-state">Search error.</div>';
+      }
+    }
+
+    function clearSearch() {
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('searchResults').innerHTML = '';
+      document.getElementById('searchInput').value = '';
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', runSearch);
+    document.getElementById('searchClear').addEventListener('click', clearSearch);
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch();
+    });
+
+    // ── Voice capture (Web Speech API) ──────────────────────
+    (function initVoice() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const micBtn = document.getElementById('micBtn');
+      if (!SpeechRecognition) { micBtn.style.display = 'none'; return; }
+
+      const recog = new SpeechRecognition();
+      recog.continuous = true;
+      recog.interimResults = true;
+      recog.lang = 'en-US';
+      let running = false;
+      let baseText = '';
+
+      recog.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) baseText += t + ' ';
+          else interim = t;
+        }
+        document.getElementById('text').value = baseText + interim;
+      };
+      recog.onerror = () => { running = false; micBtn.classList.remove('recording'); };
+      recog.onend = () => { if (running) recog.start(); };
+
+      micBtn.addEventListener('click', () => {
+        if (!running) {
+          baseText = document.getElementById('text').value;
+          if (baseText && !baseText.endsWith(' ')) baseText += ' ';
+          running = true;
+          micBtn.classList.add('recording');
+          recog.start();
+        } else {
+          running = false;
+          micBtn.classList.remove('recording');
+          recog.stop();
+        }
+      });
+    })();
+
+    // ── Form submit ──────────────────────────────────────────
     document.getElementById('entryForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -178,12 +306,15 @@
           .split(',').map(s => s.trim()).filter(Boolean);
         const tags = document.getElementById('tags').value
           .split(',').map(s => s.trim()).filter(Boolean);
+        const symbols = document.getElementById('symbols').value
+          .split(',').map(s => s.trim()).filter(Boolean);
 
         const data = {
           kind: 'dream',
           text: document.getElementById('text').value,
           emotions,
           tags,
+          symbols,
           lucidity: parseFloat(document.getElementById('lucidity').value) || 0.5
         };
 
@@ -197,11 +328,10 @@
       }
     });
 
-    // Load stats on page load
-    loadStats();
-    // Refresh stats every 10 seconds
-    setInterval(loadStats, 10000);
+    document.getElementById('refresh').addEventListener('click', loadStats);
 
+    loadStats();
+    setInterval(loadStats, 10000);
   </script>
 </body>
 </html>

@@ -2165,6 +2165,52 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
     return;
   }
 
+  if (url.pathname === "/api/dream/export" && req.method === "GET") {
+    try {
+      const format = url.searchParams.get("format") || "jsonl";
+      const dreamDir = path.join(repoRoot, "data", "dream_journal");
+      let entries = [];
+      if (fs.existsSync(dreamDir)) {
+        const files = fs.readdirSync(dreamDir).filter(f => f.endsWith(".jsonl")).sort();
+        for (const file of files) {
+          const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+          if (content) {
+            entries.push(...content.split("\n").map(line => {
+              try { return JSON.parse(line); } catch { return null; }
+            }).filter(e => e));
+          }
+        }
+      }
+      if (format === "csv") {
+        const cols = ["id", "timestamp", "kind", "text", "lucidity", "emotions", "tags", "symbols"];
+        const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+        const rows = [cols.join(",")];
+        for (const e of entries) {
+          rows.push([
+            escape(e.id), escape(e.timestamp), escape(e.kind), escape(e.text),
+            escape(e.lucidity), escape((e.emotions || []).join(";")),
+            escape((e.tags || []).join(";")), escape((e.symbols || []).join(";"))
+          ].join(","));
+        }
+        res.writeHead(200, {
+          "Content-Type": "text/csv",
+          "Content-Disposition": `attachment; filename="dream-journal-${new Date().toISOString().substring(0,10)}.csv"`
+        });
+        res.end(rows.join("\n"));
+      } else {
+        const body = entries.map(e => JSON.stringify(e)).join("\n");
+        res.writeHead(200, {
+          "Content-Type": "application/x-ndjson",
+          "Content-Disposition": `attachment; filename="dream-journal-${new Date().toISOString().substring(0,10)}.jsonl"`
+        });
+        res.end(body);
+      }
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return;
+  }
+
   if (url.pathname.startsWith("/api/dream/read/") && req.method === "GET") {
     try {
       const id = url.pathname.replace("/api/dream/read/", "");
