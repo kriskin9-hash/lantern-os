@@ -60,7 +60,7 @@ jobs:
 
           missing = []
           for href in hrefs:
-            if href.startswith(("http", "#")):
+            if href.startswith(("http", "https", "#", "mailto")):
               continue
             target = (html_path.parent / href).resolve()
             if not target.exists():

@@ -1,11 +1,4 @@
-# Local/generated
-*.log
-*.tmp
-__pycache__/
-.venv/
-*.egg-info/
-
-# Secrets and local environment
+# ─── Secrets & credentials ────────────────────────────────────────────────────
 .env
 .env.*
 *.pem
@@ -15,24 +8,39 @@ __pycache__/
 *.secret
 secrets/
 
-# Private local vaults: never commit raw PIID/PII/private social/feed/patient data.
+# ─── Private / PII data (never commit) ────────────────────────────────────────
 data/private/**
 !data/private/
 !data/private/README.md
 private/**
 .local-private/**
 
-# Large promoted artifacts should be added intentionally with manifest updates.
-artifacts/*
-!artifacts/.gitkeep
-# Node modules
+# Dreamer notebooks — private user data (local only)
+data/dreamer/notebooks/*.jsonl
+data/dream_journal/*.jsonl
+
+# Discord subscriber data
+data/discord/subscribers.json
+
+# ─── Node ─────────────────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
 
-# Python build artifacts
+# ─── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+.pytest_cache/
+*.pyc
 
 # Discord subscriber data (local only, not in Git)
 data/discord/subscribers.json

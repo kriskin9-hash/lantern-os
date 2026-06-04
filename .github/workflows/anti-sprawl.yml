@@ -29,19 +29,29 @@ jobs:
           echo "Base: origin/master"
           echo ""
 
-          # New files
+          # New files (handle empty-string so wc -l returns 0 not 1)
           NEW_FILES=$(git diff --name-only --diff-filter=A origin/master...HEAD)
-          NEW_FILE_COUNT=$(echo "$NEW_FILES" | wc -l)
+          if [ -z "$NEW_FILES" ]; then
+            NEW_FILE_COUNT=0
+          else
+            NEW_FILE_COUNT=$(echo "$NEW_FILES" | wc -l)
+          fi
           echo "new_file_count=$NEW_FILE_COUNT" >> $GITHUB_OUTPUT
 
-          # New top-level directories
-          NEW_TOP_LEVEL=$(echo "$NEW_FILES" | cut -d/ -f1 | sort | uniq | grep -vE "^(${ALLOWED_TOP_LEVEL//,/|})$" || true)
+          # New top-level directories (guard against empty NEW_FILES causing false-positive)
+          NEW_TOP_LEVEL=""
+          if [ -n "$NEW_FILES" ]; then
+            NEW_TOP_LEVEL=$(echo "$NEW_FILES" | cut -d/ -f1 | sort -u | { grep -vE "^(${ALLOWED_TOP_LEVEL//,/|})$" || true; })
+          fi
           echo "new_top_level_dirs<<EOF" >> $GITHUB_OUTPUT
           echo "$NEW_TOP_LEVEL" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          # New markdown files
-          NEW_MD=$(echo "$NEW_FILES" | grep -E '\.md$' | wc -l)
+          # New markdown files (guard grep so pipefail doesn't fire on no matches)
+          NEW_MD=0
+          if [ -n "$NEW_FILES" ]; then
+            NEW_MD=$(echo "$NEW_FILES" | { grep -E '\.md$' || true; } | wc -l)
+          fi
           echo "new_markdown_count=$NEW_MD" >> $GITHUB_OUTPUT
 
       - name: Check new top-level directories

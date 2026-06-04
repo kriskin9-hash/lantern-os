@@ -17,31 +17,6 @@
     .stat-number { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.8rem; font-weight: 700; color: var(--celestial-ink); }
     .stat-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
 
-    .chat-card { border-radius: var(--radius-lg); overflow: hidden; }
-    .chat-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: linear-gradient(135deg, var(--celestial-deep), var(--dream-purple)); color: white; font-weight: 700; border-radius: var(--radius-md) var(--radius-md) 0 0; }
-    .chat-status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 500; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; display: inline-block; }
-    .status-dot.offline { background: #f87171; }
-    .chat-log { min-height: 180px; max-height: 360px; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--panel-bg-solid); border: 1px solid var(--panel-border); border-top: none; border-bottom: none; }
-    .bubble-wrapper { display: flex; flex-direction: column; gap: 4px; }
-    .bubble-label { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .bubble { max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 0.9rem; line-height: 1.45; word-break: break-word; }
-    .bubble.operator { align-self: flex-end; background: linear-gradient(135deg, var(--celestial-deep), var(--dream-purple)); color: white; border-bottom-right-radius: 4px; }
-    .bubble.lantern { align-self: flex-start; background: var(--celestial-faint); color: var(--text-primary); border-bottom-left-radius: 4px; }
-    .bubble img { max-width: 100%; border-radius: 12px; margin-bottom: 6px; display: block; }
-    .bubble-caption { font-size: 0.78rem; color: var(--text-muted); font-style: italic; margin-top: 4px; }
-    .cursor::after { content: '|'; animation: blink 1s step-end infinite; color: var(--dream-purple); }
-    @keyframes blink { 50% { opacity: 0; } }
-    .chat-suggestions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: var(--panel-bg-solid); border: 1px solid var(--panel-border); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); }
-    .chip { padding: 6px 14px; border-radius: 100px; border: 1px solid var(--panel-border); background: var(--panel-bg); color: var(--text-secondary); font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-    .chip:hover { background: var(--celestial-ink); color: white; border-color: var(--celestial-ink); }
-    .chat-input-row { display: flex; gap: 8px; padding: 12px; background: var(--panel-bg-solid); border: 1px solid var(--panel-border); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); }
-    .chat-input-row input { flex: 1; padding: 10px 14px; border: 1px solid var(--panel-border); border-radius: 100px; background: white; font: inherit; font-size: 0.9rem; }
-    .chat-input-row input:focus { outline: none; border-color: var(--dream-purple); box-shadow: 0 0 0 3px rgba(139,126,200,0.12); }
-    .chat-input-row button { padding: 10px 18px; border: none; border-radius: 100px; background: linear-gradient(135deg, var(--celestial-deep), var(--dream-purple)); color: white; font: inherit; font-weight: 700; cursor: pointer; transition: transform 0.15s; }
-    .chat-input-row button:hover { transform: scale(1.05); }
-    .chat-input-row button:last-child { background: var(--celestial-faint); color: var(--text-secondary); }
-
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     @media (max-width: 560px) { .form-row { grid-template-columns: 1fr; } }
     .entries { min-height: 60px; }
@@ -224,12 +199,15 @@
             </div>
 
             <label for="text">What do you want to remember?</label>
-            <textarea id="text" name="text" placeholder="Write freely. What was vivid? What mattered? What surprised you?" required></textarea>
+            <div class="textarea-wrap">
+              <textarea id="text" name="text" placeholder="Write freely. What was vivid? What mattered? What surprised you?" required></textarea>
+              <button type="button" id="micBtn" title="Speak your dream" aria-label="Record voice">🎤</button>
+            </div>
 
             <div class="form-row">
               <div>
                 <label for="emotions">Emotions (comma-separated)</label>
-                <input type="text" id="emotions" name="emotions" placeholder="e.g., clarity, wonder, peace, curiosity">
+                <input type="text" id="emotions" name="emotions" placeholder="e.g., clarity, wonder, peace">
               </div>
               <div>
                 <label for="lucidity">Lucidity (0 = asleep, 1 = awake)</label>
@@ -279,6 +257,14 @@
             <button type="submit">Save Entry</button>
           </form>
 
+          <h3 style="margin:24px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">Search Journal</h3>
+          <div class="search-row">
+            <input type="text" id="searchInput" placeholder="Search by text or tag..." aria-label="Search entries">
+            <button type="button" id="searchBtn">Search</button>
+            <button type="button" id="searchClear" title="Clear search">✕</button>
+          </div>
+          <div class="search-results" id="searchResults" style="display:none;"></div>
+
           <h3 style="margin:24px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">Recent Entries</h3>
           <div class="entries" id="entriesList"></div>
         </div>
@@ -305,7 +291,6 @@
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       },
-
       stats: async () => {
         const res = await fetch('/api/dream/stats');
         if (!res.ok) throw new Error(await res.text());
@@ -352,6 +337,89 @@
       }
     }
 
+    // ── Export ──────────────────────────────────────────────
+    document.getElementById('exportJsonl').addEventListener('click', () => {
+      window.location.href = '/api/dream/export?format=jsonl';
+    });
+    document.getElementById('exportCsv').addEventListener('click', () => {
+      window.location.href = '/api/dream/export?format=csv';
+    });
+
+    // ── Search ──────────────────────────────────────────────
+    async function runSearch() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) { clearSearch(); return; }
+      try {
+        const data = await API.search(q);
+        const el = document.getElementById('searchResults');
+        el.style.display = 'block';
+        if (!data.results || data.results.length === 0) {
+          el.innerHTML = '<div class="empty-state">No entries matched.</div>';
+          return;
+        }
+        el.innerHTML = data.results.map(e => `
+          <div class="search-entry">
+            <div>${e.text ? e.text.slice(0, 200) : '(no text)'}${e.text && e.text.length > 200 ? '…' : ''}</div>
+            <div class="se-meta">${e.kind || 'dream'} · ${e.timestamp ? e.timestamp.slice(0,10) : ''}${(e.tags||[]).length ? ' · ' + e.tags.join(', ') : ''}</div>
+          </div>`).join('');
+      } catch (err) {
+        document.getElementById('searchResults').innerHTML = '<div class="empty-state">Search error.</div>';
+      }
+    }
+
+    function clearSearch() {
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('searchResults').innerHTML = '';
+      document.getElementById('searchInput').value = '';
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', runSearch);
+    document.getElementById('searchClear').addEventListener('click', clearSearch);
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch();
+    });
+
+    // ── Voice capture (Web Speech API) ──────────────────────
+    (function initVoice() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const micBtn = document.getElementById('micBtn');
+      if (!SpeechRecognition) { micBtn.style.display = 'none'; return; }
+
+      const recog = new SpeechRecognition();
+      recog.continuous = true;
+      recog.interimResults = true;
+      recog.lang = 'en-US';
+      let running = false;
+      let baseText = '';
+
+      recog.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) baseText += t + ' ';
+          else interim = t;
+        }
+        document.getElementById('text').value = baseText + interim;
+      };
+      recog.onerror = () => { running = false; micBtn.classList.remove('recording'); };
+      recog.onend = () => { if (running) recog.start(); };
+
+      micBtn.addEventListener('click', () => {
+        if (!running) {
+          baseText = document.getElementById('text').value;
+          if (baseText && !baseText.endsWith(' ')) baseText += ' ';
+          running = true;
+          micBtn.classList.add('recording');
+          recog.start();
+        } else {
+          running = false;
+          micBtn.classList.remove('recording');
+          recog.stop();
+        }
+      });
+    })();
+
+    // ── Form submit ──────────────────────────────────────────
     document.getElementById('entryForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -477,311 +545,8 @@
       { id: "orion", name: "Orion — Dream Journal", tagline: "Every dream is a door. Every memory is a home.", image: "/images/doors/orion-door.jpg", phrase: "Your dreams. Your space. Always private.", keywords: ["orion", "journal", "dream", "record", "reflect", "private"] }
     ];
 
-    let lastDraft = "";
-
-    function setStatus(online, agentName) {
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
-      if (agentName) {
-        dot.className = 'status-dot';
-        text.textContent = agentName + (online ? ' ✨' : ' (local)');
-      } else {
-        dot.className = 'status-dot' + (online ? '' : ' offline');
-        text.textContent = online ? 'Online' : 'Offline (local)';
-      }
-    }
-
-    function addBubble(role, text) {
-      const log = document.getElementById('chatLog');
-      const bubble = document.createElement('div');
-      bubble.className = `bubble ${role}`;
-      bubble.textContent = text;
-      log.appendChild(bubble);
-      log.scrollTop = log.scrollHeight;
-      saveChatMemory();
-      return bubble;
-    }
-
-    function addImageBubble(role, src, caption) {
-      const log = document.getElementById('chatLog');
-      const bubble = document.createElement('div');
-      bubble.className = `bubble ${role}`;
-      const img = document.createElement('img');
-      img.src = src;
-      img.alt = caption || '';
-      img.onerror = () => { img.style.display = 'none'; };
-      bubble.appendChild(img);
-      if (caption) {
-        const cap = document.createElement('div');
-        cap.className = 'bubble-caption';
-        cap.textContent = caption;
-        bubble.appendChild(cap);
-      }
-      log.appendChild(bubble);
-      log.scrollTop = log.scrollHeight;
-      saveChatMemory();
-      return bubble;
-    }
-
-    const CHAT_MEMORY_KEY = 'lantern_chat_memory_v1';
-    function saveChatMemory() {
-      const log = document.getElementById('chatLog');
-      const entries = [];
-      log.querySelectorAll('.bubble').forEach(b => {
-        const img = b.querySelector('img');
-        entries.push({
-          role: b.classList.contains('operator') ? 'operator' : 'lantern',
-          text: b.childNodes[0]?.textContent || '',
-          image: img ? img.src : null,
-          caption: img ? b.querySelector('.bubble-caption')?.textContent : null
-        });
-      });
-      localStorage.setItem(CHAT_MEMORY_KEY, JSON.stringify(entries.slice(-100)));
-    }
-    function loadChatMemory() {
-      try {
-        const raw = localStorage.getItem(CHAT_MEMORY_KEY);
-        if (!raw) return false;
-        const entries = JSON.parse(raw);
-        if (!entries.length) return false;
-        const log = document.getElementById('chatLog');
-        log.innerHTML = '';
-        entries.forEach(e => {
-          if (e.image) addImageBubble(e.role, e.image, e.caption);
-          else addBubble(e.role, e.text);
-        });
-        return true;
-      } catch { return false; }
-    }
-
-    function renderSuggestions(suggestions) {
-      const box = document.getElementById('chatSuggestions');
-      box.innerHTML = '';
-      (suggestions || []).forEach((s) => {
-        const chip = document.createElement('button');
-        chip.className = 'chip';
-        chip.type = 'button';
-        chip.textContent = s;
-        chip.addEventListener('click', () => handleSuggestion(s));
-        box.appendChild(chip);
-      });
-    }
-
-    // Offline in-character reply mirror of the server engine.
-    function offlineReply(message) {
-      const text = (message || '').trim();
-      const lower = text.toLowerCase();
-      const base = ["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"];
-
-      // Match the server's agent selection
-      let agentName = 'Dream Journal';
-      const agentScores = [
-        { name: 'Blinkbug', score: 0, keywords: ['light','glow','guide','small','warm','bug','firefly'] },
-        { name: 'Mary / Waterfall', score: 0, keywords: ['flow','water','mary','heal','gentle','emotion','feeling'] },
-        { name: 'Courtney / Xenon', score: 0, keywords: ['space','ship','navigate','courtney','map','course','direction'] },
-        { name: 'Keystone', score: 0, keywords: ['anchor','memory','story','foundation','hold','remember'] },
-        { name: 'Founder / Alex', score: 0, keywords: ['wish','protect','founder','alex','home','return','safety'] }
-      ];
-      for (const a of agentScores) {
-        for (const kw of a.keywords) if (lower.includes(kw)) a.score += 10;
-        a.score += Math.random() * 3;
-      }
-      agentScores.sort((a,b) => b.score - a.score);
-      agentName = agentScores[0].name;
-      for (const door of DOORS) {
-        if (door.keywords.some(k => lower.includes(k))) {
-          return {
-            reply: `${door.name} stands open. "${door.phrase}" What do you see when you step through?`,
-            image: door.image,
-            caption: `${door.name} — ${door.tagline}`,
-            suggestions: ["Log this as a dream", "Another door", "Mirror a dream"],
-            agent: agentName
-          };
-        }
-      }
-      if (lower.includes('doors') || lower.includes('all doors') || lower.includes('which doors')) {
-        const list = DOORS.map(d => `<strong>${d.name}</strong> — ${d.tagline}`).join('<br>');
-        return { reply: `These doors stand open:<br><br>${list}<br><br>Which one calls to you?`, suggestions: ["Xenon Door", "Garden Door", "XP Door", "Kingdom of Hearts"], agent: agentName };
-      }
-      if (/^(hi|hello|hey|good (morning|evening|night)|greetings)/.test(lower)) {
-        return { reply: "Welcome back. I am the Dream Journal — local, private, always here, even offline. Did you dream?", suggestions: base, agent: agentName };
-      }
-      if (lower.includes('mirror') || lower.includes('interpret') || lower.includes('mean') || lower.includes('symbol')) {
-        return { reply: "Sit with three questions: 1) What feeling stayed after waking? 2) What in waking life does this echo? 3) What small, reversible step would honor it?", suggestions: ["Record a reflection", "Recent dreams"], agent: agentName };
-      }
-      if (lower.includes('recent') || lower.includes('history')) {
-        return { reply: "Open the journal below to see your saved entries. Want to mirror one?", suggestions: ["Mirror a dream", "Log a dream"], agent: agentName };
-      }
-      if (lower.includes('log') || lower.includes('dream') || lower.includes('save')) {
-        return { reply: "Good — let us keep it. Tell me the dream in your own words. I will save it locally; only you can see it.", suggestions: ["Recent dreams", "Mirror a dream"], agent: agentName };
-      }
-      return { reply: `I hear it: "${text.slice(0, 160)}". That is worth keeping. Tap "Log this as a dream" to save it.`, suggestions: ["Log this as a dream", "Mirror a dream", "Tell me about the doors"], draft: text, agent: agentName };
-    }
-
-    function escapeHtml(t) {
-      return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    }
-
-    function makeBubble(role, label) {
-      const log = document.getElementById('chatLog');
-      const wrapper = document.createElement('div');
-      wrapper.className = `bubble-wrapper ${role}`;
-      if (label) {
-        const nameTag = document.createElement('div');
-        nameTag.className = 'bubble-label';
-        nameTag.textContent = label;
-        wrapper.appendChild(nameTag);
-      }
-      const b = document.createElement('div');
-      b.className = `bubble ${role}`;
-      wrapper.appendChild(b);
-      log.appendChild(wrapper);
-      log.scrollTop = log.scrollHeight;
-      return b;
-    }
-
-    // Simulate streaming for offline fallback
-    async function streamOffline(text, suggestions, image, caption, agentLabel) {
-      if (image) addImageBubble('lantern', image, caption);
-      setStatus(false, agentLabel || 'Dream Journal');
-      const b = makeBubble('lantern', agentLabel || 'Dream Journal');
-      b.innerHTML = '<span class="cursor"></span>';
-      const log = document.getElementById('chatLog');
-      const tokens = text.split(/(\s+)/);
-      let out = '';
-      for (const tok of tokens) {
-        if (!tok) continue;
-        out += tok;
-        const isPunct = /[.!?,;:]$/.test(tok.trim());
-        b.innerHTML = escapeHtml(out) + '<span class="cursor"></span>';
-        log.scrollTop = log.scrollHeight;
-        await new Promise(r => setTimeout(r, isPunct ? 60 + Math.random()*80 : 18 + Math.random()*28));
-      }
-      b.textContent = out;
-      renderSuggestions(suggestions);
-      return b;
-    }
-
-    async function sendChat(message) {
-      const msg = (message || '').trim();
-      if (!msg) return;
-
-      const chatInput = document.getElementById('chatInput');
-      const chatSend  = document.getElementById('chatSend');
-      chatInput.disabled = true;
-      chatSend.disabled  = true;
-
-      addBubble('operator', msg);
-      renderSuggestions([]);
-
-      const log = document.getElementById('chatLog');
-      let currentAgent = 'Dream Journal';
-      const b = makeBubble('lantern', currentAgent + ' is typing...');
-      b.innerHTML = '<span class="cursor"></span>';
-
-      try {
-        const res = await fetch('/api/dream/chat/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: msg }),
-        });
-        if (!res.ok) throw new Error('stream_failed');
-        setStatus(true);
-
-        const reader  = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '', out = '', suggestions = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop();
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const raw = line.slice(6).trim();
-            if (raw === '[DONE]') continue;
-            let ev; try { ev = JSON.parse(raw); } catch { continue; }
-            if (ev.type === 'token') {
-              out += ev.text;
-              b.innerHTML = escapeHtml(out) + '<span class="cursor"></span>';
-              log.scrollTop = log.scrollHeight;
-            } else if (ev.type === 'done') {
-              suggestions = ev.suggestions || [];
-              if (ev.draft)   lastDraft = ev.draft;
-              if (ev.online !== undefined) setStatus(ev.online, ev.agent);
-              if (ev.agent) {
-                currentAgent = ev.agent;
-                const wrapper = b.parentElement;
-                if (wrapper) {
-                  const label = wrapper.querySelector('.bubble-label');
-                  if (label) label.textContent = currentAgent;
-                }
-              }
-            }
-          }
-        }
-        b.textContent = out;
-        renderSuggestions(suggestions);
-
-      } catch (_err) {
-        b.remove();
-        const local = offlineReply(msg);
-        await streamOffline(local.reply, local.suggestions, local.image, local.caption, local.agent || 'Dream Journal');
-        if (local.draft) lastDraft = local.draft || msg;
-      } finally {
-        chatInput.disabled = false;
-        chatSend.disabled  = false;
-        chatInput.focus();
-      }
-    }
-
-    async function handleSuggestion(label) {
-      const l = label.toLowerCase();
-      if (l.includes('log')) {
-        // Pre-fill the entry form with the last draft and scroll to it.
-        if (lastDraft) document.getElementById('text').value = lastDraft;
-        document.getElementById('form-section').scrollIntoView({ behavior: 'smooth' });
-        addBubble('lantern', 'I moved your words to the New Entry form below. Add tags and emotions, then Save Entry.');
-        return;
-      }
-      if (l.includes('recent')) {
-        document.getElementById('stats-section').scrollIntoView({ behavior: 'smooth' });
-      }
-      sendChat(label);
-    }
-
-    document.getElementById('chatSend').addEventListener('click', () => {
-      const input = document.getElementById('chatInput');
-      const msg = input.value;
-      input.value = '';
-      sendChat(msg);
-    });
-
-    document.getElementById('chatInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        document.getElementById('chatSend').click();
-      }
-    });
-    document.getElementById('chatClear').addEventListener('click', () => {
-      localStorage.removeItem(CHAT_MEMORY_KEY);
-      document.getElementById('chatLog').innerHTML = '';
-      addBubble('lantern', 'Chat memory cleared. The dream door is open again.');
-    });
-
-    // Load chat memory or show greeting
-    if (!loadChatMemory()) {
-      addBubble('lantern', 'The dream door is open. What did you bring back? Tell me a dream, or tap a prompt below.');
-      renderSuggestions(["Log a dream", "Recent dreams", "Mirror a dream", "Tell me about the doors"]);
-    }
-
-    // Load stats on page load
     loadStats();
-    // Refresh stats every 10 seconds
     setInterval(loadStats, 10000);
-
   </script>
 </body>
 </html>

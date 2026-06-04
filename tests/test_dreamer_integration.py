@@ -10,6 +10,7 @@ import json
 import urllib.request
 import urllib.error
 import unittest
+import pytest
 
 BASE = "http://127.0.0.1:4177"
 
