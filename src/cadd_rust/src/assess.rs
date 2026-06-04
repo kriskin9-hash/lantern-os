@@ -233,7 +233,7 @@ impl Assess {
         true
     }
 
-    fn check_dashboard(_capture: &Capture) -> bool {
+    fn check_dashboard(capture: &Capture) -> bool {
         // Heuristic: check filename for dashboard-like words.
         let forbidden = ["dashboard", "analytics", "admin", "panel", "grid", "widget", "metrics"];
         let name_lower = capture.file_name.to_lowercase();

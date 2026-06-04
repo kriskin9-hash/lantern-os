@@ -1,8 +1,8 @@
-# CSF v0.8 — Headless container
+# CSF v1.0.1 — Headless container
 # Multi-stage build: compile Rust binary, ship minimal runtime.
-# Usage: docker build -t lantern-os/csf:v0.8 .
+# Usage: docker build -t lantern-os/csf:v1.0.1 .
 
-FROM rust:1.78-slim-bookworm AS builder
+FROM rust:slim-bookworm AS builder
 WORKDIR /build
 COPY Cargo.toml ./
 # Generate Cargo.lock if missing
