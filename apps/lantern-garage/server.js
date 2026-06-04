@@ -404,7 +404,7 @@ const DREAM_DOORS = {
  * Multi-agent dream chat — dispatches to GPT Web API (port 3000).
  * Each agent speaks from a lore-derived persona. Zero hard-coded replies.
  */
-async function dreamChatReply(message, recentDreams, requestedAgent = "") {
+async function dreamChatReply(message, recentDreams, requestedAgent = "", requestedProvider = "") {
   const text = String(message || "").trim();
   const agent = requestedAgent
     ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
@@ -447,9 +447,11 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "") {
 
   const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-3 sentences). Never diagnose or command.`;
 
+  const rp = String(requestedProvider || "").toLowerCase().trim();
+
   // Provider 1: Anthropic Claude
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  if (anthropicKey) {
+  if (anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) {
     try {
       const payload = JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307",
@@ -494,7 +496,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "") {
 
   // Provider 2: OpenAI
   const openaiKey = process.env.OPENAI_API_KEY;
-  if (openaiKey) {
+  if (openaiKey && (!rp || rp === "openai" || rp === "gpt")) {
     try {
       const payload = JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4o-mini",
@@ -539,7 +541,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "") {
   // Provider 3: Ollama
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
-  try {
+  if (!rp || rp === "ollama" || rp === "local") { try {
     const payload = JSON.stringify({
       model: ollamaModel,
       stream: false,
@@ -580,6 +582,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "") {
       return { reply, agent: agent.name, suggestions, online: true };
     }
   } catch (err) { console.error("Ollama API error:", err.message); /* fall through */ }
+  }
 
   // Provider 3: Offline persona fallback
   const snippet = text.slice(0, 90);
@@ -1588,7 +1591,7 @@ async function route(req, res) {
       const record = await appendDreamerEntry(user, { kind, text, name: body.name, mood: body.mood, tags: body.tags });
 
       const recentDreams = readRecentDreams(5);
-      const chatResult = await dreamChatReply(`[${kind}] ${text}`, recentDreams, body.agent || "");
+      const chatResult = await dreamChatReply(`[${kind}] ${text}`, recentDreams, body.agent || "", body.provider || "");
       sendJson(res, {
         saved: true,
         record,
@@ -1711,7 +1714,7 @@ async function route(req, res) {
       const body = JSON.parse(raw || "{}");
       const message = String(body.message || "").slice(0, maxDreamerTextLength);
       const recentDreams = readRecentDreams(5);
-      const result = await dreamChatReply(message, recentDreams);
+      const result = await dreamChatReply(message, recentDreams, body.agent || "", body.provider || "");
       // Best-effort conversation logging; never blocks the reply.
       try {
         await appendConversationEntry({

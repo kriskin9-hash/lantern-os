@@ -287,7 +287,7 @@
         if (!opt.value) continue;
         const h = health[opt.value];
         const isUp = h && String(h.status).startsWith('healthy');
-        opt.textContent = opt.textContent.replace(/ \(●|○\)$/, '');
+        opt.textContent = opt.textContent.replace(/\s*[●○]$/, '');
         if (isUp) opt.textContent += ' ●';
         else if (h) opt.textContent += ' ○';
       }
