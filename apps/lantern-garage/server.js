@@ -2218,6 +2218,17 @@ Tone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the d
     return;
   }
 
+  // Serve surfaces directory
+  if (url.pathname.startsWith("/surfaces/")) {
+    const surfacesRoot = path.resolve(__dirname, "../../surfaces");
+    const surfacePath = url.pathname.slice("/surfaces/".length) || "index.html";
+    const surfaceTarget = path.resolve(surfacesRoot, surfacePath);
+    if (surfaceTarget.startsWith(surfacesRoot)) {
+      sendFile(res, surfaceTarget);
+      return;
+    }
+  }
+
   const staticPath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
   const target = path.resolve(publicRoot, staticPath);
   if (!target.startsWith(publicRoot)) {
