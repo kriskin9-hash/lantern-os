@@ -9,12 +9,21 @@ Integrates with src.csf for compressed symbolic archive export of dream memory.
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+# Load local env overrides if present
+_repo_root = Path(__file__).resolve().parents[2]
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_repo_root / ".env.local")
+except Exception:
+    pass
 
 
 @dataclass
@@ -115,19 +124,30 @@ class DreamJournalOrchestrator:
             b.name: b
             for b in (LanternBot(), BlinkbugBot(), KeystoneBot())
         }
-        self.memory_path = memory_path
+        # Default to canonical Lantern OS dream journal path
+        self.memory_path = memory_path or _repo_root / "data" / "dream_journal" / f"dreams_{datetime.now().strftime('%Y-%m')}.jsonl"
         self.memory: List[DreamEntry] = []
-        if memory_path and memory_path.exists():
+        if self.memory_path.exists():
             self._load_memory()
 
     def _load_memory(self):
-        """Load past dreams from JSONL."""
+        """Load past dreams from JSONL. Handles both native DreamEntry and canonical Lantern OS schemas."""
         for line in self.memory_path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             try:
                 data = json.loads(line)
-                self.memory.append(DreamEntry(**data))
+                # Normalize canonical schema fields into DreamEntry
+                entry = DreamEntry(
+                    id=data.get("id", ""),
+                    qutrit_id=data.get("qutrit_id", data.get("kind", "dream")),
+                    content=data.get("content", data.get("text", "")),
+                    timestamp=data.get("timestamp", datetime.now().isoformat()),
+                    symbolic_tags=data.get("symbolic_tags", data.get("tags", [])),
+                    emotion_tags=data.get("emotion_tags", data.get("emotions", [])),
+                    responder=data.get("responder", ""),
+                )
+                self.memory.append(entry)
             except Exception as e:
                 print(f"Bad memory line: {e}")
 

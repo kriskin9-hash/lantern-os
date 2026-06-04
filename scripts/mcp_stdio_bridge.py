@@ -18,6 +18,14 @@ import subprocess
 import os
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Load local env overrides if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(REPO_ROOT, ".env.local"))
+except Exception:
+    pass
+
 MCP_URL = os.environ.get("MCP_SERVER_URL", "http://127.0.0.1:8771")
 
 

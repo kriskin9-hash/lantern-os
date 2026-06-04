@@ -27,6 +27,15 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+# Load local env overrides if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO_ROOT / ".env.local")
+except Exception:
+    pass
+
 # Agent tool hooks + CSF cache enforcement
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 try:
@@ -67,9 +76,8 @@ except ImportError:
 app = FastAPI(title="Lantern OS MCP Server", version="1.0.0")
 
 # ── Fleet status — loaded from file, not hardcoded ──
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_FLEET_STATUS_PATH = _REPO_ROOT / "data" / "status" / "super-jarvis-fleet.json"
-_AGENTS_CONFIG_PATH = _REPO_ROOT / "config" / "agents.json"
+_FLEET_STATUS_PATH = REPO_ROOT / "data" / "status" / "super-jarvis-fleet.json"
+_AGENTS_CONFIG_PATH = REPO_ROOT / "config" / "agents.json"
 
 def _load_fleet_status() -> Dict[str, Any]:
     """Load fleet status from data/status/super-jarvis-fleet.json.

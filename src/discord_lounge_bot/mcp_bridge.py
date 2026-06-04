@@ -13,6 +13,14 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
 
+# Load local env overrides if present
+_repo_root = Path(__file__).resolve().parents[2]
+try:
+    from dotenv import load_dotenv
+    load_dotenv(_repo_root / ".env.local")
+except Exception:
+    pass
+
 try:
     import aiohttp
 except ImportError:
