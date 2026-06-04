@@ -156,9 +156,13 @@
       <p>Orion · v1.0.0 · local</p>
     </div>
     <div class="header-right">
-      <span class="kind-label">Agent</span>
-      <select id="agent-header" class="agent-select" title="Choose agent">
-        <option value="auto">Auto</option>
+      <span class="kind-label">Model</span>
+      <select id="model-header" class="agent-select" title="Choose model">
+        <option value="">Auto</option>
+        <option value="claude">Claude 3.5 Haiku</option>
+        <option value="openai">GPT-4o Mini</option>
+        <option value="gemini">Gemini 1.5 Flash</option>
+        <option value="ollama">Ollama (Local)</option>
       </select>
       <span class="kind-label">Mode</span>
       <select id="kind-header" class="kind-select" title="Entry kind">
@@ -217,9 +221,13 @@
           <option value="character">Character</option>
           <option value="place">Place</option>
         </select>
-        <span class="kind-label" style="margin-left:8px">Agent</span>
-        <select id="agent-inline" class="agent-select">
-          <option value="auto">Auto</option>
+        <span class="kind-label" style="margin-left:8px">Model</span>
+        <select id="model-inline" class="agent-select">
+          <option value="">Auto</option>
+          <option value="claude">Claude 3.5 Haiku</option>
+          <option value="openai">GPT-4o Mini</option>
+          <option value="gemini">Gemini 1.5 Flash</option>
+          <option value="ollama">Ollama (Local)</option>
         </select>
       </div>
       <span class="hint">Enter ↵ to send · Shift+Enter for newline</span>
@@ -236,8 +244,8 @@
   const emptyState  = document.getElementById('empty-state');
   const kindHeader  = document.getElementById('kind-header');
   const kindInline  = document.getElementById('kind-inline');
-  const agentHeader = document.getElementById('agent-header');
-  const agentInline = document.getElementById('agent-inline');
+  const modelHeader = document.getElementById('model-header');
+  const modelInline = document.getElementById('model-inline');
 
   let isStreaming = false;
   let serverOnline = false;
@@ -246,8 +254,8 @@
 
   kindHeader.addEventListener('change', () => { kindInline.value = kindHeader.value; });
   kindInline.addEventListener('change', () => { kindHeader.value = kindInline.value; });
-  agentHeader.addEventListener('change', () => { agentInline.value = agentHeader.value; });
-  agentInline.addEventListener('change', () => { agentHeader.value = agentInline.value; });
+  modelHeader.addEventListener('change', () => { modelInline.value = modelHeader.value; });
+  modelInline.addEventListener('change', () => { modelHeader.value = modelInline.value; });
 
   // ── Offline fallback replies (only used when server is unreachable) ───
   const OFFLINE_REPLIES = {
@@ -261,42 +269,65 @@
     place: "Place saved. Every location holds a secret — we'll find it together.",
   };
 
-  // ── Load agents from server ───────────────────────────────────────────
-  async function loadAgents() {
+  // ── Load available providers from server health ───────────────────────
+  async function loadProviders() {
     try {
-      const r = await fetch('/api/agents', { signal: AbortSignal.timeout(3000) });
+      const r = await fetch('/api/agent/health', { signal: AbortSignal.timeout(3000) });
       if (!r.ok) return;
       const data = await r.json();
-      if (!Array.isArray(data.agents) || data.agents.length === 0) return;
-      agents = data.agents;
-      populateAgentSelects(data.agents, data.default);
-    } catch { /* server not available — keep Auto only */ }
+      if (data.health) {
+        markAvailableProviders(data.health);
+      }
+    } catch { /* server not available — keep defaults */ }
   }
 
-  function populateAgentSelects(agentList, defaultId) {
-    [agentHeader, agentInline].forEach(sel => {
-      sel.innerHTML = '<option value="auto">Auto</option>';
-      for (const a of agentList) {
-        const opt = document.createElement('option');
-        opt.value = a.id;
-        opt.textContent = a.name;
-        sel.appendChild(opt);
+  function markAvailableProviders(health) {
+    [modelHeader, modelInline].forEach(sel => {
+      for (const opt of sel.options) {
+        if (!opt.value) continue;
+        const h = health[opt.value];
+        const isUp = h && String(h.status).startsWith('healthy');
+        opt.textContent = opt.textContent.replace(/ \(●|○\)$/, '');
+        if (isUp) opt.textContent += ' ●';
+        else if (h) opt.textContent += ' ○';
       }
-      sel.value = defaultId || 'auto';
     });
   }
 
-  // ── Server ping ───────────────────────────────────────────────────────
+  // ── Real health monitor pings ────────────────────────────────────────
   async function ping() {
+    let serverOk = false;
+    let providerCount = 0;
     try {
-      const r = await fetch('/api/dreamer?user=orion', { signal: AbortSignal.timeout(2000) });
-      serverOnline = r.ok;
-    } catch { serverOnline = false; }
-    setStatus(serverOnline ? 'online' : 'offline');
+      const r = await fetch('/api/health', { signal: AbortSignal.timeout(2000) });
+      serverOk = r.ok;
+    } catch { serverOk = false; }
+
+    if (serverOk) {
+      try {
+        const r2 = await fetch('/api/agent/health', { signal: AbortSignal.timeout(3000) });
+        if (r2.ok) {
+          const data = await r2.json();
+          if (data.health) {
+            const up = Object.values(data.health).filter(h => String(h.status).startsWith('healthy'));
+            providerCount = up.length;
+            markAvailableProviders(data.health);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    serverOnline = serverOk;
+    const statusText = serverOk
+      ? (providerCount > 0 ? `online · ${providerCount} model${providerCount !== 1 ? 's' : ''}` : 'online')
+      : 'offline';
+    dot.className = 'dot' + (serverOk ? ' online' : ' offline');
+    statusLabel.textContent = statusText;
   }
 
-  loadAgents();
+  loadProviders();
   ping();
+  setInterval(ping, 15000);
 
   // ── Auto-grow textarea ────────────────────────────────────────────────
   inputEl.addEventListener('input', () => {
@@ -351,9 +382,8 @@
     return { row, bubble, cursor };
   }
 
-  function getSelectedAgent() {
-    const val = agentInline.value;
-    return val === 'auto' ? '' : val;
+  function getSelectedProvider() {
+    return modelInline.value || '';
   }
 
   function getAgentName(agentId) {
@@ -363,8 +393,8 @@
   }
 
   // ── SSE streaming from /api/dream/chat/stream ─────────────────────────
-  async function streamFromServer(text, kind, agentId) {
-    const agentName = getAgentName(agentId);
+  async function streamFromServer(text, kind, provider) {
+    const agentName = getAgentName('');
     const { row, bubble, cursor, label } = createAgentBubble(agentName);
     setStatus('thinking');
 
@@ -378,8 +408,8 @@
         body: JSON.stringify({
           message: `[${kind}] ${text}`,
           user: 'orion',
-          agent: agentId || '',
-          provider: '',
+          agent: '',
+          provider: provider || '',
         }),
         signal: AbortSignal.timeout(30000),
       });
@@ -461,7 +491,8 @@
           user: 'orion',
           kind,
           text,
-          agent: getSelectedAgent(),
+          agent: '',
+          provider: getSelectedProvider(),
           history: conversationHistory.slice(-10),
         }),
         signal: AbortSignal.timeout(15000),
@@ -521,7 +552,7 @@
     if (emptyState) emptyState.style.display = 'none';
 
     const kind = kindInline.value;
-    const agentId = getSelectedAgent();
+    const provider = getSelectedProvider();
     isStreaming = true;
     sendBtn.disabled = true;
 
@@ -532,7 +563,7 @@
     conversationHistory.push({ role: 'user', content: `[${kind}] ${text}` });
 
     if (serverOnline) {
-      await streamFromServer(text, kind, agentId);
+      await streamFromServer(text, kind, provider);
     } else {
       await sendOffline(text, kind);
     }
