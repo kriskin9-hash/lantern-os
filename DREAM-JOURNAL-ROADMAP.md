@@ -1,24 +1,220 @@
-# Dream Journal === ORION === v1.0.0
-
-## Roadmap + Requirements by Tier + Confidence Table
+# Dream Journal === ORION === Roadmap
 
 **Updated:** June 4, 2026
 
 ---
 
-## 1. v1.0.0 Overall Roadmap
+## 0. What Changed from CSF to Convergence IO
 
-**Goal for v1.0.0:** Deliver a solid, usable foundation focused on core dream logging, raw artistic expression, CSF memory, and local-first architecture. The full interactive 3 Door Game is documented in v1.0.0 but ships in v1.0.1.
+**CSF (Convergence Symbolic Format)** was the data storage and compression format — focused on symbolic memory, sparse matrices, qutrit-inspired encoding, and efficient storage of dreams and lore.
 
-### Key Milestones
+**Convergence IO** is the evolution — the active runtime intelligence system built on top of CSF. It adds real-time provider monitoring, intelligent fallback routing, regulatory-grade primitives, and tier-aware behavior.
 
-- **By June 6:** Core logging + art generation + local setup + CSF basics mostly complete.
-- **v1.0.0 Release Target:** Mid-to-late June 2026 (after final testing and documentation).
-- **v1.0.1 Target:** Full 3 Door Game with Information Cards and comment-driven evolution.
+| Aspect | CSF (Old) | Convergence IO (New) |
+|---|---|---|
+| Scope | Data format + storage | Full runtime execution engine |
+| Main Focus | Symbolic compression & memory | Intelligent routing + decision making |
+| Fallback System | Basic offline fallback | Full multi-provider chain: Claude → Gemini → OpenAI → Ollama → Offline |
+| Regulatory Stack | Not integrated | All 5 RPS primitives (PCSF, CCF, AAPF, NAP, DCF) |
+| Tier Integration | Not tied to tiers | Directly powers Wanderer / DeepDreamer / Guild behavior |
+
+**CSF = The Archive** (how we store dreams and symbols efficiently).
+**Convergence IO = The Brain** (how we decide which model to use, when to fallback, what we're allowed to do, and how we prove it).
 
 ---
 
-## 2. Feature Requirements by Tier (v1.0.0)
+## 1. Convergence IO — Regulatory Primitive Stack (RPS)
+
+### All 5 Primitives — Side-by-Side
+
+| Primitive | Full Name | Core Question | Main Focus | Example in ORION |
+|---|---|---|---|---|
+| **PCSF** | Provider Capacity State Format | "Is the backend healthy?" | Availability & Health | Tracks Claude, Gemini, Ollama health, quota, latency |
+| **CCF** | Capability Claim Format | "What can the agent do?" | Positive Claims | "I can generate Gage art" (DeepDreamer+ only) |
+| **NAP** | Negative Authority Profiles | "What is forbidden?" | Restrictions & Safety | Blocks NSFW, limits free users to 15 art/month |
+| **DCF** | Data Classification Format | "How sensitive is this?" | Privacy & Data Handling | Marks dreams as Private, Symbolic, or Shared |
+| **AAPF** | Agent Action Provenance Format | "What exactly happened?" | Audit & Traceability | Logs which model answered, which tier, which NAP triggered |
+
+### How They Work Together
+
+```
+Incoming Request
+    → DCF (classify data sensitivity)
+    → CCF (does agent claim capability?)
+    → NAP (is action forbidden?)
+    → PCSF (which provider is available?)
+    → EXECUTE
+    → AAPF (record everything)
+```
+
+### Primitive Details
+
+#### PCSF — Provider Capacity State Format
+
+Tracks real-time health of every AI provider. Includes:
+
+| Primitive | What It Tracks | Example |
+|---|---|---|
+| P1 Provider Identity | Unique identifier | `claude-3.5-sonnet`, `ollama-llama3.1` |
+| P2 Capacity State | Operational status | `healthy`, `degraded`, `rate-limited`, `offline` |
+| P3 Quota Tracking | Remaining tokens/requests | `"12,450 / 50,000 tokens left"` |
+| P4 Latency & Performance | Response time & reliability | `1.2s avg, 98.7% success` |
+| P5 Priority Level | Tier-based priority | Guild > DeepDreamer > Wanderer |
+| P6 Fallback Order | Routing sequence | Claude → Gemini → OpenAI → Ollama → Offline |
+| P7 Health Timestamp | Last check time | `2026-06-04T09:08:22Z` |
+| P8 Recovery Strategy | What to do on failure | Auto-retry, switch provider, cached persona |
+| P9 Provenance Tag | Which provider answered | `{ "source": "claude", "model": "claude-3.5-sonnet" }` |
+
+#### CCF — Capability Claim Format
+
+The "ID Card + License" system for AI agents. Includes:
+
+| Primitive | What It Does | Example |
+|---|---|---|
+| C1 Capability Declaration | What agent says it can do | "I can generate Gage doodles" |
+| C2 Proof of Capability | Evidence claim is true | "Art model available + quota OK" |
+| C3 Scope & Limitations | Where/when it applies | "Unlimited for DeepDreamer, 15/month for Wanderer" |
+| C4 Temporal Validity | How long claim is valid | `60` seconds (auto-expires) |
+| C5 Dependency Chain | What capability depends on | "Art depends on PCSF showing healthy provider" |
+| C6 Revocation Trigger | When to withdraw | "If rate limit hit → revoke immediately" |
+| C7 Honesty Score | Historical truthfulness | `0.95` (95% of claims were valid) |
+
+#### NAP — Negative Authority Profiles
+
+The restriction and denial system. Includes:
+
+| Primitive | What It Does | Example |
+|---|---|---|
+| N1 Negative Authority | List of forbidden actions | "No NSFW, no medical advice" |
+| N2 Condition Triggers | When restriction activates | "If user is Wanderer tier" |
+| N3 Denial Response | How to respond | Graceful message + suggestion + offline fallback |
+| N4 Scope | Where restriction applies | "Only applies to art generation" |
+| N5 Dynamic External Lists | Real-time restrictions | Safety classifiers, block lists |
+| N6 Audit Logging | Record every denial | AAPF log: "Denied — NAP N1 triggered for Wanderer" |
+| N7 Override & Escalation | When restrictions bypass | "Synthesasia Guild can override certain NAPs" |
+
+#### DCF — Data Classification Format
+
+Classifies data sensitivity. Includes:
+
+| Primitive | What It Does | Example |
+|---|---|---|
+| D1 Classification Label | Sensitivity level | `Private`, `Symbolic`, `Shared`, `Public` |
+| D2 Propagation Rules | Classification travels | Private dream → private art (inheritance) |
+| D3 Handling Policies | Allowed actions per class | Private dreams cannot be used for public generation |
+| D4 User Consent | User can change classification | Mark dream as "Shareable" after review |
+| D5 Retention Rules | When data must be deleted | "Auto-delete Private dreams after 90 days" |
+| D6 Audit Tagging | Record classification decisions | Every dream gets DCF tag in AAPF logs |
+| D7 Cross-Boundary Controls | Moving data between systems | Prevent sending Private to external providers |
+
+#### AAPF — Agent Action Provenance Format
+
+The "black box / flight recorder" for every action. Includes:
+
+| Primitive | What It Does | Example |
+|---|---|---|
+| A1 Action ID | Unique identifier | `aapf_20260604_091234_dream_78491` |
+| A2 Timestamp & Sequence | Precise time and ordering | `2026-06-04T09:12:34.567Z` |
+| A3 Actor Identity | Who performed action | `user:alex_place`, `tier:DeepDreamer` |
+| A4 Action Type | Category | `dream_entry_create`, `art_generate_gage` |
+| A5 Input Context | What was submitted | Dream text, user prompt |
+| A6 Output Result | What was produced | Reply text, image ID |
+| A7 CCF Reference | Which capability claimed | `ccf:art_generation_v1` |
+| A8 PCSF Provider Used | Which provider handled it | `claude-3.5-sonnet`, `ollama-llama3.1:8b` |
+| A9 NAP Rules Triggered | Any restrictions applied | `nap:rate_limit_wanderer` |
+| A10 DCF Classification | Data sensitivity at time | `Private`, `Symbolic` |
+| A11 User Tier & Consent | Tier and consent state | `DeepDreamer`, `consent:explicit` |
+| A12 Integrity Proof | Cryptographic hash | `SHA-256` hash of entire record |
+
+---
+
+## 2. Vision
+
+ORION is a local-first, symbolic, artistic dream journal that treats dreams as sacred territory. It combines raw hand-drawn expression (Gage style), intelligent AI (Convergence IO), and evolving symbolic gameplay (3 Door Game).
+
+### Tier Structure (Locked)
+
+| Tier | Price | Position |
+|---|---|---|
+| **Wanderer** | Free (7-day DeepDreamer trial) | Entry point |
+| **DeepDreamer** | $20/month | Core paid tier |
+| **Synthesasia Guild** | $200/month | Premium / team tier |
+
+---
+
+## 3. Phased Roadmap
+
+### Phase 1: v1.0.0 — Foundation (Target: Mid-to-Late June 2026)
+
+**Focus:** Solid, usable core with strong artistic identity and local-first architecture.
+
+**Key Deliverables:**
+
+- Fast dream logging (text + voice)
+- Raw Gage hand-drawn doodle art generation pipeline
+- Convergence IO v1.1.0 with full RPS (PCSF, CCF, AAPF, NAP, DCF)
+- Symbolic tagging + DCF classification
+- AAPF provenance logging with integrity hashes
+- Local Docker + Ollama setup (fully offline capable)
+- Tier system foundation with Convergence IO enforcement
+- Full 3 Door Game Design Document (ships v1.0.1)
+- Welcome marketing assets (pastel banner, first Patreon post)
+
+**Current Confidence:**
+
+| Milestone | Status |
+|---|---|
+| By June 4 | 76% |
+| By June 6 | 91% |
+
+**Completed (June 4):**
+- Convergence IO v1.1.0 implemented (`src/convergence_io/`)
+- PCSF: tier-aware routing, last_checked timestamps, quota tracking
+- CCF: temporal validity (expiring claims), honesty scores, tier enforcement
+- NAP: tier overrides (Guild bypasses certain restrictions)
+- DCF: retention policies, derive() propagation (private dream → private art)
+- AAPF: SHA-256 integrity hashes, cross-references to CCF/NAP/DCF, tier + consent fields
+- MCP server fixed (restarted from new path, `-NoLogo` fix)
+- `.env.local` dotenv loading across all MCP/orchestration scripts
+
+---
+
+### Phase 2: v1.0.1 — The 3 Door Game (Target: Late June / Early July 2026)
+
+**Focus:** Make the journal alive and interactive.
+
+**Key Deliverables:**
+
+- Full interactive 3 Door Game with Information Cards
+- Comment-driven door evolution using CSF + Convergence IO
+- Enhanced AAPF with blockchain hash anchoring (optional for Guild)
+- Advanced symbolic tools (void/light balance, mystery tracking)
+- Improved Convergence IO with full NAP + CCF enforcement
+- Tier-specific experiences fully activated
+
+---
+
+### Phase 3: v1.0.2 — Depth & Polish (July 2026)
+
+- Dream pattern analysis dashboard
+- Lucid dreaming tools (MILD/WBTB tracking, reality checks)
+- Enhanced Discord bot integration
+- Full DCF privacy controls + export tools
+- Mobile-friendly web UI improvements
+
+---
+
+### Phase 4: v1.1 — Convergence & Guild Features (August 2026)
+
+- Team / multi-user support for Synthesasia Guild
+- Shared symbolic archives
+- Advanced blockchain audit trails (full AAPF on-chain)
+- Custom art style training
+- API access for Guild members
+
+---
+
+## 4. Feature Requirements by Tier (v1.0.0+)
 
 | Feature Area | Wanderer (Free) | DeepDreamer ($20) | Synthesasia Guild ($200) | Notes |
 |---|---|---|---|---|
@@ -26,6 +222,7 @@
 | **Raw Gage Art Generation** | Limited (10–15/month) | Unlimited | Unlimited + priority queue | Major differentiator |
 | **3 Door Game** | Basic / limited plays | Full access + Information Cards | Full + team/custom instances | Plan documented in v1.0.0 |
 | **CSF Memory** | Basic export | Advanced (delta, search, merging) | Advanced + team/shared archives | Foundation in v1.0.0 |
+| **Convergence IO** | Basic fallback | Full CCF/NAP/DCF enforcement | Full + blockchain AAPF | v1.1.0 implemented |
 | **Symbolic Tools** | Basic tagging | Advanced (void/light, mystery tracking) | Advanced + custom symbols | Strong in v1.0.0 |
 | **Local-First / Offline** | Yes | Yes | Yes + team deployment support | Core requirement |
 | **Discord Integration** | Read-only + limited channels | Full role + private channels | Dedicated / private server options | Tied to tiers |
@@ -35,7 +232,21 @@
 
 ---
 
-## 3. Confidence Table – v1.0.0 Features
+## 5. Feature Maturity by Version
+
+| Feature | v1.0.0 | v1.0.1 | v1.0.2 | v1.1 |
+|---|---|---|---|---|
+| Dream Logging + Voice | Full | Full | Full | Full |
+| Raw Gage Art Generation | Strong | Unlimited | Unlimited | Unlimited |
+| Convergence IO + RPS | Full (v1.1.0) | Strong | Strong | Advanced |
+| 3 Door Game | Design | Full | Enhanced | Team/Custom |
+| Symbolic Tools & Mystery | Basic | Strong | Advanced | Advanced |
+| AAPF Provenance | Full + integrity | Full | Full | Blockchain |
+| Tier System Enforcement | Full (Convergence IO) | Full | Full | Advanced |
+
+---
+
+## 6. Confidence Table – v1.0.0 Features
 
 | Feature | Confidence by June 4 | Confidence by June 6 | Priority | Notes |
 |---|---|---|---|---|
@@ -46,14 +257,15 @@
 | CSF basic storage + export | 70% | 88% | High | Core foundation |
 | Advanced CSF (delta + search) | 60% | 82% | High | Biggest gap |
 | Local Docker + offline mode | 85% | 95% | High | Strong |
-| 3 Door Game Design Plan (documentation) | 100% | 100% | High | Already complete |
+| 3 Door Game Design Plan | 100% | 100% | High | Already complete |
 | Symbolic tagging system | 68% | 85% | Medium | Needs refinement |
 | Discord role + channel setup | 75% | 90% | Medium | Straightforward |
+| **Convergence IO v1.1.0** | **100%** | **100%** | **High** | **Implemented June 4** |
 | **Overall v1.0.0 Readiness** | **74%** | **89%** | — | Realistic target |
 
 ---
 
-## 4. Key Deliverables for v1.0.0
+## 7. Key Deliverables for v1.0.0
 
 ### Must Have (High Confidence)
 
@@ -62,6 +274,7 @@
 - Local-first Docker + Ollama setup
 - Basic CSF storage and export
 - Symbolic tagging foundation
+- **Convergence IO v1.1.0 with full RPS (DONE)**
 - Full documentation of the 3 Door Game plan
 - Patreon tier structure (Wanderer / DeepDreamer / Synthesasia Guild)
 - Marketing assets (welcome banner in pastel style)
@@ -81,12 +294,39 @@
 
 ---
 
+## 8. Implementation Notes
+
+### Convergence IO File Map
+
+| File | Purpose |
+|---|---|
+| `src/convergence_io/__init__.py` | Package exports, v1.1.0 |
+| `src/convergence_io/pcsf.py` | Provider health, tier priority, quota tracking |
+| `src/convergence_io/ccf.py` | Capability claims, temporal validity, honesty scores |
+| `src/convergence_io/nap.py` | Denial rules, tier overrides |
+| `src/convergence_io/dcf.py` | Data classification, retention, propagation |
+| `src/convergence_io/aapf.py` | Audit trail, integrity hashes, cross-references |
+| `src/convergence_io/engine.py` | Unified orchestration engine |
+
+### MCP/Orchestration Fixes (June 4)
+
+- MCP server killed at old path (`C:\Users\alexp\Documents\gm-agent-orchestrator`)
+- Restarted from new path (`C:\Users\alexp\OneDrive\Documents\GitHub\gm-agent-orchestrator`)
+- Added `-NoLogo` to all PowerShell subprocess invocations to prevent banner pollution of JSON
+- `.env.local` dotenv loading added to all MCP scripts:
+  - `scripts/mcp_stdio_bridge.py`
+  - `src/mcp_server/server.py`
+  - `src/discord_lounge_bot/mcp_bridge.py`
+  - `src/dream_journal/orchestrator.py`
+
+---
+
 ## Summary
 
-v1.0.0 is positioned as a strong foundation release focused on logging, artistic expression, and local ownership.
+v1.0.0 is positioned as a strong foundation release focused on logging, artistic expression, local ownership, and now — full regulatory-grade AI decision-making via Convergence IO.
+
+The biggest gap closed on June 4 is the complete RPS implementation. The system now has real-time provider monitoring, tier-aware routing, expiring capability claims, honesty tracking, tier override on denials, data classification with retention and propagation, and tamper-evident audit trails.
 
 The 3 Door Game is fully planned and documented in v1.0.0 but will launch as a major feature in v1.0.1.
 
-Highest risk areas right now are advanced CSF and scaling art generation for paid tiers.
-
-Overall confidence for a solid v1.0.0 release by mid-to-late June is strong (89% by June 6) if focus stays on the high-priority items.
+Overall confidence for a solid v1.0.0 release by mid-to-late June is strong (89% by June 6) with Convergence IO now fully implemented.
