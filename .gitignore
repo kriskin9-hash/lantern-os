@@ -59,15 +59,26 @@ data/dream_journal/*.jsonl
 archive/**/worktrees/**
 
 # Old versioned files
-* -v2*
-* -v3*
-*old*
-*backup*
+*-v2*
+*-v3*
+*-old*
+*-backup*
+
+# IDE / tool artifacts
 .claude/
+.claude-plugin/
+.vscode/
+.windsurf/
+
+# Generated artifacts
 artifacts/
+*.log
+*.tmp
+
+# Python cache
+__pycache__/
+
+# Data directories that should not be committed
 data/dream_journal/
 data/dollhouse/csf/
 data/agent-fleet/
-*.tmp
-*.log
-__pycache__/

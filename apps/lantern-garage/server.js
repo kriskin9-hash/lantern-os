@@ -1628,15 +1628,30 @@ async function route(req, res) {
       const raw = await collectRequestBody(req);
       const body = JSON.parse(raw);
       const dreamId = `dream_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const normalizeList = (value, limit = 12) => {
+        if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean).slice(0, limit);
+        return String(value || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, limit);
+      };
       const entry = {
         id: dreamId,
         timestamp: new Date().toISOString(),
-        kind: body.kind || "dream",
-        text: body.text || body.content || "",
-        lucidity: body.lucidity || 0,
-        emotions: body.emotions || [],
-        tags: (body.tags || []).slice(0, 10),
-        symbols: body.symbols || [],
+        kind: String(body.kind || "dream").slice(0, 40),
+        name: String(body.name || body.title || "").slice(0, 140),
+        text: String(body.text || body.content || "").slice(0, maxDreamerTextLength),
+        lucidity: Math.max(0, Math.min(1, Number(body.lucidity || 0))),
+        clarity: Math.max(0, Math.min(1, Number(body.clarity || 0))),
+        mood: String(body.mood || "").slice(0, 80),
+        technique: String(body.technique || "").slice(0, 80),
+        sleep_window: String(body.sleep_window || "").slice(0, 80),
+        recurring: Boolean(body.recurring),
+        dreamsign: Boolean(body.dreamsign),
+        emotions: normalizeList(body.emotions, 12),
+        tags: normalizeList(body.tags, 10),
+        symbols: normalizeList(body.symbols, 12),
         linked_goals: body.linked_goals || [],
         priority: body.priority || "normal",
         reflection_on: body.reflection_on || [],
