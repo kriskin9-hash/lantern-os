@@ -10,8 +10,31 @@ import json
 import urllib.request
 import urllib.error
 import unittest
+import pytest
 
 BASE = "http://127.0.0.1:4177"
+
+
+def _server_has_dream_api() -> bool:
+    """Return True only if the server is up AND has the /api/dream/create endpoint."""
+    try:
+        req = urllib.request.Request(
+            BASE + "/api/dream/create",
+            data=b'{"kind":"dream","text":"ci-probe"}',
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=3) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+if not _server_has_dream_api():
+    pytest.skip(
+        "lantern-garage not running with /api/dream/* endpoints — run server.js first",
+        allow_module_level=True,
+    )
 
 
 def api(method, path, data=None):

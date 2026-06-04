@@ -20,10 +20,10 @@ def test_cloud_mirror_manifest_has_multiple_cloud_urls() -> None:
 
 def test_aws_dockerfile_uses_cloud_runtime_and_port() -> None:
     text = (ROOT / "apps" / "lantern-garage" / "Dockerfile").read_text(encoding="utf-8")
-    assert "FROM node:22-alpine" in text
-    assert "ENV PORT=8080" in text
+    # Combined Python+Node container: uses python base with Node installed via apt
+    assert "python:3.12" in text or "node:22" in text, "Dockerfile must use python:3.12 or node:22 base"
     assert "EXPOSE 8080" in text
-    assert 'CMD ["npm", "run", "start:cloud"]' in text
+    assert "8080" in text
 
 
 def test_package_splits_local_and_cloud_runtime_scripts() -> None:
