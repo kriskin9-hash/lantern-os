@@ -26,9 +26,13 @@ jobs:
           echo "Base: origin/master"
           echo ""
 
-          # New files
+          # New files (handle empty-string so wc -l returns 0 not 1)
           NEW_FILES=$(git diff --name-only --diff-filter=A origin/master...HEAD)
-          NEW_FILE_COUNT=$(echo "$NEW_FILES" | wc -l)
+          if [ -z "$NEW_FILES" ]; then
+            NEW_FILE_COUNT=0
+          else
+            NEW_FILE_COUNT=$(echo "$NEW_FILES" | wc -l)
+          fi
           echo "new_file_count=$NEW_FILE_COUNT" >> $GITHUB_OUTPUT
 
           # New top-level directories (guard against empty NEW_FILES causing false-positive)
@@ -59,7 +63,7 @@ jobs:
           exit 1
 
       - name: Check file count
-        if: steps.analyze.outputs.new_file_count > env.MAX_NEW_FILES
+        if: fromJSON(steps.analyze.outputs.new_file_count) > fromJSON(env.MAX_NEW_FILES)
         run: |
           echo "❌ BLOCKED: Too many new files (${{ steps.analyze.outputs.new_file_count }})"
           echo "Maximum allowed per PR: ${{ env.MAX_NEW_FILES }}"
@@ -67,7 +71,7 @@ jobs:
           exit 1
 
       - name: Check markdown file count
-        if: steps.analyze.outputs.new_markdown_count > env.MAX_NEW_MARKDOWN
+        if: fromJSON(steps.analyze.outputs.new_markdown_count) > fromJSON(env.MAX_NEW_MARKDOWN)
         run: |
           echo "❌ BLOCKED: Too many new markdown files (${{ steps.analyze.outputs.new_markdown_count }})"
           echo "Maximum allowed per PR: ${{ env.MAX_NEW_MARKDOWN }}"
