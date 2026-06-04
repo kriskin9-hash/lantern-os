@@ -11,6 +11,7 @@ as NAP entries and refreshed on a schedule. The runtime degrades safely when sou
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
@@ -45,7 +46,12 @@ class NegativeAuthorityProfile:
     def is_expired(self) -> bool:
         if not self.expires_at:
             return False
-        return datetime.now(timezone.utc).isoformat() > self.expires_at
+        try:
+            now = datetime.now(timezone.utc)
+            expiry = datetime.fromisoformat(self.expires_at.replace("Z", "+00:00"))
+            return now > expiry
+        except Exception:
+            return False
 
     def can_override(self, tier: str) -> bool:
         if not self.tier_override:
@@ -75,18 +81,23 @@ class AuthorityGate:
 
     def __init__(self) -> None:
         self._profiles: Dict[str, NegativeAuthorityProfile] = {}
+        self._lock = threading.RLock()
 
     def add_profile(self, profile: NegativeAuthorityProfile) -> None:
-        self._profiles[profile.profile_id] = profile
+        with self._lock:
+            self._profiles[profile.profile_id] = profile
 
     def remove_profile(self, profile_id: str) -> None:
-        self._profiles.pop(profile_id, None)
+        with self._lock:
+            self._profiles.pop(profile_id, None)
 
     def check(self, action_type: str, provider_id: str = "",
               boundary: str = "", data_classes: Optional[List[str]] = None,
               tier: Optional[str] = None) -> "AuthorityResult":
         data_classes = data_classes or []
-        for nap in self._profiles.values():
+        with self._lock:
+            profiles = list(self._profiles.values())
+        for nap in profiles:
             if nap.is_expired():
                 continue
             # N7 — tier override: high tiers can bypass certain NAPs

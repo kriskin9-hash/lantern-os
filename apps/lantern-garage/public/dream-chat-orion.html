@@ -282,6 +282,7 @@
         opt.textContent = a.name;
         sel.appendChild(opt);
       }
+      sel.value = defaultId || 'auto';
     });
   }
 
@@ -364,7 +365,7 @@
   // ── SSE streaming from /api/dream/chat/stream ─────────────────────────
   async function streamFromServer(text, kind, agentId) {
     const agentName = getAgentName(agentId);
-    const { row, bubble, cursor } = createAgentBubble(agentName);
+    const { row, bubble, cursor, label } = createAgentBubble(agentName);
     setStatus('thinking');
 
     let fullReply = '';
@@ -460,6 +461,7 @@
           user: 'orion',
           kind,
           text,
+          agent: getSelectedAgent(),
           history: conversationHistory.slice(-10),
         }),
         signal: AbortSignal.timeout(15000),

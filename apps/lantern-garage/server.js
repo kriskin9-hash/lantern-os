@@ -404,9 +404,11 @@ const DREAM_DOORS = {
  * Multi-agent dream chat — dispatches to GPT Web API (port 3000).
  * Each agent speaks from a lore-derived persona. Zero hard-coded replies.
  */
-async function dreamChatReply(message, recentDreams) {
+async function dreamChatReply(message, recentDreams, requestedAgent = "") {
   const text = String(message || "").trim();
-  const agent = selectAgent(message);
+  const agent = requestedAgent
+    ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
+    : selectAgent(message);
 
   const suggestions = Object.values(DREAM_DOORS)
     .slice(0, 4)
@@ -666,15 +668,17 @@ function readConversationLog(limit = 50) {
 
 function collectRequestBody(req, maxBytes = 64000) {
   return new Promise((resolve, reject) => {
-    let body = "";
+    const chunks = [];
+    let totalBytes = 0;
     req.on("data", (chunk) => {
-      body += chunk.toString();
-      if (Buffer.byteLength(body, "utf8") > maxBytes) {
+      chunks.push(chunk);
+      totalBytes += chunk.length;
+      if (totalBytes > maxBytes) {
         reject(new Error("request_body_too_large"));
         req.destroy();
       }
     });
-    req.on("end", () => resolve(body));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
     req.on("error", reject);
   });
 }
@@ -1584,7 +1588,7 @@ async function route(req, res) {
       const record = await appendDreamerEntry(user, { kind, text, name: body.name, mood: body.mood, tags: body.tags });
 
       const recentDreams = readRecentDreams(5);
-      const chatResult = await dreamChatReply(`[${kind}] ${text}`, recentDreams);
+      const chatResult = await dreamChatReply(`[${kind}] ${text}`, recentDreams, body.agent || "");
       sendJson(res, {
         saved: true,
         record,

@@ -10,7 +10,7 @@ A CapabilityGate checks claims before allowing actions to proceed.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 
@@ -32,16 +32,20 @@ class CapabilityClaim:
     tier: str = "wanderer"  # wanderer | deep_dreamer | synthesasia_guild
 
     def verify(self) -> "CapabilityClaim":
-        self.verified_at = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
+        self.verified_at = now.isoformat()
         if self.validity_seconds:
-            self.expires_at = (datetime.now(timezone.utc).replace(microsecond=0).isoformat() + "Z").replace("+00:00Z", "Z")
+            expiry = now + timedelta(seconds=self.validity_seconds)
+            self.expires_at = expiry.isoformat()
         return self
 
     def is_expired(self) -> bool:
         if not self.expires_at:
             return False
         try:
-            return datetime.now(timezone.utc).isoformat() > self.expires_at
+            now = datetime.now(timezone.utc)
+            expiry = datetime.fromisoformat(self.expires_at.replace("Z", "+00:00"))
+            return now > expiry
         except Exception:
             return False
 
@@ -98,6 +102,7 @@ class CapabilityGate:
     def __init__(self) -> None:
         self._claims: Dict[str, CapabilityClaim] = {}
         self._honesty = HonestyTracker()
+        self._lock = threading.RLock()
         # CCF tier enforcement: action → required tier
         self._tier_requirements: Dict[str, str] = {
             "art_generation_unlimited": "synthesasia_guild",
@@ -136,10 +141,11 @@ class CapabilityGate:
         return GateResult(allowed=True, claim=claim, honesty_score=self._honesty.score(agent_id))
 
     def snapshot(self) -> Dict[str, Any]:
-        return {
-            "claims": {aid: c.to_dict() for aid, c in self._claims.items()},
-            "honesty": self._honesty.snapshot(),
-        }
+        with self._lock:
+            return {
+                "claims": {aid: c.to_dict() for aid, c in self._claims.items()},
+                "honesty": self._honesty.snapshot(),
+            }
 
 
 @dataclass

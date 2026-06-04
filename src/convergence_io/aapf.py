@@ -94,8 +94,8 @@ class ProvenanceLedger:
             try:
                 with open(self._path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(action.to_dict()) + "\n")
-            except OSError:
-                pass
+            except OSError as exc:
+                logging.warning("Provenance ledger write failed: %s", exc)
 
     def query(self, agent_id: Optional[str] = None, action_type: Optional[str] = None,
               since: Optional[str] = None, limit: int = 100) -> List[Dict[str, Any]]:
@@ -114,4 +114,5 @@ class ProvenanceLedger:
             counts: Dict[str, int] = {}
             for r in self._records:
                 counts[r.status] = counts.get(r.status, 0) + 1
+            return counts
             return counts

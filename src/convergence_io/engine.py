@@ -39,6 +39,7 @@ class RouteResult:
     provenance_id: str = ""
     latency_ms: float = 0.0
     capacity_snapshot: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class ConvergenceIO:
@@ -64,6 +65,18 @@ class ConvergenceIO:
 
         self.registry.check_env(lambda k: os.environ.get(k))
         self.authority_gate.add_profile(dreamer_safety_nap())
+
+        # Register default capability claims so the engine is usable out-of-the-box
+        for default_agent in ("auto", "lantern", "orion", ""):
+            claim = CapabilityClaim(
+                agent_id=default_agent,
+                provider_id="pcsf-chain",
+                capabilities={"chat", "save", "dispatch"},
+                boundary="hybrid",
+                tier="wanderer",
+            )
+            claim.verify()
+            self.capability_gate.register_claim(claim)
 
         self._provider_handlers: Dict[str, Callable] = {}
 

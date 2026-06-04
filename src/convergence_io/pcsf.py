@@ -32,7 +32,7 @@ class ProviderState(Enum):
 class ProviderCapacityState:
     provider_id: str
     state: ProviderState = ProviderState.UNAVAILABLE
-    latency_p50_ms: float = 0.0
+    latency_ema_ms: float = 0.0
     latency_p99_ms: float = 0.0
     error_count: int = 0
     success_count: int = 0
@@ -78,7 +78,7 @@ class ProviderCapacityState:
         return {
             "provider_id": self.provider_id,
             "state": self.state.value,
-            "latency_p50_ms": self.latency_p50_ms,
+            "latency_ema_ms": self.latency_ema_ms,
             "latency_p99_ms": self.latency_p99_ms,
             "error_count": self.error_count,
             "success_count": self.success_count,
