@@ -803,7 +803,12 @@
               }
               if (evt.type === "done" && !streamFinished) {
                 streamFinished = true;
-                finishStream(row, bubble, cursor, fullText, evt.source, evt.error, evt.suggestions);
+                // If server stripped the [DOORS:] marker, rewrite bubble with clean text
+                const displayText = evt.cleanText || fullText;
+                if (evt.cleanText && evt.cleanText !== fullText) {
+                  bubble.textContent = evt.cleanText;
+                }
+                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, evt.suggestions);
               }
             } catch { /* skip malformed */ }
           }
@@ -841,7 +846,7 @@
     if (!text && !error) {
       bubble.textContent = bubble.textContent || "…";
     }
-    // Save assistant reply to history for next turn
+    // Save clean assistant reply to history (no [DOORS:] marker)
     if (text) conversationHistory.push({ role: "assistant", text });
 
     if (source === "failed" || source === "unavailable" || source === "error" || error) {

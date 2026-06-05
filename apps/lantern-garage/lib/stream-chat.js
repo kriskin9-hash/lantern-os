@@ -61,30 +61,31 @@ async function handleStreamChat(req, url, res) {
     ? `\nPrior conversation turns:\n${history.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
-  const systemPrompt = `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. End responses with one question or one invitation to record.`;
+  // Three Doors instruction — the model imagines 3 equally weighted next doors
+  // based on the last door mentioned in conversation, then emits them as a
+  // parseable marker that is stripped from the visible reply.
+  const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors for the dreamer to choose next. Each door should be a brief, future-tense, equally weighted option grounded in what door we just opened or the dreamer just mentioned. Write them as a single hidden line in this exact format (do not narrate it, just append it):
+[DOORS: door option one | door option two | door option three]
+The door options should feel like natural continuations — not questions, not commands. Future tense. First person. Short (under 8 words each). Always 3. Always equal weight.`;
 
-  // Build contextual suggestions from real dream memory (tags, emotions, symbols)
-  function buildSuggestions() {
-    const tagFreq = {}, emotionFreq = {}, symbolFreq = {};
-    for (const d of recentDreams) {
-      for (const t of (d.tags || [])) tagFreq[t] = (tagFreq[t] || 0) + 1;
-      for (const e of (d.emotions || [])) emotionFreq[e] = (emotionFreq[e] || 0) + 1;
-      for (const s of (d.symbols || [])) symbolFreq[s] = (symbolFreq[s] || 0) + 1;
-    }
-    const top = (freq) => Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,2).map(([k]) => k);
-    const topTags = top(tagFreq);
-    const topEmotions = top(emotionFreq);
-    const topSymbols = top(symbolFreq);
-    const chips = [];
-    if (topTags[0]) chips.push(`Tell me more about "${topTags[0]}"`);
-    if (topEmotions[0]) chips.push(`I often feel ${topEmotions[0]} in my dreams`);
-    if (topSymbols[0]) chips.push(`The symbol "${topSymbols[0]}" keeps appearing`);
-    if (chips.length < 3 && topTags[1]) chips.push(`What does "${topTags[1]}" mean?`);
-    if (chips.length < 3 && topEmotions[1]) chips.push(`Why do I feel ${topEmotions[1]}?`);
-    // Fallback to generic prompts if not enough data
-    const fallbacks = ["I had a vivid dream last night", "I want to log a recurring dream", "Help me understand a symbol"];
-    while (chips.length < 3) chips.push(fallbacks[chips.length]);
-    return chips.slice(0, 3);
+  const systemPrompt = `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them.${DOORS_INSTRUCTION}`;
+
+  // Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
+  function extractDoors(text) {
+    const match = text.match(/\[DOORS:\s*([^\]]+)\]/i);
+    if (!match) return { cleanText: text.trim(), doors: [] };
+    const doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
+    const cleanText = text.replace(/\[DOORS:[^\]]+\]/i, "").replace(/\n{3,}/g, "\n\n").trim();
+    return { cleanText, doors };
+  }
+
+  // Fallback doors when AI omits the marker or provider fails
+  const FALLBACK_DOORS = ["Open the door I just described", "Take me through a different door", "Help me understand what I saw"];
+
+  function doorsOrFallback(text) {
+    const { cleanText, doors } = extractDoors(text);
+    const finalDoors = doors.length === 3 ? doors : [...doors, ...FALLBACK_DOORS].slice(0, 3);
+    return { cleanText, suggestions: finalDoors };
   }
 
   const sendToken = (token) => {
@@ -114,10 +115,16 @@ async function handleStreamChat(req, url, res) {
   // Provider 1: Gemini (streaming) — checked first for Auto mode
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && message && (!requestedProvider || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
+    // Gemini model fallback list: try 2.5-flash, then 2.0-flash on 429/quota
+    const GEMINI_MODEL_CHAIN = [
+      process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-flash-latest",
+    ];
+    for (const geminiModel of (requestedProvider && requestedProvider.startsWith("gemini-")
+      ? [requestedProvider]
+      : GEMINI_MODEL_CHAIN)) {
     try {
-      const geminiModel = requestedProvider && requestedProvider.startsWith("gemini-")
-        ? requestedProvider
-        : (process.env.GEMINI_MODEL || "gemini-2.5-flash");
       const payload = JSON.stringify({
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${message}` }] }],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
@@ -164,21 +171,26 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
         role: "lantern",
-        text: fullReply.slice(0, maxConversationTextLength),
+        text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendDone("gemini", { agent: agent.name, online: true, suggestions: buildSuggestions() });
+      sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors });
       return;
     } catch (err) {
+      // On 429/quota, try next model in chain before emitting error
+      const is429 = err.message.includes("429") || err.message.includes("quota");
+      if (is429) { fullReply = ""; continue; } // retry with next model silently
       sendError(`gemini_unavailable: ${err.message}`);
       if (requestedProvider && requestedProvider !== "" && requestedProvider !== "gemini" && !requestedProvider.startsWith("gemini-")) {
-        await sendLocalFallback(err.message);
+        sendFail(err.message);
         return;
       }
     }
+    } // end model chain loop
   }
 
   // Provider 2: Anthropic Claude (streaming)
@@ -240,13 +252,14 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
         role: "lantern",
-        text: fullReply.slice(0, maxConversationTextLength),
+        text: anthropicClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendDone("anthropic", { agent: agent.name, online: true, suggestions: buildSuggestions() });
+      sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
       sendError(`anthropic_unavailable: ${err.message}`);
@@ -309,13 +322,14 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
         role: "lantern",
-        text: fullReply.slice(0, maxConversationTextLength),
+        text: openaiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendDone("openai", { agent: agent.name, online: true, suggestions: buildSuggestions() });
+      sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
 if (requestedProvider) { sendFail(err.message); return; }
@@ -383,13 +397,14 @@ if (requestedProvider) { sendFail(err.message); return; }
         req2.end();
       });
       if (ollamaOk) {
+        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply);
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
           role: "lantern",
-          text: fullReply.slice(0, maxConversationTextLength),
+          text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
-        sendDone("ollama", { agent: agent.name, online: true, suggestions: buildSuggestions() });
+        sendDone("ollama", { agent: agent.name, online: true, cleanText: ollamaClean, suggestions: ollamaDoors });
         return;
       }
     } catch (err) {
