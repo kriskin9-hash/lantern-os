@@ -44,7 +44,17 @@ async function handleStreamChat(req, url, res) {
     "X-Accel-Buffering": "no",
   });
 
-  const recentDreams = readRecentDreams(8);
+  const allRecent = readRecentDreams(12);
+  // Adaptive Focus Memory: high-lucidity / high-tag entries stay Full,
+  // older low-signal entries become Placeholder summaries
+  const recentDreams = allRecent.map((d, i) => {
+    const lucidity = d.lucidity || 0;
+    const tagCount = (d.tags || []).length + (d.symbols || []).length;
+    const age = i; // 0 = most recent
+    if (age < 2 || lucidity >= 0.7 || tagCount >= 3) return d; // Full
+    if (age < 5) return { ...d, text: String(d.text || '').slice(0, 60) + '…', _fidelity: 'compressed' }; // Compressed
+    return { ...d, text: `[${d.kind || 'dream'} — ${d.tags?.[0] || 'untitled'}]`, _fidelity: 'placeholder' }; // Placeholder
+  });
 
   const agent = requestedAgent
     ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
@@ -59,7 +69,7 @@ async function handleStreamChat(req, url, res) {
   // Symbol mesh — top recurring symbols/tags across all dreams, feeds into door options
   const symbolMesh = (() => {
     const freq = {};
-    for (const d of recentDreams) {
+    for (const d of allRecent) {
       for (const s of [...(d.symbols || []), ...(d.tags || [])]) freq[s] = (freq[s] || 0) + 1;
     }
     return Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([k]) => k);
@@ -70,8 +80,22 @@ async function handleStreamChat(req, url, res) {
     ? `\nPrior conversation turns:\n${history.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
+  // Co-occurrence pairs: symbols that appear together in the same entry strengthen the edge
+  const coOccur = {};
+  for (const d of allRecent) {
+    const syms = [...(d.symbols || []), ...(d.tags || [])].slice(0, 6);
+    for (let a = 0; a < syms.length; a++) {
+      for (let b = a + 1; b < syms.length; b++) {
+        const key = [syms[a], syms[b]].sort().join('⟶');
+        coOccur[key] = (coOccur[key] || 0) + 1;
+      }
+    }
+  }
+  const topPairs = Object.entries(coOccur).sort((a,b)=>b[1]-a[1]).slice(0,3)
+    .map(([k,v]) => `${k}(×${v})`).join(', ');
+
   const meshHint = symbolMesh.length > 0
-    ? `\nRecurring symbols in dreamer's mesh: ${symbolMesh.join(", ")}.`
+    ? `\nRecurring symbols in dreamer's mesh: ${symbolMesh.join(", ")}.${topPairs ? ` Connected pairs: ${topPairs}.` : ''}`
     : "";
 
   // Three Doors instruction — equally weighted future-tense canaries
