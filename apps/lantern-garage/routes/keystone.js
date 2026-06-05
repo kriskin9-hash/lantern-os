@@ -23,8 +23,10 @@ const ALLOWED = [
   { match: /^git merge (.+) --no-edit$/, cmd: null },
   { match: /^git branch$/, cmd: "git branch" },
   // Tests
+  { match: /^npm test$/, cmd: "node tests/test_dream_journal_api.js && node tests/test_dream_chat_multiturns.js" },
   { match: /^node tests\/test_dream_journal_api\.js$/, cmd: null },
   { match: /^node tests\/test_dream_chat_multiturns\.js$/, cmd: null },
+  { match: /^python -m pytest (.+)$/, cmd: null },
   // Orchestrator
   { match: /^python src\/convergence_io_engine\.py (health|inspect|loop)$/, cmd: null },
   // File reads (read-only)
@@ -40,8 +42,11 @@ const ALLOWED = [
   { match: /^curl -s http:\/\/127\.0\.0\.1:4177\/.+$/, cmd: null },
 ];
 
-function isAllowed(command) {
-  return ALLOWED.some(a => a.match.test(command));
+function resolveCommand(command) {
+  for (const a of ALLOWED) {
+    if (a.match.test(command)) return a.cmd || command; // use override if provided
+  }
+  return null; // not allowed
 }
 
 module.exports = async function keystoneRoutes(req, res, url, deps) {
@@ -59,7 +64,8 @@ module.exports = async function keystoneRoutes(req, res, url, deps) {
         return true;
       }
 
-      if (!isAllowed(cmd)) {
+      const resolved = resolveCommand(cmd);
+      if (!resolved) {
         sendJson(res, {
           error: "command_not_allowed",
           message: `Keystone can only run allowlisted commands. "${cmd}" is not permitted.`,
@@ -68,7 +74,7 @@ module.exports = async function keystoneRoutes(req, res, url, deps) {
         return true;
       }
 
-      const output = execSync(cmd, {
+      const output = execSync(resolved, {
         cwd: repoRoot,
         encoding: "utf-8",
         timeout: 30000,
