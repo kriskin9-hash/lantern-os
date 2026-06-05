@@ -222,6 +222,10 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
     sendError(humanError(reason));
     sendDone("failed", { agent: agent.name, online: false });
   };
+  const sendLocalFallback = (reason) => {
+    sendError(`local_fallback: ${reason}`);
+    sendDone("offline", { agent: agent.name, online: false });
+  };
 
   // Stream a local persona fallback reply word-by-word so the UI shows real text, not just error notes
   const streamLocalFallback = async (reason) => {
