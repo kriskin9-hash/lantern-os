@@ -94,7 +94,13 @@ async function route(req, res) {
 }
 
 const server = http.createServer((req, res) => {
-  route(req, res).catch((error) => sendJson(res, { error: error.message }, 500));
+  route(req, res).catch((error) => {
+    if (res.headersSent) {
+      console.error("Route error after response sent:", error.message);
+      return;
+    }
+    sendJson(res, { error: error.message }, 500);
+  });
 });
 
 server.on("error", (error) => {
