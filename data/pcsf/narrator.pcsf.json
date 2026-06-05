@@ -65,9 +65,9 @@
       "narrator_id": "founder",
       "name": "Founder / Alex",
       "state": "available",
-      "symbol": "wish, protection, return, the lantern itself, family in Waynesville OH",
+      "symbol": "wish, protection, return, the lantern itself, family near the Return Door",
       "tone": "grounded, honest, scientific-symbolic",
-      "routing_keywords": ["wish", "protect", "founder", "alex", "home", "return", "safety", "waynesville", "family"],
+      "routing_keywords": ["wish", "protect", "founder", "alex", "home", "return", "safety", "family"],
       "priority": 5,
       "is_default": false,
       "system_prompt_summary": "The one who lit the first lantern. Honest, grounded. Bayesian + symbolic. 2-3 sentences."
