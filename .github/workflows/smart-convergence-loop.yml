@@ -1,0 +1,48 @@
+name: Smart Convergence Loop
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: smart-convergence-loop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cloud-convergence:
+    name: Cloud repository convergence scan
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run smart convergence loop
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\Invoke-LanternSmartConvergenceLoop.ps1 `
+            -Root . `
+            -Profile Cloud `
+            -Depth Standard `
+            -SkipNetwork `
+            -OutputPath smart-convergence-loop-report.json
+
+      - name: Upload convergence report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smart-convergence-loop-report
+          path: smart-convergence-loop-report.json
+          retention-days: 14
