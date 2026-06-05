@@ -3,6 +3,7 @@
 import json
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -127,6 +128,76 @@ class TestMemoryEngine:
             assert stats["total"] == 3
             assert stats["by_tier"]["trace"] == 2
             assert stats["by_tier"]["entity"] == 1
+
+
+class TestIndexedQuery:
+    def test_query_by_keywords(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(base_path=tmp)
+            rec1 = create_trace("The lantern flickered", "s1", keywords=["lantern", "fog"])
+            rec2 = create_trace("A mirror appeared", "s2", keywords=["mirror", "fog"])
+            engine.write(rec1)
+            engine.write(rec2)
+            results = engine.query(keywords=["lantern"])
+            assert len(results) == 1
+            assert results[0].memory_id == rec1.memory_id
+
+    def test_query_by_entities(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(base_path=tmp)
+            rec1 = create_trace("Lantern spoke", "s1", entities=["Lantern"])
+            rec2 = create_trace("Blinkbug glitched", "s2", entities=["Blinkbug"])
+            engine.write(rec1)
+            engine.write(rec2)
+            results = engine.query(entities=["Lantern"])
+            assert len(results) == 1
+            assert results[0].memory_id == rec1.memory_id
+
+    def test_query_intersects_keywords_and_entities(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(base_path=tmp)
+            rec1 = create_trace("Lantern in the fog", "s1", keywords=["lantern", "fog"], entities=["Lantern"])
+            rec2 = create_trace("Fog only", "s2", keywords=["fog"])
+            engine.write(rec1)
+            engine.write(rec2)
+            results = engine.query(keywords=["fog"], entities=["Lantern"])
+            assert len(results) == 1
+            assert results[0].memory_id == rec1.memory_id
+
+    def test_query_keywords_with_remaining_filters(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(base_path=tmp)
+            rec1 = create_trace("Lantern trace", "s1", keywords=["lantern"])
+            rec2 = create_trace("Lantern entity info", "s2", keywords=["lantern"])
+            rec2.tier = Tier.ENTITY
+            engine.write(rec1)
+            engine.write(rec2)
+            results = engine.query(keywords=["lantern"], tier=Tier.TRACE)
+            assert len(results) == 1
+            assert results[0].tier == Tier.TRACE
+
+    def test_index_persists_and_reloads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(base_path=tmp)
+            rec = create_trace("Indexed", "s1", keywords=["persist"])
+            engine.write(rec)
+            # New engine instance reads same path
+            engine2 = MemoryEngine(base_path=tmp)
+            results = engine2.query(keywords=["persist"])
+            assert len(results) == 1
+            assert results[0].memory_id == rec.memory_id
+
+    def test_index_rebuild_on_missing_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = MemoryEngine(base_path=tmp)
+            rec = create_trace("Rebuild me", "s1", keywords=["rebuild"])
+            engine.write(rec)
+            # Delete index file to simulate corruption
+            index_path = Path(tmp) / "_index.json"
+            index_path.unlink()
+            engine2 = MemoryEngine(base_path=tmp)
+            results = engine2.query(keywords=["rebuild"])
+            assert len(results) == 1
 
 
 class TestFactories:

@@ -27,10 +27,11 @@ import json
 import os
 import uuid
 from dataclasses import asdict, dataclass, field
+from collections import defaultdict
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Set
 
 
 class Tier(str, Enum):
@@ -156,6 +157,10 @@ class MemoryEngine:
         for part in CubePartition:
             (self.base / part.value).mkdir(exist_ok=True)
         self._pending: List[Any] = []  # async write queue
+        self._keyword_index: Dict[str, Set[str]] = defaultdict(set)
+        self._entity_index: Dict[str, Set[str]] = defaultdict(set)
+        self._index_path = self.base / "_index.json"
+        self._load_index()
 
     def _path(self, record: MemoryRecord) -> Path:
         tier_dir = self.base / record.cube_partition.value / record.tier.value
@@ -172,6 +177,8 @@ class MemoryEngine:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(record.to_dict(), f, indent=2, ensure_ascii=False, default=str)
         self._append_registry(record)
+        self._update_index(record)
+        self._save_index()
         return path
 
     def write_async(self, record: MemoryRecord):
@@ -214,6 +221,111 @@ class MemoryEngine:
                         return MemoryRecord.from_dict(json.load(f))
         return None
 
+    def _update_index(self, record: MemoryRecord) -> None:
+        """Add a record to keyword/entity indexes."""
+        for kw in record.keywords:
+            self._keyword_index[kw.lower()].add(record.memory_id)
+        for ent in record.entities:
+            self._entity_index[ent.lower()].add(record.memory_id)
+
+    def _save_index(self) -> None:
+        """Persist indexes to JSON for fast cold starts."""
+        try:
+            with open(self._index_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "keywords": {k: list(v) for k, v in self._keyword_index.items()},
+                        "entities": {k: list(v) for k, v in self._entity_index.items()},
+                    },
+                    f,
+                    ensure_ascii=False,
+                )
+        except Exception:
+            pass  # index is a perf optimization; failure is non-fatal
+
+    def _load_index(self) -> None:
+        """Load persisted indexes, or rebuild from registries if stale/missing."""
+        if self._index_path.exists():
+            try:
+                with open(self._index_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self._keyword_index = defaultdict(set, {k: set(v) for k, v in data.get("keywords", {}).items()})
+                self._entity_index = defaultdict(set, {k: set(v) for k, v in data.get("entities", {}).items()})
+                return
+            except Exception:
+                pass
+        self._rebuild_index()
+
+    def _rebuild_index(self) -> None:
+        """Full scan of all registries to rebuild indexes."""
+        self._keyword_index.clear()
+        self._entity_index.clear()
+        for part in CubePartition:
+            reg = self._registry_path(part)
+            if not reg.exists():
+                continue
+            with open(reg, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = MemoryRecord.from_dict(json.loads(line))
+                        self._update_index(rec)
+                    except Exception:
+                        continue
+        self._save_index()
+
+    def _scan_registry(self, partition: CubePartition) -> Generator[MemoryRecord, None, None]:
+        """Yield parsed records from a single registry."""
+        reg = self._registry_path(partition)
+        if not reg.exists():
+            return
+        with open(reg, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield MemoryRecord.from_dict(json.loads(line))
+                except Exception:
+                    continue
+
+    def _filter_record(self, rec: MemoryRecord, **filters) -> bool:
+        """Apply non-keyword/non-entity filters to a record."""
+        if filters.get("tier") and rec.tier != filters["tier"]:
+            return False
+        if filters.get("privacy_scope") and rec.privacy_scope != filters["privacy_scope"]:
+            return False
+        if filters.get("min_confidence") and rec.confidence < filters["min_confidence"]:
+            return False
+        if filters.get("source_surface") and rec.source_surface != filters["source_surface"]:
+            return False
+        if filters.get("tags") and not any(t in rec.tags for t in filters["tags"]):
+            return False
+        if filters.get("metadata_filter") and not self._metadata_matches(rec.metadata, filters["metadata_filter"]):
+            return False
+        return True
+
+    def _indexed_candidates(self, keywords: Optional[List[str]], entities: Optional[List[str]]) -> Optional[Set[str]]:
+        """Return candidate memory_ids from indexes, or None for full scan."""
+        if not keywords and not entities:
+            return None
+        candidate_sets: List[Set[str]] = []
+        if keywords:
+            for kw in keywords:
+                candidate_sets.append(self._keyword_index.get(kw.lower(), set()))
+        if entities:
+            for ent in entities:
+                candidate_sets.append(self._entity_index.get(ent.lower(), set()))
+        if not candidate_sets:
+            return None
+        # Intersection across all provided keywords and entities
+        result = candidate_sets[0].copy()
+        for s in candidate_sets[1:]:
+            result &= s
+        return result
+
     def query(
         self,
         tier: Optional[Tier] = None,
@@ -230,39 +342,54 @@ class MemoryEngine:
     ) -> List[MemoryRecord]:
         """Query memory records with optional multi-signal retrieval.
 
+        When keywords or entities are provided, uses inverted indexes for
+        O(matched_candidates) lookup instead of O(all_records) full scan.
+
         When use_multi_signal=True and keywords/entities are provided,
         results are scored and ranked by fused semantic + keyword + entity signals.
         """
         results: List[MemoryRecord] = []
         scored: List[tuple[float, MemoryRecord]] = []
-        partitions = [partition] if partition else list(CubePartition)
+        candidate_ids = self._indexed_candidates(keywords, entities)
 
-        for part in partitions:
-            reg = self._registry_path(part)
-            if not reg.exists():
-                continue
-            with open(reg, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
+        if candidate_ids is not None:
+            # Index path: load only candidates
+            for mid in candidate_ids:
+                rec = self.read(mid)
+                if rec is None:
+                    continue
+                if not self._filter_record(
+                    rec,
+                    tier=tier,
+                    privacy_scope=privacy_scope,
+                    min_confidence=min_confidence,
+                    source_surface=source_surface,
+                    tags=tags,
+                    metadata_filter=metadata_filter,
+                ):
+                    continue
+                if use_multi_signal:
+                    score = self._multi_signal_score(rec, keywords or [], entities or [])
+                    scored.append((score, rec))
+                else:
+                    results.append(rec)
+                    if len(results) >= limit:
+                        return results
+        else:
+            # Full scan fallback when no keywords/entities provided
+            partitions = [partition] if partition else list(CubePartition)
+            for part in partitions:
+                for rec in self._scan_registry(part):
+                    if not self._filter_record(
+                        rec,
+                        tier=tier,
+                        privacy_scope=privacy_scope,
+                        min_confidence=min_confidence,
+                        source_surface=source_surface,
+                        tags=tags,
+                        metadata_filter=metadata_filter,
+                    ):
                         continue
-                    try:
-                        rec = MemoryRecord.from_dict(json.loads(line))
-                    except Exception:
-                        continue
-                    if tier and rec.tier != tier:
-                        continue
-                    if privacy_scope and rec.privacy_scope != privacy_scope:
-                        continue
-                    if min_confidence and rec.confidence < min_confidence:
-                        continue
-                    if source_surface and rec.source_surface != source_surface:
-                        continue
-                    if tags and not any(t in rec.tags for t in tags):
-                        continue
-                    if metadata_filter and not self._metadata_matches(rec.metadata, metadata_filter):
-                        continue
-
                     if use_multi_signal and (keywords or entities):
                         score = self._multi_signal_score(rec, keywords or [], entities or [])
                         scored.append((score, rec))
@@ -384,6 +511,8 @@ def create_trace(
     confidence: float = 1.0,
     privacy_scope: PrivacyScope = PrivacyScope.PRIVATE,
     tags: Optional[List[str]] = None,
+    keywords: Optional[List[str]] = None,
+    entities: Optional[List[str]] = None,
 ) -> MemoryRecord:
     """Factory: create a raw trace record."""
     return MemoryRecord(
@@ -403,6 +532,8 @@ def create_trace(
         privacy_scope=privacy_scope,
         source_surface=surface,
         tags=tags or [],
+        keywords=keywords or [],
+        entities=entities or [],
     )
 
 
