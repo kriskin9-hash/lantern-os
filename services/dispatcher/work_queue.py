@@ -37,17 +37,18 @@ class WorkQueue:
         return job.job_id
     
     def get_pending_jobs(self, agent_type: str = None, limit: int = 100) -> List[JobSpec]:
-        """Get pending jobs, optionally filtered by agent type"""
+        """Pop and return pending jobs, optionally filtered by agent type"""
         jobs = []
-        pending = self.redis_client.lrange(f"{self.queue_prefix}:pending", 0, limit - 1)
-        
-        for job_json in pending:
+        for _ in range(limit):
+            job_json = self.redis_client.lpop(f"{self.queue_prefix}:pending")
+            if job_json is None:
+                break
             job_dict = json.loads(job_json)
             job = JobSpec(**job_dict)
-            
+
             if agent_type is None or job.agent_type == agent_type:
                 jobs.append(job)
-        
+
         return jobs
     
     def get_job(self, job_id: str) -> JobSpec:
