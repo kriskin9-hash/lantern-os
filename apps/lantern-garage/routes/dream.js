@@ -60,6 +60,8 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
         symbols: normalizeList(body.symbols, 12),
         linked_goals: body.linked_goals || [], priority: body.priority || "normal",
         reflection_on: body.reflection_on || [], source: "api",
+        dcf_class: body.dcf_class || null,
+        rps_flags: body.rps_flags || [],
       };
       const dreamDir = path.join(repoRoot, "data", "dream_journal");
       if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });

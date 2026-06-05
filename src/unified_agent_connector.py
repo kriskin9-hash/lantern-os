@@ -86,7 +86,7 @@ class ProviderConfig:
         return {
             "anthropic": "claude-3-5-haiku-20241022",
             "openai": "gpt-4o-mini",
-            "gemini": "gemini-1.5-flash",
+            "gemini": "gemini-2.5-flash",
             "ollama": "llama3.2",
             "deepseek": "deepseek-chat",
             "groq": "llama-3.1-70b-versatile",
@@ -312,15 +312,12 @@ class UnifiedAgentConnector:
             if isinstance(health, str) and health.startswith("unhealthy"):
                 continue
             try:
-                if _AGENT_HOOKS_AVAILABLE:
-                    registry = ToolHookRegistry(agent_id=f"unified_connector:{persona.id}")
-                    return registry.run(
-                        "stream",
-                        {"provider": prov_name, "message": message, "persona": persona.id, "temperature": temperature, "max_tokens": max_tokens},
-                        fn=lambda: self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens),
-                    )
-                else:
-                    return self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens)
+                # Hooks are not used for streaming — caching/retry logic is incompatible
+                # with generators. The hook system is reserved for discrete tool calls.
+                result = self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens)
+                if result is not None:
+                    yield from result
+                return
             except Exception as exc:
                 last_error = f"{prov_name}: {exc}"
                 self._health[prov_name] = {"status": f"unhealthy: {exc}", "at": datetime.now(timezone.utc).isoformat()}

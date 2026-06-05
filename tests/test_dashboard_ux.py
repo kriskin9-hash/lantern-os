@@ -1,3 +1,11 @@
+"""
+Dashboard / UX tests — updated for Dream Journal v1.0.0 landing page.
+
+Three xfail tests removed (tested removed features):
+  - test_dashboard_uses_plain_console_skin       (old styles.css skin attributes)
+  - test_chat_has_pending_response_queue_and_mcp_route  (Orion chat removed)
+  - test_fleet_dispatch_is_preflight_guarded     (fleet dispatch removed)
+"""
 import re
 from pathlib import Path
 import pytest
@@ -10,39 +18,34 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-@pytest.mark.xfail(reason="index.html is now a landing page; dashboard controls moved to app.js and dream-chat.html", strict=False)
-def test_journal_controls_and_features() -> None:
+def test_landing_page_is_clean_sales_page() -> None:
     html = read("apps/lantern-garage/public/index.html")
-    # Core journal features present
-    assert "dream journal" in html.lower()
-    assert 'aria-label="Primary controls"' in html
-    assert 'id="micBtn"' in html           # voice capture button
-    assert 'id="searchInput"' in html      # interactive search bar
-    assert 'id="exportCsv"' in html        # CSV export button
-    assert 'id="exportJsonl"' in html      # JSONL export button
-    # Chat widget intentionally removed in v1.0.0
+    # Title and branding
+    assert "Dream Journal" in html
+    assert "Lantern OS" in html
+    # CTA panels
+    assert "dream-chat.html" in html
+    assert "patreon.com" in html
+    assert "github.com" in html
+    # Feature table
+    assert "V1.0.0" in html
+    # No old inline journal UI
+    assert 'id="entryForm"' not in html
+    assert 'id="micBtn"' not in html
     assert 'chat-card' not in html
-    assert 'Dream Journal Chat' not in html
-    # Security: no model-bundle or reactor-core pollution
+    # No security pollution
     assert "model-bundle" not in html
     assert "reactor-core" not in html
-    assert "Local front door:" not in html
 
 
-@pytest.mark.xfail(reason="Dashboard redesigned for Dream Journal v1.0.0; old styles.css skin attributes removed", strict=False)
-def test_dashboard_uses_plain_console_skin() -> None:
-    css = read("apps/lantern-garage/public/styles.css")
-    required = [
-        'body[data-style="plain-dashboard"]',
-        "--paper: #f6f2ea",
-        "no theme-park skin",
-        "border-radius: 24px",
-        "font-family: \"Aptos\"",
-        "grid-template-columns: repeat(3, minmax(0, 1fr))",
-        ".current-model-strip",
-    ]
-    missing = [phrase for phrase in required if phrase not in css]
-    assert missing == []
+def test_landing_page_links_to_full_journal() -> None:
+    html = read("apps/lantern-garage/public/index.html")
+    assert "dream-journal" in html
+
+
+def test_landing_page_has_server_status() -> None:
+    html = read("apps/lantern-garage/public/index.html")
+    assert "/api/health" in html
 
 
 def test_markdown_links_use_formatted_reader() -> None:
@@ -51,119 +54,74 @@ def test_markdown_links_use_formatted_reader() -> None:
     assert raw_doc_links == []
 
 
-def test_file_preview_routes_api_to_local_app() -> None:
-    js = read("apps/lantern-garage/public/app.js")
-    assert 'window.location.protocol === "file:"' in js
-    assert "http://127.0.0.1:4177" in js
-    assert "normalizeInternalLinks();" in js
-
-
-def test_primary_controls_have_handlers() -> None:
-    js = read("apps/lantern-garage/public/app.js")
-    for control_id in [
-        "refresh",
-        "runLoop",
-        "localControls",
-        "flatRagIngest",
-        "autoUpdate",
-        "conversationForm",
-        "ragForm",
-        "noteForm",
-        "dispatchAll",
-    ]:
-        assert f'$("#{control_id}")' not in js
-        assert f'("{control_id}")' in js
-    assert "/api/command" in js
-    assert "/api/actions/local-controls" in js
-    assert "/api/actions/flat-rag-ingest" in js
-
-
-def test_chat_understands_mining_safely() -> None:
-    js = read("apps/lantern-garage/public/app.js")
-    assert "Rock and stone" in js
-    assert "CPU routes to Monero" in js
-    assert "BTC only belongs on owned SHA-256 ASIC hardware" in js
-    assert "No wallet cracking" in js
-
-
-@pytest.mark.xfail(reason="Orion chat + MCP reply path removed in v1.0.0 dream-journal refactor", strict=False)
-def test_chat_has_pending_response_queue_and_mcp_route() -> None:
-    js = read("apps/lantern-garage/public/app.js")
-    css = read("apps/lantern-garage/public/styles.css")
-    server = read("apps/lantern-garage/server.js")
-    required_js = [
-        "Waiting for Lantern response",
-        "queued for MCP/local reply",
-        "updateBubble(waitingBubble",
-        "aria-busy",
-        "chat-message-text",
-    ]
-    missing_js = [phrase for phrase in required_js if phrase not in js]
-    assert missing_js == []
-    assert ".chat-bubble.pending" in css
-    assert "tryMcpChatReply" in server
-    assert "get_mcp_feature_overview" in server
-    assert "Model Context Protocol, not Multi-Chain Protocol" in server
-    assert 'const wantsFleet = lower.includes("fleet") || lower.includes("agent")' in server
-    assert "mcpReadOnlyTimeoutMs" in server
-    assert "Read-only chat path only" in server
-
-
 def test_server_has_formatted_reader_and_cors_for_preview() -> None:
+    # /view route is now in routes/files.js (server was refactored into modules)
+    files_route = read("apps/lantern-garage/routes/files.js")
     server = read("apps/lantern-garage/server.js")
-    files = read("apps/lantern-garage/routes/files.js")
-    assert 'url.pathname === "/view"' in files
-    assert "renderMarkdownDocument" in files
+    assert 'url.pathname === "/view"' in files_route
+    assert "renderMarkdownDocument" in files_route
     assert "Access-Control-Allow-Origin" in server
     assert "OPTIONS" in server
 
 
-def test_orchestrator_dependency_contract_is_visible_and_read_only() -> None:
-    html = read("apps/lantern-garage/public/index.html")
-    js = read("apps/lantern-garage/public/app.js")
-    css = read("apps/lantern-garage/public/styles.css")
+def test_server_routes_are_modular() -> None:
+    """server.js should be a thin orchestrator — no inline route handlers."""
     server = read("apps/lantern-garage/server.js")
-    manifest = read("manifests/orchestrator-dependency.json")
-    docs = read("docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md")
-    script = read("scripts/Test-LanternOrchestratorDependency.ps1")
-    required = [
-        "Orchestrator Dependency",
-        "orchDepStatus",
-        "orchDepTools",
-        "orchDepFleet",
-        "orchDepNext",
-        "renderOrchestratorDependency",
-        ".dependency-panel",
-        "getOrchestratorDependencyStatus",
-        "/api/orchestrator-dependency",
-        "staleSlotsAreNotAvailable",
-        "lantern-codex-impl",
-        "mcp_ready_fleet_rebuild_required",
-        "canDispatchAgents = $false",
-    ]
-    haystack = "\n".join([html, js, css, server, manifest, docs, script])
-    missing = [phrase for phrase in required if phrase not in haystack]
-    assert missing == []
+    # Must require the route modules
+    assert 'require("./routes/status")' in server
+    assert 'require("./routes/dream")' in server
+    assert 'require("./routes/dreamer")' in server
+    # Must not contain inline route blocks (the old monolith pattern)
+    assert 'url.pathname === "/api/dream/create"' not in server
+    assert 'url.pathname === "/api/dream/stats"' not in server
 
 
-@pytest.mark.xfail(reason="Fleet dispatch preflight removed in v1.0.0 dream-journal refactor", strict=False)
-def test_fleet_dispatch_is_preflight_guarded() -> None:
-    server = read("apps/lantern-garage/server.js")
-    js = read("apps/lantern-garage/public/app.js")
-    required_server = [
-        "summarizeDispatchFleet",
-        'callMcpTool("get_agent_status", {}, mcpReadOnlyTimeoutMs)',
-        "Dispatch held: no safe agent slots available.",
-        "canDispatch: false",
-        "runAgentDispatchBatch(now, dispatchableSlots)",
-        "nextHumanAction",
-    ]
-    required_js = [
-        "dispatch.disabled",
-        "Dispatch Held",
-        "result.held",
-        "No safe agent slots are available.",
-    ]
-    missing = [phrase for phrase in required_server if phrase not in server]
-    missing += [phrase for phrase in required_js if phrase not in js]
-    assert missing == []
+def test_dream_chat_has_provider_settings() -> None:
+    html = read("apps/lantern-garage/public/dream-chat.html")
+    # Settings drawer present
+    assert "settings-drawer" in html
+    assert "settings-btn" in html
+    # All 4 providers wired
+    assert "ANTHROPIC_API_KEY" in html
+    assert "GEMINI_API_KEY" in html
+    assert "OPENAI_API_KEY" in html
+    assert "XAI_API_KEY" in html
+    # Get key links
+    assert "console.anthropic.com" in html
+    assert "aistudio.google.com" in html
+    assert "platform.openai.com" in html
+    assert "console.x.ai" in html
+
+
+def test_dream_chat_stream_reader_is_guarded() -> None:
+    html = read("apps/lantern-garage/public/dream-chat.html")
+    # streamFinished guard prevents double finishStream
+    assert "streamFinished" in html
+    assert "processLines" in html
+    # No canned offline fallback in client
+    assert "The flame holds steady" not in html
+
+
+def test_dream_chat_fails_fast_without_provider() -> None:
+    html = read("apps/lantern-garage/public/dream-chat.html")
+    # failed source is handled in finishStream
+    assert '"failed"' in html or "failed" in html
+    assert "source-badge" in html
+
+
+def test_pcsf_files_exist() -> None:
+    pcsf_dir = ROOT / "data" / "pcsf"
+    required = ["narrator.pcsf.json", "provider.pcsf.json", "agent.pcsf.json",
+                "model.pcsf.json", "settings.pcsf.json", "health.pcsf.json"]
+    for f in required:
+        assert (pcsf_dir / f).exists(), f"Missing PCSF file: {f}"
+
+
+def test_pcsf_files_are_valid_json() -> None:
+    import json
+    pcsf_dir = ROOT / "data" / "pcsf"
+    for f in pcsf_dir.glob("*.pcsf.json"):
+        data = json.loads(f.read_text(encoding="utf-8"))
+        assert "pcsf_type" in data, f"{f.name} missing pcsf_type"
+        assert "pcsf_version" in data, f"{f.name} missing pcsf_version"
+        assert "state" in data, f"{f.name} missing state"

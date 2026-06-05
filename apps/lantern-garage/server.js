@@ -87,43 +87,6 @@ async function route(req, res) {
     return;
   }
 
-  // ── Provider settings ────────────────────────────────────────────────
-  const PROVIDER_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "ANTHROPIC_MODEL", "OPENAI_MODEL", "GEMINI_MODEL"];
-
-  if (url.pathname === "/api/settings/providers" && req.method === "GET") {
-    const result = {};
-    let any = false;
-    for (const k of PROVIDER_KEYS) {
-      result[k] = !!(process.env[k]);
-      if (result[k]) any = true;
-    }
-    result._any = any;
-    sendJson(res, result);
-    return;
-  }
-
-  if (url.pathname === "/api/settings/providers" && req.method === "POST") {
-    try {
-      const raw = await collectRequestBody(req);
-      const { key, value } = JSON.parse(raw || "{}");
-      if (!key || !PROVIDER_KEYS.includes(key)) {
-        sendJson(res, { error: "unknown_key" }, 400);
-        return;
-      }
-      const envFilePath = path.join(repoRoot, ".env");
-      let existing = fs.existsSync(envFilePath) ? fs.readFileSync(envFilePath, "utf8") : "";
-      const lines = existing.split("\n").filter(l => !l.startsWith(`${key}=`) && !l.startsWith(`${key} =`));
-      if (value) lines.push(`${key}=${value}`);
-      fs.writeFileSync(envFilePath, lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", "utf8");
-      if (value) process.env[key] = value;
-      else delete process.env[key];
-      sendJson(res, { ok: true });
-    } catch (err) {
-      sendJson(res, { error: err.message }, 500);
-    }
-    return;
-  }
-
   for (const handler of routes) {
     const handled = await handler(req, res, url, deps);
     if (handled) return;

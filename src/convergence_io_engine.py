@@ -27,6 +27,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 LOG_PATH = DATA_DIR / "agent-fleet" / "tesseract-convergence.jsonl"
 
+# Load .env from repo root so CLI invocations pick up provider keys
+_env_path = REPO_ROOT / ".env"
+if _env_path.exists():
+    for _line in _env_path.read_text(encoding="utf-8").splitlines():
+        _m = __import__("re").match(r'^([A-Z0-9_]+)\s*=\s*(.*)$', _line)
+        if _m and _m.group(1) not in os.environ:
+            os.environ[_m.group(1)] = _m.group(2).strip("'\"")
+
 sys.path.insert(0, str(REPO_ROOT / "src"))
 try:
     from agent_tool_hooks import ToolHookRegistry, run_with_hooks  # noqa: F401

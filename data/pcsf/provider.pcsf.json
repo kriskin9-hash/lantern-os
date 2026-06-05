@@ -5,12 +5,13 @@
   "description": "AI provider capacity registry. Defines the fallback chain, env key bindings, circuit breaker thresholds, and current capacity states.",
   "generated_at": "2026-06-05T00:00:00Z",
   "state": "available",
-  "fallback_chain": ["anthropic", "openai", "google", "xai", "ollama"],
+  "fallback_chain": ["google", "anthropic", "openai", "xai", "ollama"],
+  "note": "Gemini is now priority 0 in stream-chat.js — checked first in Auto mode since GEMINI_API_KEY is the confirmed live key.",
   "providers": [
     {
       "provider_id": "anthropic",
       "name": "Claude",
-      "priority": 0,
+      "priority": 1,
       "env_key": "ANTHROPIC_API_KEY",
       "state": "no_key",
       "endpoint": "api.anthropic.com",
@@ -29,7 +30,7 @@
     {
       "provider_id": "openai",
       "name": "ChatGPT",
-      "priority": 1,
+      "priority": 2,
       "env_key": "OPENAI_API_KEY",
       "state": "no_key",
       "endpoint": "api.openai.com",
@@ -48,7 +49,7 @@
     {
       "provider_id": "google",
       "name": "Gemini",
-      "priority": 2,
+      "priority": 0,
       "env_key": "GEMINI_API_KEY",
       "state": "available",
       "endpoint": "generativelanguage.googleapis.com",
@@ -68,6 +69,7 @@
       "provider_id": "xai",
       "name": "Grok",
       "priority": 3,
+      "note": "Added this session. OpenAI-compatible endpoint.",
       "env_key": "XAI_API_KEY",
       "state": "no_key",
       "endpoint": "api.x.ai",
