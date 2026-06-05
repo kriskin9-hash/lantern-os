@@ -403,7 +403,21 @@ if (requestedProvider) { sendFail(err.message); return; }
   }
 
   // No provider available — local persona fallback
-  sendFail("no_provider_configured");
+  const { generateLocalReply } = require("./dream-chat");
+  const fallbackReply = generateLocalReply(message, agent, "");
+  sendError("local_fallback: all_providers_unavailable");
+  for (const token of fallbackReply.split(" ")) {
+    fullReply += token + " ";
+    sendToken(token + " ");
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  await appendConversationEntry({
+    recordedAt: new Date().toISOString(),
+    surface: "dream-chat-stream",
+    role: "lantern",
+    text: fullReply.slice(0, maxConversationTextLength),
+  }).catch(() => {});
+  sendDone("offline", { agent: agent.name, online: false, source: "local_fallback" });
 }
 
 module.exports = { handleStreamChat };
