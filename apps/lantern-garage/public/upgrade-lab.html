@@ -3,60 +3,51 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Cache-Control" content="no-store">
   <title>Lantern OS Upgrade Lab</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      color-scheme: light;
-      --ink: #152026;
-      --muted: #5c6970;
-      --paper: #f4f1ea;
-      --line: #c5d0cf;
-      --teal: #08756f;
-      --blue: #245f84;
-      --amber: #9f650a;
-      --rose: #9a3d55;
+      --bg: #f5f4ef;
+      --ink: #1a1a18;
+      --teal: #2d6a6a;
+      --amber: #a06010;
+      --rose: #8a2020;
+      --muted: #6a6a64;
+      --line: rgba(197, 208, 207, 0.72);
     }
-
-    * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper); color: var(--ink); font-family: "Aptos", "Segoe UI", Arial, sans-serif; }
-    a { color: var(--blue); font-weight: 800; }
-    code { color: var(--teal); font-weight: 800; }
-    .shell { width: min(1180px, calc(100% - 28px)); margin: 0 auto; padding: 18px 0 36px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-    .brand { font-size: 0.82rem; font-weight: 900; color: var(--teal); text-transform: uppercase; }
-    .nav { display: flex; flex-wrap: wrap; gap: 8px; }
-    .nav a, .cta { min-height: 42px; display: inline-grid; place-items: center; padding: 9px 13px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.86); color: var(--ink); text-decoration: none; }
-    .nav a:hover, .cta:hover { border-color: var(--teal); color: var(--teal); }
-    .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, 0.8fr); gap: 22px; align-items: stretch; min-height: 430px; }
-    .hero-copy { display: flex; flex-direction: column; justify-content: center; padding: 8px 0; }
-    .eyebrow { margin: 0 0 10px; color: var(--amber); font-size: 0.78rem; font-weight: 900; text-transform: uppercase; }
-    h1 { margin: 0; max-width: 760px; font-size: clamp(2.3rem, 6vw, 5rem); line-height: 0.96; letter-spacing: 0; }
-    .subtitle { max-width: 710px; margin: 16px 0 0; color: var(--muted); font-size: 1.04rem; line-height: 1.48; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
-    .cta.primary { border-color: var(--teal); background: var(--teal); color: white; }
-    .visual { position: relative; min-height: 390px; overflow: hidden; border: 1px solid var(--line); background: linear-gradient(90deg, rgba(21, 32, 38, 0.07) 1px, transparent 1px), linear-gradient(rgba(21, 32, 38, 0.07) 1px, transparent 1px), #eaf1ed; background-size: 28px 28px; }
-    .bench { position: absolute; left: 8%; right: 8%; bottom: 32px; height: 88px; border: 1px solid #aab8b3; background: #c8d8cf; box-shadow: inset 0 3px 0 rgba(255,255,255,0.75); }
-    .lantern { position: absolute; left: 40%; bottom: 80px; width: 104px; height: 170px; border: 2px solid #344247; background: #f8fbf6; box-shadow: 0 0 42px rgba(237, 191, 88, 0.58); }
-    .lantern::before { content: ""; position: absolute; left: 22px; right: 22px; top: -30px; height: 34px; border: 3px solid #344247; border-bottom: 0; border-radius: 50% 50% 0 0; }
-    .glow { position: absolute; inset: 18px 24px; background: linear-gradient(#fff7c8, #f2b94f); box-shadow: 0 0 32px #e9b84e; }
-    .screen { position: absolute; right: 8%; top: 52px; width: 210px; height: 136px; padding: 14px; border: 2px solid #344247; background: #26363d; }
-    .bar { height: 12px; margin-bottom: 10px; background: #91d1c8; }
-    .bar:nth-child(2) { width: 74%; background: #f1c45f; }
-    .bar:nth-child(3) { width: 88%; background: #98b9d1; }
-    .bar:nth-child(4) { width: 54%; background: #d99a9c; }
-    .folders { position: absolute; left: 10%; bottom: 120px; display: flex; align-items: flex-end; gap: 8px; }
-    .folder { width: 34px; height: 118px; border: 1px solid #9aa9a5; background: #fff4cc; }
-    .folder:nth-child(2) { height: 150px; background: #d7e2d4; }
-    .folder:nth-child(3) { height: 130px; background: #cfdbe5; }
-    .folder:nth-child(4) { height: 164px; background: #ead7b4; }
-    .folder:nth-child(5) { height: 108px; background: #d7e2d4; }
-    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
-    .panel { min-height: 166px; padding: 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.94); }
-    .panel h2 { margin: 0 0 10px; font-size: 1.02rem; }
-    .panel p, .panel li { color: var(--muted); line-height: 1.45; }
-    .panel p { margin: 0; }
-    .panel ul { margin: 0; padding-left: 18px; }
+    body { background: var(--bg); color: var(--ink); font-family: "Georgia", serif; font-size: 17px; line-height: 1.62; }
+    .shell { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 18px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+    .brand { font-weight: 900; font-size: 1.08rem; letter-spacing: -0.01em; color: var(--ink); }
+    .nav { display: flex; gap: 18px; font-size: 0.88rem; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a:hover { color: var(--ink); }
+    h1 { font-size: 2.1rem; line-height: 1.18; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 14px; }
+    h2 { font-size: 1.22rem; font-weight: 900; margin-bottom: 8px; }
+    p { margin-bottom: 10px; }
+    ul { padding-left: 20px; margin-bottom: 10px; }
+    li { margin-bottom: 5px; }
+    a { color: var(--teal); }
+    .eyebrow { font-size: 0.72rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 32px; margin-bottom: 24px; align-items: center; }
+    .hero-copy .subtitle { color: var(--muted); font-size: 1.04rem; margin-bottom: 20px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    .cta { display: inline-block; padding: 9px 18px; border: 1px solid var(--ink); text-decoration: none; font-size: 0.88rem; font-weight: 900; color: var(--ink); transition: background 0.15s; }
+    .cta:hover { background: var(--ink); color: var(--bg); }
+    .cta.primary { background: var(--ink); color: var(--bg); }
+    .cta.primary:hover { background: #333; }
+    .visual { min-height: 220px; background: rgba(45, 106, 106, 0.06); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 12px; padding: 24px; position: relative; overflow: hidden; }
+    .folders { display: flex; gap: 6px; }
+    .folder { width: 28px; height: 22px; background: var(--amber); opacity: 0.55; border-radius: 2px 6px 2px 2px; }
+    .screen { width: 80px; height: 60px; border: 2px solid var(--teal); padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+    .bar { height: 5px; background: var(--teal); opacity: 0.35; border-radius: 1px; }
+    .bar:nth-child(2) { width: 70%; }
+    .bar:nth-child(3) { width: 55%; }
+    .lantern { width: 28px; height: 40px; border: 2px solid var(--amber); border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+    .glow { width: 10px; height: 10px; background: var(--amber); border-radius: 50%; opacity: 0.8; }
+    .bench { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--line); }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }
+    .panel { padding: 18px 16px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.62); }
     .status { display: inline-block; margin-bottom: 10px; padding: 4px 9px; border: 1px solid var(--line); color: var(--teal); font-size: 0.72rem; font-weight: 900; text-transform: uppercase; }
     .held { color: var(--amber); }
     .risk { color: var(--rose); }
@@ -65,6 +56,19 @@
     .receipt th, .receipt td { padding: 10px; border-bottom: 1px solid rgba(197, 208, 207, 0.72); text-align: left; vertical-align: top; }
     .receipt th { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; }
     footer { margin-top: 18px; color: var(--muted); font-size: 0.84rem; }
+    .support { margin-top: 18px; padding: 26px 22px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.94); }
+    .support-header { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; }
+    .support-header .eyebrow { margin: 0; }
+    .support-header h2 { margin: 0; font-size: 1.38rem; }
+    .support-header p { margin: 0; color: var(--muted); font-size: 0.98rem; line-height: 1.48; max-width: 640px; }
+    .tier-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .tier { padding: 16px; border: 1px solid var(--line); background: #f9f7f2; }
+    .tier-name { margin: 0 0 2px; font-size: 1rem; font-weight: 900; color: var(--ink); }
+    .tier-price { margin: 0 0 12px; font-size: 0.82rem; color: var(--teal); font-weight: 900; text-transform: uppercase; }
+    .tier ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.9rem; line-height: 1.52; }
+    .patreon-btn { display: inline-grid; place-items: center; min-height: 42px; padding: 9px 20px; border: 1px solid var(--amber); background: var(--amber); color: white; text-decoration: none; font-weight: 900; font-size: 0.92rem; }
+    .patreon-btn:hover { background: #8a5508; border-color: #8a5508; color: white; }
+    @media (max-width: 600px) { .tier-grid { grid-template-columns: 1fr; } }
     @media (max-width: 900px) { .hero, .grid, .wide { grid-template-columns: 1fr; } .visual { min-height: 320px; } .topbar { align-items: flex-start; flex-direction: column; } }
   </style>
 </head>
@@ -127,6 +131,35 @@
             </tbody>
           </table>
         </article>
+      </section>
+
+      <section class="support" aria-label="Support the project">
+        <div class="support-header">
+          <p class="eyebrow">Support the project</p>
+          <h2>Keep the lantern lit</h2>
+          <p>Patreon memberships fund continued development of the Dream Journal, local-first tools, and the open upgrade workflow you’re reading right now. Every tier helps ship faster and keeps the project public.</p>
+        </div>
+        <div class="tier-grid">
+          <article class="tier">
+            <p class="tier-name">Wanderer</p>
+            <p class="tier-price">$5 / month</p>
+            <ul>
+              <li>Early access to Dream Journal feature builds</li>
+              <li>Monthly dev log with behind-the-scenes notes</li>
+              <li>Name in the project credits</li>
+            </ul>
+          </article>
+          <article class="tier">
+            <p class="tier-name">Lantern Keeper</p>
+            <p class="tier-price">$15 / month</p>
+            <ul>
+              <li>Everything in Wanderer, plus priority feature requests</li>
+              <li>Access to private changelog and upgrade receipts</li>
+              <li>Direct feedback channel with the developer</li>
+            </ul>
+          </article>
+        </div>
+        <a class="patreon-btn" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener">Join on Patreon</a>
       </section>
     </main>
 

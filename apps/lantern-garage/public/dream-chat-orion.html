@@ -179,6 +179,7 @@
         <div class="dot" id="dot"></div>
         <span id="status-label">connecting…</span>
       </div>
+      <a href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener" title="Support on Patreon" style="font-size:0.72rem;color:var(--muted);text-decoration:none;padding:4px 8px;border:1px solid var(--border);border-radius:6px;white-space:nowrap;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">&#9829; Patreon</a>
     </div>
   </header>
 
@@ -269,7 +270,7 @@
     place: "Place saved. Every location holds a secret — we'll find it together.",
   };
 
-  // ── Load available providers from server health ───────────────────────
+  // ── Load available providers from server health ─────────────────────
   async function loadProviders() {
     try {
       const r = await fetch('/api/agent/health', { signal: AbortSignal.timeout(3000) });
@@ -294,7 +295,7 @@
     });
   }
 
-  // ── Real health monitor pings ────────────────────────────────────────
+  // ── Real health monitor pings ────────────────────────────────────
   async function ping() {
     let serverOk = false;
     let providerCount = 0;
@@ -329,7 +330,7 @@
   ping();
   setInterval(ping, 15000);
 
-  // ── Auto-grow textarea ────────────────────────────────────────────────
+  // ── Auto-grow textarea ──────────────────────────────────────────
   inputEl.addEventListener('input', () => {
     inputEl.style.height = 'auto';
     inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
@@ -392,7 +393,7 @@
     return found ? found.name : 'Orion';
   }
 
-  // ── SSE streaming from /api/dream/chat/stream ─────────────────────────
+  // ── SSE streaming from /api/dream/chat/stream ─────────────────────
   async function streamFromServer(text, kind, provider) {
     const agentName = getAgentName('');
     const { row, bubble, cursor, label } = createAgentBubble(agentName);
@@ -481,7 +482,7 @@
     return fullReply;
   }
 
-  // ── Non-streaming fallback via /api/dreamer/chat ──────────────────────
+  // ── Non-streaming fallback via /api/dreamer/chat ──────────────────
   async function nonStreamingFallback(text, kind) {
     try {
       const r = await fetch('/api/dreamer/chat', {
@@ -514,7 +515,7 @@
     return OFFLINE_REPLIES[kind] || OFFLINE_REPLIES.dream;
   }
 
-  // ── Offline-only path (no server at all) ──────────────────────────────
+  // ── Offline-only path (no server at all) ────────────────────────
   async function sendOffline(text, kind) {
     const { row, bubble, cursor } = createAgentBubble('Orion');
     setStatus('thinking');
@@ -544,7 +545,7 @@
     conversationHistory.push({ role: 'assistant', content: reply });
   }
 
-  // ── Main send handler ─────────────────────────────────────────────────
+  // ── Main send handler ───────────────────────────────────────────
   async function send() {
     const text = inputEl.value.trim();
     if (!text || isStreaming) return;
