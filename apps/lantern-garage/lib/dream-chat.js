@@ -267,25 +267,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   } catch (err) { console.error("Ollama API error:", err.message); /* fall through */ }
   }
 
-  // Offline persona fallback
-  const snippet = text.slice(0, 90);
-  const last = recentDreams[0];
-  const lastText = last ? String(last.text || "").slice(0, 60) : "";
-  const lastTags = last && last.tags ? ` [${last.tags.join(", ")}]` : "";
-
-  const offlineReplies = {
-    lantern: `The flame holds steady. "${snippet}..." You can always come home safe. What light did you bring back?`,
-    blinkbug: `[STATIC] "${snippet}..." [GLITCH] Windows XP door detected. Hidden lore? Unhinged energy rising. What did the CRT show you?`,
-    keystone: `"${snippet}..." Truth: this connects to something older. The Return Door remembers. What pattern repeats?`,
-    waterfall: last
-      ? `This flows alongside your recent entry: "${lastText}"${lastTags}. What feeling carried between them?`
-      : `"${snippet}..." flows like water. What feeling wants to move through?`,
-    xenon: `"${snippet}..." charts a course. Where does this dream point — and who walks with you?`,
-    founder: `"${snippet}..." carries a wish. What are you protecting, and where do you need to return?`,
-  };
-
-  const reply = offlineReplies[agent.id] || `"${snippet}..." That is worth keeping. What do you see when you sit with it?`;
-  return { reply, agent: agent.name, suggestions, online: false };
+  return { reply: null, error: "no_provider_configured", agent: agent.name, suggestions, online: false };
 }
 
 module.exports = {

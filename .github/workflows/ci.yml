@@ -99,7 +99,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run pytest
-        run: python -m pytest tests -q --tb=short --junitxml=pytest-results.xml || true
+        run: python -m pytest tests -q --tb=short --junitxml=pytest-results.xml
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -127,19 +127,29 @@ jobs:
           restore-keys: ${{ runner.os }}-npm-
 
       - name: Install dependencies
-        run: |
-          cd apps/lantern-garage && npm ci --prefer-offline
+        run: cd apps/lantern-garage && npm ci --prefer-offline
 
-      - name: Run Node tests
+      - name: Start server
+        run: node apps/lantern-garage/server.js &
+
+      - name: Wait for server to be healthy
         run: |
-          cd apps/lantern-garage && npm test -- --reporter=junit --outputFile=node-test-results.xml || true
+          for i in $(seq 1 15); do
+            curl -sf http://127.0.0.1:4177/api/health && break
+            echo "Waiting for server... ($i)"
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:4177/api/health || (echo "Server did not start" && exit 1)
+
+      - name: Run Node API tests
+        run: node tests/test_dream_journal_api.js
 
       - name: Upload Node test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: node-test-results
-          path: apps/lantern-garage/node-test-results.xml
+          path: node-test-results.xml
           retention-days: 30
 
   # ============================================================================
@@ -308,19 +318,18 @@ jobs:
     needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation, security-scan, csf-cache-validate]
     if: always()
     steps:
-      - name: Summary
+      - name: Check for failures
         run: |
-          if [ "${{ needs.validate-repo.result }}" = "success" ] && \
-             [ "${{ needs.convergence-check.result }}" = "success" ] && \
-             [ "${{ needs.integration-checks.result }}" = "success" ] && \
-             [ "${{ needs.convergence-loop-validation.result }}" = "success" ]; then
-            echo "ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü"
-            echo "Γ£ô All core checks passed. Deploy gate unlocked."
-            echo "Γ£ô CI/CD + Batch Framework mutual validation active"
-            echo "Γ£ô Convergence loop ready to run on schedule"
-            echo "ΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöüΓöü"
-            exit 0
-          else
-            echo "ΓÜá Some checks failed or skipped. Review logs above."
-            exit 0
+          FAILED=""
+          [ "${{ needs.validate-repo.result }}"              != "success" ] && FAILED="$FAILED validate-repo(${{ needs.validate-repo.result }})"
+          [ "${{ needs.test-python.result }}"                != "success" ] && FAILED="$FAILED test-python(${{ needs.test-python.result }})"
+          [ "${{ needs.test-node.result }}"                  != "success" ] && FAILED="$FAILED test-node(${{ needs.test-node.result }})"
+          [ "${{ needs.convergence-check.result }}"          != "success" ] && FAILED="$FAILED convergence-check(${{ needs.convergence-check.result }})"
+          [ "${{ needs.integration-checks.result }}"         != "success" ] && FAILED="$FAILED integration-checks(${{ needs.integration-checks.result }})"
+          [ "${{ needs.convergence-loop-validation.result }}" != "success" ] && FAILED="$FAILED convergence-loop-validation(${{ needs.convergence-loop-validation.result }})"
+
+          if [ -n "$FAILED" ]; then
+            echo "FAILED jobs:$FAILED"
+            exit 1
           fi
+          echo "All required checks passed."

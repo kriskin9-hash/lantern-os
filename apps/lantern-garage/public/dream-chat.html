@@ -214,6 +214,8 @@
     .source-badge.offline { color: var(--muted); }
     .source-badge.anthropic { color: var(--accent); }
     .source-badge.ollama { color: var(--green); }
+    .source-badge.grok { color: #e2c97e; }
+    .source-badge.gemini { color: #4fc3f7; }
 
     /* Thinking indicator */
     .thinking-row {
@@ -308,6 +310,184 @@
       margin-top: 8px;
     }
 
+    /* ── Settings button ── */
+    .settings-btn {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .settings-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .settings-btn svg { width: 15px; height: 15px; }
+    .settings-btn.has-error { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Settings drawer ── */
+    .settings-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 100;
+    }
+    .settings-overlay.open { display: block; }
+    .settings-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(400px, 100vw);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 101;
+      transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .settings-drawer.open { transform: translateX(0); }
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 20px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .drawer-header h2 { font-size: 1rem; font-weight: 600; }
+    .drawer-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1.4rem;
+      line-height: 1;
+      padding: 2px 6px;
+    }
+    .drawer-close:hover { color: var(--text); }
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .drawer-hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 4px;
+    }
+    /* Provider card */
+    .provider-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s;
+    }
+    .provider-card.connected { border-color: #2e5c42; }
+    .provider-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .provider-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .provider-name { font-size: 0.9rem; font-weight: 600; flex: 1; }
+    .provider-status {
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+    .provider-status.ok { background: #1a3d2a; color: var(--green); }
+    .provider-status.missing { background: var(--surface); color: var(--muted); }
+    .provider-key-row {
+      display: flex;
+      gap: 8px;
+    }
+    .provider-key-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-family: monospace;
+      padding: 7px 10px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .provider-key-input:focus { border-color: var(--accent); }
+    .provider-key-input::placeholder { font-family: inherit; color: var(--muted); }
+    .provider-save-btn {
+      flex-shrink: 0;
+      background: var(--accent);
+      border: none;
+      color: white;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .provider-save-btn:hover { background: #6a59e0; }
+    .provider-save-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .provider-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .provider-getkey {
+      font-size: 0.78rem;
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--accent-dim);
+      padding: 4px 10px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .provider-getkey:hover { background: var(--accent-dim); }
+    .provider-clear {
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .provider-clear:hover { color: var(--danger); border-color: var(--danger); }
+    .save-feedback {
+      font-size: 0.75rem;
+      padding: 2px 4px;
+      display: none;
+    }
+    .save-feedback.ok { color: var(--green); display: inline; }
+    .save-feedback.err { color: var(--danger); display: inline; }
+
     /* ── Empty state ── */
     .empty-state {
       flex: 1;
@@ -347,14 +527,105 @@
         <option value="claude">Claude</option>
         <option value="openai">OpenAI</option>
         <option value="gemini">Gemini</option>
+        <option value="gemini">Gemini</option>
+        <option value="grok">Grok</option>
         <option value="ollama">Ollama</option>
       </select>
     </div>
+    <button class="settings-btn" id="settings-btn" title="Provider settings" onclick="openSettings()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
     <div class="status-dot">
       <div class="dot" id="status-dot"></div>
       <span id="status-label">connecting…</span>
     </div>
   </header>
+
+  <!-- Settings drawer -->
+  <div class="settings-overlay" id="settings-overlay" onclick="closeSettings()"></div>
+  <div class="settings-drawer" id="settings-drawer">
+    <div class="drawer-header">
+      <h2>AI Providers</h2>
+      <button class="drawer-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="drawer-body">
+      <p class="drawer-hint">Add an API key to enable live AI responses. Keys are saved locally to your <code>.env</code> file and never leave your machine.</p>
+
+      <!-- Claude -->
+      <div class="provider-card" id="card-claude">
+        <div class="provider-top">
+          <div class="provider-icon" style="background:#1a1535">✦</div>
+          <span class="provider-name">Claude <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by Anthropic</span></span>
+          <span class="provider-status missing" id="status-claude">not set</span>
+        </div>
+        <div class="provider-key-row">
+          <input class="provider-key-input" id="key-claude" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('claude','ANTHROPIC_API_KEY','key-claude')">Save</button>
+        </div>
+        <div class="provider-actions">
+          <a class="provider-getkey" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get key →</a>
+          <button class="provider-clear" onclick="clearKey('claude','ANTHROPIC_API_KEY')">Remove</button>
+          <span class="save-feedback" id="fb-claude"></span>
+        </div>
+      </div>
+
+      <!-- Gemini -->
+      <div class="provider-card" id="card-gemini">
+        <div class="provider-top">
+          <div class="provider-icon" style="background:#0d1f2d">🌐</div>
+          <span class="provider-name">Gemini <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by Google</span></span>
+          <span class="provider-status missing" id="status-gemini">not set</span>
+        </div>
+        <div class="provider-key-row">
+          <input class="provider-key-input" id="key-gemini" type="password" placeholder="AIza…" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('gemini','GEMINI_API_KEY','key-gemini')">Save</button>
+        </div>
+        <div class="provider-actions">
+          <a class="provider-getkey" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Get key →</a>
+          <button class="provider-clear" onclick="clearKey('gemini','GEMINI_API_KEY')">Remove</button>
+          <span class="save-feedback" id="fb-gemini"></span>
+        </div>
+      </div>
+
+      <!-- ChatGPT / OpenAI -->
+      <div class="provider-card" id="card-openai">
+        <div class="provider-top">
+          <div class="provider-icon" style="background:#0d1f1a">◈</div>
+          <span class="provider-name">ChatGPT <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by OpenAI</span></span>
+          <span class="provider-status missing" id="status-openai">not set</span>
+        </div>
+        <div class="provider-key-row">
+          <input class="provider-key-input" id="key-openai" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('openai','OPENAI_API_KEY','key-openai')">Save</button>
+        </div>
+        <div class="provider-actions">
+          <a class="provider-getkey" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get key →</a>
+          <button class="provider-clear" onclick="clearKey('openai','OPENAI_API_KEY')">Remove</button>
+          <span class="save-feedback" id="fb-openai"></span>
+        </div>
+      </div>
+
+      <!-- Grok -->
+      <div class="provider-card" id="card-grok">
+        <div class="provider-top">
+          <div class="provider-icon" style="background:#1a1410">𝕏</div>
+          <span class="provider-name">Grok <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by xAI</span></span>
+          <span class="provider-status missing" id="status-grok">not set</span>
+        </div>
+        <div class="provider-key-row">
+          <input class="provider-key-input" id="key-grok" type="password" placeholder="xai-…" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('grok','XAI_API_KEY','key-grok')">Save</button>
+        </div>
+        <div class="provider-actions">
+          <a class="provider-getkey" href="https://console.x.ai/" target="_blank" rel="noopener">Get key →</a>
+          <button class="provider-clear" onclick="clearKey('grok','XAI_API_KEY')">Remove</button>
+          <span class="save-feedback" id="fb-grok"></span>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="messages" id="messages">
     <div class="empty-state" id="empty-state">
@@ -503,42 +774,49 @@
         const decoder = new TextDecoder();
         let buf = "";
 
+        let streamFinished = false;
+        function processLines(lines) {
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+            const raw = line.slice(5).trim();
+            if (!raw) continue;
+            try {
+              const evt = JSON.parse(raw);
+              if (evt.type === "token" && evt.text) {
+                if (!hasTokens) { hasTokens = true; setThinking(false); }
+                fullText += evt.text;
+                cursor.remove();
+                bubble.textContent = fullText;
+                bubble.appendChild(cursor);
+                scrollToBottom();
+              }
+              if (evt.type === "error" && evt.text) {
+                appendErrorNotice(row, evt.text);
+              }
+              if (evt.type === "done" && !streamFinished) {
+                streamFinished = true;
+                finishStream(row, bubble, cursor, fullText, evt.source, evt.error);
+              }
+            } catch { /* skip malformed */ }
+          }
+        }
         function read() {
           reader.read().then(({ done, value }) => {
             if (done) {
-              if (!hasTokens) {
-                bubble.textContent = "No response received.";
+              // flush any remaining buffer (handles partial last line)
+              if (buf.trim()) processLines([buf]);
+              if (!streamFinished) {
+                if (!hasTokens) bubble.textContent = "No response received.";
+                finishStream(row, bubble, cursor, fullText, "done");
               }
-              finishStream(row, bubble, cursor, fullText, "done");
               return;
             }
             buf += decoder.decode(value, { stream: true });
             const lines = buf.split("\n");
             buf = lines.pop();
-            for (const line of lines) {
-              if (!line.startsWith("data:")) continue;
-              const raw = line.slice(5).trim();
-              if (!raw) continue;
-              try {
-                const evt = JSON.parse(raw);
-                if (evt.type === "token" && evt.text) {
-                  if (!hasTokens) { hasTokens = true; setThinking(false); }
-                  fullText += evt.text;
-                  cursor.remove();
-                  bubble.textContent = fullText;
-                  bubble.appendChild(cursor);
-                  scrollToBottom();
-                }
-                if (evt.type === "error" && evt.text) {
-                  appendErrorNotice(row, evt.text);
-                }
-                if (evt.type === "done") {
-                  finishStream(row, bubble, cursor, fullText, evt.source, evt.error);
-                }
-              } catch { /* skip malformed */ }
-            }
+            processLines(lines);
             read();
-          }).catch(() => finishStream(row, bubble, cursor, fullText, "error"));
+          }).catch(() => { if (!streamFinished) finishStream(row, bubble, cursor, fullText, "error"); });
         }
         read();
       })
@@ -555,15 +833,15 @@
     if (!text && !error) {
       bubble.textContent = bubble.textContent || "…";
     }
-    if (source === "unavailable" || error) {
+    if (source === "failed" || source === "unavailable" || source === "error" || error) {
       const badge = document.createElement("div");
       badge.className = "source-badge offline";
-      badge.textContent = error ? `unavailable — ${error}` : "unavailable";
+      badge.textContent = error ? error : source;
       row.appendChild(badge);
-    } else if (source && source !== "error") {
+    } else if (source) {
       const badge = document.createElement("div");
       badge.className = `source-badge ${source}`;
-      const names = { anthropic: "Claude", openai: "OpenAI", gemini: "Gemini", ollama: "Ollama" };
+      const names = { anthropic: "Claude", openai: "ChatGPT", gemini: "Gemini", grok: "Grok", ollama: "Ollama" };
       badge.textContent = `✦ ${names[source] || source}`;
       row.appendChild(badge);
     }
@@ -597,6 +875,94 @@
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
+
+  // ── Settings drawer ───────────────────────────────────────────────────
+  const PROVIDERS = [
+    { id: "claude",  envKey: "ANTHROPIC_API_KEY" },
+    { id: "gemini",  envKey: "GEMINI_API_KEY" },
+    { id: "openai",  envKey: "OPENAI_API_KEY" },
+    { id: "grok",    envKey: "XAI_API_KEY" },
+  ];
+
+  function openSettings() {
+    document.getElementById("settings-overlay").classList.add("open");
+    document.getElementById("settings-drawer").classList.add("open");
+    loadProviderStatus();
+  }
+
+  function closeSettings() {
+    document.getElementById("settings-overlay").classList.remove("open");
+    document.getElementById("settings-drawer").classList.remove("open");
+  }
+
+  async function loadProviderStatus() {
+    try {
+      const r = await fetch(`${serverBase}/api/settings/providers`, { signal: AbortSignal.timeout(4000) });
+      if (!r.ok) return;
+      const data = await r.json();
+      let anyMissing = false;
+      for (const { id, envKey } of PROVIDERS) {
+        const configured = !!(data[envKey]);
+        const statusEl = document.getElementById(`status-${id}`);
+        const cardEl = document.getElementById(`card-${id}`);
+        const inputEl2 = document.getElementById(`key-${id}`);
+        if (statusEl) {
+          statusEl.textContent = configured ? "connected" : "not set";
+          statusEl.className = `provider-status ${configured ? "ok" : "missing"}`;
+        }
+        if (cardEl) cardEl.classList.toggle("connected", configured);
+        if (inputEl2 && configured) inputEl2.placeholder = "••••••••  (set — enter new key to replace)";
+        if (!configured) anyMissing = true;
+      }
+      document.getElementById("settings-btn").classList.toggle("has-error", anyMissing && data._any === false);
+    } catch { /* non-critical */ }
+  }
+
+  async function saveKey(providerId, envKey, inputId) {
+    const val = document.getElementById(inputId).value.trim();
+    if (!val) return;
+    const fb = document.getElementById(`fb-${providerId}`);
+    try {
+      const r = await fetch(`${serverBase}/api/settings/providers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: envKey, value: val }),
+      });
+      const data = await r.json();
+      if (r.ok && data.ok) {
+        fb.textContent = "✓ saved"; fb.className = "save-feedback ok";
+        document.getElementById(inputId).value = "";
+        setTimeout(() => { fb.textContent = ""; fb.className = "save-feedback"; }, 2500);
+        loadProviderStatus();
+      } else {
+        fb.textContent = data.error || "error"; fb.className = "save-feedback err";
+      }
+    } catch (e) {
+      fb.textContent = e.message; fb.className = "save-feedback err";
+    }
+  }
+
+  async function clearKey(providerId, envKey) {
+    const fb = document.getElementById(`fb-${providerId}`);
+    try {
+      const r = await fetch(`${serverBase}/api/settings/providers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: envKey, value: "" }),
+      });
+      const data = await r.json();
+      if (r.ok && data.ok) {
+        fb.textContent = "removed"; fb.className = "save-feedback ok";
+        setTimeout(() => { fb.textContent = ""; fb.className = "save-feedback"; }, 2000);
+        loadProviderStatus();
+      }
+    } catch (e) {
+      fb.textContent = e.message; fb.className = "save-feedback err";
+    }
+  }
+
+  // Load status badge on open if a provider was missing last time
+  loadProviderStatus();
 </script>
 </body>
 </html>

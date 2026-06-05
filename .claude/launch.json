@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "dream-journal",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/lantern-garage/server.js"],
+      "port": 4177
+    },
+    {
       "name": "lantern-api",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "flask", "run", "--port=5000"],
