@@ -1,6 +1,6 @@
 const https = require("https");
 const http = require("http");
-const { AGENT_PERSONAS, selectAgent } = require("./dream-chat");
+const { AGENT_PERSONAS, DREAM_DOORS, selectAgent } = require("./dream-chat");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 
@@ -58,6 +58,35 @@ async function handleStreamChat(req, url, res) {
   };
   const sendError = (msg) => {
     res.write(`data: ${JSON.stringify({ type: "error", text: msg })}\n\n`);
+  };
+  const sendLocalFallback = async (error = "") => {
+    const snippet = message.slice(0, 90);
+    const last = recentDreams[0];
+    const lastText = last ? String(last.text || last.content || "").slice(0, 60) : "";
+    const lastTags = last && last.tags ? ` [${last.tags.join(", ")}]` : "";
+    const offlineReplies = {
+      lantern: `The flame holds steady. "${snippet}..." You can always come home safe. What light did you bring back?`,
+      blinkbug: `[STATIC] "${snippet}..." [GLITCH] Windows XP door detected. Hidden lore? What did the CRT show you?`,
+      keystone: `"${snippet}..." Truth: this connects to something older. The Return Door remembers. What pattern repeats?`,
+      waterfall: last
+        ? `This flows alongside your recent entry: "${lastText}"${lastTags}. What feeling carried between them?`
+        : `"${snippet}..." flows like water. What feeling wants to move through?`,
+      xenon: `"${snippet}..." charts a course. Where does this dream point, and who walks with you?`,
+      founder: `"${snippet}..." carries a wish. What are you protecting, and where do you need to return?`,
+    };
+    const fallback = message
+      ? (offlineReplies[agent.id] || `"${snippet}..." That is worth keeping. What do you see when you sit with it?`)
+      : `${DREAM_DOORS.founder.phrase} The dream door is open. What did you bring back?`;
+
+    fullReply = fallback;
+    sendToken(fallback);
+    await appendConversationEntry({
+      recordedAt: new Date().toISOString(),
+      surface: "dream-chat-stream",
+      role: "lantern",
+      text: fallback.slice(0, maxConversationTextLength),
+    }).catch(() => {});
+    sendDone("offline", { error, agent: agent.name, online: false });
   };
 
   await appendConversationEntry({
@@ -136,7 +165,7 @@ async function handleStreamChat(req, url, res) {
       return;
     } catch (err) {
       sendError(`anthropic_unavailable: ${err.message}`);
-      if (requestedProvider) { sendDone("unavailable", { error: err.message, agent: agent.name }); return; }
+      if (requestedProvider) { await sendLocalFallback(err.message); return; }
     }
   }
 
@@ -205,7 +234,7 @@ async function handleStreamChat(req, url, res) {
       return;
     } catch (err) {
       sendError(`openai_unavailable: ${err.message}`);
-      if (requestedProvider) { sendDone("unavailable", { error: err.message, agent: agent.name }); return; }
+      if (requestedProvider) { await sendLocalFallback(err.message); return; }
     }
   }
 
@@ -270,7 +299,7 @@ async function handleStreamChat(req, url, res) {
       return;
     } catch (err) {
       sendError(`gemini_unavailable: ${err.message}`);
-      if (requestedProvider) { sendDone("unavailable", { error: err.message, agent: agent.name }); return; }
+      if (requestedProvider) { await sendLocalFallback(err.message); return; }
     }
   }
 
@@ -350,13 +379,12 @@ async function handleStreamChat(req, url, res) {
       }
     } catch (err) {
       sendError(`ollama_unavailable: ${err.message}`);
-      if (requestedProvider) { sendDone("unavailable", { error: err.message, agent: agent.name }); return; }
+      if (requestedProvider) { await sendLocalFallback(err.message); return; }
     }
   }
 
-  // No provider available — clean failure
-  sendError("All providers unavailable. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, or start Ollama.");
-  sendDone("unavailable", { error: "no_provider", agent: agent.name, online: false });
+  // No provider available — local persona fallback
+  await sendLocalFallback("no_provider");
 }
 
 module.exports = { handleStreamChat };
