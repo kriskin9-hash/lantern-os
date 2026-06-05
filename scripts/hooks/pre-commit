@@ -1,0 +1,33 @@
+#!/bin/sh
+# Monoworkstream gate: refuse new commits while any PR is open.
+# Single-dev rule: one stream at a time. Finish the open PR before starting new work.
+
+# Allow bypass with --no-verify or SKIP_MONOWORKSTREAM=1
+if [ "$SKIP_MONOWORKSTREAM" = "1" ]; then
+    exit 0
+fi
+
+if ! command -v gh >/dev/null 2>&1; then
+    echo "Warning: gh CLI not found. Cannot enforce monoworkstream gate."
+    exit 0
+fi
+
+open_count=$(gh pr list --repo alex-place/lantern-os --state open --json number --jq 'length' 2>/dev/null)
+if [ $? -ne 0 ]; then
+    echo "Warning: could not query GitHub PRs. Skipping monoworkstream gate."
+    exit 0
+fi
+
+if [ "$open_count" -gt 0 ]; then
+    echo ""
+    echo "MONOWORKSTREAM BLOCK: $open_count PR(s) still open."
+    echo ""
+    gh pr list --repo alex-place/lantern-os --state open --json number,title,headRefName --jq '.[] | "  #\(.number) \(.title) [\(.headRefName)]"' 2>/dev/null
+    echo ""
+    echo "Rule: finish or close the open PR before starting new work."
+    echo "Bypass: SKIP_MONOWORKSTREAM=1 git commit ..."
+    echo ""
+    exit 1
+fi
+
+exit 0
