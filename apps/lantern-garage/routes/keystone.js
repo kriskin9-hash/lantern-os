@@ -14,7 +14,11 @@ const MAX_OUTPUT = 4000;
 const ALLOWED = [
   // Git
   { match: /^git status$/, cmd: "git status" },
+  { match: /^git status --short$/, cmd: "git status --short" },
+  { match: /^git diff$/, cmd: "git diff" },
   { match: /^git diff --stat$/, cmd: "git diff --stat" },
+  { match: /^git log$/, cmd: "git log -n 20" },
+  { match: /^git log --oneline$/, cmd: "git log --oneline -n 20" },
   { match: /^git log --oneline -\d+$/, cmd: null }, // pass through
   { match: /^git add (.+)$/, cmd: null },
   { match: /^git commit -m "(.+)"$/, cmd: null },
@@ -22,6 +26,11 @@ const ALLOWED = [
   { match: /^git fetch (.+)$/, cmd: null },
   { match: /^git merge (.+) --no-edit$/, cmd: null },
   { match: /^git branch$/, cmd: "git branch" },
+  { match: /^git branch -a$/, cmd: "git branch -a" },
+  { match: /^git stash list$/, cmd: "git stash list" },
+  { match: /^git stash push -m "(.+)"$/, cmd: null },
+  { match: /^git stash pop$/, cmd: "git stash pop" },
+  { match: /^git pull(.*)$/, cmd: null },
   // Tests
   { match: /^npm test$/, cmd: "node tests/run-dream-journal-tests.js api chat multiturn keystone" },
   { match: /^node tests\/test_dream_journal_api\.js$/, cmd: null },
@@ -29,6 +38,8 @@ const ALLOWED = [
   { match: /^node tests\/test_dream_chat_multiturns\.js$/, cmd: null },
   { match: /^node tests\/test_dream_journal_keystone\.js$/, cmd: null },
   { match: /^python -m pytest (.+)$/, cmd: null },
+  { match: /^npm run (.+)$/, cmd: null },
+  { match: /^node --check (.+)$/, cmd: null },
   // Orchestrator
   { match: /^python src\/convergence_io_engine\.py (health|inspect|loop)$/, cmd: null },
   // File reads (read-only)
