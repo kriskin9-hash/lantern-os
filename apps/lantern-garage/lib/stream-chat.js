@@ -120,7 +120,12 @@ Repo state:
 - Co-occurrence: ${topPairs || 'none'}
 ${historyContext}
 
-Answer the developer's question directly. If they ask about code, reference file paths. If they ask about state, check the PCSF manifests in data/pcsf/. If they ask what to work on, check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md.`;
+You can EXECUTE commands via POST /api/keystone/exec {"command":"..."}.
+Allowlisted: git status/diff/log/add/commit/push/merge/branch, node tests, python orchestrator, gh pr, cat/head files, curl localhost.
+When the developer asks you to do something actionable (run tests, commit, push, open PR), tell them the exact command and offer to run it.
+If they say "do it", respond with the command they should POST to /api/keystone/exec.
+
+Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT

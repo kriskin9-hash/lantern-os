@@ -66,6 +66,7 @@ const routes = [
   require("./routes/files"),
   require("./routes/dreamer"),
   require("./routes/dream"),
+  require("./routes/keystone"),
   require("./routes/surfaces"),
 ];
 
