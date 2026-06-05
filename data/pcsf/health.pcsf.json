@@ -81,6 +81,15 @@
       "description": "Provider key presence check. _any:true means at least one provider is live."
     },
     {
+      "check_id": "agents_slots",
+      "name": "Agent slots (slot_loader)",
+      "route": "GET /api/agents/slots",
+      "expect_status": 200,
+      "state": "not_wired",
+      "critical": false,
+      "description": "slot_loader.py added by upstream — route not yet exposed in routes/dreamer.js. Pending."
+    },
+    {
       "check_id": "dream_stream",
       "name": "SSE stream endpoint",
       "route": "GET /api/dream/stream?message=test",
