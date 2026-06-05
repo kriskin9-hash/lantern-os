@@ -72,6 +72,19 @@
       "offline_capable": true,
       "description": "Background job dispatcher. Wakes sleeping agents when work queues, sleeps when idle. Requires Redis. Currently stopped.",
       "binary": "services/dispatcher/dispatcher.py"
+    },
+    {
+      "agent_id": "tesseract_listener",
+      "name": "Tesseract Listener",
+      "state": "available",
+      "surface": null,
+      "entry_route": null,
+      "narrator_id": null,
+      "provider_id": null,
+      "capabilities": ["heartbeat", "checkin_manifest", "slot_monitoring", "lock_acquisition"],
+      "requires_provider": false,
+      "offline_capable": true,
+      "description": "Background listener daemon that refreshes agent-checkin-manifest, monitors dollhouse segments, and holds the tesseract listener lock. Started via scripts/Start-TesseractListener.ps1."
     }
   ],
   "default_agent_id": "dream_chat",

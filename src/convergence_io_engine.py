@@ -98,6 +98,18 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _parse_timestamp(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def _load_json(path: Path) -> Optional[Dict[str, Any]]:
     if not path.exists():
         return None
@@ -426,7 +438,7 @@ class TesseractEngine:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._cells: Dict[str, TesseractCell] = {}
         self._init_cells()
-        self.slots = SlotManager()
+        self.slots = SlotManager(self.data_dir / "agent-fleet" / "slots.json")
         self.metrics = MetricsCollector()
         self.health = HealthProbe()
         self._circuit_cache: Dict[str, CircuitBreaker] = {}
@@ -743,11 +755,87 @@ class TesseractEngine:
             "last_log": str(self.log_path) if self.log_path.exists() else "none",
             "metrics": self.metrics.snapshot(),
             "slots_active": self.slots.active_count("dream_journal"),
+            "dream_journal_slots_active": self.slots.active_count("dream_journal"),
             "circuits": {k: v.state.value for k, v in self._circuit_cache.items()},
         }
 
     def health_check(self, url: str = "http://127.0.0.1:4177/api/status") -> Dict[str, Any]:
-        return self.health.check(url)
+        http_result = self.health.check(url)
+        http_ok = http_result.get("ok", False)
+
+        now = datetime.now(timezone.utc)
+
+        # Try agent-checkin-manifest first, then tesseract-latest as fallback
+        listener_info: Dict[str, Any] = {"status": "missing", "ready": False}
+        listener_source = None
+
+        checkin_path = self.data_dir / "dollhouse" / "agent-checkin-manifest.json"
+        tesseract_path = self.data_dir / "agent-fleet" / "tesseract-latest.json"
+
+        for source, path in [("agent-checkin-manifest", checkin_path), ("tesseract-latest", tesseract_path)]:
+            data = _load_json(path)
+            if not data:
+                continue
+            listener_data = data.get("listener") or {}
+            hb = _parse_timestamp(listener_data.get("heartbeat_at"))
+            if hb is not None:
+                age_seconds = (now - hb).total_seconds()
+                interval = listener_data.get("interval_seconds", 60)
+                stale_threshold = interval * 3
+                if age_seconds <= stale_threshold:
+                    listener_info = {
+                        "source": source,
+                        "status": "fresh",
+                        "ready": True,
+                    }
+                    listener_source = source
+                    break
+                else:
+                    listener_info = {
+                        "source": source,
+                        "status": "stale",
+                        "ready": False,
+                    }
+                    listener_source = source
+
+        # Count active slots from slots.json
+        slots_path = self.data_dir / "agent-fleet" / "slots.json"
+        slots_data = _load_json(slots_path) or {}
+        active_slots = 0
+        for slot in slots_data.get("slots", {}).values():
+            if slot.get("status") == "active":
+                active_slots += 1
+
+        # Determine overall agent activity state
+        if listener_info.get("ready"):
+            state = "listener"
+        elif active_slots > 0:
+            state = "active"
+        else:
+            state = "idle"
+
+        issues = []
+        if not http_ok:
+            issues.append("HTTP health check failed")
+        if not listener_info.get("ready") and not active_slots:
+            issues.append("no active slots or listener")
+        if listener_info.get("status") == "stale":
+            issues.append("listener heartbeat is stale")
+
+        ok = http_ok and (listener_info.get("ready") or active_slots > 0)
+
+        return {
+            "http_ok": http_ok,
+            "ok": ok,
+            "agent_activity": {
+                "state": state,
+                "listener": listener_info,
+                "active_slots": active_slots,
+                "dream_journal_slots_active": self.slots.active_count("dream_journal"),
+            },
+            "issues": issues,
+            "http": http_result,
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════

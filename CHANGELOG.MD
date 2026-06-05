@@ -49,6 +49,26 @@ intent.
 - Claude haiku-4-5 streaming confirmed live
 - Convergence loop `promotion_ready=True`
 
+## [1.0.1] — 2026-06-06 — Dream Journal Stability and Honesty Patch
+
+### Fixed
+- Deterministic agent selection in Dream Chat to reduce nondeterministic routing.
+- Command handling clarified: unsupported bang-commands no longer silently behave like normal chat.
+- Three Doors UX corrected so door-state behavior matches the documented experience.
+- Provider settings persistence aligned with documented local secret handling (`.env.local` preferred over `.env`).
+- Release notes and user guide corrected to match actual runtime behavior and data paths.
+- Privacy claims updated to reflect provider-key behavior, `.env` persistence, and deployed-host exposure.
+
+### Changed
+- Release messaging now distinguishes verified local behavior from planned future behavior.
+- Launch validation now uses current repo files and current test paths.
+
+### Verification
+- Local Dream Chat smoke-tested on `apps/lantern-garage`.
+- Node Dream Journal API tests passed.
+- Multi-turn Dream Chat tests passed.
+- Release blockers on master reviewed and either fixed or explicitly held.
+
 ## [Unreleased]
 
 ### Planned (Convergence)

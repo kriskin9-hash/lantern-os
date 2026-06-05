@@ -29,6 +29,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_DIR = REPO_ROOT / "config"
 DATA_DIR = REPO_ROOT / "data"
 LOG_PATH = DATA_DIR / "agent-fleet" / "inspector-log.jsonl"
+CHECKIN_MANIFEST_PATH = DATA_DIR / "dollhouse" / "agent-checkin-manifest.json"
+CSF_MANIFEST_PATH = DATA_DIR / "dollhouse" / "csf" / "manifest.json"
+LISTENER_LOCK_PATH = DATA_DIR / "agent-fleet" / "tesseract-listener.lock.json"
 
 
 def load_json(path: Path) -> Optional[Dict[str, Any]]:
@@ -125,6 +128,91 @@ def inspect_all() -> Dict[str, Any]:
     return summary
 
 
+def _pid_running(pid: int) -> bool:
+    """Return True if the given PID is still running (cross-platform)."""
+    if sys.platform == "win32":
+        import ctypes
+        kernel = ctypes.windll.kernel32
+        handle = kernel.OpenProcess(1, False, pid)
+        if handle:
+            kernel.CloseHandle(handle)
+            return True
+        return False
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except (OSError, ProcessLookupError):
+            return False
+
+
+def acquire_listener_lock(interval_seconds: int) -> bool:
+    """Try to acquire the listener lock. Returns True if acquired, False if already owned by a running process."""
+    LISTENER_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if LISTENER_LOCK_PATH.exists():
+        try:
+            with open(LISTENER_LOCK_PATH, "r", encoding="utf-8") as f:
+                lock = json.load(f)
+            if _pid_running(lock.get("pid", -1)):
+                return False
+        except Exception:
+            pass
+    lock = {
+        "pid": os.getpid(),
+        "acquired_at": datetime.now(timezone.utc).isoformat(),
+        "interval_seconds": interval_seconds,
+    }
+    with open(LISTENER_LOCK_PATH, "w", encoding="utf-8") as f:
+        json.dump(lock, f, indent=2)
+    return True
+
+
+def refresh_checkin_manifest(interval_seconds: int) -> Dict[str, Any]:
+    """Refresh the agent-checkin-manifest with current listener heartbeat and CSF slots."""
+    CHECKIN_MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    now = datetime.now(timezone.utc)
+    csf = load_json(CSF_MANIFEST_PATH) or {}
+    slots = csf.get("checkin_slots", [])
+    if not slots:
+        slots = csf.get("paths", [])
+        slots = [
+            {
+                "slot_id": f"checkin-{i}",
+                "segment_id": str(s),
+                "interval_minutes": 30,
+                "agent_type": "dollhouse_monitor",
+                "status": "active",
+            }
+            for i, s in enumerate(slots)
+        ]
+    manifest = {
+        "generated_at": now.isoformat(),
+        "listener": {
+            "agent": "agent_inspector",
+            "status": "active",
+            "interval_seconds": interval_seconds,
+            "heartbeat_at": now.isoformat(),
+            "pid": os.getpid(),
+        },
+        "slots": slots,
+    }
+    with open(CHECKIN_MANIFEST_PATH, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2)
+    return manifest
+
+
+def listener_mode(interval_seconds: int) -> None:
+    """Run as the Tesseract listener: acquire lock, refresh manifest, and sleep."""
+    if not acquire_listener_lock(interval_seconds):
+        print("[Listener] Lock already held by another process. Exiting.")
+        sys.exit(1)
+    print(f"[Listener] Lock acquired. PID: {os.getpid()}. Interval: {interval_seconds}s")
+    while True:
+        refresh_checkin_manifest(interval_seconds)
+        print(f"[Listener] Heartbeat written. Sleeping {interval_seconds}s...")
+        time.sleep(interval_seconds)
+
+
 def daemon_mode(interval_seconds: int) -> None:
     print(f"[Agent Inspector] Daemon started. Interval: {interval_seconds}s")
     while True:
@@ -137,12 +225,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Agent Inspector & Self-Monitoring")
     parser.add_argument("--once", action="store_true", help="Run once and exit")
     parser.add_argument("--daemon", action="store_true", help="Run continuously")
+    parser.add_argument("--listener", action="store_true", help="Run as Tesseract listener daemon")
+    parser.add_argument("--refresh-checkins", action="store_true", help="Refresh checkin manifest and exit")
     parser.add_argument("--interval", type=int, default=300, help="Daemon interval in seconds")
     parser.add_argument("--report", type=Path, help="Write latest report to JSON file")
     args = parser.parse_args()
 
-    if args.daemon:
+    if args.listener:
+        listener_mode(args.interval)
+    elif args.daemon:
         daemon_mode(args.interval)
+    elif args.refresh_checkins:
+        manifest = refresh_checkin_manifest(args.interval)
+        print(json.dumps(manifest, indent=2))
     else:
         summary = inspect_all()
         print(json.dumps(summary, indent=2))
