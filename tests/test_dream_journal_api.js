@@ -6,16 +6,16 @@
 
 const http = require("http");
 const assert = require("assert");
+const { baseUrl: BASE, hostname: HOST, port: PORT } = require("./lantern-test-base");
 
-const BASE = "http://127.0.0.1:4177";
 let passed = 0;
 let failed = 0;
 
 async function request(method, path, body) {
   return new Promise((resolve, reject) => {
     const opts = {
-      hostname: "127.0.0.1",
-      port: 4177,
+      hostname: HOST,
+      port: PORT,
       path,
       method,
       headers: { "Content-Type": "application/json" },
@@ -207,7 +207,7 @@ async function run() {
   await test("stream returns text/event-stream", async () => {
     return new Promise((resolve, reject) => {
       const req = http.request(
-        { hostname: "127.0.0.1", port: 4177, path: "/api/dream/stream?message=test+stream", method: "GET" },
+        { hostname: HOST, port: PORT, path: "/api/dream/stream?message=test+stream", method: "GET" },
         (res) => {
           let data = "";
           res.on("data", (c) => (data += c));
@@ -229,7 +229,7 @@ async function run() {
 
   await test("landing page returns 200 HTML with Dream Journal heading", async () => {
     const r = await new Promise((resolve, reject) => {
-      const req = http.request({ hostname: "127.0.0.1", port: 4177, path: "/", method: "GET" }, (res) => {
+      const req = http.request({ hostname: HOST, port: PORT, path: "/", method: "GET" }, (res) => {
         let data = "";
         res.on("data", (c) => (data += c));
         res.on("end", () => resolve({ status: res.statusCode, body: data }));
@@ -244,7 +244,7 @@ async function run() {
 
   await test("landing page has CTA panels", async () => {
     const r = await new Promise((resolve, reject) => {
-      const req = http.request({ hostname: "127.0.0.1", port: 4177, path: "/", method: "GET" }, (res) => {
+      const req = http.request({ hostname: HOST, port: PORT, path: "/", method: "GET" }, (res) => {
         let data = "";
         res.on("data", (c) => (data += c));
         res.on("end", () => resolve({ status: res.statusCode, body: data }));

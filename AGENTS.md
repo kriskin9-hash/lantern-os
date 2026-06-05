@@ -158,6 +158,47 @@ This repo enforces a **single workstream**: only one open PR at a time.
 
 ---
 
+## Workspace Hygiene (Critical)
+
+A clean workspace prevents context fragmentation and merge rot.
+
+### Branch policy
+- **Only `master` and `gh-pages` are long-lived branches.** All other branches are temporary.
+- **Delete your branch immediately after merge.** The `branch-cleanup.yml` workflow auto-deletes merged PR branches.
+- **Never reuse an old branch.** Always create a new branch from latest `master`.
+- **Branch naming:** `<type>/<short-description>` (e.g., `feat/convergence-io-tier`, `fix/mcp-dotenv`).
+- **Valid types:** `feat`, `fix`, `docs`, `chore`, `test`, `refactor`.
+
+### Before starting work
+```bash
+# 1. Check for open PRs (monoworkstream)
+gh pr list --state open
+
+# 2. Ensure master is current
+git checkout master
+git pull origin master
+
+# 3. Create a fresh branch
+git checkout -b feat/your-feature-name
+```
+
+### After merging
+```bash
+# Delete local and remote branch
+git push origin --delete feat/your-feature-name
+git branch -D feat/your-feature-name
+
+# Prune stale refs
+git fetch --prune
+```
+
+### Forbidden branches (auto-deleted if found)
+- `dev`, `rebase`, `merge-resolved-prs` — these are not part of the workflow.
+- Any branch with garbage commits (e.g., "ai", "ay", "commit").
+- Any branch older than 30 days that has been merged.
+
+---
+
 ## Rules for AI Agents
 
 1. **Read PCSF manifests before reading source code.**

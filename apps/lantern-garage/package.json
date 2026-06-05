@@ -11,12 +11,14 @@
     "start:cloud": "node cloud-server.js",
     "check": "node --check server.js && node --check cloud-server.js",
     "validate": "node validate.js",
-    "test": "node ../../tests/test_dream_journal_api.js",
+    "test": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone",
     "test:api": "node ../../tests/test_dream_journal_api.js",
     "test:chat": "node ../../tests/test_dream_journal_chat.js",
+    "test:multiturn": "node ../../tests/test_dream_chat_multiturns.js",
+    "test:keystone": "node ../../tests/test_dream_journal_keystone.js",
     "test:ui": "npx playwright test ../../tests/test_dream_journal_ui.spec.js",
     "test:ui:headed": "npx playwright test ../../tests/test_dream_journal_ui.spec.js --headed",
-    "test:all": "npm run test:api && npm run test:chat && npm run test:ui"
+    "test:all": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone ui"
   },
   "engines": {
     "node": ">=20"

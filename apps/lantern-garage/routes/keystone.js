@@ -23,9 +23,11 @@ const ALLOWED = [
   { match: /^git merge (.+) --no-edit$/, cmd: null },
   { match: /^git branch$/, cmd: "git branch" },
   // Tests
-  { match: /^npm test$/, cmd: "node tests/test_dream_journal_api.js && node tests/test_dream_chat_multiturns.js" },
+  { match: /^npm test$/, cmd: "node tests/run-dream-journal-tests.js api chat multiturn keystone" },
   { match: /^node tests\/test_dream_journal_api\.js$/, cmd: null },
+  { match: /^node tests\/test_dream_journal_chat\.js$/, cmd: null },
   { match: /^node tests\/test_dream_chat_multiturns\.js$/, cmd: null },
+  { match: /^node tests\/test_dream_journal_keystone\.js$/, cmd: null },
   { match: /^python -m pytest (.+)$/, cmd: null },
   // Orchestrator
   { match: /^python src\/convergence_io_engine\.py (health|inspect|loop)$/, cmd: null },
@@ -106,7 +108,7 @@ module.exports = async function keystoneRoutes(req, res, url, deps) {
       const git_status = execSync("git status --short", { cwd: repoRoot, encoding: "utf-8", timeout: 5000 }).trim();
       const branch = execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf-8", timeout: 5000 }).trim();
       const log = execSync("git log --oneline -5", { cwd: repoRoot, encoding: "utf-8", timeout: 5000 }).trim();
-      const test_count = "Run: node tests/test_dream_journal_api.js (18) + test_dream_chat_multiturns.js (11)";
+      const test_count = "Run: npm test or node tests/test_dream_journal_api.js + test_dream_journal_chat.js + test_dream_chat_multiturns.js + test_dream_journal_keystone.js";
 
       sendJson(res, {
         branch,

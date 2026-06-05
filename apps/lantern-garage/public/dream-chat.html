@@ -101,6 +101,28 @@
       cursor: pointer;
     }
     .selector-row select:focus { border-color: var(--accent); }
+    .mcp-toggle {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .mcp-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .mcp-toggle.active {
+      background: #0a1a0e;
+      border-color: #4caf82;
+      color: #4caf82;
+    }
+    .input-area.mcp-mode { gap: 6px; }
+    .input-area.mcp-mode .voice-btn,
+    .input-area.mcp-mode .ctf-popup,
+    .app.mcp-mode .debug-toggle,
+    .app.mcp-mode .debug-panel { display: none !important; }
     .dot {
       width: 8px;
       height: 8px;
@@ -678,6 +700,7 @@
         <option value="grok">Grok</option>
         <option value="ollama">Ollama</option>
       </select>
+      <button class="mcp-toggle" id="mcp-toggle" title="Toggle Keystone MCP mode" onclick="toggleKeystoneMcp()">🔧 MCP</button>
     </div>
     <button class="settings-btn" id="settings-btn" title="Provider settings" onclick="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -829,6 +852,9 @@
   const emptyState = document.getElementById("empty-state");
   const agentSelect = document.getElementById("agent-select");
   const providerSelect = document.getElementById("provider-select");
+  const mcpToggle = document.getElementById("mcp-toggle");
+  let keystoneMcpEnabled = false;
+  let originalAgents = [];
 
   let isStreaming = false;
   // Conversation history for multi-turn context — [{role:"user"|"assistant", text:"..."}]
@@ -884,6 +910,32 @@
   function toggleDebug() {
     document.getElementById("debug-panel").classList.toggle("open");
   }
+
+  function toggleKeystoneMcp() {
+    keystoneMcpEnabled = !keystoneMcpEnabled;
+    mcpToggle.classList.toggle("active", keystoneMcpEnabled);
+    document.querySelector(".app").classList.toggle("mcp-mode", keystoneMcpEnabled);
+    document.querySelector(".input-area").classList.toggle("mcp-mode", keystoneMcpEnabled);
+    if (keystoneMcpEnabled) {
+      lockAgentToKeystone();
+    } else {
+      restoreAgentSelector();
+    }
+  }
+
+  function lockAgentToKeystone() {
+    if (!originalAgents.length) return;
+    const keystone = originalAgents.find(a => a.id === "keystone");
+    if (keystone) {
+      agentSelect.innerHTML = `<option value="${keystone.id}">${keystone.name}</option>`;
+      agentSelect.value = keystone.id;
+    }
+  }
+
+  function restoreAgentSelector() {
+    if (!originalAgents.length) return;
+    agentSelect.innerHTML = originalAgents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+  }
   document.addEventListener("keydown", (e) => {
     if (e.key === "d" && !e.ctrlKey && !e.metaKey && !e.altKey && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") {
       toggleDebug();
@@ -911,8 +963,10 @@
       if (r.ok) {
         const data = await r.json();
         agents = data.agents || [];
+        originalAgents = agents;
         agentSelect.innerHTML = agents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
         if (data.default) agentSelect.value = data.default;
+        if (keystoneMcpEnabled) lockAgentToKeystone();
         statusDot.className = "dot online";
         statusLabel.textContent = "online";
         return;
@@ -998,7 +1052,7 @@
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend }),
+      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: keystoneMcpEnabled }),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -1146,8 +1200,8 @@
       row.appendChild(logBtn);
     }
 
-    // Keystone: extract code blocks as executable commands
-    if (agentSelect.value === "keystone" && text) {
+    // Keystone MCP: extract code blocks as executable commands
+    if (keystoneMcpEnabled && agentSelect.value === "keystone" && text) {
       const codeBlocks = text.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/g) || [];
       codeBlocks.forEach(block => {
         const cmd = block.replace(/```(?:bash|powershell|sh)?\n?/, "").replace(/```$/, "").trim();

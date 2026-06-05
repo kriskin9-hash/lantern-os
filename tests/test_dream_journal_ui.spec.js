@@ -8,8 +8,7 @@
  */
 
 const { test, expect } = require("@playwright/test");
-
-const BASE_URL = "http://127.0.0.1:4177";
+const { baseUrl: BASE_URL } = require("./lantern-test-base");
 
 test.describe("Dream Journal UI", () => {
   test("dashboard loads and shows Dream Journal heading", async ({ page }) => {
@@ -149,5 +148,71 @@ test.describe("Dream Journal Chat Agents", () => {
       const hasAgentNames = /Blinkbug|Waterfall|Xenon|Mary|Courtney/i.test(bodyText);
       expect(hasAgentNames || bodyText.length > 50).toBe(true);
     }
+  });
+
+  test("keystone renders run buttons and inline exec output for single-line commands", async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch.bind(window);
+      window.__keystoneExecutedCommand = null;
+
+      window.fetch = async (input, init) => {
+        const url = typeof input === "string" ? input : input.url;
+
+        if (url.endsWith("/api/keystone/exec")) {
+          const payload = JSON.parse((init && init.body) || "{}");
+          window.__keystoneExecutedCommand = payload.command || null;
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              command: payload.command,
+              output: "keystone exec ok",
+              truncated: false,
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        return originalFetch(input, init);
+      };
+    });
+
+    await page.goto(`${BASE_URL}/dream-chat.html`);
+    await page.waitForSelector("#agent-select option[value='keystone']", { state: "attached" });
+    await page.selectOption("#agent-select", "keystone");
+    await page.evaluate(() => {
+      keystoneMcpEnabled = true;
+      const messagesEl = document.getElementById("messages");
+      const text = "Start with:\n```bash\ngit status\n```";
+      const row = document.createElement("div");
+      row.className = "msg-row agent";
+
+      const label = document.createElement("div");
+      label.className = "msg-label";
+      label.textContent = "Keystone";
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+
+      const cursor = document.createElement("span");
+      cursor.className = "cursor";
+      bubble.appendChild(cursor);
+
+      row.appendChild(label);
+      row.appendChild(bubble);
+      messagesEl.appendChild(row);
+
+      finishStream(row, bubble, cursor, text, "offline", undefined, []);
+    });
+
+    const execBtn = page.locator("button.suggestion", { hasText: "git status" }).first();
+    await expect(execBtn).toBeVisible();
+    await execBtn.click();
+
+    expect(await page.evaluate(() => window.__keystoneExecutedCommand)).toBe("git status");
+    await expect(page.locator(".msg-row.agent", { hasText: "KEYSTONE EXEC" }).last()).toContainText("keystone exec ok");
   });
 });

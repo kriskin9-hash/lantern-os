@@ -14,6 +14,8 @@ const playwrightCli = path.join(repoRoot, "node_modules", "@playwright", "test",
 const allCommands = {
   api: [node, ["tests/test_dream_journal_api.js"]],
   chat: [node, ["tests/test_dream_journal_chat.js"]],
+  multiturn: [node, ["tests/test_dream_chat_multiturns.js"]],
+  keystone: [node, ["tests/test_dream_journal_keystone.js"]],
   validate: [node, ["apps/lantern-garage/validate.js"]],
   ui: [node, [playwrightCli, "test", "tests/test_dream_journal_ui.spec.js"]],
   "ui:headed": [node, [playwrightCli, "test", "tests/test_dream_journal_ui.spec.js", "--headed"]],
@@ -21,10 +23,10 @@ const allCommands = {
 
 function selectedCommands() {
   const requested = process.argv.slice(2);
-  const names = requested.length ? requested : ["api", "chat", "ui"];
+  const names = requested.length ? requested : ["api", "chat", "multiturn", "keystone", "ui"];
   for (const name of names) {
     if (!allCommands[name]) {
-      throw new Error(`Unknown test target "${name}". Use api, chat, validate, ui, or ui:headed.`);
+      throw new Error(`Unknown test target "${name}". Use api, chat, multiturn, keystone, validate, ui, or ui:headed.`);
     }
   }
   return names;
@@ -117,13 +119,12 @@ function stopServer(child) {
   const names = selectedCommands();
   let server = null;
   const canReuseExisting = Boolean(explicitBaseUrl || explicitPort);
+  let alreadyRunning = await getHealth();
 
-  if (!canReuseExisting) {
+  if (!alreadyRunning && !canReuseExisting) {
     port = await findFreePort();
     baseUrl = `http://127.0.0.1:${port}`;
   }
-
-  const alreadyRunning = canReuseExisting && await getHealth();
 
   if (!alreadyRunning) {
     server = startServer();

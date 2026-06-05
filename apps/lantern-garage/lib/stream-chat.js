@@ -12,6 +12,7 @@ async function handleStreamChat(req, url, res) {
   let requestedAgent = "";
   let requestedProvider = "";
   let history = []; // [{role:"user"|"assistant", text:"..."}]
+  let mcpFlag = false;
   if (req.method === "GET") {
     message = String(url.searchParams.get("message") || "").slice(0, 4000).trim();
     user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
@@ -22,6 +23,7 @@ async function handleStreamChat(req, url, res) {
       const { collectRequestBody } = require("./http-utils");
       const rawBody = await collectRequestBody(req);
       const body = JSON.parse(rawBody || "{}");
+      mcpFlag = !!body.mcp;
       message = String(body.message || "").slice(0, 4000).trim();
       user = normalizeDreamerUser(body.user || "dreamer");
       requestedAgent = String(body.agent || "").trim();
@@ -63,7 +65,7 @@ async function handleStreamChat(req, url, res) {
   // ── Keystone debug mode ───────────────────────────────────────────────
   // When Keystone is selected, bypass persona/doors and talk raw to the model
   // about app dev, repo state, and convergence. Direct API access from the UX.
-  const isKeystoneDebug = agent.id === "keystone";
+  const isKeystoneDebug = agent.id === "keystone" && mcpFlag;
 
   const dreamContext = recentDreams.length > 0
     ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
@@ -123,7 +125,7 @@ ${historyContext}
 You can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.
 ONLY use these exact commands (anything else is blocked):
 
-TESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_chat_multiturns.js\`
+TESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`
 GIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`
 PR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`
 ORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`
