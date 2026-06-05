@@ -232,12 +232,15 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       ? [requestedProvider]
       : GEMINI_MODEL_CHAIN)) {
     try {
-      // Grounding: enable Google Search if GEMINI_GROUNDING=true (requires Gemini paid tier)
+      // Grounding: Google Search enabled by default on gemini-3.x models (5K free/month)
+      // Disable with GEMINI_GROUNDING=false if needed
+      const isGroundable = geminiModel.startsWith("gemini-3");
+      const groundingEnabled = process.env.GEMINI_GROUNDING !== "false" && isGroundable;
       const geminiPayloadBase = {
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${message}` }] }],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
       };
-      if (process.env.GEMINI_GROUNDING === "true") {
+      if (groundingEnabled) {
         geminiPayloadBase.tools = [{ googleSearch: {} }];
       }
       const payload = JSON.stringify(geminiPayloadBase);

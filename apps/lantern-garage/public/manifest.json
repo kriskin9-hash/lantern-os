@@ -1,0 +1,20 @@
+{
+  "name": "Dream Journal — Lantern OS",
+  "short_name": "Dream Journal",
+  "description": "A private, local-first dream journal with AI reflection. Capture dreams, talk to Lantern agents, explore three doors.",
+  "start_url": "/dream-chat.html",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#7c6af7",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "categories": ["lifestyle", "health", "productivity"],
+  "lang": "en",
+  "scope": "/"
+}
