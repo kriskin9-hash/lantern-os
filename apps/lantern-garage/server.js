@@ -290,7 +290,7 @@ async function route(req, res) {
     return;
   }
 
-  // ── Agents list ─────────────────────────────────────────────────────
+  // ── Agents list
   if (url.pathname === "/api/agents" && req.method === "GET") {
     sendJson(res, {
       agents: AGENT_PERSONAS.map((a) => ({
@@ -303,7 +303,7 @@ async function route(req, res) {
     return;
   }
 
-  // ── Agentic Workspace — Unified Connector Endpoints ──────────────────
+  // ── Agentic Workspace — Unified Connector Endpoints
   if (url.pathname === "/api/dream/greet" && req.method === "GET") {
     try {
       const recentDreams = readRecentDreams(5);
@@ -528,7 +528,7 @@ async function route(req, res) {
         for (const e of entries) {
           rows.push([
             escape(e.id), escape(e.timestamp), escape(e.kind), escape(e.text),
-            escape(e.lucidity), escape((e.emotions || []).join(";",)),
+            escape(e.lucidity), escape((e.emotions || []).join(";")),
             escape((e.tags || []).join(";")), escape((e.symbols || []).join(";"))
           ].join(","));
         }
