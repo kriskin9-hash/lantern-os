@@ -33,6 +33,17 @@ python src/mcp_server/server.py             # port 8771
 
 Never claim a skill or fleet slot is active unless confirmed by implementation or status file.
 
+## Monoworkstream Rule (Single-Dev Workflow)
+
+This repo enforces a **single workstream**: only one open PR at a time.
+
+- **No new commits while any PR is open.** Finish the current PR (merge or close) before starting new work.
+- **No new branches while any PR is open.** The pre-commit and pre-push hooks enforce this via GitHub CLI.
+- **Emergency bypass:** `SKIP_MONOWORKSTREAM=1 git commit ...` or `SKIP_MONOWORKSTREAM=1 git push ...`
+- **Install hooks:** `powershell -ExecutionPolicy Bypass -File scripts/Install-MonoworkstreamHooks.ps1`
+
+Rationale: as a solo dev, open PRs represent unfinished work. Starting a new branch before closing the old one fragments context and increases merge risk. The rule keeps the pipeline linear.
+
 ## Rules for AI Agents
 
 1. Read the file before editing it.
@@ -43,10 +54,12 @@ Never claim a skill or fleet slot is active unless confirmed by implementation o
 6. No new top-level directories without a ticket.
 7. Never commit secrets.
 8. Streaming uses `/api/dream/stream` SSE endpoint.
+9. **Respect monoworkstream** — check for open PRs before creating new branches or commits.
 
 ## Key Guardrails
 
 - Use Pull Requests for changes
 - Keep PRs small and reviewable
+- One open PR at a time (monoworkstream)
 
-**Last Updated:** 2026-06-03
+**Last Updated:** 2026-06-05

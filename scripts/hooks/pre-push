@@ -1,0 +1,27 @@
+#!/bin/sh
+# Monoworkstream gate + master protection + LFS check
+
+# 1. Block direct pushes to master
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/master" ]; then
+    printf >&2 "\n%s\n\n" "Direct push to master is blocked. Open a pull request instead."
+    exit 1
+  fi
+done
+
+# 2. Monoworkstream: refuse pushes while any PR is open
+if [ "$SKIP_MONOWORKSTREAM" != "1" ]; then
+  if command -v gh >/dev/null 2>&1; then
+    open_count=$(gh pr list --repo alex-place/lantern-os --state open --json number --jq 'length' 2>/dev/null)
+    if [ $? -eq 0 ] && [ "$open_count" -gt 0 ]; then
+      printf >&2 "\n%s\n" "MONOWORKSTREAM BLOCK: $open_count PR(s) still open."
+      gh pr list --repo alex-place/lantern-os --state open --json number,title,headRefName --jq '.[] | "  #\(.number) \(.title) [\(.headRefName)]"' 2>/dev/null >&2
+      printf >&2 "\n%s\n\n" "Finish or close the open PR before pushing new branches. Bypass: SKIP_MONOWORKSTREAM=1 git push ..."
+      exit 1
+    fi
+  fi
+fi
+
+# 3. Git LFS
+command -v git-lfs >/dev/null 2>&1 || { printf >&2 "\n%s\n\n" "This repository is configured for Git LFS but 'git-lfs' was not found on your path. If you no longer wish to use Git LFS, remove this hook by deleting the 'pre-push' file in the hooks directory (set by 'core.hookspath'; usually '.git/hooks')."; exit 2; }
+git lfs pre-push "$@"
