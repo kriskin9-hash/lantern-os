@@ -61,6 +61,15 @@ intent.
 - **#144** Receipt diff (compare current vs previous convergence run)
 - **#148** PII cleanup -- remove "waynesville" from persona keyword matcher
 
+### Known Bugs (Tracked)
+
+- **#160** _multi_signal_score() needs real vector similarity integration
+- **#159** Memory Engine query() is O(n) -- no keyword/entity indexes
+- **#164** hff-api dream_journal /recent route returns empty entries (TODO stub)
+- **#165** converged_tesseract.py convergence_io_route_on_slice is a placeholder stub
+- **#166** hff-api load_data_source() returns mock data -- not yet implemented
+- **#167** discord lounge bot memory_layer export_csf_stub is a placeholder
+
 ### Added
 
 - Initial workspace governance files for changelog, license, security, support,
