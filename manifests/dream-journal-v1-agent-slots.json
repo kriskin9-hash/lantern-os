@@ -1,0 +1,52 @@
+{
+  "generated_at": "2026-06-05T15:18:46.494858+00:00",
+  "upstream_pr": "https://github.com/alex-place/lantern-os/pull/120",
+  "strategy": "action_pooling \u2014 read-only tasks batch; ref docs/ACTION-POOLING-AND-BATCHING.md",
+  "token_budget": "max_tokens=1024 per provider call; context slimmed via symbol mesh (top 8 symbols passed); CSF compression on save",
+  "agent_slots": [
+    {
+      "id": "dream_journal/agents_slots_route",
+      "priority": 1,
+      "status": "queued",
+      "description": "Wire /api/agents/slots in routes/dreamer.js \u2014 slot_loader.py exists, HTTP route not registered"
+    },
+    {
+      "id": "dream_journal/three_doors_test",
+      "priority": 2,
+      "status": "queued",
+      "description": "test_three_doors.js: verify [DOORS:] parsed, cleanText strips it, 3 chips rendered in browser"
+    },
+    {
+      "id": "dream_journal/ctf_persistence",
+      "priority": 3,
+      "status": "queued",
+      "description": "Persist CTF glyphs in dream entries; surface in stats/search; update entry schema in dream.js"
+    },
+    {
+      "id": "dream_journal/tts_voice_select",
+      "priority": 4,
+      "status": "queued",
+      "description": "Add TTS voice selector to settings drawer (name/rate/pitch from SpeechSynthesis.getVoices)"
+    },
+    {
+      "id": "dream_journal/pcsf_live_refresh",
+      "priority": 5,
+      "status": "queued",
+      "description": "Auto-update data/pcsf/*.pcsf.json on server start from live provider + journal state"
+    },
+    {
+      "id": "dream_journal/gemini_grounding_test",
+      "priority": 6,
+      "status": "queued",
+      "description": "Verify GEMINI_GROUNDING=true with paid key; update .env.example + health.pcsf.json"
+    },
+    {
+      "id": "dream_journal/voice_server_stt",
+      "priority": 7,
+      "status": "queued",
+      "description": "Backend Vosk STT fallback for non-Chrome; route POST /api/dream/transcribe"
+    }
+  ],
+  "convergence_loop_result": "promotion_ready=True (all 12 phases pass)",
+  "notes": "Gemini key rate-limited until daily quota reset. Use ANTHROPIC_API_KEY or OPENAI_API_KEY as fallback for agent work."
+}

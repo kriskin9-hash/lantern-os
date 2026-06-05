@@ -218,7 +218,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && message && (!requestedProvider || requestedProvider === "claude" || requestedProvider === "anthropic" || requestedProvider === "claude-sonnet")) {
     try {
-      let claudeModel = "claude-3-5-haiku-20241022";
+      let claudeModel = "claude-haiku-4-5-20251001";
       if (requestedProvider === "claude-sonnet") {
         claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-3-5-sonnet-20241022";
       } else {
@@ -353,11 +353,54 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
-if (requestedProvider) { sendFail(err.message); return; }
-
       sendError(`openai_unavailable: ${err.message}`);
-      if (requestedProvider) { await sendLocalFallback(err.message); return; }
+      if (requestedProvider) { sendFail(err.message); return; }
+    }
+  }
 
+  // Provider 4: Grok / xAI (streaming — OpenAI-compatible)
+  const xaiKey = process.env.XAI_API_KEY;
+  if (xaiKey && message && (!requestedProvider || requestedProvider === "grok" || requestedProvider === "xai")) {
+    try {
+      const xaiModel = process.env.XAI_MODEL || "grok-3-mini";
+      const payload = JSON.stringify({
+        model: xaiModel, stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...history.map(h => ({ role: h.role, content: h.text })),
+          { role: "user", content: message },
+        ],
+      });
+      await new Promise((resolve, reject) => {
+        const req2 = require("https").request({
+          hostname: "api.x.ai", path: "/v1/chat/completions", method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${xaiKey}`, "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`xai_status_${upstream.statusCode}`)); return; }
+          let buf = "";
+          upstream.on("data", (chunk) => {
+            buf += chunk.toString();
+            const lines = buf.split("\n"); buf = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const raw = line.slice(6).trim();
+              if (raw === "[DONE]" || !raw) continue;
+              try { const t = JSON.parse(raw).choices?.[0]?.delta?.content || ""; if (t) { fullReply += t; sendToken(t); } } catch { /* skip */ }
+            }
+          });
+          upstream.on("end", resolve); upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
+        req2.write(payload); req2.end();
+      });
+      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply);
+      await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
+      sendDone("grok", { agent: agent.name, online: true, cleanText: xaiClean, suggestions: xaiDoors });
+      return;
+    } catch (err) {
+      sendError(`grok_unavailable: ${err.message}`);
+      if (requestedProvider) { sendFail(err.message); return; }
     }
   }
 
