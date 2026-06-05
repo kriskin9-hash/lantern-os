@@ -120,7 +120,18 @@ Repo state:
 - Co-occurrence: ${topPairs || 'none'}
 ${historyContext}
 
-Answer the developer's question directly. If they ask about code, reference file paths. If they ask about state, check the PCSF manifests in data/pcsf/. If they ask what to work on, check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md.`;
+You can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.
+ONLY use these exact commands (anything else is blocked):
+
+TESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_chat_multiturns.js\`
+GIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`
+PR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`
+ORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`
+READ: \`cat FILE\` \`head -N FILE\`
+
+When asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.
+
+Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT

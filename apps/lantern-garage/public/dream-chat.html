@@ -1146,6 +1146,45 @@
       row.appendChild(logBtn);
     }
 
+    // Keystone: extract code blocks as executable commands
+    if (agentSelect.value === "keystone" && text) {
+      const codeBlocks = text.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/g) || [];
+      codeBlocks.forEach(block => {
+        const cmd = block.replace(/```(?:bash|powershell|sh)?\n?/, "").replace(/```$/, "").trim();
+        if (!cmd || cmd.includes("\n")) return; // only single-line commands
+        const execBtn = document.createElement("button");
+        execBtn.className = "suggestion";
+        execBtn.style.cssText = "margin-top:4px;border-color:#4caf82;color:#4caf82;font-family:monospace;font-size:0.78rem;";
+        execBtn.textContent = `▶ ${cmd.slice(0, 60)}`;
+        execBtn.onclick = async () => {
+          execBtn.disabled = true;
+          execBtn.textContent = "Running…";
+          try {
+            const r = await fetch(`${serverBase}/api/keystone/exec`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ command: cmd }),
+            });
+            const d = await r.json();
+            // Show output as a new message
+            const outRow = document.createElement("div");
+            outRow.className = "msg-row agent";
+            const isErr = !d.ok;
+            const label = isErr ? "KEYSTONE EXEC ✗" : "KEYSTONE EXEC ✓";
+            const color = isErr ? "#e05555" : "#4caf82";
+            const bg = isErr ? "#1a0a0a" : "#0a1a0e";
+            const border = isErr ? "#3d1a1a" : "#1a3d2a";
+            const body = d.output || d.error || d.message || "no output";
+            outRow.innerHTML = `<div class="msg-label" style="color:${color}">${label}</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;background:${bg};border-color:${border};">${escapeHtml(body)}</div>`;
+            messagesEl.appendChild(outRow);
+            execBtn.textContent = d.ok ? `✓ ${cmd.slice(0, 40)}` : `✗ exit ${d.exit_code}`;
+            scrollToBottom();
+          } catch (e) { execBtn.textContent = `✗ ${e.message}`; }
+        };
+        row.appendChild(execBtn);
+      });
+    }
+
     isStreaming = false;
     sendBtn.disabled = false;
     setThinking(false);
