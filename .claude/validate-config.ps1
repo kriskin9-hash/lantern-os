@@ -1,4 +1,4 @@
-# validate-config.ps1
+﻿# validate-config.ps1
 # Validates all Lantern OS configuration files and registries
 
 param(
