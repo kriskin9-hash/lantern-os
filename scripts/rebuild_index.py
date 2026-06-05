@@ -140,7 +140,7 @@ html = """<!doctype html>
             <h3 style="font-size:0.95rem;margin-bottom:6px;">Outreach Program</h3>
             <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:6px;"><a href="/outreach.html">Outreach Program</a></p>
             <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:6px;">20260530-kalshi-packet</p>
-            <p style="font-size:0.85rem;color:var(--text-muted);"><a href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Mining lab notes</a> <a href="/view?path=skills/solo-mining/SKILL.md">Solo mining skill</a></p>
+            <p style="font-size:0.85rem;color:var(--text-muted);"><a href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Mining lab notes</a> (solo-mining skill archived)</p>
           </section>
 
           <section aria-label="Primary controls">

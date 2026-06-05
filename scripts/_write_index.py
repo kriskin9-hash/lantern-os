@@ -119,7 +119,7 @@ label{display:block;margin-bottom:6px;color:var(--text-secondary);font-size:.82r
 </div>
 </div>
 </section>
-<section id="outreach-section"><h2>Outreach Program</h2><p><a href="/outreach.html">Outreach Program</a></p><p>20260530-kalshi-packet</p><p><a href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Mining lab notes</a> <a href="/view?path=skills/solo-mining/SKILL.md">Solo mining skill</a></p></section>
+<section id="outreach-section"><h2>Outreach Program</h2><p><a href="/outreach.html">Outreach Program</a></p><p>20260530-kalshi-packet</p><p><a href="/view?path=docs/ARC-REACTOR-MINING-LAB.md">Mining lab notes</a> (solo-mining skill archived)</p></section>
 <section aria-label="Primary controls"><button type="button" id="refresh">Refresh</button></section>
 <section id="stats-section">
 <div class="dream-panel">

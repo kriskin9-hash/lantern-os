@@ -124,7 +124,6 @@ These mathematical frameworks are not isolated — they form an integrated cogni
 
 - `skills/bayesian-world-model/SKILL.md` — operational belief loop and polling for the dollhouse
 - `skills/dream_journal/SKILL.md` — dream logging, lucidity, and episodic memory
-- `skills/asi-arc-reactor-mk1/SKILL.md` — ASI confidence calibration and human trial gates
 - `skills/arc-reactor-confidence/SKILL.md` — Brier-style error tracking
 
 ---
