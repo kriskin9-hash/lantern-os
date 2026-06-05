@@ -1,0 +1,11 @@
+# Dream Journal v1.0.0 is here — thank you
+
+This one has been a long time coming, and I wanted to tell you about it before anyone else.
+
+Dream Journal v1.0.0 shipped today. It is the first version I am genuinely proud to hand to another person. It captures dreams by voice or text, lets you tag them by kind — dream, note, place, character, event, lore, symbol, or mirror — and keeps everything local. Your data lives in files on your machine. There is no cloud backend holding your subconscious hostage. You can export everything to JSONL or CSV and open it in any text editor or spreadsheet. That is the whole philosophy in one sentence: own your dreams the way you own a paper journal, but with search, structure, and a little intelligence when you want it.
+
+I built this because I believe the things you experience while asleep deserve the same privacy as the things you write in a private notebook. Most journaling apps are built on the assumption that your data is worth more to them as a training set or an advertising signal than it is to you as a record of your inner life. Dream Journal flips that. Nothing leaves your machine unless you decide to move it. The mic button uses your browser's own speech API — no third-party transcription. The search runs against your local files. The exports go straight to your downloads folder. This is what local-first actually means in practice, not just as a marketing word.
+
+What is coming next is the 3 Door Game — a symbolic, interactive layer that turns your dream archive into something that evolves with you. The design is finished and ships alongside v1.0.0 as documentation; the full interactive experience is the focus of v1.0.1. After that, v1.1 opens up team and multi-user features for the Synthesasia Guild tier, shared symbolic archives, and deeper pattern analysis. There is a lot in motion. The foundation is solid now, and that is what matters.
+
+If you want to try it today, clone the repo and run `npm start --prefix apps/lantern-garage`, then open http://127.0.0.1:4177. Start with a single dream. Use the mic button if you are still half-asleep and do not want to type. Pick a kind from the dropdown, write what you remember, and hit enter. That is all it takes. Your support made this version possible — thank you for being patient while we got it right.
