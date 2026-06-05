@@ -21,8 +21,10 @@ def test_1_queue():
     
     queue = WorkQueue()
     
-    # Clear queue
-    queue.redis_client.flushdb()
+    # Clear only queue-related keys (avoid wiping unrelated data)
+    queue_keys = queue.redis_client.keys("queue:*")
+    if queue_keys:
+        queue.redis_client.delete(*queue_keys)
     
     # Create 3 test jobs
     test_jobs = [

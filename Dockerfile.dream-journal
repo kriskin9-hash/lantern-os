@@ -1,3 +1,4 @@
+# See docker-compose.yml for which Dockerfile to use per service
 # Slim Dream Journal Dockerfile
 # ~100MB image for dream_journal Flask API only
 

@@ -18,10 +18,12 @@ class AgentState(Enum):
     IDLE_CHECK = "idle_check"
 
 class AgentController:
-    def __init__(self, agent_name: str, agent_type: str, container_name: str = None):
+    def __init__(self, agent_name: str, agent_type: str, container_name: str = None, host: str = "localhost", port: int = 5000):
         self.agent_name = agent_name
         self.agent_type = agent_type
         self.container_name = container_name or agent_name
+        self.host = host
+        self.port = port
         self.state = AgentState.SLEEPING
         self.idle_timer = None
         self.state_log = []
@@ -61,19 +63,22 @@ class AgentController:
             if result.returncode != 0:
                 raise Exception(f"Failed to start container: {result.stderr}")
             
-            # Wait for container to be ready
-            time.sleep(2)
-            
-            # Health check
-            health_result = subprocess.run(
-                ["docker", "exec", self.container_name, "curl", "-s", "http://localhost:5000/health"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            if health_result.returncode != 0:
-                raise Exception(f"Health check failed: {health_result.stderr}")
+            # Poll until container is ready (up to 10 attempts, 1 second apart)
+            last_error = None
+            for attempt in range(10):
+                time.sleep(1)
+                health_result = subprocess.run(
+                    ["docker", "exec", self.container_name, "curl", "-s", f"http://localhost:{self.port}/health"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                if health_result.returncode == 0:
+                    last_error = None
+                    break
+                last_error = health_result.stderr
+            else:
+                raise Exception(f"Health check failed after 10 attempts: {last_error}")
             
             self.log_state(AgentState.AWAKE, "Ready to process jobs")
             self.idle_timer = time.time()
@@ -117,7 +122,7 @@ class AgentController:
             # Post job to agent
             import requests
             response = requests.post(
-                f"http://localhost:5000/dreams/log",
+                f"http://{self.host}:{self.port}/dreams/log",
                 json=job_payload,
                 timeout=30
             )

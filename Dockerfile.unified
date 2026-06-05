@@ -1,3 +1,4 @@
+# See docker-compose.yml for which Dockerfile to use per service
 # Lantern OS Unified Container
 # Simplified for single-repo AWS ECS deployment
 # Base: Python 3.12 slim + essential services

@@ -1,3 +1,4 @@
+# See docker-compose.yml for which Dockerfile to use per service
 # Agent Launcher - Runs agents inside container (no popups)
 FROM python:3.11-slim
 
