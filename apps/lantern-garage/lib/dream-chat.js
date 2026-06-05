@@ -136,6 +136,47 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   const rp = String(requestedProvider || "").toLowerCase().trim();
 
   // Provider 1: Anthropic Claude
+  // Provider 1: Gemini (non-streaming) — checked first for Auto mode
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (geminiKey && (!rp || rp === "gemini" || rp === "google" || rp.startsWith("gemini-"))) {
+    try {
+      const geminiModel = rp.startsWith("gemini-") ? rp : (process.env.GEMINI_MODEL || "gemini-2.5-flash");
+      const payload = JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: `${agent.systemPrompt}\n\n${userPrompt}` }] }],
+        generationConfig: { maxOutputTokens: 256, temperature: 0.7 },
+      });
+      const reply = await new Promise((resolve, reject) => {
+        const req2 = https.request({
+          hostname: "generativelanguage.googleapis.com",
+          path: `/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        }, (upstream) => {
+          let data = "";
+          upstream.on("data", (c) => (data += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(data);
+              resolve(String(json.candidates?.[0]?.content?.parts?.[0]?.text || "").trim());
+            } catch { resolve(""); }
+          });
+          upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("timeout")); });
+        req2.write(payload);
+        req2.end();
+      });
+      if (reply) {
+        return { reply, agent: agent.name, suggestions, online: true };
+      }
+    } catch (err) { console.error("Gemini API error:", err.message); /* fall through */ }
+  }
+
+  // Provider 2: Anthropic Claude
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) {
     try {
