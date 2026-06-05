@@ -263,6 +263,18 @@ main() {
         exit 1
     fi
 
+    # Ensure Rust toolchain for CSF convergence layer
+    if ! command -v cargo &> /dev/null; then
+        log_warn "Rust not found, attempting auto-install..."
+        if [ -f "${LANTERN_ROOT}/scripts/install-rust.sh" ]; then
+            bash "${LANTERN_ROOT}/scripts/install-rust.sh"
+        else
+            log_warn "install-rust.sh not found, skipping CSF Rust build"
+        fi
+    else
+        log_info "Rust found: $(rustc --version)"
+    fi
+
     log_info "Pre-flight checks passed"
 
     # Initialize data directories

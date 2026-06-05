@@ -4,6 +4,8 @@
   "private": true,
   "description": "Local-first Lantern OS garage full-stack app.",
   "scripts": {
+    "setup": "node ../../scripts/ensure-rust.js || true",
+    "prestart": "npm run setup",
     "start": "node server.js",
     "start:local": "node server.js",
     "start:cloud": "node cloud-server.js",

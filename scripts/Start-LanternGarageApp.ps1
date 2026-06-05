@@ -4,6 +4,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Ensure Rust toolchain is available (needed for CSF convergence layer)
+$rustSetup = Join-Path $PSScriptRoot "Install-Rust.ps1"
+if (Test-Path $rustSetup) {
+    try {
+        & $rustSetup
+    } catch {
+        Write-Warning "Rust setup check failed (non-fatal for basic operation): $_"
+    }
+}
+
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $app = Join-Path $root "apps\lantern-garage"
 $healthUrl = "http://127.0.0.1:$Port/api/health"
