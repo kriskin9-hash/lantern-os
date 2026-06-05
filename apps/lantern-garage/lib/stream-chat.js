@@ -221,7 +221,7 @@ async function handleStreamChat(req, url, res) {
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${message}` }] }],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
       });
-      const geminiModel = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+      const geminiModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
       await new Promise((resolve, reject) => {
         const req2 = https.request({
           hostname: "generativelanguage.googleapis.com",
