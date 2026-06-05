@@ -181,7 +181,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   if (anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) {
     try {
       const payload = JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL || "claude-3-haiku-20240307",
+        model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
         max_tokens: 256,
         system: agent.systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
