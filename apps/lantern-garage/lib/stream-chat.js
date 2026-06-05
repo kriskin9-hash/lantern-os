@@ -218,7 +218,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && message && (!requestedProvider || requestedProvider === "claude" || requestedProvider === "anthropic" || requestedProvider === "claude-sonnet")) {
     try {
-      let claudeModel = "claude-3-5-haiku-20241022";
+      let claudeModel = "claude-haiku-4-5-20251001";
       if (requestedProvider === "claude-sonnet") {
         claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-3-5-sonnet-20241022";
       } else {
