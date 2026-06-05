@@ -96,45 +96,58 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.build.outputs.version }}
-          name: "Lantern OS ${{ needs.build.outputs.version }}"
+          name: "Dream Journal ${{ needs.build.outputs.version }}"
           draft: true
           prerelease: ${{ contains(needs.build.outputs.version, '-') }}
-          generate_release_notes: true
+          generate_release_notes: false
           files: |
             _release/*.zip
           body: |
-            ## Lantern OS ${{ needs.build.outputs.version }}
+            ## What is Dream Journal?
 
-            ### Dream Journal — Web App
-            Local-first dream journal with AI agent (Orion), multi-turn conversation, and offline fallback.
+            Dream Journal is a local-first, private journaling app for capturing and exploring your dreams. Everything runs on your machine. Nothing is uploaded to a cloud. Your entries live in plain JSONL files you control — no account required, no subscription gate on the core experience.
 
-            **What's included:**
-            - `lantern-dream-journal-*.zip` — Dream Journal web app (deploy to Railway or run locally with `node server.js`)
-            - `lantern-os-source-*.zip` — Full source archive
+            ## What's new in ${{ needs.build.outputs.version }}
 
-            **Quick start:**
+            **Voice capture** — tap the mic button to speak a dream directly into the entry field using your browser's built-in speech recognition. No third-party transcription service.
+
+            **Interactive search** — filters entries by text or tag in real time, inline, no page reload.
+
+            **Export: CSV and JSONL** — both generated locally and downloaded straight to your machine.
+
+            **8 entry types** — Dream, Note, Place, Character, Event, Lore, Symbol, Mirror.
+
+            **Local, privacy-first** — data lives in `data/dreams/` JSONL files on your machine. No analytics, no telemetry, no cloud sync by default. The server binds to `127.0.0.1` only.
+
+            **Single command startup** — `npm start` from repo root, server up in 2–3 seconds.
+
+            ## How to get it
+
             ```bash
-            unzip lantern-dream-journal-*.zip
-            cd apps/lantern-garage
-            npm install
-            node server.js
+            git pull origin master
+            npm start --prefix apps/lantern-garage
             # Open http://127.0.0.1:4177
             ```
 
-            **Deploy to Railway:**
+            Or download `lantern-dream-journal-${{ needs.build.outputs.version }}.zip` and run:
+
+            ```bash
+            cd apps/lantern-garage && npm install && node server.js
+            ```
+
+            Node.js v20+ required. No database, no Docker, no environment variables needed for local use.
+
+            ## Deploy to Railway
+
             Connect your fork at [railway.app](https://railway.app) — `railway.json` is pre-configured.
 
-            ### Feature comparison vs market
-            | Feature | Lantern OS | Oniri | DreamStream |
-            |---------|-----------|-------|-------------|
-            | Private / local-first | ✓ | ✗ | ✗ |
-            | AI agent chat | ✓ (Orion) | ✓ | ✓ |
-            | 8 entry types | ✓ | partial | partial |
-            | Offline fallback | ✓ | ✗ | partial |
-            | Open source | ✓ | ✗ | ✗ |
-            | Voice capture | roadmap | ✓ | ✓ |
-            | Dream art / images | roadmap | ✓ | ✓ |
-            | Lucid dreaming tools | roadmap | ✓ | partial |
+            ## What's coming in v1.0.1
+
+            The 3 Door Game — an interactive symbolic layer built on top of the journal. Design ships with v1.0.0; the full interactive experience follows in v1.0.1.
+
+            ---
+
+            Thank you for being here at the beginning. Every dream you capture is yours.
 
   # ── Deploy to GitHub Pages ────────────────────────────────────────────────────
   deploy-pages:
