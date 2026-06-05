@@ -1,6 +1,6 @@
 const https = require("https");
 const http = require("http");
-const { AGENT_PERSONAS, DREAM_DOORS, selectAgent } = require("./dream-chat");
+const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, generateLocalReply } = require("./dream-chat");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 
@@ -189,9 +189,24 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
     sendError(humanError(reason));
     sendDone("failed", { agent: agent.name, online: false });
   };
-  const sendLocalFallback = (reason) => {
-    sendError(humanError(reason));
-    sendDone("offline", { agent: agent.name, online: false });
+
+  // Stream a local persona fallback reply word-by-word so the UI shows real text, not just error notes
+  const streamLocalFallback = async (reason) => {
+    const fallbackReply = generateLocalReply(message, agent, "");
+    if (reason) sendError(humanError(reason));
+    const words = fallbackReply.split(" ");
+    for (const word of words) {
+      fullReply += word + " ";
+      sendToken(word + " ");
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    await appendConversationEntry({
+      recordedAt: new Date().toISOString(),
+      surface: "dream-chat-stream",
+      role: "lantern",
+      text: fullReply.slice(0, maxConversationTextLength),
+    }).catch(() => {});
+    sendDone("offline", { agent: agent.name, online: false, source: "local_fallback", suggestions: FALLBACK_DOORS });
   };
 
   await appendConversationEntry({
@@ -280,11 +295,12 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
       if (is429) { fullReply = ""; continue; } // retry with next model silently
-      sendError(humanError(err));
-      if (requestedProvider && requestedProvider !== "" && requestedProvider !== "gemini" && !requestedProvider.startsWith("gemini-")) {
+      if (requestedProvider) {
+        sendError(humanError(err));
         sendFail(err.message);
         return;
       }
+      // Auto mode: swallow error silently, let next provider try
     }
     } // end model chain loop
   }
@@ -358,9 +374,12 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
-      sendError(humanError(err));
-      if (requestedProvider) { await sendLocalFallback(err.message); return; }
-
+      if (requestedProvider) {
+        sendError(humanError(err));
+        await streamLocalFallback(err.message);
+        return;
+      }
+      // Auto mode: swallow error silently, let next provider try
     }
   }
 
@@ -428,8 +447,12 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
-      sendError(humanError(err));
-      if (requestedProvider) { sendFail(err.message); return; }
+      if (requestedProvider) {
+        sendError(humanError(err));
+        sendFail(err.message);
+        return;
+      }
+      // Auto mode: swallow error silently, let next provider try
     }
   }
 
@@ -474,8 +497,12 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("grok", { agent: agent.name, online: true, cleanText: xaiClean, suggestions: xaiDoors });
       return;
     } catch (err) {
-      sendError(humanError(err));
-      if (requestedProvider) { sendFail(err.message); return; }
+      if (requestedProvider) {
+        sendError(humanError(err));
+        sendFail(err.message);
+        return;
+      }
+      // Auto mode: swallow error silently, let next provider try
     }
   }
 
@@ -547,13 +574,17 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
         return;
       }
     } catch (err) {
-      sendError(humanError(err));
-      if (requestedProvider) { sendFail(err.message); return; }
+      if (requestedProvider) {
+        sendError(humanError(err));
+        sendFail(err.message);
+        return;
+      }
+      // Auto mode: swallow error silently, let next provider try
     }
   }
 
-  // No provider available — local persona fallback
-  sendFail("no_provider_configured");
+  // No provider available — stream local persona fallback
+  await streamLocalFallback("no_provider_configured");
 }
 
 module.exports = { handleStreamChat };
