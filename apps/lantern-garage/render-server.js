@@ -210,8 +210,7 @@ function getMiningLabStatus() {
   const files = [
     "docs/ARC-REACTOR-MINING-LAB.md",
     "docs/WALLET-MATRIX-TEMPLATE.md",
-    "skills/solo-mining/SKILL.md",
-    "templates/hardware-intake.csv",
+        "templates/hardware-intake.csv",
     "templates/wallet-matrix.csv",
     "templates/coin-feasibility.csv",
     "templates/mining-receipt.json",

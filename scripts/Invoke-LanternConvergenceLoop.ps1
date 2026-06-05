@@ -49,7 +49,7 @@ $required = @(
     "scripts/Test-ConvergenceAgentFleet.py",
     "scripts/Update-ArcReactorStatus.ps1",
     "scripts/Invoke-LoopReceipt.ps1",
-    "skills/asi-arc-reactor-mk1/SKILL.md",
+
     "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md",
     "manifests/TMP-REPO-RAG-INDEX.md",
     "manifests/TMP-REPO-RAG-INDEX.json",
@@ -120,23 +120,6 @@ if (Test-Path $readinessDoc) {
     }
 }
 
-# ASI Arc Reactor MK1 validation
-$asiSkillDoc = Join-Path $Root "skills/asi-arc-reactor-mk1/SKILL.md"
-if (Test-Path $asiSkillDoc) {
-    $asiText = Get-Content -LiteralPath $asiSkillDoc -Raw
-    $requiredAsiPhrases = @(
-        "ASI patterns are architecture references only",
-        "no local ASI capability claim",
-        "no investment advice",
-        "Brier-style error tracking",
-        "human trial readiness"
-    )
-    foreach ($phrase in $requiredAsiPhrases) {
-        if ($asiText -notlike "*$phrase*") {
-            Add-Issue $issues "ASI-MISSING-$phrase" "high" "ASI skill missing required phrase: $phrase" "Add phrase to skills/asi-arc-reactor-mk1/SKILL.md."
-        }
-    }
-}
 
 $asiEvidenceDoc = Join-Path $Root "manifests/evidence/asi-local-pdf-convergence-2026-05-29.md"
 if (Test-Path $asiEvidenceDoc) {

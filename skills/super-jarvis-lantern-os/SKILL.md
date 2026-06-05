@@ -284,7 +284,6 @@ skills/lantern-rag-dollhouse/SKILL.md
 skills/comet-leap-agile/SKILL.md
 skills/foundry-shareholder/SKILL.md
 skills/archive-commons-batch/SKILL.md
-skills/one-world-leader-app/SKILL.md
 skills/arc-reactor-confidence/SKILL.md
 ```
 
