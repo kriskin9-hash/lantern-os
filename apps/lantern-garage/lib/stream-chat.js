@@ -11,6 +11,7 @@ async function handleStreamChat(req, url, res) {
   let user = "dreamer";
   let requestedAgent = "";
   let requestedProvider = "";
+  let history = []; // [{role:"user"|"assistant", text:"..."}]
   if (req.method === "GET") {
     message = String(url.searchParams.get("message") || "").slice(0, 4000).trim();
     user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
@@ -25,6 +26,13 @@ async function handleStreamChat(req, url, res) {
       user = normalizeDreamerUser(body.user || "dreamer");
       requestedAgent = String(body.agent || "").trim();
       requestedProvider = String(body.provider || "").trim().toLowerCase();
+      // Conversation history — last N turns from the client [{role, text}]
+      if (Array.isArray(body.history)) {
+        history = body.history
+          .filter(h => h && typeof h.role === "string" && typeof h.text === "string")
+          .slice(-6) // max 3 exchanges = 6 turns
+          .map(h => ({ role: h.role === "assistant" ? "assistant" : "user", text: String(h.text).slice(0, 1000) }));
+      }
     } catch { /* message stays empty */ }
   }
 
@@ -36,18 +44,48 @@ async function handleStreamChat(req, url, res) {
     "X-Accel-Buffering": "no",
   });
 
-  const recentDreams = readRecentDreams(5);
+  const recentDreams = readRecentDreams(8);
 
   const agent = requestedAgent
     ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
     : selectAgent(message);
+
   const dreamContext = recentDreams.length > 0
     ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
         `${i + 1}. ${String(d.text || d.content || "").slice(0, 200)}`
       ).join("\n")}`
     : "No journal entries yet — this is the dreamer's first visit.";
 
-  const systemPrompt = `${agent.systemPrompt}\n\n${dreamContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. End responses with one question or one invitation to record.`;
+  // Include prior conversation turns so the model has full context
+  const historyContext = history.length > 0
+    ? `\nPrior conversation turns:\n${history.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
+    : "";
+
+  const systemPrompt = `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. End responses with one question or one invitation to record.`;
+
+  // Build contextual suggestions from real dream memory (tags, emotions, symbols)
+  function buildSuggestions() {
+    const tagFreq = {}, emotionFreq = {}, symbolFreq = {};
+    for (const d of recentDreams) {
+      for (const t of (d.tags || [])) tagFreq[t] = (tagFreq[t] || 0) + 1;
+      for (const e of (d.emotions || [])) emotionFreq[e] = (emotionFreq[e] || 0) + 1;
+      for (const s of (d.symbols || [])) symbolFreq[s] = (symbolFreq[s] || 0) + 1;
+    }
+    const top = (freq) => Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,2).map(([k]) => k);
+    const topTags = top(tagFreq);
+    const topEmotions = top(emotionFreq);
+    const topSymbols = top(symbolFreq);
+    const chips = [];
+    if (topTags[0]) chips.push(`Tell me more about "${topTags[0]}"`);
+    if (topEmotions[0]) chips.push(`I often feel ${topEmotions[0]} in my dreams`);
+    if (topSymbols[0]) chips.push(`The symbol "${topSymbols[0]}" keeps appearing`);
+    if (chips.length < 3 && topTags[1]) chips.push(`What does "${topTags[1]}" mean?`);
+    if (chips.length < 3 && topEmotions[1]) chips.push(`Why do I feel ${topEmotions[1]}?`);
+    // Fallback to generic prompts if not enough data
+    const fallbacks = ["I had a vivid dream last night", "I want to log a recurring dream", "Help me understand a symbol"];
+    while (chips.length < 3) chips.push(fallbacks[chips.length]);
+    return chips.slice(0, 3);
+  }
 
   const sendToken = (token) => {
     res.write(`data: ${JSON.stringify({ type: "token", text: token })}\n\n`);
@@ -136,7 +174,7 @@ async function handleStreamChat(req, url, res) {
         role: "lantern",
         text: fullReply.slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendDone("gemini", { agent: agent.name, online: true });
+      sendDone("gemini", { agent: agent.name, online: true, suggestions: buildSuggestions() });
       return;
     } catch (err) {
       sendError(`gemini_unavailable: ${err.message}`);
@@ -162,7 +200,7 @@ async function handleStreamChat(req, url, res) {
         max_tokens: 1024,
         stream: true,
         system: systemPrompt,
-        messages: [{ role: "user", content: message }],
+        messages: [...history.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
       });
       await new Promise((resolve, reject) => {
         const req2 = https.request({
@@ -212,7 +250,7 @@ async function handleStreamChat(req, url, res) {
         role: "lantern",
         text: fullReply.slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendDone("anthropic", { agent: agent.name, online: true });
+      sendDone("anthropic", { agent: agent.name, online: true, suggestions: buildSuggestions() });
       return;
     } catch (err) {
       sendError(`anthropic_unavailable: ${err.message}`);
@@ -230,6 +268,7 @@ async function handleStreamChat(req, url, res) {
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
+          ...history.map(h => ({ role: h.role, content: h.text })),
           { role: "user", content: message },
         ],
       });
@@ -280,7 +319,7 @@ async function handleStreamChat(req, url, res) {
         role: "lantern",
         text: fullReply.slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendDone("openai", { agent: agent.name, online: true });
+      sendDone("openai", { agent: agent.name, online: true, suggestions: buildSuggestions() });
       return;
     } catch (err) {
 if (requestedProvider) { sendFail(err.message); return; }
@@ -301,6 +340,7 @@ if (requestedProvider) { sendFail(err.message); return; }
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
+          ...history.map(h => ({ role: h.role, content: h.text })),
           { role: "user", content: message },
         ],
       });
@@ -353,7 +393,7 @@ if (requestedProvider) { sendFail(err.message); return; }
           role: "lantern",
           text: fullReply.slice(0, maxConversationTextLength),
         }).catch(() => {});
-        sendDone("ollama", { agent: agent.name, online: true });
+        sendDone("ollama", { agent: agent.name, online: true, suggestions: buildSuggestions() });
         return;
       }
     } catch (err) {

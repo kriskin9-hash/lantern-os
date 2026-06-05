@@ -666,6 +666,8 @@
   const providerSelect = document.getElementById("provider-select");
 
   let isStreaming = false;
+  // Conversation history for multi-turn context — [{role:"user"|"assistant", text:"..."}]
+  const conversationHistory = [];
 
   // On static hosts (GitHub Pages, file://) the API server isn't running.
   // Point at the expected local address and surface a clear banner if unreachable.
@@ -725,6 +727,7 @@
   }
 
   function appendUserBubble(text) {
+    conversationHistory.push({ role: "user", text });
     const row = document.createElement("div");
     row.className = "msg-row user";
     row.innerHTML = `<div class="msg-label">You</div><div class="bubble">${escapeHtml(text)}</div>`;
@@ -762,9 +765,14 @@
     let hasTokens = false;
     const provider = providerSelect.value;
     const agent = agentSelect.value;
-    const url = `${serverBase}/api/dream/stream?message=${encodeURIComponent(message)}${provider ? "&provider=" + encodeURIComponent(provider) : ""}${agent ? "&agent=" + encodeURIComponent(agent) : ""}`;
+    // POST with history for multi-turn context; history excludes current message (already appended)
+    const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
 
-    fetch(url)
+    fetch(`${serverBase}/api/dream/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend }),
+    })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.body;
@@ -795,7 +803,7 @@
               }
               if (evt.type === "done" && !streamFinished) {
                 streamFinished = true;
-                finishStream(row, bubble, cursor, fullText, evt.source, evt.error);
+                finishStream(row, bubble, cursor, fullText, evt.source, evt.error, evt.suggestions);
               }
             } catch { /* skip malformed */ }
           }
@@ -807,7 +815,7 @@
               if (buf.trim()) processLines([buf]);
               if (!streamFinished) {
                 if (!hasTokens) bubble.textContent = "No response received.";
-                finishStream(row, bubble, cursor, fullText, "done");
+                finishStream(row, bubble, cursor, fullText, "done", undefined, undefined);
               }
               return;
             }
@@ -828,11 +836,14 @@
       });
   }
 
-  function finishStream(row, bubble, cursor, text, source, error) {
+  function finishStream(row, bubble, cursor, text, source, error, suggestions) {
     cursor.remove();
     if (!text && !error) {
       bubble.textContent = bubble.textContent || "…";
     }
+    // Save assistant reply to history for next turn
+    if (text) conversationHistory.push({ role: "assistant", text });
+
     if (source === "failed" || source === "unavailable" || source === "error" || error) {
       const badge = document.createElement("div");
       badge.className = "source-badge offline";
@@ -845,6 +856,49 @@
       badge.textContent = `✦ ${names[source] || source}`;
       row.appendChild(badge);
     }
+
+    // Render contextual suggestion chips from dream memory
+    if (Array.isArray(suggestions) && suggestions.length > 0) {
+      const chips = document.createElement("div");
+      chips.className = "suggestions";
+      suggestions.forEach(s => {
+        const btn = document.createElement("button");
+        btn.className = "suggestion";
+        btn.textContent = s;
+        btn.onclick = () => {
+          if (isStreaming) return;
+          inputEl.value = s;
+          inputEl.dispatchEvent(new Event("input"));
+          sendMessage();
+        };
+        chips.appendChild(btn);
+      });
+      row.appendChild(chips);
+    }
+
+    // ✦ Log dream button — lets user save conversation as a dream entry
+    if (text && source !== "failed" && source !== "error") {
+      const logBtn = document.createElement("button");
+      logBtn.className = "suggestion";
+      logBtn.style.cssText = "margin-top:6px;border-color:var(--accent-dim);color:var(--accent);";
+      logBtn.textContent = "✦ Log this as a dream";
+      logBtn.onclick = async () => {
+        logBtn.disabled = true;
+        logBtn.textContent = "Saving…";
+        const fullConv = conversationHistory.map(h => `${h.role === "user" ? "You" : "Lantern"}: ${h.text}`).join("\n");
+        try {
+          const r = await fetch(`${serverBase}/api/dream/create`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ kind: "dream", text: fullConv, tags: ["chat-log"], source: "dream-chat" }),
+          });
+          const d = await r.json();
+          logBtn.textContent = d.saved ? "✓ Saved to journal" : "Save failed";
+        } catch { logBtn.textContent = "Save failed"; }
+      };
+      row.appendChild(logBtn);
+    }
+
     isStreaming = false;
     sendBtn.disabled = false;
     setThinking(false);

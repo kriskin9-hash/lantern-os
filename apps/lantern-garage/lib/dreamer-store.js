@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { generateQutritId, generateEntryId } = require("./qutrit");
 
-const repoRoot = path.resolve(__dirname, "..", "..");
+const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const maxDreamerTextLength = 2000;
 const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
 
