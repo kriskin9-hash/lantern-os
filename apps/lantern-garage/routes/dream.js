@@ -157,6 +157,37 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     return true;
   }
 
+  // ── Symbol co-occurrence timeline ────────────────────────────────────
+  if (url.pathname === "/api/dream/symbols/timeline" && req.method === "GET") {
+    try {
+      const entries = loadDreamEntries(fs, path, repoRoot);
+      const byWeek = {};
+      for (const e of entries) {
+        if (!e.timestamp) continue;
+        const d = new Date(e.timestamp);
+        const week = `${d.getUTCFullYear()}-W${String(Math.ceil((d.getUTCDate() - d.getUTCDay() + 6) / 7)).padStart(2,'0')}`;
+        if (!byWeek[week]) byWeek[week] = {};
+        for (const s of [...(e.symbols || []), ...(e.tags || [])]) {
+          byWeek[week][s] = (byWeek[week][s] || 0) + 1;
+        }
+      }
+      // Co-occurrence across all entries
+      const coOccur = {};
+      for (const e of entries) {
+        const syms = [...(e.symbols || []), ...(e.tags || [])].slice(0, 8);
+        for (let a = 0; a < syms.length; a++)
+          for (let b = a + 1; b < syms.length; b++) {
+            const key = [syms[a], syms[b]].sort().join('⟶');
+            coOccur[key] = (coOccur[key] || 0) + 1;
+          }
+      }
+      const topPairs = Object.entries(coOccur).sort((x,y)=>y[1]-x[1]).slice(0,10)
+        .map(([k,v]) => ({ pair: k, count: v }));
+      sendJson(res, { weeks: byWeek, top_pairs: topPairs, total_entries: entries.length });
+    } catch (error) { sendJson(res, { error: error.message }, 400); }
+    return true;
+  }
+
   // ── Provider settings ─────────────────────────────────────────────────
   if (url.pathname === "/api/settings/providers" && req.method === "GET") {
     const result = {};
