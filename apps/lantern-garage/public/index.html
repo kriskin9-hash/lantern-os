@@ -6,3 +6,511 @@
   <meta http-equiv="Cache-Control" content="no-store">
   <title>Dream Journal — Orion by Lantern OS</title>
   <link rel="stylesheet" href="dream-journal.css?v=20260602-orion-v1">
+  <style>
+    .message { padding: 12px 16px; border-radius: 12px; margin-bottom: 16px; font-size: 0.9rem; font-weight: 600; }
+    .message.success { background: #e6f5e6; color: #2d6a2d; border: 1px solid #b8e0b8; }
+    .message.error { background: #f5e6e6; color: #8b2d2d; border: 1px solid #e0b8b8; }
+    #message { display: none; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 16px 0 20px; }
+    .stat-card { text-align: center; padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.7); border: 1px solid var(--panel-border); }
+    .stat-number { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.8rem; font-weight: 700; color: var(--celestial-ink); }
+    .stat-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 560px) { .form-row { grid-template-columns: 1fr; } }
+    .entries { min-height: 60px; }
+    .empty-state { text-align: center; color: var(--text-muted); padding: 24px; font-size: 0.9rem; }
+
+    #outreach-section { margin-top: 20px; }
+    #outreach-section a { color: var(--dream-purple); text-decoration: none; font-weight: 600; }
+    #outreach-section a:hover { text-decoration: underline; }
+
+    #refresh { margin: 8px 0 16px; padding: 8px 16px; border: 1px solid var(--panel-border); border-radius: 100px; background: var(--panel-bg); color: var(--text-secondary); font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    #refresh:hover { background: var(--celestial-ink); color: white; }
+
+    .release-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 20px; }
+    .release-card { min-height: 106px; padding: 14px; border: 1px solid var(--panel-border); border-radius: 16px; background: rgba(255,255,255,0.78); }
+    .release-card strong { display: block; color: var(--celestial-ink); font-size: 0.9rem; margin-bottom: 5px; }
+    .release-card span { color: var(--text-muted); font-size: 0.78rem; line-height: 1.35; }
+    .market-panel { grid-column: 1 / -1; }
+    .feature-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    .feature-table th, .feature-table td { padding: 9px 8px; border-bottom: 1px solid var(--panel-border); text-align: left; vertical-align: top; }
+    .feature-table th { color: var(--text-muted); font-size: 0.7rem; letter-spacing: 0.05em; text-transform: uppercase; }
+    .feature-table td:last-child { color: var(--text-secondary); }
+    .truth-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--celestial-faint); color: var(--celestial-deep); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; }
+    .truth-pill.live { background: #e6f5e6; color: #2d6a2d; }
+    .truth-pill.held { background: #fff1d6; color: #8a5209; }
+    .tool-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+    .tool-row button { padding: 8px 14px; border: 1px solid var(--panel-border); border-radius: 999px; background: var(--panel-bg); color: var(--text-secondary); font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+    .tool-row button:hover { background: var(--celestial-ink); color: white; }
+    .field-hint { margin-top: 4px; color: var(--text-muted); font-size: 0.74rem; line-height: 1.35; }
+    .checkbox-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+    .checkbox-row label { display: inline-flex; align-items: center; gap: 7px; margin: 0; font-size: 0.78rem; letter-spacing: 0; text-transform: none; }
+    .checkbox-row input { width: auto; }
+    .entry-card { padding: 12px; border: 1px solid var(--panel-border); border-radius: 14px; background: var(--panel-bg-solid); margin-bottom: 10px; }
+    .entry-card h4 { margin: 0 0 4px; color: var(--celestial-ink); font-size: 0.95rem; }
+    .entry-meta { color: var(--text-muted); font-size: 0.74rem; margin-bottom: 6px; }
+    .entry-text { color: var(--text-secondary); font-size: 0.86rem; line-height: 1.45; white-space: pre-wrap; }
+    .entry-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .entry-tags span { padding: 2px 7px; border-radius: 999px; background: var(--celestial-faint); color: var(--celestial-deep); font-size: 0.68rem; font-weight: 700; }
+    .insight-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 10px 0 16px; }
+    .insight-card { min-height: 76px; padding: 12px; border: 1px solid var(--panel-border); border-radius: 14px; background: rgba(255,255,255,0.68); }
+    .insight-card strong { display: block; font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 5px; }
+    .insight-card span { color: var(--celestial-ink); font-size: 0.9rem; font-weight: 700; }
+    @media (max-width: 860px) { .release-strip, .insight-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .release-strip, .insight-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="dream-shell">
+    <header class="dream-hero">
+      <div class="hero-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <p class="eyebrow">Lantern OS</p>
+      <h1>Dream Journal</h1>
+      <p class="byline">Orion Edition / V1.0.0 Release Candidate</p>
+      <p class="tagline">Remember your dreams.<br>Reflect on what they mean.</p>
+      <p class="subtagline">A private, local-first dream journal for capture, lucidity, symbols, patterns, export, and optional AI reflection.</p>
+      <div class="privacy-badge" role="img" aria-label="Privacy shield">
+        <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Your dreams. Your space. Always private.</span>
+      </div>
+      <nav class="dream-nav" aria-label="Dreamer sections">
+        <a href="/" aria-current="page">Journal</a>
+        <a href="/upgrade-lab.html">Upgrade Lab</a>
+        <a href="/courtney.html">The Well</a>
+        <a href="/wish-door.html">Wish Door</a>
+      </nav>
+    </header>
+
+    <section class="features-strip" aria-label="Features">
+      <article class="feature-card"><div class="icon">&#128211;</div><h3>Capture</h3><p>Fast dream, note, symbol, place, lore, and mirror entries.</p></article>
+      <article class="feature-card"><div class="icon">&#128172;</div><h3>Mirror</h3><p>Generate a reflection prompt from your actual journal stats.</p></article>
+      <article class="feature-card"><div class="icon">&#128202;</div><h3>Analyze</h3><p>Track lucidity, emotions, tags, symbols, and recurring dream signs.</p></article>
+      <article class="feature-card"><div class="icon">&#128190;</div><h3>Export</h3><p>Download JSONL from the local API for backup or review.</p></article>
+      <article class="feature-card"><div class="icon">&#128274;</div><h3>Private</h3><p>Local-first by default; AI reflection is optional and clearly labeled.</p></article>
+    </section>
+
+    <main class="dream-main">
+      <section class="dream-panel market-panel" aria-label="Dream Journal V1 feature benchmark">
+        <div class="panel-header">
+          <h2>V1.0.0 release benchmark</h2>
+          <p class="panel-desc">Market-inspired features, grounded in the local-first Lantern contract.</p>
+        </div>
+        <div class="panel-body">
+          <div class="release-strip">
+            <div class="release-card"><strong>Local-first PC journal</strong><span>Best-of The Journal, Obsidian, and Diarium: private storage, quick access, backup-ready export.</span></div>
+            <div class="release-card"><strong>Lucid practice lane</strong><span>Lucidity score, technique, recurring flag, and dream-sign tracking without turning dreams into commands.</span></div>
+            <div class="release-card"><strong>Symbol analytics</strong><span>DreamDiary-style symbols and stats, plus Lantern door language kept as reflection, not proof.</span></div>
+            <div class="release-card"><strong>Optional AI mirror</strong><span>DreamStream/Oniri-style reflection only when provider support exists; local prompt generation always works.</span></div>
+          </div>
+          <table class="feature-table">
+            <thead><tr><th>Market feature</th><th>Lantern V1 status</th><th>Release behavior</th></tr></thead>
+            <tbody>
+              <tr><td>Quick capture</td><td><span class="truth-pill live">Live</span></td><td>Dream, note, place, character, event, lore, symbol, and mirror entry types.</td></tr>
+              <tr><td>Lucid dreaming tools</td><td><span class="truth-pill live">Live</span></td><td>Lucidity scale, technique logging, recurring dream and dream-sign flags.</td></tr>
+              <tr><td>Symbols and stats</td><td><span class="truth-pill live">Live</span></td><td>Top tags, emotions, and symbols are derived from saved entries.</td></tr>
+              <tr><td>Voice transcription and art generation</td><td><span class="truth-pill held">Held</span></td><td>Not claimed for V1. These stay future work until implemented and verified.</td></tr>
+              <tr><td>AI interpretation</td><td><span class="truth-pill held">Optional</span></td><td>Provider-backed chat may stream when configured; local mirror prompt remains available offline.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="dream-panel" id="stats-section" aria-label="Journal entries and form">
+        <div class="panel-header">
+          <h2>Your Journal</h2>
+          <p class="panel-desc">Log a new entry or review what you have saved.</p>
+        </div>
+        <div class="panel-body">
+          <div class="stats">
+            <div class="stat-card"><div class="stat-number" id="totalCount">0</div><div class="stat-label">Total Entries</div></div>
+            <div class="stat-card"><div class="stat-number" id="dreamCount">0</div><div class="stat-label">Dreams</div></div>
+            <div class="stat-card"><div class="stat-number" id="noteCount">0</div><div class="stat-label">Notes</div></div>
+            <div class="stat-card"><div class="stat-number" id="avgLucidity">--</div><div class="stat-label">Avg Lucidity</div></div>
+          </div>
+          <div class="insight-grid" aria-label="Pattern snapshot">
+            <div class="insight-card"><strong>Top emotion</strong><span id="topEmotion">--</span></div>
+            <div class="insight-card"><strong>Top symbol</strong><span id="topSymbol">--</span></div>
+            <div class="insight-card"><strong>Top tag</strong><span id="topTag">--</span></div>
+          </div>
+
+          <section id="outreach-section">
+            <h3 style="font-size:0.95rem;margin-bottom:6px;">Release tools</h3>
+            <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:6px;">V1 keeps backup, reflection, and review visible before adding bigger features.</p>
+            <p><a href="/outreach.html">Outreach Program</a></p>
+          </section>
+
+          <section class="tool-row" aria-label="Primary controls">
+            <button type="button" id="refresh">Refresh</button>
+            <button type="button" id="mirrorPrompt">Copy Mirror Prompt</button>
+            <button type="button" id="exportJsonl">Export JSONL</button>
+            <button type="button" id="exportCsv">Export CSV</button>
+          </section>
+
+          <h3 id="form-section" style="margin:20px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">New Entry</h3>
+          <form id="entryForm" class="dream-form">
+            <div class="form-row">
+              <div>
+                <label for="kind">Entry type</label>
+                <select id="kind" name="kind">
+                  <option value="dream">Dream</option>
+                  <option value="note">Note</option>
+                  <option value="place">Place</option>
+                  <option value="character">Character</option>
+                  <option value="event">Event</option>
+                  <option value="lore">Lore</option>
+                  <option value="symbol">Symbol</option>
+                  <option value="mirror">Mirror</option>
+                </select>
+              </div>
+              <div>
+                <label for="name">Title</label>
+                <input type="text" id="name" name="name" placeholder="e.g., Blue door, crystal city, morning fragment">
+              </div>
+            </div>
+
+            <label for="text">What do you want to remember?</label>
+            <div class="textarea-wrap">
+              <textarea id="text" name="text" placeholder="Write freely. What was vivid? What mattered? What surprised you?" required></textarea>
+              <button type="button" id="micBtn" title="Speak your dream" aria-label="Record voice">🎤</button>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label for="emotions">Emotions (comma-separated)</label>
+                <input type="text" id="emotions" name="emotions" placeholder="e.g., clarity, wonder, peace">
+              </div>
+              <div>
+                <label for="lucidity">Lucidity (0 = asleep, 1 = awake)</label>
+                <input type="number" id="lucidity" name="lucidity" min="0" max="1" step="0.1" value="0.5">
+                <p class="field-hint">0.0 non-lucid, 0.5 partial, 1.0 fully lucid.</p>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label for="symbols">Symbols (comma-separated)</label>
+                <input type="text" id="symbols" name="symbols" placeholder="e.g., door, river, lantern, tower">
+              </div>
+              <div>
+                <label for="clarity">Recall clarity (0-1)</label>
+                <input type="number" id="clarity" name="clarity" min="0" max="1" step="0.1" value="0.5">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label for="tags">Tags (comma-separated)</label>
+                <input type="text" id="tags" name="tags" placeholder="e.g., lantern, learning, home, family">
+              </div>
+              <div>
+                <label for="technique">Lucid technique</label>
+                <input type="text" id="technique" name="technique" placeholder="e.g., MILD, WBTB, reality check, none">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label for="mood">Waking mood</label>
+                <input type="text" id="mood" name="mood" placeholder="e.g., calm, startled, curious">
+              </div>
+              <div>
+                <label for="sleepWindow">Sleep window</label>
+                <input type="text" id="sleepWindow" name="sleep_window" placeholder="e.g., 11pm-6am, nap, morning">
+              </div>
+            </div>
+
+            <div class="checkbox-row" aria-label="Dream flags">
+              <label><input type="checkbox" id="recurring" name="recurring"> Recurring dream</label>
+              <label><input type="checkbox" id="dreamsign" name="dreamsign"> Dream sign noticed</label>
+            </div>
+
+            <button type="submit">Save Entry</button>
+          </form>
+
+          <h3 style="margin:24px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">Search Journal</h3>
+          <div class="search-row">
+            <input type="text" id="searchInput" placeholder="Search by text or tag..." aria-label="Search entries">
+            <button type="button" id="searchBtn">Search</button>
+            <button type="button" id="searchClear" title="Clear search">✕</button>
+          </div>
+          <div class="search-results" id="searchResults" style="display:none;"></div>
+
+          <h3 style="margin:24px 0 10px;font-family:'Cormorant Garamond',serif;font-size:1.1rem;color:var(--celestial-ink);">Recent Entries</h3>
+          <div class="entries" id="entriesList"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="dream-footer">
+      <p>Dream Journal Orion — CSF v0.7 Symbolic Qutrit Edition</p>
+      <p class="creator">Created by Alex Place</p>
+      <div class="footer-note">
+        <strong>Lantern Principle:</strong> Visible enough to trust. Small enough not to burn the house down.
+      </div>
+      <p class="footer-support">
+        <a href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener" style="color:var(--dream-purple);text-decoration:none;font-weight:600;">Support on Patreon</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    const API = {
+      create: async (data) => {
+        const res = await fetch('/api/dream/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      },
+      stats: async () => {
+        const res = await fetch('/api/dream/stats');
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      },
+
+      search: async () => {
+        const res = await fetch('/api/dream/search?text=');
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
+      }
+    };
+
+    let latestStats = null;
+    let latestEntries = [];
+
+    function showMessage(text, type = 'success') {
+      const el = document.getElementById('message');
+      el.className = `message ${type}`;
+      el.textContent = text;
+      el.style.display = 'block';
+      if (type === 'success') setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    function renderEntries(stats) {
+      if (!stats || stats.total_entries === 0) {
+        document.getElementById('entriesList').innerHTML = '<div class="empty-state">✨ No entries yet.<br>Start with your first dream or note.</div>';
+        return;
+      }
+      document.getElementById('entriesList').innerHTML = '<p style="color: #9a8fb8; text-align: center;">Your entries are saved locally in your journal.</p>';
+    }
+
+    async function loadStats() {
+      try {
+        const stats = await API.stats();
+        document.getElementById('totalCount').textContent = stats.total_entries || 0;
+        document.getElementById('dreamCount').textContent = stats.entries_by_kind?.dream || 0;
+        document.getElementById('noteCount').textContent = stats.entries_by_kind?.note || 0;
+        const avg = stats.avg_lucidity ? parseFloat(stats.avg_lucidity).toFixed(2) : '--';
+        document.getElementById('avgLucidity').textContent = avg;
+        renderEntries(stats);
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+
+    // ── Export ──────────────────────────────────────────────
+    document.getElementById('exportJsonl').addEventListener('click', () => {
+      window.location.href = '/api/dream/export?format=jsonl';
+    });
+    document.getElementById('exportCsv').addEventListener('click', () => {
+      window.location.href = '/api/dream/export?format=csv';
+    });
+
+    // ── Search ──────────────────────────────────────────────
+    async function runSearch() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) { clearSearch(); return; }
+      try {
+        const data = await API.search(q);
+        const el = document.getElementById('searchResults');
+        el.style.display = 'block';
+        if (!data.results || data.results.length === 0) {
+          el.innerHTML = '<div class="empty-state">No entries matched.</div>';
+          return;
+        }
+        el.innerHTML = data.results.map(e => `
+          <div class="search-entry">
+            <div>${e.text ? e.text.slice(0, 200) : '(no text)'}${e.text && e.text.length > 200 ? '…' : ''}</div>
+            <div class="se-meta">${e.kind || 'dream'} · ${e.timestamp ? e.timestamp.slice(0,10) : ''}${(e.tags||[]).length ? ' · ' + e.tags.join(', ') : ''}</div>
+          </div>`).join('');
+      } catch (err) {
+        document.getElementById('searchResults').innerHTML = '<div class="empty-state">Search error.</div>';
+      }
+    }
+
+    function clearSearch() {
+      document.getElementById('searchResults').style.display = 'none';
+      document.getElementById('searchResults').innerHTML = '';
+      document.getElementById('searchInput').value = '';
+    }
+
+    document.getElementById('searchBtn').addEventListener('click', runSearch);
+    document.getElementById('searchClear').addEventListener('click', clearSearch);
+    document.getElementById('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch();
+    });
+
+    // ── Voice capture (Web Speech API) ──────────────────────
+    (function initVoice() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const micBtn = document.getElementById('micBtn');
+      if (!SpeechRecognition) { micBtn.style.display = 'none'; return; }
+
+      const recog = new SpeechRecognition();
+      recog.continuous = true;
+      recog.interimResults = true;
+      recog.lang = 'en-US';
+      let running = false;
+      let baseText = '';
+
+      recog.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) baseText += t + ' ';
+          else interim = t;
+        }
+        document.getElementById('text').value = baseText + interim;
+      };
+      recog.onerror = () => { running = false; micBtn.classList.remove('recording'); };
+      recog.onend = () => { if (running) recog.start(); };
+
+      micBtn.addEventListener('click', () => {
+        if (!running) {
+          baseText = document.getElementById('text').value;
+          if (baseText && !baseText.endsWith(' ')) baseText += ' ';
+          running = true;
+          micBtn.classList.add('recording');
+          recog.start();
+        } else {
+          running = false;
+          micBtn.classList.remove('recording');
+          recog.stop();
+        }
+      });
+    })();
+
+    // ── Form submit ──────────────────────────────────────────
+    document.getElementById('entryForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const splitList = (value) => value.split(',').map(s => s.trim()).filter(Boolean);
+        const emotions = splitList(document.getElementById('emotions').value);
+        const tags = splitList(document.getElementById('tags').value);
+        const symbols = splitList(document.getElementById('symbols').value);
+
+        const data = {
+          kind: document.getElementById('kind').value,
+          name: document.getElementById('name').value,
+          text: document.getElementById('text').value,
+          emotions,
+          tags,
+          symbols,
+          lucidity: parseFloat(document.getElementById('lucidity').value) || 0,
+          clarity: parseFloat(document.getElementById('clarity').value) || 0,
+          mood: document.getElementById('mood').value,
+          technique: document.getElementById('technique').value,
+          sleep_window: document.getElementById('sleepWindow').value,
+          recurring: document.getElementById('recurring').checked,
+          dreamsign: document.getElementById('dreamsign').checked
+        };
+
+        await API.create(data);
+        showMessage('✓ Entry saved to your journal');
+        document.getElementById('entryForm').reset();
+        document.getElementById('lucidity').value = 0.5;
+        await loadStats();
+      } catch (error) {
+        showMessage(`Error: ${error.message}`, 'error');
+      }
+    });
+
+    function topKey(obj) {
+      const entries = Object.entries(obj || {}).sort((a, b) => b[1] - a[1]);
+      return entries.length ? `${entries[0][0]} (${entries[0][1]})` : '--';
+    }
+
+    function renderEntries(entries) {
+      if (!entries || entries.length === 0) {
+        document.getElementById('entriesList').innerHTML = '<div class="empty-state">No entries yet.<br>Start with your first dream or note.</div>';
+        return;
+      }
+      document.getElementById('entriesList').innerHTML = entries.slice(0, 8).map((entry) => {
+        const when = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'saved locally';
+        const title = entry.name || `${entry.kind || 'dream'} entry`;
+        const chips = [...(entry.tags || []), ...(entry.symbols || []).map(s => `symbol:${s}`)].slice(0, 8)
+          .map(t => `<span>${escapeHtml(t)}</span>`).join('');
+        const flags = [entry.recurring ? 'recurring' : '', entry.dreamsign ? 'dream sign' : '', entry.technique ? `technique: ${entry.technique}` : ''].filter(Boolean).join(' / ');
+        return `<article class="entry-card recent-entry">
+          <h4>${escapeHtml(title)}</h4>
+          <div class="entry-meta">${escapeHtml(entry.kind || 'dream')} / lucidity ${Number(entry.lucidity || 0).toFixed(1)} / ${escapeHtml(when)}${flags ? ' / ' + escapeHtml(flags) : ''}</div>
+          <div class="entry-text">${escapeHtml(String(entry.text || '').slice(0, 280))}</div>
+          ${chips ? `<div class="entry-tags">${chips}</div>` : ''}
+        </article>`;
+      }).join('');
+    }
+
+    async function loadStats() {
+      try {
+        const [stats, search] = await Promise.all([API.stats(), API.search()]);
+        latestStats = stats;
+        latestEntries = (search.results || []).sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
+        document.getElementById('totalCount').textContent = stats.total_entries || 0;
+        document.getElementById('dreamCount').textContent = stats.entries_by_kind?.dream || 0;
+        document.getElementById('noteCount').textContent = stats.entries_by_kind?.note || 0;
+        const avg = stats.avg_lucidity ? parseFloat(stats.avg_lucidity).toFixed(2) : '--';
+        document.getElementById('avgLucidity').textContent = avg;
+        document.getElementById('topEmotion').textContent = topKey(stats.top_emotions);
+        document.getElementById('topSymbol').textContent = topKey(stats.top_symbols);
+        document.getElementById('topTag').textContent = topKey(stats.top_tags);
+        renderEntries(latestEntries);
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    }
+
+    function buildMirrorPrompt() {
+      const stats = latestStats || {};
+      const samples = latestEntries.slice(0, 5).map((entry, index) =>
+        `${index + 1}. ${entry.kind || 'dream'} / lucidity ${Number(entry.lucidity || 0).toFixed(1)} / tags ${(entry.tags || []).join(', ')} / symbols ${(entry.symbols || []).join(', ')}\n${String(entry.text || '').slice(0, 420)}`
+      ).join('\n\n');
+      return `Dream Journal V1 mirror request\n\nBoundary: Reflect on patterns only. Do not diagnose, command, predict, or treat symbols as proof.\n\nStats:\n- Total entries: ${stats.total_entries || 0}\n- Average lucidity: ${stats.avg_lucidity || '--'}\n- Top emotions: ${Object.keys(stats.top_emotions || {}).slice(0, 8).join(', ') || 'none yet'}\n- Top tags: ${Object.keys(stats.top_tags || {}).slice(0, 8).join(', ') || 'none yet'}\n- Top symbols: ${Object.keys(stats.top_symbols || {}).slice(0, 8).join(', ') || 'none yet'}\n\nRecent entries:\n${samples || 'No entries yet.'}\n\nPlease identify recurring themes, symbols, lucidity conditions, and one small reversible reflection practice.`;
+    }
+
+    document.getElementById('mirrorPrompt').addEventListener('click', async () => {
+      const prompt = buildMirrorPrompt();
+      try {
+        await navigator.clipboard.writeText(prompt);
+        showMessage('Mirror prompt copied');
+      } catch {
+        showMessage(prompt, 'success');
+      }
+    });
+
+    document.getElementById('exportJsonl').addEventListener('click', () => {
+      const lines = latestEntries.map(entry => JSON.stringify(entry)).join('\n');
+      const blob = new Blob([lines + (lines ? '\n' : '')], { type: 'application/jsonl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lantern-dream-journal-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showMessage('JSONL export prepared');
+    });
+
+    document.getElementById('refresh').addEventListener('click', loadStats);
+
+    loadStats();
+    setInterval(loadStats, 10000);
+  </script>
+</body>
+</html>
