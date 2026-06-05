@@ -131,15 +131,66 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
     res.write(`data: ${JSON.stringify({ type: "done", source, ...extra })}\n\n`);
     res.end();
   };
+  // Human-readable error translator — turns internal codes into plain language
+  function humanError(err) {
+    const msg = String(err?.message || err || "");
+    if (msg.includes("gemini_status_429") || msg.includes("quota")) {
+      return "Gemini is rate-limited right now. Retrying with another model…";
+    }
+    if (msg.includes("gemini_status_401") || msg.includes("gemini_status_403")) {
+      return "Gemini key is invalid or expired. Check your API key in Settings.";
+    }
+    if (msg.includes("gemini_status_")) {
+      return `Gemini returned an error (${msg.replace("gemini_status_", "")}). It may be temporarily unavailable.`;
+    }
+    if (msg.includes("gemini_timeout")) {
+      return "Gemini took too long to respond. Your connection may be slow.";
+    }
+    if (msg.includes("anthropic_status_404")) {
+      return "Claude model not found. The model name may have changed.";
+    }
+    if (msg.includes("anthropic_status_401") || msg.includes("anthropic_status_403")) {
+      return "Claude key is invalid. Check your API key in Settings.";
+    }
+    if (msg.includes("anthropic_status_")) {
+      return `Claude returned an error (${msg.replace("anthropic_status_", "")}). It may be temporarily unavailable.`;
+    }
+    if (msg.includes("openai_status_429")) {
+      return "OpenAI is rate-limited right now. Try again in a moment.";
+    }
+    if (msg.includes("openai_status_401") || msg.includes("openai_status_403")) {
+      return "OpenAI key is invalid. Check your API key in Settings.";
+    }
+    if (msg.includes("openai_status_")) {
+      return `OpenAI returned an error (${msg.replace("openai_status_", "")}). It may be temporarily unavailable.`;
+    }
+    if (msg.includes("xai_status_")) {
+      return `Grok returned an error (${msg.replace("xai_status_", "")}). It may be temporarily unavailable.`;
+    }
+    if (msg.includes("ollama_status_")) {
+      return `Ollama returned an error (${msg.replace("ollama_status_", "")}). Is your local model running?`;
+    }
+    if (msg.includes("ollama_connect_timeout") || msg.includes("ECONNREFUSED")) {
+      return "Ollama is not running locally. Start it with: ollama run llama3";
+    }
+    if (msg.includes("timeout")) {
+      return "The provider timed out. Your network or the service may be slow.";
+    }
+    if (msg.includes("no_provider_configured")) {
+      return "No AI providers are set up. Add an API key in Settings to get started.";
+    }
+    return msg;
+  }
+
   const sendError = (msg) => {
     res.write(`data: ${JSON.stringify({ type: "error", text: msg })}\n\n`);
   };
   const sendFail = (reason) => {
-    sendError(`no_provider: ${reason}`);
+    sendError(humanError(reason));
     sendDone("failed", { agent: agent.name, online: false });
   };
   const sendLocalFallback = (reason) => {
-    sendError(`local_fallback: ${reason}`);
+    sendError(humanError(reason));
     sendDone("offline", { agent: agent.name, online: false });
   };
 
@@ -229,7 +280,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
       if (is429) { fullReply = ""; continue; } // retry with next model silently
-      sendError(`gemini_unavailable: ${err.message}`);
+      sendError(humanError(err));
       if (requestedProvider && requestedProvider !== "" && requestedProvider !== "gemini" && !requestedProvider.startsWith("gemini-")) {
         sendFail(err.message);
         return;
@@ -307,7 +358,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
-      sendError(`anthropic_unavailable: ${err.message}`);
+      sendError(humanError(err));
       if (requestedProvider) { await sendLocalFallback(err.message); return; }
 
     }
@@ -377,7 +428,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
-      sendError(`openai_unavailable: ${err.message}`);
+      sendError(humanError(err));
       if (requestedProvider) { sendFail(err.message); return; }
     }
   }
@@ -423,7 +474,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
       sendDone("grok", { agent: agent.name, online: true, cleanText: xaiClean, suggestions: xaiDoors });
       return;
     } catch (err) {
-      sendError(`grok_unavailable: ${err.message}`);
+      sendError(humanError(err));
       if (requestedProvider) { sendFail(err.message); return; }
     }
   }
@@ -496,7 +547,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
         return;
       }
     } catch (err) {
-      sendError(`ollama_unavailable: ${err.message}`);
+      sendError(humanError(err));
       if (requestedProvider) { sendFail(err.message); return; }
     }
   }
