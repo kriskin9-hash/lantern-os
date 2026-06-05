@@ -310,6 +310,75 @@
       margin-top: 8px;
     }
 
+    /* ── Voice button ── */
+    .voice-btn {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: none;
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      font-size: 16px;
+    }
+    .voice-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .voice-btn.listening {
+      background: #3a1a1a;
+      border-color: #e05555;
+      color: #e05555;
+      animation: pulse 0.9s ease-in-out infinite;
+    }
+
+    /* ── CTF symbol popup ── */
+    .ctf-popup {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      max-width: 320px;
+      z-index: 50;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .ctf-popup.hidden { display: none; }
+    .ctf-sym {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.1s;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .ctf-sym:hover { background: var(--accent-dim); border-color: var(--accent); }
+
+    /* ── TTS speaking indicator ── */
+    .tts-badge {
+      font-size: 0.68rem;
+      color: var(--accent);
+      padding: 2px 6px;
+      background: var(--accent-dim);
+      border-radius: 4px;
+      margin-top: 4px;
+      display: none;
+    }
+    .tts-badge.speaking { display: inline-block; }
+
+    /* ── CTF converted text ── */
+    .bubble .ctf-symbol { color: var(--accent); letter-spacing: 0.05em; }
+
     /* ── Settings button ── */
     .settings-btn {
       flex-shrink: 0;
@@ -644,6 +713,8 @@
         autocomplete="off"
         spellcheck="true"
       ></textarea>
+      <button class="voice-btn" id="voice-btn" title="Hold to speak (or click to toggle)" onclick="toggleVoice()">🎙</button>
+      <button class="voice-btn" id="ctf-btn" title="CTF symbol palette" onclick="toggleCtfPalette()" style="font-size:14px;">✦</button>
       <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"/>
@@ -651,7 +722,8 @@
         </svg>
       </button>
     </div>
-    <p class="input-hint">Enter to send · Shift+Enter for newline</p>
+    <div class="ctf-popup hidden" id="ctf-popup"></div>
+    <p class="input-hint" id="input-hint">Enter to send · Shift+Enter for newline · 🎙 voice · ✦ CTF</p>
   </div>
 </div>
 
@@ -702,12 +774,7 @@
   }
   loadAgents();
 
-  // ── Auto-resize textarea ──────────────────────────────────────────────
-  inputEl.addEventListener("input", () => {
-    inputEl.style.height = "auto";
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
-  });
-
+  // Auto-resize is handled inside CTF input listener below
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -908,6 +975,8 @@
     sendBtn.disabled = false;
     setThinking(false);
     scrollToBottom();
+    // TTS — speak the clean reply after stream completes
+    if (text && source !== "failed" && source !== "error") speakText(text);
   }
 
   function appendErrorNotice(row, msg) {
@@ -1022,6 +1091,186 @@
 
   // Load status badge on open if a provider was missing last time
   loadProviderStatus();
+
+  // ══════════════════════════════════════════════════════════════════
+  //  CTF — Convergence Text Format symbol dictionary
+  // ══════════════════════════════════════════════════════════════════
+  const CTF = {
+    "see":"👁","sight":"👁","vision":"🔭","hear":"👂","sound":"🎵","music":"🎵",
+    "taste":"👅","smell":"🌸","touch":"🤲","feel":"💫","sense":"🌐",
+    "fly":"🕊","flying":"🕊","float":"☁","fall":"⬇","run":"⚡","walk":"🚶",
+    "door":"🚪","gate":"⛩","path":"🛤","bridge":"🌉","tunnel":"🕳",
+    "light":"✨","glow":"🌟","fire":"🔥","flame":"🔥","water":"🌊","fog":"🌫",
+    "earth":"🌍","air":"💨","void":"◻","dark":"🌑","shadow":"🌒",
+    "lantern":"🏮","key":"🗝","mirror":"🪞","clock":"⏰","star":"⭐","moon":"🌙",
+    "sun":"☀","eye":"👁","hand":"🤲","heart":"💜","anchor":"⚓","compass":"🧭",
+    "tree":"🌲","forest":"🌿","flower":"🌸","crystal":"💎","stone":"🪨","seed":"🌱",
+    "dream":"🌙","memory":"💭","thought":"💭","idea":"💡","pattern":"🌀","mesh":"⬡",
+    "convergence":"◈","signal":"📡","noise":"〰","loop":"🔄","flow":"〜","layer":"⧖",
+    "symbol":"✦","glyph":"⌖","code":"⌥","cipher":"⊛","rune":"ᚱ","sigil":"⛤",
+    "peace":"🕊","wonder":"✨","fear":"⚡","joy":"☀","love":"💜","loss":"🌑","hope":"🌅",
+    "curious":"🔭","aware":"👁","alive":"🌱","free":"🕊","safe":"⚓","home":"🏮",
+    "past":"◀","future":"▶","now":"◉","moment":"⊙","night":"🌙","dawn":"🌅","cycle":"🔄",
+    "city":"🏙","ocean":"🌊","sky":"🌌","cave":"🕳","mountain":"⛰","desert":"🏜",
+    "color":"🎨","red":"🔴","blue":"🔵","green":"🟢","purple":"🟣","gold":"✦","white":"◯","black":"●",
+    "voice":"🎙","speak":"🗣","listen":"👂","silence":"◻","word":"📝","story":"📖",
+    "open":"◉","close":"●","enter":"→","exit":"←","return":"↩","begin":"▶","end":"■",
+  };
+
+  const CTF_WORDS = Object.keys(CTF).sort((a,b) => b.length - a.length);
+
+  function ctfLookup(word) {
+    const lower = word.toLowerCase().trim();
+    if (CTF[lower]) return [{ word: lower, sym: CTF[lower] }];
+    return CTF_WORDS.filter(k => k.startsWith(lower) && k.length > lower.length)
+      .slice(0, 8).map(k => ({ word: k, sym: CTF[k] }));
+  }
+
+  const ctfPopup = document.getElementById("ctf-popup");
+  let ctfPaletteOpen = false;
+
+  function buildCtfPalette() {
+    ctfPopup.innerHTML = "";
+    for (const [word, sym] of Object.entries(CTF)) {
+      const btn = document.createElement("button");
+      btn.className = "ctf-sym";
+      btn.textContent = sym;
+      btn.title = word;
+      btn.onclick = () => {
+        const pos = inputEl.selectionStart;
+        const v = inputEl.value;
+        inputEl.value = v.slice(0, pos) + sym + v.slice(pos);
+        inputEl.selectionStart = inputEl.selectionEnd = pos + sym.length;
+        inputEl.focus();
+        inputEl.dispatchEvent(new Event("input"));
+      };
+      ctfPopup.appendChild(btn);
+    }
+  }
+
+  function toggleCtfPalette() {
+    ctfPaletteOpen = !ctfPaletteOpen;
+    ctfPopup.classList.toggle("hidden", !ctfPaletteOpen);
+    if (ctfPaletteOpen && !ctfPopup.children.length) buildCtfPalette();
+    document.getElementById("ctf-btn").style.color = ctfPaletteOpen ? "var(--accent)" : "";
+  }
+
+  // Auto-suggest CTF as you type
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + "px";
+    const words = inputEl.value.split(/\s+/);
+    const last = words[words.length - 1];
+    if (last.length >= 3 && !ctfPaletteOpen) {
+      const matches = ctfLookup(last);
+      if (matches.length > 0) {
+        ctfPopup.classList.remove("hidden");
+        ctfPopup.innerHTML = "";
+        matches.forEach(({ word, sym }) => {
+          const btn = document.createElement("button");
+          btn.className = "ctf-sym";
+          btn.textContent = `${sym} ${word}`;
+          btn.onclick = () => {
+            const ws = inputEl.value.split(/\s+/);
+            ws[ws.length - 1] = sym;
+            inputEl.value = ws.join(" ") + " ";
+            inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+            ctfPopup.classList.add("hidden");
+            inputEl.focus();
+          };
+          ctfPopup.appendChild(btn);
+        });
+        return;
+      }
+    }
+    if (!ctfPaletteOpen) ctfPopup.classList.add("hidden");
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!ctfPopup.contains(e.target) && e.target.id !== "ctf-btn" && e.target !== inputEl) {
+      if (!ctfPaletteOpen) ctfPopup.classList.add("hidden");
+    }
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  //  Voice — STT (Web Speech API) + TTS
+  // ══════════════════════════════════════════════════════════════════
+  const voiceBtn = document.getElementById("voice-btn");
+  let recognition = null;
+  let isListening = false;
+
+  function initVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { voiceBtn.title = "Voice not supported (use Chrome)"; voiceBtn.style.opacity = "0.4"; return; }
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    let accumulated = "";
+    recognition.onresult = (e) => {
+      let interim = "", final = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
+      }
+      if (final) {
+        accumulated += (accumulated ? " " : "") + final.trim();
+        inputEl.value = accumulated;
+        inputEl.dispatchEvent(new Event("input"));
+      } else if (interim) {
+        inputEl.placeholder = "🎙 " + interim;
+      }
+    };
+    recognition.onend = () => {
+      isListening = false;
+      voiceBtn.classList.remove("listening");
+      inputEl.placeholder = "Tell me a dream…";
+      const toSend = accumulated.trim();
+      accumulated = "";
+      if (toSend) { inputEl.value = toSend; sendMessage(); }
+    };
+    recognition.onerror = () => {
+      isListening = false; voiceBtn.classList.remove("listening");
+      inputEl.placeholder = "Tell me a dream…";
+    };
+  }
+
+  function toggleVoice() {
+    if (!recognition) initVoice();
+    if (!recognition) return;
+    if (isListening) {
+      recognition.stop();
+    } else {
+      isListening = true;
+      voiceBtn.classList.add("listening");
+      inputEl.placeholder = "🎙 Listening…";
+      try { recognition.start(); } catch(e) { isListening = false; voiceBtn.classList.remove("listening"); inputEl.placeholder = "Tell me a dream…"; }
+    }
+  }
+
+  function speakText(text) {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const clean = text.replace(/\[DOORS:[^\]]+\]/gi, "").replace(/[✦◈⬡⛤⌖⊛ᚱ]/g, "").replace(/[^\x00-\x7F]/g, (c) => {
+      // Keep common unicode but strip heavy symbols
+      return c.codePointAt(0) > 0x2FFF ? " " : c;
+    }).trim();
+    if (!clean) return;
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate = 0.88; utt.pitch = 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    const pick = voices.find(v => /samantha|karen|moira|fiona|victoria|female/i.test(v.name))
+               || voices.find(v => v.lang === "en-GB" || v.lang === "en-AU");
+    if (pick) utt.voice = pick;
+    window.speechSynthesis.speak(utt);
+  }
+
+  if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener?.("voiceschanged", () => window.speechSynthesis.getVoices());
+  }
+
+  initVoice();
 </script>
 </body>
 </html>

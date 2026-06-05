@@ -56,17 +56,29 @@ async function handleStreamChat(req, url, res) {
       ).join("\n")}`
     : "No journal entries yet — this is the dreamer's first visit.";
 
+  // Symbol mesh — top recurring symbols/tags across all dreams, feeds into door options
+  const symbolMesh = (() => {
+    const freq = {};
+    for (const d of recentDreams) {
+      for (const s of [...(d.symbols || []), ...(d.tags || [])]) freq[s] = (freq[s] || 0) + 1;
+    }
+    return Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([k]) => k);
+  })();
+
   // Include prior conversation turns so the model has full context
   const historyContext = history.length > 0
     ? `\nPrior conversation turns:\n${history.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
-  // Three Doors instruction — the model imagines 3 equally weighted next doors
-  // based on the last door mentioned in conversation, then emits them as a
-  // parseable marker that is stripped from the visible reply.
-  const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors for the dreamer to choose next. Each door should be a brief, future-tense, equally weighted option grounded in what door we just opened or the dreamer just mentioned. Write them as a single hidden line in this exact format (do not narrate it, just append it):
-[DOORS: door option one | door option two | door option three]
-The door options should feel like natural continuations — not questions, not commands. Future tense. First person. Short (under 8 words each). Always 3. Always equal weight.`;
+  const meshHint = symbolMesh.length > 0
+    ? `\nRecurring symbols in dreamer's mesh: ${symbolMesh.join(", ")}.`
+    : "";
+
+  // Three Doors instruction — equally weighted future-tense canaries
+  // grounded in the last door opened and the dreamer's personal symbol mesh.
+  const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors — canaries the dreamer is sending ahead into their waking and dreaming life. Each door should be a brief, future-tense, equally weighted sensory or experiential path grounded in the last door mentioned and the dreamer's personal symbol mesh. All 3 should carry equal weight — no door is more important. They represent what the dreamer wants to see, hear, feel, taste, touch, or live. Write them as a single hidden line:
+[DOORS: door one | door two | door three]
+Rules: future tense, first person, short (under 8 words), no questions, no commands, equally weighted, rooted in the conversation and symbol mesh.${meshHint}`;
 
   const systemPrompt = `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them.${DOORS_INSTRUCTION}`;
 
@@ -129,10 +141,15 @@ The door options should feel like natural continuations — not questions, not c
       ? [requestedProvider]
       : GEMINI_MODEL_CHAIN)) {
     try {
-      const payload = JSON.stringify({
+      // Grounding: enable Google Search if GEMINI_GROUNDING=true (requires Gemini paid tier)
+      const geminiPayloadBase = {
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${message}` }] }],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
-      });
+      };
+      if (process.env.GEMINI_GROUNDING === "true") {
+        geminiPayloadBase.tools = [{ googleSearch: {} }];
+      }
+      const payload = JSON.stringify(geminiPayloadBase);
       await new Promise((resolve, reject) => {
         const req2 = https.request({
           hostname: "generativelanguage.googleapis.com",
