@@ -221,11 +221,12 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
   // Provider 1: Gemini (streaming) — checked first for Auto mode
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && message && (!requestedProvider || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
-    // Gemini model fallback list: try 2.5-flash, then 2.0-flash on 429/quota
+    // Gemini model fallback chain: primary → fallbacks on 429/quota
+    // Note: gemini-2.0-flash-lite shut down June 1 2026; gemini-3.5-flash is GA with free grounding
     const GEMINI_MODEL_CHAIN = [
       process.env.GEMINI_MODEL || "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-flash-latest",
+      "gemini-3.5-flash",
+      "gemini-3.1-flash-lite",
     ];
     for (const geminiModel of (requestedProvider && requestedProvider.startsWith("gemini-")
       ? [requestedProvider]
@@ -388,7 +389,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
   if (openaiKey && message && (!requestedProvider || requestedProvider === "openai" || requestedProvider === "gpt")) {
     try {
       const payload = JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
@@ -460,7 +461,7 @@ Rules: future tense, first person, short (under 8 words), no questions, no comma
   const xaiKey = process.env.XAI_API_KEY;
   if (xaiKey && message && (!requestedProvider || requestedProvider === "grok" || requestedProvider === "xai")) {
     try {
-      const xaiModel = process.env.XAI_MODEL || "grok-3-mini";
+      const xaiModel = process.env.XAI_MODEL || "grok-4.3";
       const payload = JSON.stringify({
         model: xaiModel, stream: true,
         messages: [

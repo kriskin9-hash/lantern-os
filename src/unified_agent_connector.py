@@ -85,12 +85,12 @@ class ProviderConfig:
     def _default_model(provider: str) -> str:
         return {
             "anthropic": "claude-haiku-4-5-20251001",
-            "openai": "gpt-4o-mini",
+            "openai": "gpt-4.1-mini",
             "gemini": "gemini-2.5-flash",
             "ollama": "llama3.2",
             "deepseek": "deepseek-chat",
             "groq": "llama-3.1-70b-versatile",
-            "azure": "gpt-4o",
+            "azure": "gpt-4.1",
             "generic": "default",
         }.get(provider, "default")
 

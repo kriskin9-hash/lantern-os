@@ -1,6 +1,6 @@
 {
   "pcsf_type": "provider",
-  "pcsf_version": "1.0.0",
+  "pcsf_version": "2.0.0",
   "component": "provider",
   "description": "AI provider capacity registry. Defines the fallback chain, env key bindings, circuit breaker thresholds, and current capacity states.",
   "generated_at": "2026-06-05T00:00:00Z",
