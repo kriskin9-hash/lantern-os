@@ -364,3 +364,117 @@ The biggest gap closed on June 4 is the complete RPS implementation. The system 
 The 3 Door Game is fully planned and documented in v1.0.0 but will launch as a major feature in v1.0.1.
 
 Overall confidence for a solid v1.0.0 release by mid-to-late June is strong (89% by June 6) with Convergence IO now fully implemented.
+
+---
+
+## 9. Convergence Refinements — 2026-06-05
+
+Source: 2026 State of AI Agent Memory (Mem0, ECAI 2025/2026 arXiv:2504.19413) and MemOS architecture analysis.
+
+These refinements extend the CSF Memory Engine and Convergence IO based on production patterns emerging across the agent memory ecosystem.
+
+### 9.1 Multi-Signal Retrieval (CSF Engine)
+
+**Problem:** CSF retrieval uses vector similarity alone. Production systems in 2026 fuse semantic + keyword + entity scoring.
+
+**Plan:**
+- Add `keywords: list[str]` to `MemoryRecord` (extracted at ingestion)
+- Add `{collection}_entities` parallel collection (extracted nouns/proper nouns)
+- Implement three-pass retrieval:
+  1. Vector similarity (existing)
+  2. BM25 keyword matching on `keywords`
+  3. Entity overlap scoring against query entities
+- Fuse: `score = 0.5*semantic + 0.3*keyword + 0.2*entity`
+
+**Target:** `src/csf/memory_engine.py`, `caad/schema/memory.schema.json`
+**Priority:** P0
+
+### 9.2 Procedural Memory Tier
+
+**Problem:** No explicit "how" tier. Agents need to remember workflows, tool-use habits, review conventions.
+
+**Plan:**
+- Add `PROCEDURAL` to `Tier` enum
+- Factory `create_procedure()` with:
+  - `steps: list[str]`
+  - `tool_invocations: list[str]`
+  - `success_rate: float`
+  - `last_applied: ISO8601`
+- Promote to `SKILL` on crystallization, keep `PROCEDURAL` trace
+
+**Target:** `src/csf/memory_engine.py`, `caad/schema/memory.schema.json`
+**Priority:** P1
+
+### 9.3 Async Memory Writes
+
+**Problem:** Synchronous writes block response pipeline. Mem0 fixed this by making `async_mode=True` default.
+
+**Plan:**
+- Add `write_async()` to `MemoryEngine` using `asyncio.create_task()`
+- Track pending write queue depth
+- Expose queue depth in debug panel analytics
+
+**Target:** `src/csf/memory_engine.py`, `apps/lantern-garage/public/dream-chat.html`
+**Priority:** P0
+
+### 9.4 Actor-Aware Provenance
+
+**Problem:** "User needs help with deployment" is ambiguous. Was it stated, inferred, or created by an agent?
+
+**Plan:**
+- Expand `source_surface` → `actor_id`, `actor_type` (`user | agent | system | inferred`)
+- Add `confidence_reasoning: str` explaining why memory exists
+- Show provenance column in debug panel for recent memories
+
+**Target:** `caad/schema/memory.schema.json`, `src/csf/memory_engine.py`
+**Priority:** P1
+
+### 9.5 Memory Staleness Detection
+
+**Problem:** High-confidence memory becomes confidently wrong (e.g., user changes jobs). Decay handles low-relevance; staleness handles high-relevance contradictions.
+
+**Plan:**
+- Add `staleness_signals: list[str]` to `MemoryRecord`
+- On ingestion, run lightweight contradiction check against same-entity memories
+- If contradiction > threshold, mark old memory `confidence *= 0.5`
+- Track stale corrections in debug panel
+
+**Target:** `src/csf/memory_engine.py`
+**Priority:** P2
+
+### 9.6 Temporal Abstraction in Lineage
+
+**Problem:** Moving NY → SF should be stored as evolution, not replacement.
+
+**Plan:**
+- Extend `promotion_lineage` with:
+  - `lineage_event: { type: "creation" | "promotion" | "correction" | "evolution", from_memory_id: str | null, reason: str }`
+- On entity update, create `EVOLUTION` entry linking old → new
+- Keep both in `REFINED` cube with temporal validity flags
+
+**Target:** `src/csf/memory_engine.py`, `caad/schema/memory.schema.json`
+**Priority:** P2
+
+### 9.7 Metadata Filtering API
+
+**Problem:** Retrieval is purely semantic. Scoped queries need structured filtering.
+
+**Plan:**
+- Add `metadata: dict[str, Any]` to `MemoryRecord`
+- Extend `query()` with `metadata_filter: dict`
+- Example: `engine.query("deployment", metadata_filter={"project": "lantern-garage", "privacy_scope": "local"})`
+
+**Target:** `src/csf/memory_engine.py`
+**Priority:** P3
+
+### Implementation Priority
+
+| Priority | Feature | Effort | Impact |
+|----------|---------|--------|--------|
+| **P0** | Async writes | 1 file | Immediate UX |
+| **P0** | Multi-signal retrieval | 2 files | +29% recall |
+| **P1** | Procedural tier | 3 files | Agent capability |
+| **P1** | Actor provenance | 2 files | Multi-agent reliability |
+| **P2** | Staleness detection | 2 files | Long-term accuracy |
+| **P2** | Temporal lineage | 2 files | Memory evolution |
+| **P3** | Metadata filtering | 2 files | Query precision |

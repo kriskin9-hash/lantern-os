@@ -587,6 +587,51 @@
     .save-feedback.ok { color: var(--green); display: inline; }
     .save-feedback.err { color: var(--danger); display: inline; }
 
+    /* ── Debug / Analytics Panel ── */
+    .debug-toggle {
+      position: fixed;
+      bottom: 12px;
+      right: 12px;
+      z-index: 9000;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      font-size: 14px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0.6; transition: opacity 0.2s;
+    }
+    .debug-toggle:hover { opacity: 1; color: var(--accent); }
+    .debug-panel {
+      position: fixed;
+      bottom: 52px; right: 12px;
+      width: 340px; max-height: 420px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      z-index: 9001;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      overflow-y: auto;
+      display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .debug-panel.open { display: block; }
+    .debug-panel h3 { font-size: 0.82rem; font-weight: 600; margin-bottom: 8px; color: var(--accent); }
+    .debug-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid var(--border); }
+    .debug-row:last-child { border-bottom: none; }
+    .debug-label { color: var(--muted); }
+    .debug-val { font-family: ui-monospace, "SF Mono", monospace; color: var(--text); }
+    .debug-val.ok { color: var(--green); }
+    .debug-val.warn { color: #e2c97e; }
+    .debug-val.err { color: var(--danger); }
+    .debug-log { margin-top: 10px; max-height: 180px; overflow-y: auto; font-size: 0.72rem; }
+    .debug-log-entry { padding: 2px 0; border-bottom: 1px solid rgba(46,51,80,0.5); }
+    .debug-log-entry:last-child { border-bottom: none; }
+
     /* ── Empty state ── */
     .empty-state {
       flex: 1;
@@ -756,6 +801,21 @@
   </div>
 </div>
 
+<!-- Debug / Analytics Panel -->
+<button class="debug-toggle" id="debug-toggle" title="Toggle analytics (D)" onclick="toggleDebug()">📊</button>
+<div class="debug-panel" id="debug-panel">
+  <h3>Analytics</h3>
+  <div class="debug-row"><span class="debug-label">Session</span><span class="debug-val" id="dbg-session">—</span></div>
+  <div class="debug-row"><span class="debug-label">Messages</span><span class="debug-val" id="dbg-messages">0</span></div>
+  <div class="debug-row"><span class="debug-label">Tokens</span><span class="debug-val" id="dbg-tokens">0</span></div>
+  <div class="debug-row"><span class="debug-label">Errors</span><span class="debug-val" id="dbg-errors">0</span></div>
+  <div class="debug-row"><span class="debug-label">Fallbacks</span><span class="debug-val" id="dbg-fallbacks">0</span></div>
+  <div class="debug-row"><span class="debug-label">Avg latency</span><span class="debug-val" id="dbg-latency">—</span></div>
+  <div class="debug-row"><span class="debug-label">Last provider</span><span class="debug-val" id="dbg-provider">—</span></div>
+  <div class="debug-row"><span class="debug-label">Agent</span><span class="debug-val" id="dbg-agent">—</span></div>
+  <div class="debug-log" id="debug-log"></div>
+</div>
+
 <script>
   const messagesEl = document.getElementById("messages");
   const inputEl = document.getElementById("input");
@@ -769,6 +829,62 @@
   let isStreaming = false;
   // Conversation history for multi-turn context — [{role:"user"|"assistant", text:"..."}]
   const conversationHistory = [];
+
+  // ── Analytics / Debug collector ───────────────────────────────────────
+  const analytics = {
+    sessionStart: Date.now(),
+    messagesSent: 0,
+    tokensReceived: 0,
+    errors: 0,
+    fallbacks: 0,
+    latencies: [], // ms per response
+    lastProvider: null,
+    lastAgent: null,
+    log: [],
+    record(type, detail) {
+      const entry = { t: Date.now(), type, detail };
+      this.log.push(entry);
+      const logEl = document.getElementById("debug-log");
+      if (logEl) {
+        const line = document.createElement("div");
+        line.className = "debug-log-entry";
+        const time = new Date(entry.t).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        line.textContent = `${time}  ${type}: ${detail}`;
+        logEl.prepend(line);
+        while (logEl.children.length > 50) logEl.lastChild.remove();
+      }
+      this.render();
+    },
+    render() {
+      const elapsed = Math.round((Date.now() - this.sessionStart) / 1000);
+      const mins = Math.floor(elapsed / 60).toString().padStart(2, "0");
+      const secs = (elapsed % 60).toString().padStart(2, "0");
+      document.getElementById("dbg-session").textContent = `${mins}:${secs}`;
+      document.getElementById("dbg-messages").textContent = this.messagesSent;
+      document.getElementById("dbg-tokens").textContent = this.tokensReceived;
+      const errEl = document.getElementById("dbg-errors");
+      errEl.textContent = this.errors;
+      errEl.className = "debug-val " + (this.errors > 0 ? "err" : "ok");
+      const fbEl = document.getElementById("dbg-fallbacks");
+      fbEl.textContent = this.fallbacks;
+      fbEl.className = "debug-val " + (this.fallbacks > 0 ? "warn" : "ok");
+      const avg = this.latencies.length > 0
+        ? Math.round(this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length) + " ms"
+        : "—";
+      document.getElementById("dbg-latency").textContent = avg;
+      document.getElementById("dbg-provider").textContent = this.lastProvider || "—";
+      document.getElementById("dbg-agent").textContent = this.lastAgent || "—";
+    },
+  };
+  setInterval(() => analytics.render(), 1000);
+  function toggleDebug() {
+    document.getElementById("debug-panel").classList.toggle("open");
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "d" && !e.ctrlKey && !e.metaKey && !e.altKey && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") {
+      toggleDebug();
+    }
+  });
 
   // On static hosts (GitHub Pages, file://) the API server isn't running.
   // Point at the expected local address and surface a clear banner if unreachable.
@@ -819,6 +935,10 @@
     appendUserBubble(text);
     inputEl.value = "";
     inputEl.style.height = "auto";
+    analytics.messagesSent++;
+    analytics.lastAgent = agents.find((a) => a.id === agentSelect.value)?.name || agentSelect.value;
+    analytics.record("send", text.slice(0, 40));
+    analytics._msgStart = Date.now();
     streamAgentResponse(text);
   }
 
@@ -889,12 +1009,15 @@
               if (evt.type === "token" && evt.text) {
                 if (!hasTokens) { hasTokens = true; setThinking(false); }
                 fullText += evt.text;
+                analytics.tokensReceived++;
                 cursor.remove();
                 bubble.textContent = fullText;
                 bubble.appendChild(cursor);
                 scrollToBottom();
               }
               if (evt.type === "error" && evt.text) {
+                analytics.errors++;
+                analytics.record("error", evt.text);
                 appendErrorNotice(row, evt.text);
               }
               if (evt.type === "done" && !streamFinished) {
@@ -944,6 +1067,14 @@
     }
     // Save clean assistant reply to history (no [DOORS:] marker)
     if (text) conversationHistory.push({ role: "assistant", text });
+
+    // Analytics
+    const latency = analytics._msgStart ? Date.now() - analytics._msgStart : null;
+    if (latency) analytics.latencies.push(latency);
+    analytics.lastProvider = source || "—";
+    const isFallback = source === "offline" || source === "local_fallback" || source === "unavailable";
+    if (isFallback) analytics.fallbacks++;
+    analytics.record(isFallback ? "fallback" : "done", `${source}${latency ? " @ " + latency + "ms" : ""}`);
 
     if (source === "failed" || source === "unavailable" || source === "error" || error) {
       const badge = document.createElement("div");
