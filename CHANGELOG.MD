@@ -69,6 +69,11 @@ intent.
 - **#165** converged_tesseract.py convergence_io_route_on_slice is a placeholder stub
 - **#166** hff-api load_data_source() returns mock data -- not yet implemented
 - **#167** discord lounge bot memory_layer export_csf_stub is a placeholder
+- **#168** discord lounge bot ot.py is empty and ot_v2.py missing — bot won't start
+
+### Fixed
+
+- **#168** Restored Discord bot v2 slash commands from commit 8b5cd9; ot.py and ot_v2.py both populated
 
 ### Added
 
