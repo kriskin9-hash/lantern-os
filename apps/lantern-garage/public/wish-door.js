@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const LOCAL_APP_ORIGIN = "http://127.0.0.1:4177";
-const DREAMER_USER = "courtney";
+const DREAMER_USER = "dreamer";
 
 function appOrigin() {
   return window.location.protocol === "file:" ? LOCAL_APP_ORIGIN : window.location.origin;

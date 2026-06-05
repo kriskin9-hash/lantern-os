@@ -7,13 +7,13 @@ const maxDreamerTextLength = 2000;
 const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
 
 function normalizeDreamerUser(value) {
-  const user = String(value || "courtney")
+  const user = String(value || "dreamer")
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
-  return user || "courtney";
+  return user || "dreamer";
 }
 
 function dreamerNotebookPath(user) {

@@ -5,7 +5,7 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
     readDreamerNotebook, readRecentDreams, dreamChatReply, AGENT_PERSONAS } = deps;
 
   if (url.pathname === "/api/dreamer" && req.method === "GET") {
-    const user = normalizeDreamerUser(url.searchParams.get("user") || "courtney");
+    const user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
     const entries = readDreamerNotebook(user);
     sendJson(res, { user, entries, path: path.relative(repoRoot, dreamerNotebookPath(user)) });
     return true;
@@ -14,7 +14,7 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
     try {
       const raw = await collectRequestBody(req);
       const body = JSON.parse(raw);
-      const user = normalizeDreamerUser(body.user || "courtney");
+      const user = normalizeDreamerUser(body.user || "dreamer");
       const record = await appendDreamerEntry(user, body);
       sendJson(res, { saved: true, record });
     } catch (error) {
