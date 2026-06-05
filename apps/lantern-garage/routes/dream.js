@@ -67,6 +67,8 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
       const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
       await appendJsonlQueued(monthFile, entry);
+      // MemOS ingest runs via: python -c "from src.convergence_io.memos_bridge import get_cube; get_cube().ingest_all()"
+      // or automatically on each TesseractEngine._convergence_rag() call (lazy load).
       sendJson(res, { id: dreamId, saved: true, entry, csf: { compressed: false } });
     } catch (error) { sendJson(res, { error: error.message }, 400); }
     return true;

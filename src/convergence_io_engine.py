@@ -623,6 +623,25 @@ class TesseractEngine:
         return ctx
 
     def _convergence_rag(self, ctx: ConvergenceContext) -> ConvergenceContext:
+        # ── MemOS semantic retrieval (primary) ───────────────────────────────
+        # Uses MemOS MemCube to semantically search dream journal memories.
+        # Falls back to flat-rag-house if MemOS not installed.
+        try:
+            from convergence_io.memos_bridge import get_cube  # type: ignore
+            cube = get_cube()
+            # Build query from current message context + persona
+            query = " ".join(filter(None, [
+                " ".join(ctx.lore_hints[:2]) if ctx.lore_hints else "",
+                ctx.persona,
+            ])) or "dream"
+            mem_context = cube.get_context_for_prompt(query, limit=3)
+            if mem_context:
+                ctx.lore_hints = [mem_context]
+                return ctx
+        except Exception as _memos_err:
+            pass  # fall through to flat-rag-house
+
+        # ── Flat RAG house fallback ──────────────────────────────────────────
         rag_path = self.data_dir / "rag-house" / "flat-rag-house-latest.json"
         if rag_path.exists():
             try:
