@@ -558,7 +558,7 @@ class TesseractEngine:
             ctx.persona = "waterfall"
         elif any(k in lower for k in ["space", "ship", "navigate", "map"]):
             ctx.persona = "xenon"
-        elif any(k in lower for k in ["wish", "protect", "founder", "waynesville"]):
+        elif any(k in lower for k in ["wish", "protect", "founder", "home", "return"]):
             ctx.persona = "founder"
         return ctx
 

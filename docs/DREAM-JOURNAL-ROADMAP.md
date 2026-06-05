@@ -478,3 +478,25 @@ These refinements extend the CSF Memory Engine and Convergence IO based on produ
 | **P2** | Staleness detection | 2 files | Long-term accuracy |
 | **P2** | Temporal lineage | 2 files | Memory evolution |
 | **P3** | Metadata filtering | 2 files | Query precision |
+
+
+---
+
+## Appendix: Convergence Engine Improvements (Planned)
+
+Tracked in GitHub issues. These refine the Convergence IO runtime without changing user-facing behavior.
+
+| Issue | Title | Priority | File |
+|---|---|---|---|
+| #142 | Add Watch/Observe phase for drift detection | Medium | `src/convergence_io_engine.py` |
+| #143 | Backpressure + rate limiting on TesseractEngine | High | `src/convergence_io_engine.py` |
+| #145 | Structured trace logging (OpenTelemetry-style spans) | Medium | `src/convergence_io_engine.py` |
+| #146 | Idempotent slot claims (deterministic slot IDs) | Medium | `src/convergence_io_engine.py` |
+| #147 | Graduated degradation (layer-by-layer fallback) | High | `src/convergence_io_engine.py` |
+| #144 | Receipt diff (compare current vs previous run) | Low | `src/convergence_io_engine.py` |
+| #148 | PII cleanup -- remove "waynesville" from persona matcher | High | `src/convergence_io_engine.py` |
+
+**Design principles:**
+- No infinite loops; explicit triggers only
+- Local-first; cloud mirrors validate but don't own state
+- Receipts are read-only evidence; never self-modify without operator approval

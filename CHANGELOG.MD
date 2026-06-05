@@ -51,6 +51,16 @@ intent.
 
 ## [Unreleased]
 
+### Planned (Convergence)
+
+- **#142** Watch/Observe phase -- drift detection between convergence runs
+- **#143** Backpressure + rate limiting on TesseractEngine (bounded queue, 429 shedding)
+- **#145** Structured trace logging (OpenTelemetry-style spans per layer)
+- **#146** Idempotent slot claims (deterministic slot IDs, no orphaned slots on retry)
+- **#147** Graduated degradation (layer-by-layer fallback instead of all-or-nothing)
+- **#144** Receipt diff (compare current vs previous convergence run)
+- **#148** PII cleanup -- remove "waynesville" from persona keyword matcher
+
 ### Added
 
 - Initial workspace governance files for changelog, license, security, support,
