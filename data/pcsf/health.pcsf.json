@@ -3,7 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "health_check",
   "description": "Health monitoring layer. Declares all checkable endpoints, their expected responses, and current pass/fail state. Used by CI, agents, and canary monitors.",
-  "generated_at": "2026-06-06T17:48:39.826Z",
+  "generated_at": "2026-06-06T18:41:21.640Z",
   "state": "available",
   "server": {
     "host": "127.0.0.1",
@@ -90,11 +90,11 @@
       ],
       "state": "pass",
       "current_snapshot": {
-        "ANTHROPIC_API_KEY": true,
+        "ANTHROPIC_API_KEY": false,
         "OPENAI_API_KEY": true,
-        "GEMINI_API_KEY": true,
+        "GEMINI_API_KEY": false,
         "GOOGLE_API_KEY": false,
-        "XAI_API_KEY": true,
+        "XAI_API_KEY": false,
         "OLLAMA_BASE_URL": false,
         "_any": true
       },
@@ -169,14 +169,10 @@
     "ci_job": "test-node"
   },
   "journal": {
-    "total_entries": 103,
-    "entries_by_kind": {
-      "dream": 67,
-      "note": 20,
-      "reflection": 16
-    },
+    "total_entries": 0,
+    "entries_by_kind": {},
     "entries_with_ctf": 0,
-    "avg_lucidity": 0.2,
-    "generated_at": "2026-06-06T17:48:39.826Z"
+    "avg_lucidity": 0,
+    "generated_at": "2026-06-06T18:41:21.640Z"
   }
 }
