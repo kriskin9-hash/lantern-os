@@ -1,4 +1,6 @@
 // Health, status, system metrics — read-only telemetry endpoints
+const { getRoutingSnapshot } = require("../lib/provider-cache");
+
 module.exports = async function statusRoutes(req, res, url, deps) {
   const { sendJson, readJson, readJsonl, getStatus, getReadiness, getMiningLabStatus,
     getActionCapabilities, getOperatorFeedbackMemory, getAccessModel, getCloudMirrorStatus } = deps;
@@ -44,6 +46,10 @@ module.exports = async function statusRoutes(req, res, url, deps) {
   }
   if (url.pathname === "/api/cloud-mirrors") {
     sendJson(res, getCloudMirrorStatus());
+    return true;
+  }
+  if (url.pathname === "/api/pcsf/routing") {
+    sendJson(res, getRoutingSnapshot());
     return true;
   }
 };

@@ -3,6 +3,7 @@ const http = require("http");
 const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, generateLocalReply } = require("./dream-chat");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
+const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 
 const maxConversationTextLength = 4000;
 
@@ -126,41 +127,17 @@ async function handleStreamChat(req, url, res) {
     }
   }
   const topPairs = Object.entries(coOccur).sort((a,b)=>b[1]-a[1]).slice(0,3)
-    .map(([k,v]) => `${k}(×${v})`).join(', ');
+    .map(([k,v]) => `${k}(\xd7${v})`).join(', ');
 
   const meshHint = symbolMesh.length > 0
     ? `\nRecurring symbols in dreamer's mesh: ${symbolMesh.join(", ")}.${topPairs ? ` Connected pairs: ${topPairs}.` : ''}`
     : "";
 
   // Three Doors instruction — equally weighted future-tense canaries
-  const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors — canaries the dreamer is sending ahead into their waking and dreaming life. Each door should be a brief, future-tense, equally weighted sensory or experiential path grounded in the last door mentioned and the dreamer's personal symbol mesh. All 3 should carry equal weight — no door is more important. They represent what the dreamer wants to see, hear, feel, taste, touch, or live. Write them as a single hidden line:
-[DOORS: door one | door two | door three]
-Rules: future tense, first person, short (under 8 words), no questions, no commands, equally weighted, rooted in the conversation and symbol mesh.${meshHint}`;
+  const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors — canaries the dreamer is sending ahead into their waking and dreaming life. Each door should be a brief, future-tense, equally weighted sensory or experiential path grounded in the last door mentioned and the dreamer's personal symbol mesh. All 3 should carry equal weight — no door is more important. They represent what the dreamer wants to see, hear, feel, taste, touch, or live. Write them as a single hidden line:\n[DOORS: door one | door two | door three]\nRules: future tense, first person, short (under 8 words), no questions, no commands, equally weighted, rooted in the conversation and symbol mesh.${meshHint}`;
 
   // Keystone debug prompt — raw dev access, no persona, no doors
-  const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.
-
-Repo state:
-- Server: apps/lantern-garage/server.js (modular routes under routes/)
-- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)
-- Dream journal: ${allRecent.length} entries in data/dream_journal/
-- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}
-- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}
-- Co-occurrence: ${topPairs || 'none'}
-${historyContext}
-
-You can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.
-ONLY use these exact commands (anything else is blocked):
-
-TESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`
-GIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`
-PR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`
-ORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`
-READ: \`cat FILE\` \`head -N FILE\`
-
-When asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.
-
-Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
+  const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
@@ -265,11 +242,16 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
     text: message.slice(0, maxConversationTextLength),
   }).catch(() => {});
 
-  // Detect whether any provider keys are configured (so we can distinguish "no keys" from "all failed")
-  const anyProviderConfigured = !!(
-    process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY ||
-    process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY ||
-    process.env.XAI_API_KEY || process.env.OLLAMA_BASE_URL
+  // Snapshot provider availability from the 60s PCSF cache (avoids per-request env re-reads)
+  const providerState = getProviderState();
+  const anyProviderConfigured = !!({
+    ...providerState.gemini,
+    ...providerState.anthropic,
+    ...providerState.openai,
+    ...providerState.xai,
+  }).hasKey || !!(providerState.gemini.hasKey || providerState.anthropic.hasKey ||
+    providerState.openai.hasKey || providerState.xai.hasKey ||
+    process.env.OLLAMA_BASE_URL
   );
 
   let fullReply = "";
@@ -277,7 +259,7 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
   // Provider 1: Gemini (streaming) — checked first for Auto mode
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && message && (!requestedProvider || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
-    // Gemini model fallback chain: primary → fallbacks on 429/quota
+    // Gemini model fallback chain: primary -> fallbacks on 429/quota
     // Note: gemini-2.0-flash-lite shut down June 1 2026; gemini-3.5-flash is GA with free grounding
     const GEMINI_MODEL_CHAIN = [
       process.env.GEMINI_MODEL || "gemini-2.5-flash",
@@ -349,9 +331,11 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
         role: "lantern",
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
+      recordProviderSuccess("gemini");
       sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors });
       return;
     } catch (err) {
+      recordProviderFailure("gemini", err.message);
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
       if (is429) { fullReply = ""; continue; } // retry with next model silently
@@ -431,9 +415,11 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
         role: "lantern",
         text: anthropicClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
+      recordProviderSuccess("anthropic");
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
+      recordProviderFailure("anthropic", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
         await streamLocalFallback(err.message);
@@ -504,9 +490,11 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
         role: "lantern",
         text: openaiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
+      recordProviderSuccess("openai");
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
+      recordProviderFailure("openai", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
         sendFail(err.message);
@@ -554,9 +542,11 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
       });
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
+      recordProviderSuccess("xai");
       sendDone("grok", { agent: agent.name, online: true, cleanText: xaiClean, suggestions: xaiDoors });
       return;
     } catch (err) {
+      recordProviderFailure("xai", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
         sendFail(err.message);
@@ -630,10 +620,12 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
           role: "lantern",
           text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
+        recordProviderSuccess("ollama");
         sendDone("ollama", { agent: agent.name, online: true, cleanText: ollamaClean, suggestions: ollamaDoors });
         return;
       }
     } catch (err) {
+      recordProviderFailure("ollama", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
         sendFail(err.message);
