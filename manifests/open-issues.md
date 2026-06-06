@@ -374,3 +374,37 @@ Documentation: See `docs/DASHBOARD-CONSOLIDATION.md`
    - Fix: added `tags: ["v*.*.*"]` trigger to `.github/workflows/deploy.yml` for one-click tag-based deployment.
    - Status: fixed.
    - Note: pre-existing `secrets.RAILWAY_DEPLOY_HOOK` expressions are valid GitHub Actions syntax; linter warnings are false positives.
+
+## Fixed in Convergence Engine Optimization Pass (2026-06-06)
+
+1. `CONVERGENCE-LOOP-OPT-001`: Convergence IO engine was not performant enough for live orchestration.
+   - Fix: optimized `src/convergence_io_engine.py` across all classes:
+     - MetricsCollector: `deque(maxlen)` for O(1) windowing, lock-free snapshot reads, `nlargest` for O(k) percentiles.
+     - CircuitBreaker: fast-path `allow()` bypasses lock when closed, `health` property, graceful recovery.
+     - NapSafety: 2-second throttle between sensor polls, cached results.
+     - ConvergenceLoop: phase caching via repo state hash, early termination after 2 clean ticks, adaptive convergence score.
+     - TesseractEngine: parallel CSF+RAG convergence layer, persona LRU cache (1000 entries), fast selective context merge, adaptive quality feedback.
+     - SlotManager: in-memory cache with lazy disk persistence.
+     - HealthProbe: connection-reusing `urllib` opener.
+   - Status: fixed.
+   - Commit: `092ff73`.
+
+2. `DREAM-CHAT-THEME-001`: Dream Chat page had no light/dark theme toggle and no back navigation.
+   - Fix: added dual-theme CSS variables matching root page (Patreon `#ff424d` accent), theme toggle with `localStorage`, and back link to `/`.
+   - Status: fixed.
+   - Commit: `1d8640c`.
+
+3. `GITIGNORE-CSF-001`: `src/csf_rust/target/` build artifacts were not ignored.
+   - Fix: added `src/csf_rust/target/` to `.gitignore` and removed tracked artifacts from index.
+   - Status: fixed.
+   - Commit: `5cc0342` (merge) + `.gitignore` update.
+
+## Active Gaps (Current Loop)
+
+1. `SPRAWL-INTEGRATIONS-001`: Top-level `integrations/` directory flagged by convergence manager.
+   - Status: candidate. Either move into allowed directory or add to `ALLOWED_TOP` if intentional.
+   - Next: operator decision.
+
+2. `PCSF-UNTRACKED-001`: PCSF state files (`data/pcsf/*.json`) show as modified in convergence scan.
+   - Status: held. Runtime state files; should not be committed. Verify `.gitignore` covers `data/pcsf/` or add exclusion.
+   - Next: add `data/pcsf/*.json` to `.gitignore` if not present.
