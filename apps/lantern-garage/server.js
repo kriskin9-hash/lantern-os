@@ -33,6 +33,7 @@ const flatRagHouseManifestPath = path.join(repoRoot, "manifests", "FLAT-RAG-HOUS
 const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.jsonl");
 const cloudMirrorsPath = path.join(repoRoot, "manifests", "cloud-mirrors.json");
 const cloudMirrorUrls = process.env.LANTERN_CLOUD_MIRROR_URLS || "";
+const openaiApiKey = process.env.OPENAI_API_KEY || "";
 const maxConversationTextLength = 4000;
 const maxDreamerTextLength = 2000;
 
@@ -56,6 +57,7 @@ const deps = {
   conversationLogPath, flatRagHousePath, flatRagHouseManifestPath,
   operatorNotesPath, cloudMirrorsPath, cloudMirrorUrls,
   maxConversationTextLength, maxDreamerTextLength,
+  openaiApiKey,
   "__dirname": __dirname,
 };
 
@@ -67,6 +69,7 @@ const routes = [
   require("./routes/dreamer"),
   require("./routes/dream"),
   require("./routes/keystone"),
+  require("./routes/image"),
   require("./routes/surfaces"),
 ];
 
