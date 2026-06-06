@@ -1,44 +1,30 @@
 {
-  "generatedAt": "2026-06-06T22:32:35.288Z",
+  "generatedAt": "2026-06-06T22:37:23.714Z",
   "root": "c:\\Users\\angela\\Github\\lantern-os",
-  "mode": "auto-fix",
+  "mode": "scan-only",
   "iterations": [
     {
       "iteration": 1,
-      "issueCount": 12,
+      "issueCount": 2,
       "leadingIssues": [
         {
-          "id": "SPRAWL:archive",
+          "id": "GIT:DIRTY",
           "severity": "medium",
-          "summary": "Unexpected top-level directory: archive",
-          "fix": "Move archive into an allowed directory or add to ALLOWED_TOP if intentional",
+          "summary": "Uncommitted changes:\nM manifests/validation/CONVERGENCE-MANAGER-LATEST.json",
+          "fix": "Commit or stash all changes before shipping",
           "autoFixFn": null
         },
         {
-          "id": "SPRAWL:caad",
-          "severity": "medium",
-          "summary": "Unexpected top-level directory: caad",
-          "fix": "Move caad into an allowed directory or add to ALLOWED_TOP if intentional",
-          "autoFixFn": null
-        },
-        {
-          "id": "SPRAWL:csf",
-          "severity": "medium",
-          "summary": "Unexpected top-level directory: csf",
-          "fix": "Move csf into an allowed directory or add to ALLOWED_TOP if intentional",
-          "autoFixFn": null
-        },
-        {
-          "id": "SPRAWL:integrations",
-          "severity": "medium",
-          "summary": "Unexpected top-level directory: integrations",
-          "fix": "Move integrations into an allowed directory or add to ALLOWED_TOP if intentional",
+          "id": "GIT:STASH",
+          "severity": "low",
+          "summary": "Stashed work exists:\nstash@{0}: On master: auto-stash before worktree cleanup\nstash@{1}: WIP on master: 163156c chore(pcsf): expand to v2.0.0 — full model rosters June 2026, fix deprecated defaults\nstash@{2}: WIP on master: dff0723 fix: orchestrator crash, stream routing, test suite, schema & deps",
+          "fix": "Pop, commit, or drop stash entries before shipping",
           "autoFixFn": null
         }
       ],
       "fixed": []
     }
   ],
-  "finalIssueCount": 12,
+  "finalIssueCount": 2,
   "status": "needs_review"
 }
