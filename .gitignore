@@ -22,6 +22,9 @@ data/dream_journal/*.jsonl
 # Discord subscriber data
 data/discord/subscribers.json
 
+# ─── Rust ─────────────────────────────────────────────────────────────────────
+src/csf_rust/target/
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/
