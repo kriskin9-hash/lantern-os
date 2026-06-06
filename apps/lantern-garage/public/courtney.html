@@ -19,7 +19,7 @@
       </div>
       <p class="eyebrow">Lantern OS</p>
       <h1>Dream Journal</h1>
-      <p class="byline">Orion Edition</p>
+      <p class="byline"><span data-version-badge="Orion Edition · ">Orion Edition</span></p>
       <p class="tagline">Remember your dreams.<br>Reflect on what they mean.</p>
       <p class="subtagline">A private dream-journaling space with guided prompts, saved notes, notebook recall, and a Discord companion.</p>
 
@@ -120,7 +120,29 @@
     <footer class="dream-footer">
       <p>Dream Journal Orion — CSF v0.7 Symbolic Qutrit Edition</p>
       <p class="creator">Created by Alex Place</p>
+      <p style="opacity:0.6;font-size:0.75rem;margin-top:4px;"><span data-version-badge="Lantern OS v">Lantern OS</span> · private · local</p>
     </footer>
   </div>
+
+<!-- Version badge auto-loader -->
+<script>
+(function() {
+  const base = window.location.origin;
+  fetch(base + '/version.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(v => {
+      if (!v || !v.version) return;
+      document.querySelectorAll('[data-version-badge]').forEach(el => {
+        const prefix = el.dataset.versionBadge || '';
+        el.textContent = prefix + 'v' + v.version;
+        el.style.cursor = 'pointer';
+        el.title = 'View changelog';
+        el.onclick = function() { window.open('/repo/CHANGELOG.MD', '_blank'); };
+      });
+    })
+    .catch(() => {});
+})();
+</script>
 </body>
+
 </html>

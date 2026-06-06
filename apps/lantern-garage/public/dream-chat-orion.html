@@ -153,7 +153,7 @@
     <div class="logo">🌙</div>
     <div class="title-block">
       <h1>Dream Journal</h1>
-      <p>Orion · v1.0.0 · local</p>
+      <p>Orion · <span data-version-badge="Orion · ">v1.0.0</span> · local</p>
     </div>
     <div class="header-right">
       <span class="kind-label">Model</span>
@@ -603,6 +603,26 @@
     };
     return (map[kind] || []).slice(0, 3);
   }
+</script>
+<p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS v">Lantern OS</span> · private · local</p>
+<!-- Version badge auto-loader -->
+<script>
+(function() {
+  const base = window.location.origin;
+  fetch(base + '/version.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(v => {
+      if (!v || !v.version) return;
+      document.querySelectorAll('[data-version-badge]').forEach(el => {
+        const prefix = el.dataset.versionBadge || '';
+        el.textContent = prefix + 'v' + v.version;
+        el.style.cursor = 'pointer';
+        el.title = 'View changelog';
+        el.onclick = function() { window.open('/repo/CHANGELOG.MD', '_blank'); };
+      });
+    })
+    .catch(() => {});
+})();
 </script>
 </body>
 </html>

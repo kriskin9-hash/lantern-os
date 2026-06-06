@@ -193,7 +193,7 @@
     <span class="hero-icon">🌙</span>
     <h1>Dream <span>Journal</span></h1>
     <p class="tagline">A private, local-first dream journal for capture, reflection, and optional AI insight.</p>
-    <p class="sub">Orion Edition · v1.0.2 · Lantern OS · Your dreams stay on your machine.</p>
+    <p class="sub">Orion Edition · <span data-version-badge="Orion Edition · ">v1.0.2</span> · Lantern OS · Your dreams stay on your machine.</p>
   </div>
 
   <div class="panels">
@@ -261,7 +261,7 @@
   <div class="status-bar">
     <div class="dot online" id="status-dot"></div>
     <span id="status-label">local server running</span>
-    <span style="margin-left:auto;opacity:0.5">Lantern OS · private · local · v1.0.0</span>
+    <span style="margin-left:auto;opacity:0.5">Lantern OS · private · local · <span data-version-badge="Lantern OS · private · local · ">v1.0.0</span></span>
   </div>
 
 </div>
@@ -275,5 +275,24 @@
   });
 </script>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+<!-- Version badge auto-loader -->
+<script>
+(function() {
+  const base = window.location.origin;
+  fetch(base + '/version.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(v => {
+      if (!v || !v.version) return;
+      document.querySelectorAll('[data-version-badge]').forEach(el => {
+        const prefix = el.dataset.versionBadge || '';
+        el.textContent = prefix + 'v' + v.version;
+        el.style.cursor = 'pointer';
+        el.title = 'View changelog';
+        el.onclick = function() { window.open('/repo/CHANGELOG.MD', '_blank'); };
+      });
+    })
+    .catch(() => {});
+})();
+</script>
 </body>
 </html>

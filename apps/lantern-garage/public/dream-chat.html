@@ -360,5 +360,27 @@
 
 </script>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+<p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS v">Lantern OS</span> · private · local</p>
+<!-- Version badge auto-loader -->
+<script>
+(function() {
+  const base = window.location.origin;
+  fetch(base + '/version.json', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : null)
+    .then(v => {
+      if (!v || !v.version) return;
+      document.querySelectorAll('[data-version-badge]').forEach(el => {
+        const prefix = el.dataset.versionBadge || '';
+        el.textContent = prefix + 'v' + v.version;
+        el.style.cursor = 'pointer';
+        el.title = 'View changelog';
+        el.onclick = function() { window.open('/repo/CHANGELOG.MD', '_blank'); };
+      });
+      const appVer = document.getElementById('app-version');
+      if (appVer) appVer.textContent = 'Lantern OS v' + v.version + ' · private · local';
+    })
+    .catch(() => {});
+})();
+</script>
 </body>
 </html>
