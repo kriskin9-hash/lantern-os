@@ -18,7 +18,8 @@
     "test:keystone": "node ../../tests/test_dream_journal_keystone.js",
     "test:ui": "npx playwright test ../../tests/test_dream_journal_ui.spec.js",
     "test:ui:headed": "npx playwright test ../../tests/test_dream_journal_ui.spec.js --headed",
-    "test:all": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone ui"
+    "test:all": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone ui",
+    "dev": "node --watch server.js"
   },
   "engines": {
     "node": ">=20"
