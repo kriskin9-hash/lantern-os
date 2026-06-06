@@ -4,7 +4,7 @@
   "indexVersion": "1.0.0",
   "repos": [
     {
-      "localFolder": "D:\\tmp\\lantern-os",
+      "localFolder": "C:\\Users\\alexp\\OneDrive\\Documents\\GitHub\\lantern-os",
       "githubOrigin": "https://github.com/alex-place/lantern-os.git",
       "ragState": "local_inspected",
       "isPrimaryOrchestrator": true,
@@ -43,8 +43,8 @@
     {
       "localFolder": "D:\\tmp\\lantern-symbolic-sandbox",
       "githubOrigin": "https://github.com/alex-place/lantern-symbolic-sandbox.git",
-      "ragState": "local_inspected",
-      "notes": "Symbolic sandbox experiments."
+      "ragState": "not_yet_cloned",
+      "notes": "Local copy removed. Re-clone if needed."
     },
     {
       "localFolder": "D:\\tmp\\lantern-discord",

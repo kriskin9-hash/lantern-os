@@ -3,7 +3,7 @@
   "pcsf_version": "2.0.0",
   "component": "provider",
   "description": "AI provider capacity registry. Defines the fallback chain, env key bindings, circuit breaker thresholds, and current capacity states.",
-  "generated_at": "2026-06-06T18:41:21.616Z",
+  "generated_at": "2026-06-06T18:35:16.087Z",
   "state": "available",
   "fallback_chain": [
     "google",
@@ -19,7 +19,7 @@
       "name": "Claude",
       "priority": 1,
       "env_key": "ANTHROPIC_API_KEY",
-      "state": "no_key",
+      "state": "available",
       "endpoint": "api.anthropic.com",
       "path": "/v1/messages",
       "stream_supported": true,
@@ -29,12 +29,12 @@
       "error_count": 0,
       "success_count": 0,
       "quota_remaining": null,
-      "is_routable": false,
+      "is_routable": true,
       "circuit_breaker": {
         "failure_threshold": 3,
         "recovery_secs": 30
       },
-      "last_checked": "2026-06-06T18:41:21.615Z"
+      "last_checked": "2026-06-06T18:35:16.086Z"
     },
     {
       "provider_id": "openai",
@@ -56,14 +56,14 @@
         "failure_threshold": 3,
         "recovery_secs": 30
       },
-      "last_checked": "2026-06-06T18:41:21.615Z"
+      "last_checked": "2026-06-06T18:35:16.087Z"
     },
     {
       "provider_id": "google",
       "name": "Gemini",
       "priority": 0,
       "env_key": "GEMINI_API_KEY",
-      "state": "no_key",
+      "state": "available",
       "endpoint": "generativelanguage.googleapis.com",
       "path": "/v1beta/models/{model}:streamGenerateContent",
       "stream_supported": true,
@@ -73,12 +73,12 @@
       "error_count": 0,
       "success_count": 0,
       "quota_remaining": null,
-      "is_routable": false,
+      "is_routable": true,
       "circuit_breaker": {
         "failure_threshold": 3,
         "recovery_secs": 30
       },
-      "last_checked": "2026-06-06T18:41:21.615Z"
+      "last_checked": "2026-06-06T18:35:16.087Z"
     },
     {
       "provider_id": "xai",
@@ -86,7 +86,7 @@
       "priority": 3,
       "note": "Added this session. OpenAI-compatible endpoint.",
       "env_key": "XAI_API_KEY",
-      "state": "no_key",
+      "state": "available",
       "endpoint": "api.x.ai",
       "path": "/v1/chat/completions",
       "stream_supported": true,
@@ -96,12 +96,12 @@
       "error_count": 0,
       "success_count": 0,
       "quota_remaining": null,
-      "is_routable": false,
+      "is_routable": true,
       "circuit_breaker": {
         "failure_threshold": 3,
         "recovery_secs": 30
       },
-      "last_checked": "2026-06-06T18:41:21.616Z"
+      "last_checked": "2026-06-06T18:35:16.087Z"
     },
     {
       "provider_id": "ollama",

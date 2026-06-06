@@ -19,7 +19,9 @@
       <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
     </div>
     <div class="selector-row">
-      <select id="agent-select" title="Agent"></select>
+      <select id="agent-select" title="Agent">
+        <option value="lantern" selected>Lantern</option>
+      </select>
       <select id="provider-select" title="Provider">
         <option value="">Auto</option>
         <option value="claude">Claude</option>
@@ -302,10 +304,10 @@
   </div>
 
   <div class="messages" id="messages">
-    <div class="empty-state" id="empty-state">
-      <div class="icon">🌙</div>
-      <h2>The dream door is open.</h2>
-      <p>Choose an agent and say something.</p>
+    <div class="empty-state dream-door-hero" id="empty-state">
+      <div class="dream-door-art" aria-hidden="true"></div>
+      <h2>The <span>dream</span> door is open.</h2>
+      <p>Step through with a dream, a memory, a thought, or a question.</p>
     </div>
   </div>
 
@@ -328,7 +330,7 @@
       </button>
     </div>
     <div class="ctf-popup hidden" id="ctf-popup"></div>
-    <p class="input-hint" id="input-hint">Enter to send · Shift+Enter for newline · 🎙 voice · ✦ CTF</p>
+    <p class="input-hint" id="input-hint">Enter to send · Shift+Enter for newline · ⌘ voice · ⌘ K</p>
   </div>
 </div>
 

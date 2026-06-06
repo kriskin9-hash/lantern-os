@@ -98,3 +98,4 @@ data/agent-fleet/
 
 # Auto-generated convergence evidence files
 manifests/evidence/convergence-*.json
+convergence-output.json
