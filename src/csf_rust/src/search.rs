@@ -91,11 +91,19 @@ impl SearchIndex {
 
     /// Returns candidate segment indices that MAY contain `query`.
     /// In production: intersect inverted lists, then selective-decode candidates.
-    pub fn query_candidates(&self, query: &SearchQuery) -> HashSet<u32> {
+    pub fn query_candidates(&self, query: &SearchQuery, dictionary: &crate::dictionary::SymbolicDictionary) -> HashSet<u32> {
         let mut candidates: Option<HashSet<u32>> = None;
         for term in &query.terms {
+            let id = dictionary.encode(term);
+            if id == 0 {
+                // Unknown term — if require_all, no segment can satisfy.
+                if query.require_all {
+                    return HashSet::new();
+                }
+                continue;
+            }
             let empty = HashSet::new();
-            let set = self.inverted.get(&0).unwrap_or(&empty); // placeholder
+            let set = self.inverted.get(&id).unwrap_or(&empty);
             match &mut candidates {
                 None => candidates = Some(set.clone()),
                 Some(c) => {

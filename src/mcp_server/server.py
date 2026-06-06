@@ -27,6 +27,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
+# Mesh bridge for P2P coordination
+from mesh_bridge import get_mesh_bridge, MeshBridge, HTTPX_AVAILABLE
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # Load local env overrides if present
@@ -269,6 +272,47 @@ def _tool_fleet_status() -> Dict[str, Any]:
     }
 
 
+# ── Mesh / P2P Tools ──
+
+_mesh = get_mesh_bridge()
+
+
+def _tool_mesh_register_peer(name: str, mcp_url: str, messages_url: str = "", donated_resources: str = "{}") -> Dict[str, Any]:
+    """Register a peer node in the P2P mesh. Peers may donate resources (agent slots, compute)."""
+    resources = json.loads(donated_resources) if donated_resources else {}
+    # NOTE: this is a sync wrapper; the real mesh bridge is async.
+    # For the MCP tool registry we return a serializable dict.
+    loop = asyncio.get_event_loop()
+    result = loop.run_until_complete(_mesh.register_peer(
+        name=name,
+        mcp_url=mcp_url,
+        messages_url=messages_url or None,
+        donated_resources=resources,
+    ))
+    return result
+
+
+def _tool_mesh_status() -> Dict[str, Any]:
+    """Show P2P mesh topology: founder, peers, and aggregate donated resources."""
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(_mesh.get_topology())
+
+
+def _tool_mesh_donate(peer_id: str, resources: str) -> Dict[str, Any]:
+    """Update the resources a peer is willing to donate (opt-in)."""
+    parsed = json.loads(resources) if resources else {}
+    loop = asyncio.get_event_loop()
+    result = loop.run_until_complete(_mesh.update_donation(peer_id, parsed))
+    return result or {"error": "peer not found"}
+
+
+def _tool_mesh_prune(max_age_seconds: float = 300.0) -> Dict[str, Any]:
+    """Remove stale peers that haven't sent a heartbeat. Founder-only control."""
+    loop = asyncio.get_event_loop()
+    removed = loop.run_until_complete(_mesh.prune_stale_peers(max_age_seconds))
+    return {"pruned": removed, "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
 # ── JSON-RPC Dispatch ──
 
 TOOLS_REGISTRY = {
@@ -279,6 +323,10 @@ TOOLS_REGISTRY = {
     "list_skills": _tool_list_skills,
     "get_status": _tool_get_status,
     "fleet_status": _tool_fleet_status,
+    "mesh_register_peer": _tool_mesh_register_peer,
+    "mesh_status": _tool_mesh_status,
+    "mesh_donate": _tool_mesh_donate,
+    "mesh_prune": _tool_mesh_prune,
 }
 
 
@@ -395,6 +443,7 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
 async def health():
     start = time.time()
     fleet = _load_fleet_status()
+    mesh = await _mesh.get_topology()
     result = {
         "status": "online",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -402,9 +451,17 @@ async def health():
         "designed_ring_slots": fleet["designed_ring_slots"],
         "claim_boundary": fleet["claim_boundary"],
         "queue_depth": len(_task_queue),
+        "mesh_peers": mesh["peer_count"],
+        "mesh_donors": mesh["donor_count"],
         "response_time_ms": round((time.time() - start) * 1000, 2),
     }
     return result
+
+
+@app.get("/mesh/topology")
+async def mesh_topology():
+    """Expose mesh topology as a plain HTTP endpoint (no SSE required)."""
+    return await _mesh.get_topology()
 
 
 @app.get("/sse")
@@ -451,11 +508,18 @@ async def messages_endpoint(request: Request):
 
 @app.get("/")
 async def root():
+    mesh = await _mesh.get_topology()
     return {
         "name": "Lantern OS MCP Server",
         "version": "1.0.0",
-        "endpoints": ["/sse", "/messages", "/health"],
+        "endpoints": ["/sse", "/messages", "/health", "/mesh/topology"],
         "tools": list(TOOLS_REGISTRY.keys()),
+        "mesh": {
+            "founder_id": mesh["founder_id"],
+            "peer_count": mesh["peer_count"],
+            "donor_count": mesh["donor_count"],
+            "aggregate_donated_resources": mesh["aggregate_donated_resources"],
+        },
     }
 
 
@@ -466,4 +530,5 @@ if __name__ == "__main__":
     host = os.getenv("MCP_SERVER_HOST", "127.0.0.1")
     logger.info("Lantern OS MCP Server starting on http://%s:%s", host, port)
     logger.info("Tools available: %s", list(TOOLS_REGISTRY.keys()))
+    logger.info("Mesh mode: founder control + opt-in peer donations")
     uvicorn.run(app, host=host, port=port, log_level="info")

@@ -124,6 +124,53 @@
       padding: 0;
     }
     .toolbar a:hover, .toolbar button.link:hover { text-decoration: underline; }
+    .notepad {
+      display: grid;
+      gap: 0.45rem;
+      padding: 0.65rem 1rem;
+      border-top: 1px solid var(--border);
+      background: linear-gradient(135deg, rgba(123, 104, 238, 0.14), rgba(255, 140, 66, 0.08));
+      flex-shrink: 0;
+    }
+    .notepad-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .notepad-head strong {
+      color: var(--text);
+      font-size: 0.84rem;
+    }
+    .notepad-actions {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .notepad-actions button {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--agent-bubble);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.72rem;
+      padding: 0.3rem 0.6rem;
+    }
+    .notepad textarea {
+      width: 100%;
+      min-height: 72px;
+      max-height: 180px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(26, 21, 32, 0.92);
+      color: var(--text);
+      font: inherit;
+      line-height: 1.45;
+      padding: 0.65rem 0.75rem;
+    }
   </style>
 </head>
 <body>
@@ -134,6 +181,19 @@
     </header>
 
     <div class="chat" id="chat"></div>
+
+    <section class="notepad" aria-label="Convergence notepad">
+      <div class="notepad-head">
+        <strong>Convergence Notepad</strong>
+        <span id="draftStats">0 words · saved locally</span>
+      </div>
+      <textarea id="draftInput" placeholder="Catch fragments before they fade: images, people, places, feelings, symbols..."></textarea>
+      <div class="notepad-actions">
+        <button id="convergeBtn" type="button">Send as !convergence</button>
+        <button id="dreamPromptBtn" type="button">Add dream prompts</button>
+        <button id="clearDraftBtn" type="button">Clear draft</button>
+      </div>
+    </section>
 
     <div class="input-bar">
       <textarea id="msgInput" placeholder="Say something..."></textarea>
@@ -149,6 +209,7 @@
 
   <script>
     const STORAGE_KEY = 'lantern_dream_chat_v2';
+    const DRAFT_KEY = 'lantern_dream_notepad_draft_v1';
 
     function loadMessages() {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -187,6 +248,36 @@
       input.value = '';
       input.style.height = 'auto';
     }
+    function updateDraftStats() {
+      const draft = document.getElementById('draftInput').value.trim();
+      const words = draft ? draft.split(/\s+/).length : 0;
+      document.getElementById('draftStats').textContent = `${words} word${words === 1 ? '' : 's'} · saved locally`;
+    }
+    function saveDraft() {
+      localStorage.setItem(DRAFT_KEY, document.getElementById('draftInput').value);
+      updateDraftStats();
+    }
+    function loadDraft() {
+      const draftInput = document.getElementById('draftInput');
+      draftInput.value = localStorage.getItem(DRAFT_KEY) || '';
+      updateDraftStats();
+    }
+    function sendConvergence() {
+      const draftInput = document.getElementById('draftInput');
+      const draft = draftInput.value.trim();
+      if (!draft) return;
+      document.getElementById('msgInput').value = `!convergence\n\nDream fragments:\n${draft}\n\nWhat converges here?`;
+      send();
+      draftInput.value = '';
+      saveDraft();
+    }
+    function addDreamPrompts() {
+      const draftInput = document.getElementById('draftInput');
+      const prompt = '\n\nImages:\nPeople:\nPlaces:\nFeelings:\nSymbols:\nWhat changed by morning:';
+      draftInput.value = `${draftInput.value.trim()}${prompt}`;
+      draftInput.focus();
+      saveDraft();
+    }
 
     document.getElementById('sendBtn').addEventListener('click', send);
     document.getElementById('msgInput').addEventListener('keydown', (e) => {
@@ -195,6 +286,15 @@
     document.getElementById('msgInput').addEventListener('input', function() {
       this.style.height = 'auto';
       this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    document.getElementById('draftInput').addEventListener('input', saveDraft);
+    document.getElementById('convergeBtn').addEventListener('click', sendConvergence);
+    document.getElementById('dreamPromptBtn').addEventListener('click', addDreamPrompts);
+    document.getElementById('clearDraftBtn').addEventListener('click', () => {
+      if (confirm('Clear the saved notepad draft?')) {
+        document.getElementById('draftInput').value = '';
+        saveDraft();
+      }
     });
 
     document.getElementById('clearBtn').addEventListener('click', () => {
@@ -214,6 +314,7 @@
     });
 
     render();
+    loadDraft();
   </script>
 </body>
 </html>

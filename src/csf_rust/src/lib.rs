@@ -21,6 +21,7 @@ pub mod search;
 pub mod security;
 pub mod sparse;
 pub mod streaming;
+pub mod wavefront;
 
 use thiserror::Error;
 
@@ -60,6 +61,7 @@ pub use search::{SearchIndex, SearchQuery, SearchHit};
 pub use security::SecurityPolicy;
 pub use sparse::{CsrMatrix, CsrMetadata};
 pub use streaming::{SegmentReader, StreamingCompressor};
+pub use wavefront::Wavefront;
 
 /// Convenience archive builder.
 #[derive(Debug, Default)]
@@ -109,5 +111,62 @@ mod tests {
         let policy = SecurityPolicy::default();
         archive.write(&mut buf, &policy).unwrap();
         assert!(!buf.is_empty());
+    }
+
+    #[test]
+    fn segment_reader_roundtrip() {
+        let mut archive = Archive::new();
+        archive.add_segment(b"Segment zero");
+        archive.add_segment(b"Segment one");
+        archive.add_segment(b"Segment two");
+
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut file = std::fs::File::create(tmp.path()).unwrap();
+        let policy = SecurityPolicy::default();
+        archive.write(&mut file, &policy).unwrap();
+        drop(file);
+
+        let mut reader = SegmentReader::open(tmp.path()).unwrap();
+        assert_eq!(reader.header().segment_count, 3);
+
+        let seg0 = reader.decompress_segment(0).unwrap();
+        assert_eq!(&seg0[..], b"Segment zero");
+
+        let seg2 = reader.decompress_segment(2).unwrap();
+        assert_eq!(&seg2[..], b"Segment two");
+    }
+
+    #[test]
+    fn wavefront_load_and_evict() {
+        let mut archive = Archive::new();
+        for i in 0..10 {
+            archive.add_segment(format!("segment {i}").as_bytes());
+        }
+
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        let mut file = std::fs::File::create(tmp.path()).unwrap();
+        let policy = SecurityPolicy::default();
+        archive.write(&mut file, &policy).unwrap();
+        drop(file);
+
+        let mut reader = SegmentReader::open(tmp.path()).unwrap();
+        let header = reader.header().clone();
+        let dict = SymbolicDictionary::new();
+
+        let mut wf = Wavefront::new(header, dict, None, policy, 3, 64 * 1024 * 1024);
+
+        wf.load_segment(0, |i| reader.decompress_segment(i)).unwrap();
+        wf.load_segment(5, |i| reader.decompress_segment(i)).unwrap();
+        wf.load_segment(9, |i| reader.decompress_segment(i)).unwrap();
+
+        assert_eq!(wf.resident_segments(), 3);
+        assert!(wf.cache.contains_key(&0));
+        assert!(wf.cache.contains_key(&5));
+        assert!(wf.cache.contains_key(&9));
+
+        // Touch 0 again, then add 3 — 5 should be evicted.
+        wf.load_segment(0, |i| reader.decompress_segment(i)).unwrap();
+        wf.load_segment(3, |i| reader.decompress_segment(i)).unwrap();
+        assert!(!wf.cache.contains_key(&5));
     }
 }

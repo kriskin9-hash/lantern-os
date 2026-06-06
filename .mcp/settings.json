@@ -90,6 +90,32 @@
     "fleet_status": {
       "description": "Read agent fleet status from data/status/super-jarvis-fleet.json",
       "parameters": {}
+    },
+    "mesh_register_peer": {
+      "description": "Register a peer node in the P2P mesh",
+      "parameters": {
+        "name": { "type": "string" },
+        "mcp_url": { "type": "string" },
+        "messages_url": { "type": "string", "default": "" },
+        "donated_resources": { "type": "string", "default": "{}", "description": "JSON dict of donated resources" }
+      }
+    },
+    "mesh_status": {
+      "description": "Show P2P mesh topology and aggregate donated resources",
+      "parameters": {}
+    },
+    "mesh_donate": {
+      "description": "Update the resources a peer is willing to donate (opt-in)",
+      "parameters": {
+        "peer_id": { "type": "string" },
+        "resources": { "type": "string", "description": "JSON dict of resources" }
+      }
+    },
+    "mesh_prune": {
+      "description": "Remove stale peers. Founder-only control.",
+      "parameters": {
+        "max_age_seconds": { "type": "number", "default": 300 }
+      }
     }
   },
   "startup": {
