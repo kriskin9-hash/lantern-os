@@ -7,6 +7,19 @@ release date. This project is currently private and local-first, so release
 notes should be honest about what was verified locally and what remains design
 intent.
 
+## [1.0.3] — 2026-06-06 — PCSF Provider Health Cache
+
+### Server
+- `apps/lantern-garage/lib/provider-cache.js` — 60-second in-memory TTL cache for provider routing state
+  - `getProviderState()` — returns cached key-presence snapshot (gemini, anthropic, openai, xai, ollama); auto-refreshes when TTL expires
+  - `recordProviderSuccess(id)` / `recordProviderFailure(id, error)` — update rolling 10-entry history per provider
+  - `getRoutingSnapshot()` — redacted JSON snapshot (never exposes key values) for the telemetry endpoint
+- `stream-chat.js` now reads `getProviderState()` once per request instead of re-reading `process.env.*`; all 5 providers record success/failure to the cache
+- `GET /api/pcsf/routing` — new endpoint returning cache age, TTL, per-provider presence flags and recent history (safe to expose publicly)
+
+### Versioning
+- Bumped `version.json` → `1.0.3`
+
 ## [1.0.2] — 2026-06-06 — TTS Provider Chain + Version Badge
 
 ### Dream Chat
@@ -88,7 +101,7 @@ intent.
 
 ### Planned (ORION / Lantern OS Performance)
 
-- CSF memory optimization plan: add delta-only dream-entry storage, `previous_entry_hash` checks, sparse ternary storage for the `3^12` symbolic matrix, and dictionary compression for recurring symbols such as “King of Nowhere,” “birds & bees,” doors, anchors, and repeated Lantern / ORION motifs.
+- CSF memory optimization plan: add delta-only dream-entry storage, `previous_entry_hash` checks, sparse ternary storage for the `3^12` symbolic matrix, and dictionary compression for recurring symbols such as "King of Nowhere," "birds & bees," doors, anchors, and repeated Lantern / ORION motifs.
 - Convergence IO / PCSF routing plan: cache the last 5–10 healthy provider states in memory with a 60-second expiry, default local Dream Journal routing to Ollama `Q4_K_M`, fall back to `Q5_K_M` when quality checks fail, and add a `dreamChatReply()` routing cache for repeated similar requests.
 - Digital Blackbox acceleration plan: add a configurable `internal_multiplier` defaulting to the 5x–8x range, run bounded internal convergence steps per external tick, throttle UI / external I/O through light external dilation, and guard the loop with NAP safety checks for temperature, memory, and runaway execution.
 - Art generation and 3 Door Game plan: gate art generation by tier (`Wanderer` = 15/month, `DeepDreamer` = unlimited), cache recent Gage-style prompts and reusable embeddings where privacy-safe, and pre-warm the Ollama model before art requests.

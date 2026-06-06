@@ -28,6 +28,7 @@ const { dreamChatReply, AGENT_PERSONAS, DREAM_DOORS, selectAgent } = require("./
 const { unifiedAgentGreet, unifiedAgentHealth, unifiedAgentInspect } = require("./lib/unified-agent");
 const { handleStreamChat } = require("./lib/stream-chat");
 const { refreshAllPcsf } = require("./lib/pcsf-refresh");
+const { getRoutingSnapshot, refreshProviderCache } = require("./lib/provider-cache");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
