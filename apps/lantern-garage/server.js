@@ -27,6 +27,7 @@ const { normalizeDreamerUser, dreamerNotebookPath, appendDreamerEntry, readDream
 const { dreamChatReply, AGENT_PERSONAS, DREAM_DOORS, selectAgent } = require("./lib/dream-chat");
 const { unifiedAgentGreet, unifiedAgentHealth, unifiedAgentInspect } = require("./lib/unified-agent");
 const { handleStreamChat } = require("./lib/stream-chat");
+const { refreshAllPcsf } = require("./lib/pcsf-refresh");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -163,4 +164,5 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 server.listen(port, host, () => {
   console.log(`Lantern Garage app listening on ${host}:${port}`);
+  refreshAllPcsf(repoRoot);
 });

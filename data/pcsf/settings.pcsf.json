@@ -97,6 +97,22 @@
       "purpose": "Ollama model to use. Must be pulled via 'ollama pull <model>'."
     },
     {
+      "key": "ELEVENLABS_API_KEY",
+      "group": "provider",
+      "required": false,
+      "state": "absent",
+      "purpose": "Enables ElevenLabs TTS proxy for calm, high-quality voice output",
+      "get_key_url": "https://elevenlabs.io/app/sign-up"
+    },
+    {
+      "key": "ELEVENLABS_VOICE_ID",
+      "group": "model",
+      "required": false,
+      "default": "Rachel",
+      "state": "absent",
+      "purpose": "ElevenLabs voice ID. Default 'Rachel' is warm and calm."
+    },
+    {
       "key": "LANTERN_GARAGE_PORT",
       "group": "server",
       "required": false,

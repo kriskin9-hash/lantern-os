@@ -31,7 +31,7 @@
     {
       "id": "dream_journal/pcsf_live_refresh",
       "priority": 6,
-      "status": "queued",
+      "status": "completed",
       "description": "Auto-update data/pcsf/*.pcsf.json on server start from live provider + journal state"
     },
     {

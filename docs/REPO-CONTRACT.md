@@ -145,6 +145,41 @@ Use this contract as the **deletion checklist**:
 
 ---
 
+## Archive Migration → Google Drive
+
+Historical artifacts, old manifests, and large generated files should not accumulate in the repo. Move them to Google Drive after each convergence cycle.
+
+### What to Archive
+
+| Category | Examples | Destination |
+|---|---|---|
+| Old reports | `archive/reports-YYYY-MM-DD/` | `Lantern-OS-Archive/reports/` |
+| Old manifests | `archive/manifests-*-YYYY-MM-DD/` | `Lantern-OS-Archive/manifests/` |
+| Old skills | `archive/skills-YYYY-MM-DD/` | `Lantern-OS-Archive/skills/` |
+| Old surfaces | `archive/surfaces-YYYY-MM-DD/` | `Lantern-OS-Archive/surfaces/` |
+| Large PDFs | `*.pdf` > 5MB in `docs/` or `reports/` | `Lantern-OS-Archive/pdfs/` |
+| Cleanup snapshots | `archive/root-cleanup-YYYY-MM-DD/` | `Lantern-OS-Archive/cleanup/` |
+
+### How to Archive
+
+```powershell
+# Step 1: Run the archive commons batch to prepare folders
+powershell -File .\scripts\Invoke-ArchiveCommonsBatch.ps1
+
+# Step 2: Open Google Drive folder "Lantern-OS-Archive"
+# Step 3: Drag the dated archive folders from archive/ to the Drive folder
+# Step 4: Delete the local copies after confirming upload
+# Step 5: Commit the cleaned archive/ state
+```
+
+### Rules
+
+- Never delete from `archive/` without first confirming the files are in Drive.
+- Keep the `archive/` directory itself — it's the staging area.
+- Run archive cleanup at the end of every convergence cycle (after PR merge).
+
+---
+
 ## Decision Tree
 
 ```

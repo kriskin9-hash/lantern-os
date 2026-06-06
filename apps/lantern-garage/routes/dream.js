@@ -1,8 +1,11 @@
+const https = require("https");
+
 // Dream Journal core — create, chat, stream, stats, search, export, read, settings
 const PROVIDER_KEYS = [
   "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
   "XAI_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "ANTHROPIC_MODEL", "OPENAI_MODEL", "GEMINI_MODEL",
   "DISCORD_BOT_TOKEN", "LANTERN_DISCORD_GUILD_ID",
+  "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID",
 ];
 
 module.exports = async function dreamRoutes(req, res, url, deps) {
@@ -297,6 +300,81 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
         .map(([k,v]) => ({ pair: k, count: v }));
       sendJson(res, { weeks: byWeek, top_pairs: topPairs, total_entries: entries.length });
     } catch (error) { sendJson(res, { error: error.message }, 400); }
+    return true;
+  }
+
+  // ── TTS proxy ─────────────────────────────────────────────────────────
+  if (url.pathname === "/api/dream/tts" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+      const text = String(body.text || "").slice(0, 4000).trim();
+      if (!text) { sendJson(res, { error: "text_required" }, 400); return true; }
+      const voiceId = String(body.voice_id || process.env.ELEVENLABS_VOICE_ID || "Rachel").slice(0, 60);
+
+      const proxyAudio = (hostname, path2, headers, postData) => {
+        return new Promise((resolve) => {
+          let resolved = false;
+          const proxyReq = https.request({ hostname, path: path2, method: "POST", headers, timeout: 15000 }, (proxyRes) => {
+            if (proxyRes.statusCode >= 200 && proxyRes.statusCode < 300) {
+              res.writeHead(200, { "Content-Type": "audio/mpeg" });
+              proxyRes.pipe(res);
+              resolved = true;
+              resolve(true);
+            } else {
+              // Drain the error response so the connection closes cleanly
+              proxyRes.resume();
+              if (!resolved) { resolved = true; resolve(false); }
+            }
+          });
+          proxyReq.on("timeout", () => {
+            proxyReq.destroy();
+            if (!resolved) { resolved = true; resolve(false); }
+          });
+          proxyReq.on("error", () => {
+            if (!resolved) { resolved = true; resolve(false); }
+          });
+          proxyReq.write(postData);
+          proxyReq.end();
+        });
+      };
+
+      // Try ElevenLabs first
+      if (process.env.ELEVENLABS_API_KEY) {
+        const postData = JSON.stringify({ text, model_id: "eleven_turbo_v2_5" });
+        const ok = await proxyAudio(
+          "api.elevenlabs.io",
+          `/v1/text-to-speech/${encodeURIComponent(voiceId)}`,
+          {
+            "xi-api-key": process.env.ELEVENLABS_API_KEY,
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(postData),
+            "Accept": "audio/mpeg",
+          },
+          postData
+        );
+        if (ok) return true;
+      }
+
+      // Fall back to OpenAI TTS
+      if (process.env.OPENAI_API_KEY) {
+        const openaiVoice = String(body.voice_id || "nova").slice(0, 20);
+        const postData = JSON.stringify({ model: "tts-1", input: text, voice: openaiVoice });
+        const ok = await proxyAudio(
+          "api.openai.com",
+          "/v1/audio/speech",
+          {
+            "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(postData),
+          },
+          postData
+        );
+        if (ok) return true;
+      }
+
+      sendJson(res, { fallback: "browser" });
+    } catch (err) { sendJson(res, { error: err.message }, 500); }
     return true;
   }
 

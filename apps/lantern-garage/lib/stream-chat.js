@@ -221,6 +221,9 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
     if (msg.includes("no_provider_configured")) {
       return "No AI providers are set up. Add an API key in Settings to get started.";
     }
+    if (msg.includes("all_providers_failed")) {
+      return "All providers failed. This can happen when keys are invalid, rate-limited, or the network is slow. Check Settings or try again.";
+    }
     return msg;
   }
 
@@ -261,6 +264,13 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
     role: "operator",
     text: message.slice(0, maxConversationTextLength),
   }).catch(() => {});
+
+  // Detect whether any provider keys are configured (so we can distinguish "no keys" from "all failed")
+  const anyProviderConfigured = !!(
+    process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY ||
+    process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY ||
+    process.env.XAI_API_KEY || process.env.OLLAMA_BASE_URL
+  );
 
   let fullReply = "";
 
@@ -634,7 +644,10 @@ Answer directly. Reference file paths. Check data/pcsf/ for state. Check manifes
   }
 
   // No provider available — stream local persona fallback
-  await streamLocalFallback("no_provider_configured");
+  const fallbackReason = anyProviderConfigured
+    ? "all_providers_failed"
+    : "no_provider_configured";
+  await streamLocalFallback(fallbackReason);
 }
 
 module.exports = { handleStreamChat, extractDoors, doorsOrFallback };

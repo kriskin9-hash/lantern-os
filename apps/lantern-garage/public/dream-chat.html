@@ -937,8 +937,37 @@
           <span class="voice-value" id="voice-pitch-val">1.05</span>
         </div>
         <div class="voice-row">
+          <label>TTS ID</label>
+          <input class="voice-select" id="voice-tts-id" type="text" placeholder="ElevenLabs voice (e.g. Rachel)" onchange="saveVoiceSettings()" style="font-size:0.78rem;">
+        </div>
+        <p class="drawer-hint" style="font-size:0.7rem;margin:0;">Used for server TTS (ElevenLabs → OpenAI). Leave empty for browser-only fallback.</p>
+        <div class="voice-row">
           <button class="voice-test-btn" onclick="testVoice()">Test voice</button>
           <span class="save-feedback" id="fb-voice"></span>
+        </div>
+      </div>
+
+      <!-- ElevenLabs TTS -->
+      <div class="provider-card" id="card-elevenlabs">
+        <div class="provider-top">
+          <div class="provider-icon" style="background:#1a1020">🎙</div>
+          <span class="provider-name">ElevenLabs <span style="font-weight:400;color:var(--muted);font-size:0.78rem">TTS provider</span></span>
+          <span class="provider-status missing" id="status-elevenlabs">not set</span>
+        </div>
+        <div class="provider-key-row">
+          <input class="provider-key-input" id="key-elevenlabs" type="password" placeholder="sk_…" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('elevenlabs','ELEVENLABS_API_KEY','key-elevenlabs')">Save</button>
+        </div>
+        <div class="provider-key-row" style="margin-top:8px;">
+          <input class="provider-key-input" id="key-elevenlabs-voice" type="text" placeholder="Voice ID (e.g. Rachel)" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('elevenlabs-voice','ELEVENLABS_VOICE_ID','key-elevenlabs-voice')">Save</button>
+        </div>
+        <div class="provider-actions">
+          <a class="provider-getkey" href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">Get key →</a>
+          <button class="provider-clear" onclick="clearKey('elevenlabs','ELEVENLABS_API_KEY')">Remove Key</button>
+          <button class="provider-clear" onclick="clearKey('elevenlabs-voice','ELEVENLABS_VOICE_ID')">Remove Voice</button>
+          <span class="save-feedback" id="fb-elevenlabs"></span>
+          <span class="save-feedback" id="fb-elevenlabs-voice"></span>
         </div>
       </div>
     </div>
@@ -1579,6 +1608,7 @@
     { id: "gemini",  envKey: "GEMINI_API_KEY" },
     { id: "openai",  envKey: "OPENAI_API_KEY" },
     { id: "grok",    envKey: "XAI_API_KEY" },
+    { id: "elevenlabs", envKey: "ELEVENLABS_API_KEY" },
   ];
 
   function openSettings() {
@@ -1934,15 +1964,51 @@
     }
   }
 
-  function speakText(text) {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
+  let ttsAudio = null;
+
+  function stopSpeaking() {
+    if (ttsAudio) { ttsAudio.pause(); ttsAudio = null; }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  async function speakText(text) {
+    stopSpeaking();
     const clean = text.replace(/\[DOORS:[^\]]+\]/gi, "").replace(/[✦◈⬡⛤⌖⊛ᚱ]/g, "").replace(/[^\x00-\x7F]/g, (c) => {
       return c.codePointAt(0) > 0x2FFF ? " " : c;
     }).trim();
     if (!clean) return;
-    const utt = new SpeechSynthesisUtterance(clean);
+
     const prefs = JSON.parse(localStorage.getItem("lantern_tts_prefs") || "{}");
+    const voiceId = prefs.ttsVoice || "";
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: clean, voice_id: voiceId }),
+      });
+      const ct = r.headers.get("content-type") || "";
+      if (r.ok && ct.includes("audio")) {
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        ttsAudio = new Audio(url);
+        ttsAudio.play();
+        ttsAudio.onended = () => { URL.revokeObjectURL(url); ttsAudio = null; };
+        return;
+      }
+      const d = await r.json().catch(() => ({}));
+      if (d.fallback === "browser") {
+        // fall through to browser TTS below
+      } else if (d.error) {
+        console.warn("TTS server error:", d.error);
+      }
+    } catch (e) {
+      console.warn("TTS network error:", e.message);
+    }
+
+    // Browser fallback
+    if (!window.speechSynthesis) return;
+    const utt = new SpeechSynthesisUtterance(clean);
     utt.rate = prefs.rate ?? 0.88;
     utt.pitch = prefs.pitch ?? 1.05;
     const voices = window.speechSynthesis.getVoices();
@@ -1978,6 +2044,7 @@
       voiceURI: document.getElementById("voice-select").value || null,
       rate: parseFloat(document.getElementById("voice-rate").value),
       pitch: parseFloat(document.getElementById("voice-pitch").value),
+      ttsVoice: document.getElementById("voice-tts-id")?.value?.trim() || null,
     };
     localStorage.setItem("lantern_tts_prefs", JSON.stringify(prefs));
     const fb = document.getElementById("fb-voice");
@@ -1995,6 +2062,10 @@
     if (prefs.voiceURI && select) select.value = prefs.voiceURI;
     if (prefs.rate && rateEl) { rateEl.value = prefs.rate; document.getElementById("voice-rate-val").textContent = prefs.rate; }
     if (prefs.pitch && pitchEl) { pitchEl.value = prefs.pitch; document.getElementById("voice-pitch-val").textContent = prefs.pitch; }
+    if (prefs.ttsVoice) {
+      const voiceInput = document.getElementById("voice-tts-id");
+      if (voiceInput) voiceInput.value = prefs.ttsVoice;
+    }
   }
 
   function testVoice() {

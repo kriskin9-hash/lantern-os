@@ -219,6 +219,60 @@ git fetch --prune
 
 ---
 
+## Startup Guide for Agents
+
+When you start work, get the full stack running so you can test changes end-to-end.
+
+### 1. Install dependencies
+
+```bash
+npm install --prefix apps/lantern-garage
+python -m pip install -r requirements.txt
+```
+
+### 2. Start the web server (required)
+
+```bash
+node apps/lantern-garage/server.js
+```
+
+Opens on `http://127.0.0.1:4177`.
+
+### 3. Add at least one AI provider key
+
+Via the chat UI settings drawer, or `.env.local`:
+
+```bash
+echo "GEMINI_API_KEY=your_key" > apps/lantern-garage/.env.local
+```
+
+### 4. Start optional services as needed
+
+| Service | Command | Why you need it |
+|---|---|---|
+| MCP server | `python src/mcp_server/server.py` | Testing tool discovery / agent slots |
+| Convergence loop | `python src/convergence_io_engine.py loop` | Pre-flight repo health check |
+| Discord bot | `python src/discord_lounge_bot/bot.py` | Only if touching Discord features |
+
+### 5. Run tests before and after changes
+
+```bash
+node tests/test_dream_journal_api.js        # 18 API tests — requires running server
+node tests/test_dream_chat_multiturns.js    # 11 multi-turn tests — requires running server
+python -m pytest tests/ -q --tb=short       # Python unit tests
+```
+
+### 6. Verify via orchestrator
+
+```bash
+python src/convergence_io_engine.py health
+python src/convergence_io_engine.py inspect
+```
+
+**See [`QUICKSTART.md`](QUICKSTART.md) for the full operator-facing guide.**
+
+---
+
 ## Key File Locations
 
 | What | Where |

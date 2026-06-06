@@ -293,41 +293,63 @@ The orchestrator dependency currently centers on named agent slots such as Claud
 
 ## Run Locally
 
+See [`QUICKSTART.md`](QUICKSTART.md) for the full startup guide. Below is the condensed version.
+
 Prerequisites:
 
 ```bash
-node --version
-python --version
+node --version   # v18+
+python --version # v3.10+
 ```
 
-Start the main web server:
+Install dependencies:
+
+```bash
+npm install --prefix apps/lantern-garage
+python -m pip install -r requirements.txt
+```
+
+### Start the Core Web Server (Required)
 
 ```bash
 node apps/lantern-garage/server.js
 ```
 
-Open:
+Open `http://127.0.0.1:4177`.
 
-```text
-http://127.0.0.1:4177
-```
+### Configure AI Providers (Optional)
 
-Or with npm:
+Add keys via the settings drawer in the chat UI, or create `.env.local`:
 
 ```bash
-npm start --prefix apps/lantern-garage
+echo "GEMINI_API_KEY=your_key" > apps/lantern-garage/.env.local
 ```
 
-Optional MCP server:
+Supported providers: Gemini, Claude, OpenAI, Grok, Ollama (local).
 
+### Optional Services
+
+| Service | Command | Port |
+|---|---|---|
+| MCP server | `python src/mcp_server/server.py` | 8771 |
+| Convergence loop | `python src/convergence_io_engine.py loop` | — |
+| Discord bot | `python src/discord_lounge_bot/bot.py` | — |
+
+### Full Stack Startup
+
+Terminal 1 — Web server:
+```bash
+node apps/lantern-garage/server.js
+```
+
+Terminal 2 — MCP server:
 ```bash
 python src/mcp_server/server.py
 ```
 
-Optional Discord bot:
-
+Terminal 3 — Convergence loop:
 ```bash
-python src/discord_lounge_bot/bot.py
+python src/convergence_io_engine.py loop
 ```
 
 ---
@@ -373,6 +395,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Update-InternalHou
 | Document | Purpose |
 |---|---|
 | [AGENTS.md](AGENTS.md) | Required operating instructions for AI coding agents. |
+| [QUICKSTART.md](QUICKSTART.md) | Full startup guide — turn on every service. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, branch model, and repo rules. |
 | [docs/DREAM-JOURNAL-USER-GUIDE.md](docs/DREAM-JOURNAL-USER-GUIDE.md) | Dream Journal user guide. |
 | [docs/DREAM-JOURNAL-QUICKSTART.md](docs/DREAM-JOURNAL-QUICKSTART.md) | Dream Journal quick start. |
@@ -392,43 +415,23 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Update-InternalHou
 
 The repository is being consolidated so SCM contains source code, tests, deployable scripts, active manifests, validation receipts, and code-facing documentation.
 
-Historical packets, large generated artifacts, screenshots, narrative archives, old planning bundles, and non-runtime evidence collections are planned for migration to external archive storage such as Google Drive.
+Historical packets, large generated artifacts, screenshots, narrative archives, old planning bundles, and non-runtime evidence collections are migrated to Google Drive.
 
-Planned migration process:
+**See [`docs/REPO-CONTRACT.md`](docs/REPO-CONTRACT.md) for the full archive migration process**, including:
+- What to archive (reports, manifests, skills, surfaces, large PDFs)
+- How to run `scripts/Invoke-ArchiveCommonsBatch.ps1`
+- Google Drive folder naming conventions
+- Rules for safe deletion after upload confirmation
 
-1. Classify files using `docs/REPO-CONTRACT.md`.
-2. Export non-SCM material into a dated archive bundle.
-3. Generate a manifest with source path, destination path, hash, and reason.
-4. Upload the archive bundle to Google Drive or external archive storage.
-5. Keep a small SCM pointer manifest with archive title, date, hash, and summary.
-6. Retire or remove migrated files from active repo surfaces after review.
-7. Re-run validation and update the internal RAG index.
+Quick summary:
 
-Suggested archive naming convention:
+```powershell
+# Step 1: Prepare archive bundles
+powershell -File .\scripts\Invoke-ArchiveCommonsBatch.ps1
 
-```text
-Lantern OS Non-SCM Archive - YYYY-MM-DD
-```
-
-Suggested SCM pointer file:
-
-```text
-manifests/external-archives/LANTERN-OS-NON-SCM-ARCHIVE-YYYY-MM-DD.md
-```
-
-Suggested pointer format:
-
-```md
-# Lantern OS Non-SCM Archive - YYYY-MM-DD
-
-Storage: Google Drive
-Archive title: Lantern OS Non-SCM Archive - YYYY-MM-DD
-Archive type: documentation / evidence / historical packet
-Manifest hash: ...
-Created by: operator
-Repo cleanup status: pending | complete
-Summary:
-- ...
+# Step 2: Upload dated folders to Google Drive "Lantern-OS-Archive"
+# Step 3: Delete local copies after confirming upload
+# Step 4: Commit cleaned archive/ state
 ```
 
 ---
