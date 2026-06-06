@@ -9,9 +9,9 @@
 //!   csf ping
 
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufWriter, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::thread;
 
 use clap::{Parser, Subcommand};
@@ -43,10 +43,7 @@ enum Commands {
         output: PathBuf,
     },
     /// Search inside an archive without full decompression.
-    Search {
-        archive: PathBuf,
-        query: String,
-    },
+    Search { archive: PathBuf, query: String },
     /// Merge two archives via convergence.
     Merge {
         base: PathBuf,
@@ -68,7 +65,11 @@ enum Commands {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Compress { input, output, policy } => {
+        Commands::Compress {
+            input,
+            output,
+            policy,
+        } => {
             let sec = match policy.as_str() {
                 "untrusted" => SecurityPolicy::untrusted(),
                 _ => SecurityPolicy::default(),
@@ -83,7 +84,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let mut out = BufWriter::new(File::create(&output)?);
             out.write_all(&compressed)?;
-            println!("Compressed {} -> {} ({} bytes)", input.display(), output.display(), compressed.len());
+            println!(
+                "Compressed {} -> {} ({} bytes)",
+                input.display(),
+                output.display(),
+                compressed.len()
+            );
         }
         Commands::Decompress { archive, output } => {
             let mut file = File::open(&archive)?;
@@ -99,8 +105,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Searching {} for '{}'...", archive.display(), query);
             // Simplified: full decompress for prototype.
         }
-        Commands::Merge { base, delta, output } => {
-            println!("Merging {} + {} -> {}", base.display(), delta.display(), output.display());
+        Commands::Merge {
+            base,
+            delta,
+            output,
+        } => {
+            println!(
+                "Merging {} + {} -> {}",
+                base.display(),
+                delta.display(),
+                output.display()
+            );
         }
         Commands::Server { bind, data_dir } => {
             run_server(&bind, &data_dir)?;
@@ -112,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn run_server(bind: &str, data_dir: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn run_server(bind: &str, data_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind(bind)?;
     println!("CSF server listening on {}", bind);
     println!("Data directory: {}", data_dir.display());
@@ -120,7 +135,7 @@ fn run_server(bind: &str, data_dir: &PathBuf) -> Result<(), Box<dyn std::error::
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                let data_dir = data_dir.clone();
+                let data_dir = data_dir.to_path_buf();
                 thread::spawn(move || handle_connection(stream, &data_dir));
             }
             Err(e) => eprintln!("Connection failed: {}", e),
@@ -129,7 +144,7 @@ fn run_server(bind: &str, data_dir: &PathBuf) -> Result<(), Box<dyn std::error::
     Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream, data_dir: &PathBuf) {
+fn handle_connection(mut stream: TcpStream, _data_dir: &Path) {
     let mut buf = [0u8; 1024];
     match stream.read(&mut buf) {
         Ok(n) if n > 0 => {

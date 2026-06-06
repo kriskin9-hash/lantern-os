@@ -37,7 +37,7 @@ impl SymbolicDictionary {
         }
 
         let mut pairs: Vec<(String, usize)> = counts.into_iter().collect();
-        pairs.sort_by(|a, b| b.1.cmp(&a.1)); // descending frequency
+        pairs.sort_by_key(|b| std::cmp::Reverse(b.1)); // descending frequency
 
         for (token, count) in pairs {
             if count < min_freq {
@@ -146,10 +146,10 @@ mod tests {
             &policy,
         )
         .unwrap();
-        assert_ne!(dict.encode("Garden"), 0);   // known (freq 2)
-        assert_ne!(dict.encode("Table"), 0);    // known (freq 2)
-        assert_eq!(dict.encode("Lantern"), 0);  // unknown (freq 1 < min_freq)
-        assert_eq!(dict.encode("Missing"), 0);  // unknown
+        assert_ne!(dict.encode("Garden"), 0); // known (freq 2)
+        assert_ne!(dict.encode("Table"), 0); // known (freq 2)
+        assert_eq!(dict.encode("Lantern"), 0); // unknown (freq 1 < min_freq)
+        assert_eq!(dict.encode("Missing"), 0); // unknown
 
         let mut buf = Vec::new();
         dict.write(&mut buf, &policy).unwrap();

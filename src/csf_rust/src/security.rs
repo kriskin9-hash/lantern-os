@@ -29,12 +29,12 @@ pub struct SecurityPolicy {
 impl Default for SecurityPolicy {
     fn default() -> Self {
         Self {
-            max_dictionary_bytes: 256 * 1024 * 1024, // 256 MB
-            max_symbol_count: 1 << 24,               // 16.7 M symbols
+            max_dictionary_bytes: 256 * 1024 * 1024,   // 256 MB
+            max_symbol_count: 1 << 24,                 // 16.7 M symbols
             max_segment_bytes: 4 * 1024 * 1024 * 1024, // 4 GB
             max_segments: 1_000_000,
             max_sparse_nonzeros: 1_000_000_000,
-            max_archive_bytes: 1 << 50,              // ~1 PB
+            max_archive_bytes: 1 << 50, // ~1 PB
             max_convergence_depth: 64,
             enforce_checksums: true,
         }
