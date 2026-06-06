@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#7c6af7">
+  <meta name="theme-color" content="#ff424d">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
@@ -12,19 +12,43 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #0f1117;
-      --surface: #1a1d27;
-      --surface2: #22263a;
-      --border: #2e3350;
-      --text: #e8eaf6;
-      --muted: #8891b4;
-      --accent: #7c6af7;
-      --accent-dim: #4a4280;
-      --user-bubble: #1e2440;
-      --agent-bubble: #13161f;
-      --cursor: #7c6af7;
-      --green: #4caf82;
-      --danger: #e05555;
+      --bg: #ffffff;
+      --surface: #f8f9fa;
+      --surface2: #f1f3f5;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #ff424d;
+      --accent-dim: #ffe5e7;
+      --accent-hover: #e63a44;
+      --user-bubble: #fff0f1;
+      --agent-bubble: #f8f9fa;
+      --cursor: #ff424d;
+      --green: #10b981;
+      --danger: #e63946;
+      --gold: #f59e0b;
+      --shadow: 0 2px 8px rgba(0,0,0,0.06);
+      --shadow-hover: 0 4px 16px rgba(0,0,0,0.1);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface2: #1a2332;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #ff424d;
+      --accent-dim: #3a1a1c;
+      --accent-hover: #ff5a63;
+      --user-bubble: #1a2332;
+      --agent-bubble: #0f141c;
+      --cursor: #ff5a63;
+      --green: #34d399;
+      --danger: #ff6b6b;
+      --gold: #fbbf24;
+      --shadow: 0 2px 8px rgba(0,0,0,0.3);
+      --shadow-hover: 0 4px 16px rgba(0,0,0,0.4);
     }
 
     html, body {
@@ -114,9 +138,35 @@
     }
     .mcp-toggle:hover { border-color: var(--accent); color: var(--accent); }
     .mcp-toggle.active {
-      background: #0a1a0e;
-      border-color: #4caf82;
-      color: #4caf82;
+      background: rgba(16,185,129,0.08);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* ── Theme toggle ── */
+    .theme-toggle {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 1000;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      box-shadow: var(--shadow);
+    }
+    .theme-toggle:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      transform: scale(1.05);
     }
     .input-area.mcp-mode { gap: 6px; }
     .input-area.mcp-mode .voice-btn,
@@ -355,7 +405,7 @@
       justify-content: center;
       transition: background 0.15s, opacity 0.15s;
     }
-    .send-btn:hover { background: #6a59e0; }
+    .send-btn:hover { background: var(--accent-hover); }
     .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
     .send-btn svg { width: 16px; height: 16px; }
 
@@ -384,9 +434,9 @@
     }
     .voice-btn:hover { border-color: var(--accent); color: var(--accent); }
     .voice-btn.listening {
-      background: #3a1a1a;
-      border-color: #e05555;
-      color: #e05555;
+      background: var(--accent-dim);
+      border-color: var(--danger);
+      color: var(--danger);
       animation: pulse 0.9s ease-in-out infinite;
     }
 
@@ -522,7 +572,7 @@
       gap: 10px;
       transition: border-color 0.15s;
     }
-    .provider-card.connected { border-color: #2e5c42; }
+    .provider-card.connected { border-color: var(--green); }
     .provider-top {
       display: flex;
       align-items: center;
@@ -545,7 +595,7 @@
       border-radius: 20px;
       font-weight: 500;
     }
-    .provider-status.ok { background: #1a3d2a; color: var(--green); }
+    .provider-status.ok { background: rgba(16,185,129,0.1); color: var(--green); }
     .provider-status.missing { background: var(--surface); color: var(--muted); }
     .provider-key-row {
       display: flex;
@@ -577,7 +627,7 @@
       cursor: pointer;
       transition: background 0.15s, opacity 0.15s;
     }
-    .provider-save-btn:hover { background: #6a59e0; }
+    .provider-save-btn:hover { background: var(--accent-hover); }
     .provider-save-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .provider-actions {
       display: flex;
@@ -652,10 +702,10 @@
     .debug-label { color: var(--muted); }
     .debug-val { font-family: ui-monospace, "SF Mono", monospace; color: var(--text); }
     .debug-val.ok { color: var(--green); }
-    .debug-val.warn { color: #e2c97e; }
+    .debug-val.warn { color: var(--gold); }
     .debug-val.err { color: var(--danger); }
     .debug-log { margin-top: 10px; max-height: 180px; overflow-y: auto; font-size: 0.72rem; }
-    .debug-log-entry { padding: 2px 0; border-bottom: 1px solid rgba(46,51,80,0.5); }
+    .debug-log-entry { padding: 2px 0; border-bottom: 1px solid var(--border); }
     .debug-log-entry:last-child { border-bottom: none; }
 
     /* ── Empty state ── */
@@ -683,6 +733,7 @@
   </style>
 </head>
 <body>
+<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()">🌙</button>
 <div class="app">
   <header>
     <div class="logo">🔮</div>
@@ -867,6 +918,25 @@
 </div>
 
 <script>
+  /* ── Theme toggle ── */
+  (function() {
+    const stored = localStorage.getItem('lantern-theme');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = stored ? stored === 'dark' : prefersDark;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+  })();
+  function toggleTheme() {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    const next = isDark ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('lantern-theme', next);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+  }
+
   const messagesEl = document.getElementById("messages");
   const inputEl = document.getElementById("input");
   const sendBtn = document.getElementById("send-btn");
@@ -972,8 +1042,8 @@
 
   if (isStaticHost) {
     const banner = document.createElement("div");
-    banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#e2c97e;padding:10px 16px;font-size:0.85rem;text-align:center;z-index:9999;border-bottom:1px solid #e2c97e44;";
-    banner.innerHTML = 'Dream Chat requires the local server. Run <code style="background:#0d0d1a;padding:2px 6px;border-radius:3px;">npm start --prefix apps/lantern-garage</code> then open <a href="http://127.0.0.1:4177/dream-chat.html" style="color:#e2c97e;">http://127.0.0.1:4177/dream-chat.html</a>';
+    banner.style.cssText = "position:fixed;top:0;left:0;right:0;background:var(--surface2);color:var(--gold);padding:10px 16px;font-size:0.85rem;text-align:center;z-index:9999;border-bottom:1px solid var(--border);";
+    banner.innerHTML = 'Dream Chat requires the local server. Run <code style="background:var(--bg);padding:2px 6px;border-radius:3px;">npm start --prefix apps/lantern-garage</code> then open <a href="http://127.0.0.1:4177/dream-chat.html" style="color:var(--accent);">http://127.0.0.1:4177/dream-chat.html</a>';
     document.body.prepend(banner);
   }
 
@@ -1253,7 +1323,7 @@
         if (!cmd || cmd.includes("\n")) return; // only single-line commands
         const execBtn = document.createElement("button");
         execBtn.className = "suggestion";
-        execBtn.style.cssText = "margin-top:4px;border-color:#4caf82;color:#4caf82;font-family:monospace;font-size:0.78rem;";
+        execBtn.style.cssText = "margin-top:4px;border-color:var(--green);color:var(--green);font-family:monospace;font-size:0.78rem;";
         execBtn.textContent = `▶ ${cmd.slice(0, 60)}`;
         execBtn.onclick = async () => {
           execBtn.disabled = true;
@@ -1270,9 +1340,9 @@
             outRow.className = "msg-row agent";
             const isErr = !d.ok;
             const label = isErr ? "KEYSTONE EXEC ✗" : "KEYSTONE EXEC ✓";
-            const color = isErr ? "#e05555" : "#4caf82";
-            const bg = isErr ? "#1a0a0a" : "#0a1a0e";
-            const border = isErr ? "#3d1a1a" : "#1a3d2a";
+            const color = isErr ? "var(--danger)" : "var(--green)";
+            const bg = isErr ? "var(--accent-dim)" : "rgba(16,185,129,0.06)";
+            const border = isErr ? "var(--danger)" : "var(--green)";
             const body = d.output || d.error || d.message || "no output";
             outRow.innerHTML = `<div class="msg-label" style="color:${color}">${label}</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;background:${bg};border-color:${border};">${escapeHtml(body)}</div>`;
             messagesEl.appendChild(outRow);
