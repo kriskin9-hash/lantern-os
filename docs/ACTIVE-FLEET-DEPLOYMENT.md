@@ -35,7 +35,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-ActiveAgentF
 ### Step 3: Verify MCP Server Health
 ```powershell
 # Check MCP server status
-Invoke-RestMethod http://127.0.0.1:8787/health | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8771/health | ConvertTo-Json
 
 # Expected response: ok=true, noAuth=true
 ```
@@ -92,7 +92,7 @@ git push origin master
 ## Verification Checklist
 
 ### Active Processing Verification
-- [ ] MCP server running on http://127.0.0.1:8787
+- [ ] MCP server running on http://127.0.0.1:8771
 - [ ] Active fleet script runs without errors
 - [ ] Agent configuration loaded correctly
 - [ ] Chat handoffs captured and processed
@@ -119,7 +119,7 @@ git push origin master
 ### MCP Server Issues
 ```powershell
 # Check if MCP server is running
-Invoke-RestMethod http://127.0.0.1:8787/health
+Invoke-RestMethod http://127.0.0.1:8771/health
 
 # Restart MCP server
 Stop-Process -Name "node" -Force

@@ -158,7 +158,7 @@ If something goes wrong during rebuild:
 
 1. Stop all agent processes
 2. Delete `data/orchestrator-queue/` (safe—read-only copy in `gm-agent-orchestrator` repo)
-3. Restart MCP server (`uvicorn src.mcp_server.server:app --port 8787`)
+3. Restart MCP server (`uvicorn src.mcp_server.server:app --port 8771`)
 4. Re-run agent registration scripts
 5. Validate with `Test-LanternOrchestratorDependency.ps1`
 
