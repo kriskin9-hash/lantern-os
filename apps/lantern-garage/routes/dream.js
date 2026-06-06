@@ -60,7 +60,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
         emotions: normalizeList(body.emotions, 12), tags: normalizeList(body.tags, 10),
         symbols: normalizeList(body.symbols, 12),
         linked_goals: body.linked_goals || [], priority: body.priority || "normal",
-        reflection_on: body.reflection_on || [], source: "api",
+        reflection_on: body.reflection_on || [], source: String(body.source || "api").slice(0, 40),
         dcf_class: body.dcf_class || null,
         rps_flags: body.rps_flags || [],
         ctf_glyphs: normalizeList(body.ctf_glyphs, 20),
@@ -219,7 +219,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const ctf = (url.searchParams.get("ctf") || "").split(",").filter(t => t);
       const results = loadDreamEntries(fs, path, repoRoot).filter(e =>
         (query === "" || (e.text || "").toLowerCase().includes(query.toLowerCase())) &&
-        (tags.length === 0 || tags.some(t => (e.tags || []).includes(t) &&
+        (tags.length === 0 || tags.some(t => (e.tags || []).includes(t))) &&
         (ctf.length === 0 || ctf.some(t => (e.ctf_glyphs || []).includes(t)))
       );
       sendJson(res, { query, tags, ctf, count: results.length, results: results.slice(0, 50) });
@@ -232,12 +232,12 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const format = url.searchParams.get("format") || "jsonl";
       const entries = loadDreamEntries(fs, path, repoRoot, true);
       if (format === "csv") {
-        const cols = ["id", "timestamp", "kind", "text", "lucidity", "emotions", "tags", "symbols"];
+        const cols = ["id", "timestamp", "kind", "text", "lucidity", "emotions", "tags", "symbols", "ctf_glyphs"];
         const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
         const rows = [cols.join(","), ...entries.map(e => [
           escape(e.id), escape(e.timestamp), escape(e.kind), escape(e.text),
           escape(e.lucidity), escape((e.emotions || []).join(";")),
-          escape((e.tags || []).join(";")), escape((e.symbols || []).join(";"))
+          escape((e.tags || []).join(";")), escape((e.symbols || []).join(";")), escape((e.ctf_glyphs || []).join(";"))
         ].join(","))];
         res.writeHead(200, { "Content-Type": "text/csv", "Content-Disposition": `attachment; filename="dream-journal-${new Date().toISOString().substring(0,10)}.csv"` });
         res.end(rows.join("\n"));

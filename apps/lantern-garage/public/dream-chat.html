@@ -1019,6 +1019,40 @@
       toggleDebug();
       return;
     }
+    // !convergence runs the Lantern convergence loop
+    if (text === "!convergence") {
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      const sysRow = document.createElement("div");
+      sysRow.className = "msg-row agent";
+      sysRow.innerHTML = `<div class="msg-label">System</div><div class="bubble">Running convergence loop…</div>`;
+      messagesEl.appendChild(sysRow);
+      scrollToBottom();
+      fetch(`${serverBase}/api/actions/run-loop`, { method: "POST" })
+        .then(async (r) => {
+          const d = await r.json();
+          const out = d.stdout ? d.stdout.slice(0, 800) : "";
+          const err = d.stderr ? d.stderr.slice(0, 400) : "";
+          sysRow.querySelector(".bubble").innerHTML = `<b>Convergence loop</b> ${r.ok ? "✓" : "✗"}<pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(out)}${err ? "\n---stderr---\n" + escapeHtml(err) : ""}</pre>`;
+          scrollToBottom();
+        })
+        .catch((e) => {
+          sysRow.querySelector(".bubble").textContent = `Convergence loop failed: ${e.message}`;
+          scrollToBottom();
+        });
+      return;
+    }
+    // !comet-leap shows COMET-LEAP plan status
+    if (text === "!comet-leap") {
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      const sysRow = document.createElement("div");
+      sysRow.className = "msg-row agent";
+      sysRow.innerHTML = `<div class="msg-label">System</div><div class="bubble"><b>COMET LEAP</b> — Master Plan v1.0<br>Status: APPROVED FOR PRINTING · Confidence: 72%<br><a href="/view?path=lantern-discord/COMET-LEAP-MASTER-PLAN-v1.0.md" target="_blank" style="color:var(--accent);">Open full plan ↗</a></div>`;
+      messagesEl.appendChild(sysRow);
+      scrollToBottom();
+      return;
+    }
     // Explicitly reject other bang commands so they don't silently behave like normal chat
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
@@ -1236,7 +1270,7 @@
           const r = await fetch(`${serverBase}/api/dream/create`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ kind: "dream", text: fullConv, tags: ["chat-log"], source: "dream-chat" }),
+            body: JSON.stringify({ kind: "dream", text: fullConv, tags: ["chat-log"], source: "dream-chat", ctf_glyphs: extractCtfGlyphs(fullConv) }),
           });
           const d = await r.json();
           logBtn.textContent = d.saved ? "✓ Saved to journal" : "Save failed";
@@ -1442,6 +1476,15 @@
 
   const CTF_WORDS = Object.keys(CTF).sort((a,b) => b.length - a.length);
 
+
+  function extractCtfGlyphs(text) {
+    const glyphs = new Set();
+    const ctfValues = Object.values(CTF);
+    for (const sym of ctfValues) {
+      if (text.includes(sym)) glyphs.add(sym);
+    }
+    return Array.from(glyphs);
+  }
   function ctfLookup(word) {
     const lower = word.toLowerCase().trim();
     if (CTF[lower]) return [{ word: lower, sym: CTF[lower] }];
