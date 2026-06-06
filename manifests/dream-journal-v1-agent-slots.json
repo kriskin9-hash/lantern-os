@@ -25,7 +25,7 @@
     {
       "id": "dream_journal/tts_voice_select",
       "priority": 5,
-      "status": "queued",
+      "status": "completed",
       "description": "Add TTS voice selector to settings drawer (name/rate/pitch from SpeechSynthesis.getVoices)"
     },
     {
