@@ -1673,6 +1673,103 @@
   loadProviderStatus();
 
   // ══════════════════════════════════════════════════════════════════
+  //  Log Dream — structured capture drawer
+  // ══════════════════════════════════════════════════════════════════
+  const logDreamTags = { emotions: [], tags: [], symbols: [] };
+
+  function openLogDream() {
+    document.getElementById("logdream-overlay").classList.add("open");
+    document.getElementById("logdream-drawer").classList.add("open");
+  }
+
+  function closeLogDream() {
+    document.getElementById("logdream-overlay").classList.remove("open");
+    document.getElementById("logdream-drawer").classList.remove("open");
+  }
+
+  function addTagChip(category, value) {
+    const v = value.trim().toLowerCase();
+    if (!v || logDreamTags[category].includes(v)) return;
+    logDreamTags[category].push(v);
+    renderTagChips(category);
+  }
+
+  function removeTagChip(category, value) {
+    logDreamTags[category] = logDreamTags[category].filter(x => x !== value);
+    renderTagChips(category);
+  }
+
+  function renderTagChips(category) {
+    const container = document.getElementById(`chips-${category}`);
+    container.innerHTML = logDreamTags[category].map(v =>
+      `<span class="tag-chip active" onclick="removeTagChip('${category}','${v}')">${escapeHtml(v)} ×</span>`
+    ).join("");
+  }
+
+  function clearLogDream() {
+    document.getElementById("ld-title").value = "";
+    document.getElementById("ld-text").value = "";
+    document.getElementById("ld-kind").value = "dream";
+    document.getElementById("ld-mood").value = "";
+    document.getElementById("ld-lucidity").value = 0;
+    document.getElementById("ld-lucidity-val").textContent = "0%";
+    document.getElementById("ld-clarity").value = 50;
+    document.getElementById("ld-clarity-val").textContent = "50%";
+    document.getElementById("ld-technique").value = "";
+    document.getElementById("ld-window").value = "";
+    document.getElementById("ld-dreamsign").checked = false;
+    document.getElementById("ld-recurring").checked = false;
+    logDreamTags.emotions = []; logDreamTags.tags = []; logDreamTags.symbols = [];
+    renderTagChips("emotions"); renderTagChips("tags"); renderTagChips("symbols");
+    document.getElementById("ld-feedback").textContent = "";
+  }
+
+  async function saveLogDream() {
+    const text = document.getElementById("ld-text").value.trim();
+    if (!text) {
+      document.getElementById("ld-feedback").textContent = "Please enter a dream story.";
+      document.getElementById("ld-feedback").style.color = "var(--danger)";
+      return;
+    }
+    const payload = {
+      kind: document.getElementById("ld-kind").value,
+      name: document.getElementById("ld-title").value.trim(),
+      text,
+      lucidity: Number(document.getElementById("ld-lucidity").value) / 100,
+      clarity: Number(document.getElementById("ld-clarity").value) / 100,
+      mood: document.getElementById("ld-mood").value.trim(),
+      technique: document.getElementById("ld-technique").value.trim(),
+      sleep_window: document.getElementById("ld-window").value.trim(),
+      dreamsign: document.getElementById("ld-dreamsign").checked,
+      recurring: document.getElementById("ld-recurring").checked,
+      emotions: logDreamTags.emotions,
+      tags: logDreamTags.tags,
+      symbols: logDreamTags.symbols,
+      source: "dream-chat-ui",
+    };
+    const fb = document.getElementById("ld-feedback");
+    try {
+      const r = await fetch(`${serverBase}/api/dream/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (r.ok && d.saved) {
+        fb.textContent = "✓ Saved to journal";
+        fb.style.color = "var(--green)";
+        setTimeout(() => { clearLogDream(); closeLogDream(); }, 900);
+      } else {
+        fb.textContent = d.error || "Save failed";
+        fb.style.color = "var(--danger)";
+      }
+    } catch (e) {
+      fb.textContent = "Network error: " + e.message;
+      fb.style.color = "var(--danger)";
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
   //  CTF — Convergence Text Format symbol dictionary
   // ══════════════════════════════════════════════════════════════════
   const CTF = {
