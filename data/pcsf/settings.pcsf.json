@@ -3,7 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "settings",
   "description": "Runtime configuration layer. Declares all env vars the system reads, their purpose, defaults, and current resolved states (key present = true, absent = false — values never stored here).",
-  "generated_at": "2026-06-06T17:10:38.616Z",
+  "generated_at": "2026-06-06T18:41:21.565Z",
   "state": "available",
   "env_file": ".env",
   "env_file_loader": "apps/lantern-garage/server.js (startup, regex ^[A-Z0-9_]+)",
@@ -13,7 +13,7 @@
       "key": "ANTHROPIC_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "present",
+      "state": "absent",
       "purpose": "Enables Claude streaming via api.anthropic.com",
       "get_key_url": "https://console.anthropic.com/settings/keys"
     },
@@ -22,7 +22,7 @@
       "group": "model",
       "required": false,
       "default": "claude-3-5-haiku-20241022",
-      "state": "present",
+      "state": "absent",
       "purpose": "Override the default Claude model"
     },
     {
@@ -45,7 +45,7 @@
       "key": "GEMINI_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "present",
+      "state": "absent",
       "purpose": "Enables Gemini streaming via generativelanguage.googleapis.com",
       "get_key_url": "https://aistudio.google.com/app/apikey"
     },
@@ -68,7 +68,7 @@
       "key": "XAI_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "present",
+      "state": "absent",
       "purpose": "Enables Grok streaming via api.x.ai (OpenAI-compatible)",
       "get_key_url": "https://console.x.ai/"
     },

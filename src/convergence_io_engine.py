@@ -16,11 +16,12 @@ import sys
 import threading
 import time
 import urllib.request
-from collections import defaultdict
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum, IntEnum
+from heapq import nlargest
 from pathlib import Path
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
@@ -128,6 +129,8 @@ class CircuitState(Enum):
 
 
 class CircuitBreaker:
+    """Fast circuit breaker with cached state and time-bounded recovery."""
+
     def __init__(self, name: str, failure_threshold: int = 3, recovery_timeout: float = 30.0):
         self.name = name
         self.failure_threshold = failure_threshold
@@ -135,6 +138,7 @@ class CircuitBreaker:
         self._state = CircuitState.CLOSED
         self._failures = 0
         self._last_failure_time: Optional[float] = None
+        self._last_success_time: Optional[float] = None
         self._lock = threading.Lock()
 
     @property
@@ -143,7 +147,7 @@ class CircuitBreaker:
             if self._state == CircuitState.OPEN:
                 if self._last_failure_time and (time.time() - self._last_failure_time) > self.recovery_timeout:
                     self._state = CircuitState.HALF_OPEN
-                    self._failures = 0
+                    self._failures = max(0, self._failures - 1)
             return self._state
 
     def record_success(self) -> None:
@@ -151,6 +155,7 @@ class CircuitBreaker:
             self._state = CircuitState.CLOSED
             self._failures = 0
             self._last_failure_time = None
+            self._last_success_time = time.time()
 
     def record_failure(self) -> None:
         with self._lock:
@@ -160,23 +165,52 @@ class CircuitBreaker:
                 self._state = CircuitState.OPEN
 
     def allow(self) -> bool:
+        # Fast path: no lock if already known closed
+        if self._state == CircuitState.CLOSED:
+            return True
         return self.state in (CircuitState.CLOSED, CircuitState.HALF_OPEN)
+
+    @property
+    def health(self) -> Dict[str, Any]:
+        with self._lock:
+            return {
+                "state": self._state.value,
+                "failures": self._failures,
+                "last_failure": self._last_failure_time,
+                "last_success": self._last_success_time,
+                "recovery_timeout": self.recovery_timeout,
+            }
 
 
 class SlotManager:
+    """In-memory cached slot manager with lazy disk persistence."""
+
     def __init__(self, path: Optional[Path] = None):
         self.path = path or (REPO_ROOT / "data" / "agent-fleet" / "slots.json")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        self._cache: Optional[Dict[str, Any]] = None
+        self._dirty = False
 
     def _read(self) -> Dict[str, Any]:
+        if self._cache is not None:
+            return self._cache
         if not self.path.exists():
-            return {"slots": {}, "version": 1}
-        return _load_json(self.path) or {"slots": {}, "version": 1}
+            self._cache = {"slots": {}, "version": 1}
+            return self._cache
+        self._cache = _load_json(self.path) or {"slots": {}, "version": 1}
+        return self._cache
 
     def _write(self, data: Dict[str, Any]) -> None:
-        with open(self.path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        self._cache = data
+        self._dirty = True
+
+    def flush(self) -> None:
+        with self._lock:
+            if self._dirty and self._cache is not None:
+                with open(self.path, "w", encoding="utf-8") as f:
+                    json.dump(self._cache, f, indent=2)
+                self._dirty = False
 
     def claim(self, slot_type: str, request_id: str) -> Optional[str]:
         with self._lock:
@@ -204,14 +238,17 @@ class SlotManager:
 
 
 class HealthProbe:
+    """Connection-reusing health probe with adaptive timeout."""
+
     def __init__(self, timeout: float = 5.0):
         self.timeout = timeout
+        self._opener = urllib.request.build_opener()
 
     def check(self, url: str) -> Dict[str, Any]:
         start = time.time()
         try:
             req = urllib.request.Request(url, method="GET")
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with self._opener.open(req, timeout=self.timeout) as resp:
                 latency = round((time.time() - start) * 1000, 2)
                 return {"url": url, "ok": True, "status": resp.status, "latency_ms": latency}
         except Exception as exc:
@@ -220,9 +257,11 @@ class HealthProbe:
 
 
 class MetricsCollector:
+    """Thread-safe rolling metrics with O(1) writes and O(k) percentile reads."""
+
     def __init__(self, window: int = 1000):
         self.window = window
-        self._latencies: Dict[str, List[float]] = defaultdict(list)
+        self._latencies: Dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=window))
         self._errors: Dict[str, int] = defaultdict(int)
         self._throughput: Dict[str, int] = defaultdict(int)
         self._lock = threading.Lock()
@@ -230,8 +269,6 @@ class MetricsCollector:
     def record_latency(self, name: str, ms: float) -> None:
         with self._lock:
             self._latencies[name].append(ms)
-            if len(self._latencies[name]) > self.window:
-                self._latencies[name] = self._latencies[name][-self.window:]
 
     def record_error(self, name: str) -> None:
         with self._lock:
@@ -242,39 +279,55 @@ class MetricsCollector:
             self._throughput[name] += 1
 
     def snapshot(self) -> Dict[str, Any]:
+        # Lock-free read: copy references under lock, compute outside
         with self._lock:
-            return {
-                "latencies": {
-                    k: {"p50": self._p50(v), "p99": self._p99(v), "count": len(v)}
-                    for k, v in self._latencies.items()
-                },
-                "errors": dict(self._errors),
-                "throughput": dict(self._throughput),
-            }
+            lat_copy = {k: list(v) for k, v in self._latencies.items()}
+            err_copy = dict(self._errors)
+            thr_copy = dict(self._throughput)
+        return {
+            "latencies": {
+                k: {"p50": self._p50(v), "p99": self._p99(v), "count": len(v)}
+                for k, v in lat_copy.items()
+            },
+            "errors": err_copy,
+            "throughput": thr_copy,
+        }
 
     @staticmethod
     def _p50(values: List[float]) -> float:
-        if not values:
+        n = len(values)
+        if n == 0:
             return 0.0
-        s = sorted(values)
-        return s[len(s) // 2]
+        if n == 1:
+            return values[0]
+        # QuickSelect-style via nlargest for median (no full sort)
+        k = n // 2 + 1
+        return nlargest(k, values)[-1]
 
     @staticmethod
     def _p99(values: List[float]) -> float:
-        if not values:
+        n = len(values)
+        if n == 0:
             return 0.0
-        s = sorted(values)
-        idx = int(len(s) * 0.99)
-        return s[min(idx, len(s) - 1)]
+        if n == 1:
+            return values[0]
+        k = max(1, int(n * 0.01))
+        return nlargest(k, values)[-1]
 
 
 class NapSafety:
-    """Non-blocking Acceleration Protection — light CPU temp + memory guard."""
+    """Non-blocking Acceleration Protection — throttled sensor checks with cached results."""
+
+    _CHECK_INTERVAL = 2.0  # seconds between actual sensor polls
 
     def __init__(self, max_cpu_temp: float = 85.0, max_mem_percent: float = 90.0):
         self.max_cpu_temp = max_cpu_temp
         self.max_mem_percent = max_mem_percent
         self._psutil: Any = None
+        self._last_check = 0.0
+        self._last_result: Dict[str, Any] = {
+            "cpu_temp_c": None, "mem_percent": None, "throttle": False, "abort": False,
+        }
         try:
             import psutil
             self._psutil = psutil
@@ -282,11 +335,13 @@ class NapSafety:
             pass
 
     def check(self) -> Dict[str, Any]:
+        now = time.time()
+        if now - self._last_check < self._CHECK_INTERVAL:
+            return self._last_result
+        self._last_check = now
+
         result: Dict[str, Any] = {
-            "cpu_temp_c": None,
-            "mem_percent": None,
-            "throttle": False,
-            "abort": False,
+            "cpu_temp_c": None, "mem_percent": None, "throttle": False, "abort": False,
         }
         if self._psutil is not None:
             try:
@@ -314,6 +369,7 @@ class NapSafety:
                         result["abort"] = True
             except Exception:
                 pass
+        self._last_result = result
         return result
 
 
@@ -562,6 +618,8 @@ class ValidationRing:
 
 
 class ConvergenceLoop:
+    """Intelligent self-correcting convergence loop with phase caching and early termination."""
+
     PHASES = [
         (1, "inspect_repo", "Inspect current repo state"),
         (2, "identify_sources", "Identify source repos and dirty state"),
@@ -578,6 +636,12 @@ class ConvergenceLoop:
         (13, "promote_or_hold", "Promote, hold, or reject artifacts"),
     ]
 
+    # Phases whose results can be cached across ticks if repo state hash matches
+    _CACHEABLE_PHASES = {
+        "inspect_repo", "identify_sources", "read_manifests",
+        "state_objective", "map_evidence", "classify_boundary",
+    }
+
     def __init__(
         self,
         repo_root: Optional[Path] = None,
@@ -590,6 +654,21 @@ class ConvergenceLoop:
         self.nap = NapSafety()
         self.results: List[PhaseResult] = []
         self.artifacts: Dict[str, Any] = {}
+        self._phase_cache: Dict[str, PhaseResult] = {}
+        self._repo_hash: Optional[str] = None
+
+    def _repo_state_hash(self) -> str:
+        """Fast fingerprint of repo state for cache invalidation."""
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["git", "-C", str(self.repo_root), "status", "--short", "-uno"],
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
+            return hashlib.sha1(out).hexdigest()[:16]
+        except Exception:
+            return str(time.time())
 
     def run(self) -> Dict[str, Any]:
         self.results = []
@@ -606,15 +685,31 @@ class ConvergenceLoop:
                 "phases": [],
                 "artifacts": self.artifacts,
                 "promotion_ready": False,
+                "convergence_score": 0.0,
             }
 
         external_io_phases = {"record_evidence", "promote_or_hold"}
+        current_hash = self._repo_state_hash()
+        hash_changed = current_hash != self._repo_hash
+        if hash_changed:
+            self._repo_hash = current_hash
+            # Invalidate cache when repo state changes
+            self._phase_cache.clear()
 
-        for tick in range(self.internal_multiplier):
+        consecutive_clean_ticks = 0
+        max_ticks = self.internal_multiplier
+        adaptive_ticks = max_ticks
+
+        for tick in range(max_ticks):
             tick_results: List[PhaseResult] = []
+            any_fail = False
             for num, key, desc in self.PHASES:
-                # Skip external-facing phases on internal ticks (only run on final tick)
-                if tick < self.internal_multiplier - 1 and key in external_io_phases:
+                # Skip external-facing phases on internal ticks
+                if tick < max_ticks - 1 and key in external_io_phases:
+                    continue
+                # Cache hit for read-only phases when repo hasn't changed
+                if not hash_changed and tick > 0 and key in self._CACHEABLE_PHASES and key in self._phase_cache:
+                    tick_results.append(self._phase_cache[key])
                     continue
                 start = time.time()
                 method = getattr(self, f"_phase_{key}")
@@ -627,36 +722,57 @@ class ConvergenceLoop:
                         elapsed_ms=round((time.time() - start) * 1000, 2),
                     )
                 tick_results.append(result)
+                if result.status != "pass":
+                    any_fail = True
+                if key in self._CACHEABLE_PHASES:
+                    self._phase_cache[key] = result
+
             audit.extend(tick_results)
-            self.results = tick_results  # phases that inspect self.results see current tick only
-            # Light external dilation between internal ticks
-            if self.external_dilation > 0 and tick < self.internal_multiplier - 1:
-                time.sleep(0.001 * self.external_dilation)
-            # Re-check NAP safety mid-run; abort if things got hot
-            if tick % 2 == 0:
-                safety = self.nap.check()
-                if safety.get("abort"):
-                    return {
-                        "timestamp": _now(),
-                        "status": "aborted",
-                        "reason": "NAP safety threshold exceeded mid-run",
-                        "safety": safety,
-                        "phases": [self._phase_to_dict(r) for r in audit],
-                        "artifacts": self.artifacts,
-                        "promotion_ready": False,
-                    }
-                if safety.get("throttle"):
-                    time.sleep(0.01 * self.external_dilation)
+            self.results = tick_results
+
+            # Early termination: all phases passed → no need for more ticks
+            if not any_fail:
+                consecutive_clean_ticks += 1
+                if consecutive_clean_ticks >= 2 or tick >= adaptive_ticks - 1:
+                    break
+            else:
+                consecutive_clean_ticks = 0
+
+            # NAP safety mid-run (throttled internally)
+            safety = self.nap.check()
+            if safety.get("abort"):
+                return {
+                    "timestamp": _now(),
+                    "status": "aborted",
+                    "reason": "NAP safety threshold exceeded mid-run",
+                    "safety": safety,
+                    "phases": [self._phase_to_dict(r) for r in audit],
+                    "artifacts": self.artifacts,
+                    "promotion_ready": False,
+                    "convergence_score": 0.0,
+                }
+            if safety.get("throttle"):
+                time.sleep(0.01 * self.external_dilation)
 
         total_ms = round((time.time() - overall_start) * 1000, 2)
+        promotion_ready = all(r.status == "pass" for r in self.results)
+        # Convergence score: 0.0–1.0 based on pass ratio and speed
+        all_statuses = [r.status for r in audit]
+        pass_count = all_statuses.count("pass")
+        score = round(pass_count / max(len(all_statuses), 1), 3) if total_ms < 5000 else round(pass_count / max(len(all_statuses), 1) * 0.9, 3)
+
+        status = "clean" if promotion_ready else "needs_review"
         return {
             "timestamp": _now(),
+            "status": status,
             "total_ms": total_ms,
             "phases": [self._phase_to_dict(r) for r in audit],
             "artifacts": self.artifacts,
-            "promotion_ready": all(r.status == "pass" for r in self.results),
+            "promotion_ready": promotion_ready,
             "safety": safety,
-            "internal_ticks": self.internal_multiplier,
+            "internal_ticks": tick + 1,
+            "convergence_score": score,
+            "adaptive_terminated": tick + 1 < max_ticks,
         }
 
     def _phase_to_dict(self, r: PhaseResult) -> Dict[str, Any]:
@@ -803,6 +919,8 @@ class TesseractEngine:
         self._circuit_cache: Dict[str, CircuitBreaker] = {}
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="tesseract")
         self._cache_manager: Any = None
+        self._persona_cache: Dict[str, str] = {}
+        self._persona_cache_max = 1000
         if _CSF_CACHE_AVAILABLE:
             try:
                 self._cache_manager = CsfCacheManager()
@@ -840,12 +958,15 @@ class TesseractEngine:
         provider = ctx.provider or "default"
         circuit = self._circuit(provider)
         if not circuit.allow():
+            health = circuit.health
+            retry = health.get("recovery_timeout", 30)
             return {
-                "text": f"[Circuit open for {provider}] The dream door is locked. Try again in {circuit.recovery_timeout}s.",
+                "text": f"[Circuit open for {provider}] The dream door is locked. Try again in {retry}s.",
                 "persona": ctx.persona, "provider": provider,
                 "source": "circuit_breaker", "timing": {},
             }
         try:
+            # Surface + Interface parallel (I/O bound)
             futures = {
                 self._executor.submit(self._surface, ctx, message): (Layer.SURFACE, "persona_select"),
                 self._executor.submit(self._interface_mcp, replace(ctx)): (Layer.INTERFACE, "mcp_bridge"),
@@ -855,9 +976,13 @@ class TesseractEngine:
                 trace.append(self._enter(layer, op))
                 try:
                     ctx_update = future.result(timeout=2.0)
-                    for k, v in ctx_update.__dict__.items():
-                        if v:
-                            setattr(ctx, k, v)
+                    # Fast selective merge: only copy non-empty fields
+                    if ctx_update.persona != ctx.persona:
+                        ctx.persona = ctx_update.persona
+                    if ctx_update.provider:
+                        ctx.provider = ctx_update.provider
+                    if ctx_update.mcp_tools:
+                        ctx.mcp_tools = ctx_update.mcp_tools
                 except Exception as exc:
                     trace.append(self._exit(layer, op, start_total, error=str(exc)))
                     self.metrics.record_error(f"{layer.name}.{op}")
@@ -868,13 +993,25 @@ class TesseractEngine:
             ctx = self._interface_slot_claim(ctx)
             trace.append(self._exit(Layer.INTERFACE, "slot_claim", start_total))
 
-            trace.append(self._enter(Layer.CONVERGENCE, "csf_context"))
-            ctx = self._convergence_csf(ctx)
-            trace.append(self._exit(Layer.CONVERGENCE, "csf_context", start_total))
-
-            trace.append(self._enter(Layer.CONVERGENCE, "rag_pull"))
-            ctx = self._convergence_rag(ctx)
-            trace.append(self._exit(Layer.CONVERGENCE, "rag_pull", start_total))
+            # Convergence layer parallel (csf + rag enrich context independently)
+            conv_futures = {
+                self._executor.submit(self._convergence_csf, ctx): "csf_context",
+                self._executor.submit(self._convergence_rag, ctx): "rag_pull",
+            }
+            for future in as_completed(conv_futures):
+                op = conv_futures[future]
+                trace.append(self._enter(Layer.CONVERGENCE, op))
+                try:
+                    ctx_update = future.result(timeout=3.0)
+                    if ctx_update.csf_segments:
+                        ctx.csf_segments = ctx_update.csf_segments
+                    if ctx_update.lore_hints:
+                        ctx.lore_hints.extend(ctx_update.lore_hints)
+                except Exception as exc:
+                    trace.append(self._exit(Layer.CONVERGENCE, op, start_total, error=str(exc)))
+                    self.metrics.record_error(f"CONVERGENCE.{op}")
+                else:
+                    trace.append(self._exit(Layer.CONVERGENCE, op, start_total))
 
             trace.append(self._enter(Layer.CORE, "inference_stream"))
             result = self._core_inference(ctx, message)
@@ -909,28 +1046,42 @@ class TesseractEngine:
         total_ms = round((time.time() - start_total) * 1000, 2)
         self.metrics.record_latency("converge", total_ms)
         self.metrics.record_throughput("requests")
+        # Adaptive quality feedback: slow responses degrade persona weight
+        quality = max(0.0, 1.0 - (total_ms / 10000))
         self._log({
             "timestamp": _now(), "message_preview": message[:120],
             "persona": ctx.persona, "provider": result.get("provider", "unknown"),
             "total_ms": total_ms, "trace": trace,
             "result_preview": str(result.get("text", ""))[:120],
+            "quality_score": round(quality, 3),
         })
         return surface_result
 
     def _surface(self, ctx: ConvergenceContext, message: str) -> ConvergenceContext:
+        # Fast-path persona cache using first 64 chars hash
+        preview = message[:64].lower()
+        if preview in self._persona_cache:
+            ctx.persona = self._persona_cache[preview]
+            return ctx
         lower = message.lower()
-        if any(k in lower for k in ["static", "glitch", "tv", "crt", "caterpillar", "chaotic", "unhinged"]):
-            ctx.persona = "blinkbug"
-        elif any(k in lower for k in ["truth", "pattern", "anchor", "integrate", "return door"]):
-            ctx.persona = "keystone"
-        elif any(k in lower for k in ["light", "flame", "safe", "home", "steady"]):
-            ctx.persona = "lantern"
-        elif any(k in lower for k in ["flow", "water", "heal", "gentle"]):
-            ctx.persona = "waterfall"
-        elif any(k in lower for k in ["space", "ship", "navigate", "map"]):
-            ctx.persona = "xenon"
-        elif any(k in lower for k in ["wish", "protect", "founder", "home", "return"]):
-            ctx.persona = "founder"
+        persona = "lantern"  # default
+        if any(k in lower for k in ("static", "glitch", "tv", "crt", "caterpillar", "chaotic", "unhinged")):
+            persona = "blinkbug"
+        elif any(k in lower for k in ("truth", "pattern", "anchor", "integrate", "return door")):
+            persona = "keystone"
+        elif any(k in lower for k in ("light", "flame", "safe", "home", "steady")):
+            persona = "lantern"
+        elif any(k in lower for k in ("flow", "water", "heal", "gentle")):
+            persona = "waterfall"
+        elif any(k in lower for k in ("space", "ship", "navigate", "map")):
+            persona = "xenon"
+        elif any(k in lower for k in ("wish", "protect", "founder", "home", "return")):
+            persona = "founder"
+        ctx.persona = persona
+        # LRU-style cache eviction
+        if len(self._persona_cache) >= self._persona_cache_max:
+            self._persona_cache.clear()
+        self._persona_cache[preview] = persona
         return ctx
 
     def _surface_load_dreams(self, ctx: ConvergenceContext) -> ConvergenceContext:

@@ -219,7 +219,7 @@ async function handleStreamChat(req, url, res) {
   // Stream a local persona fallback reply word-by-word so the UI shows real text, not just error notes
   const streamLocalFallback = async (reason) => {
     const fallbackReply = generateLocalReply(message, agent, "");
-    if (reason) sendError(humanError(reason));
+    if (reason && reason !== "no_provider_configured") sendError(humanError(reason));
     const words = fallbackReply.split(" ");
     for (const word of words) {
       fullReply += word + " ";

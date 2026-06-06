@@ -1,4 +1,5 @@
 const https = require("https");
+const { refreshProviderCache } = require("../lib/provider-cache");
 
 // Dream Journal core — create, chat, stream, stats, search, export, read, settings
 const PROVIDER_KEYS = [
@@ -399,6 +400,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       if (value) lines.push(`${key}=${value}`);
       fs.writeFileSync(envFilePath, lines.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", "utf8");
       if (value) process.env[key] = value; else delete process.env[key];
+      refreshProviderCache();
       sendJson(res, { ok: true });
     } catch (err) { sendJson(res, { error: err.message }, 500); }
     return true;
