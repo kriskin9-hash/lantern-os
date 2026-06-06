@@ -37,6 +37,18 @@ intent.
 
 ## [1.0.0] — 2026-06-05 — Dream Journal Orion Edition
 
+### V1.0.0 Feature Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Quick capture | **Live** | Dream, note, place, character, event, lore, symbol, mirror |
+| Lucid dreaming tools | **Live** | Lucidity scale, technique logging, dream-sign flags |
+| Symbol analytics | **Live** | Top tags, emotions, and symbols from saved entries |
+| Export (JSONL / CSV) | **Live** | Full backup download via `/api/dream/export` |
+| AI reflection chat | **Optional** | Streams when a provider key is configured; fails fast otherwise |
+| Voice transcription | **Held** | Not claimed for V1 — browser STT works, server-side not wired |
+| Dream art generation | **Held** | Not claimed for V1 — see backlog entry below |
+
 ### Core
 - Dream Journal V1.0.0 — local-first, private, no account required
 - `node apps/lantern-garage/server.js` — single command startup on port 4177
@@ -50,7 +62,7 @@ intent.
 - Multi-turn conversation history (last 6 turns threaded into API calls)
 - Adaptive Focus Memory — tiered dream context (Full/Compressed/Placeholder)
 - Symbol co-occurrence mesh — relational pairs passed to system prompt
-- Voice STT (Web Speech API) + TTS
+- Voice STT (Web Speech API) — browser-only, no server-side transcription in V1
 - CTF symbol autocomplete (~80 unicode glyphs)
 - Provider settings drawer (Claude, Gemini, ChatGPT, Grok) with hot-reload
 
@@ -104,7 +116,7 @@ intent.
 - CSF memory optimization plan: add delta-only dream-entry storage, `previous_entry_hash` checks, sparse ternary storage for the `3^12` symbolic matrix, and dictionary compression for recurring symbols such as "King of Nowhere," "birds & bees," doors, anchors, and repeated Lantern / ORION motifs.
 - Convergence IO / PCSF routing plan: cache the last 5–10 healthy provider states in memory with a 60-second expiry, default local Dream Journal routing to Ollama `Q4_K_M`, fall back to `Q5_K_M` when quality checks fail, and add a `dreamChatReply()` routing cache for repeated similar requests.
 - Digital Blackbox acceleration plan: add a configurable `internal_multiplier` defaulting to the 5x–8x range, run bounded internal convergence steps per external tick, throttle UI / external I/O through light external dilation, and guard the loop with NAP safety checks for temperature, memory, and runaway execution.
-- Art generation and 3 Door Game plan: gate art generation by tier (`Wanderer` = 15/month, `DeepDreamer` = unlimited), cache recent Gage-style prompts and reusable embeddings where privacy-safe, and pre-warm the Ollama model before art requests.
+- **Dream Art Generation (Held — post-V1 backlog):** Generate Gage-style symbolic imagery from dream entries via a local Stable Diffusion or Ollama-backed pipeline. Gate by tier (`Wanderer` = 15/month, `DeepDreamer` = unlimited). Cache recent prompts and reusable embeddings where privacy-safe; pre-warm model before requests. Acceptance criteria before promotion: (1) `POST /api/dream/art/generate` endpoint wired and returning image binary or URL; (2) tier gate enforced in middleware with a usage ledger; (3) at least one end-to-end smoke test generating an image locally; (4) prompt-injection guard on dream text before passing to diffusion model.
 - General low-risk performance plan: enable response streaming on all chat endpoints, add a redacted Debug Mode for PCSF state / selected provider / fallback reason / quantization / cache hit-miss / dilation ratio, and implement hot/cold dream memory tiers with active dreams in RAM and archived dreams in CSF.
 - Target action window: 2026-06-06 through 2026-06-12, with CSF compression first, PCSF routing second, Blackbox multiplier third, tier gating and Debug Mode fourth, then local tests, documentation, and release-note decision.
 
