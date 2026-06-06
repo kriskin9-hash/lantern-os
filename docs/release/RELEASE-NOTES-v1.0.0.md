@@ -7,7 +7,7 @@
 
 ## What is Dream Journal?
 
-Dream Journal is a local-first, private journaling app for capturing and exploring your dreams. Everything runs on your machine. Nothing is uploaded to a cloud. Your entries live in your browser's local storage and in plain JSONL files you control — no account required, no subscription gate on the core experience.
+Dream Journal is a local-first, private journaling app for capturing and exploring your dreams. The core experience runs entirely on your machine: entries are stored in plain JSONL files you control, and the Node server defaults to `127.0.0.1`. If you choose to configure AI provider keys (Gemini, Claude, OpenAI, Grok), chat prompts are sent to that provider over HTTPS. No analytics, no telemetry, no cloud sync by default.
 
 ---
 
@@ -47,7 +47,7 @@ Every entry is tagged with a kind, selectable from a dropdown in the header or i
 
 ### Local, privacy-first architecture
 
-- Data is stored in `localStorage` and in server-side JSONL files under `data/dreams/`.
+- Data is stored in server-side JSONL files under `data/dream_journal/` (and in browser `localStorage` for the standalone file surface).
 - No analytics, no telemetry, no cloud sync by default.
 - The Node.js server runs entirely on `127.0.0.1`. Nothing is bound to an external interface unless you explicitly deploy to a cloud host.
 
@@ -78,7 +78,7 @@ Node.js v20 or higher is required. No database, no Docker, no environment variab
 
 ## What's coming in v1.0.1
 
-The 3 Door Game — an interactive symbolic gameplay layer built on top of the journal. The design document ships with v1.0.0; the full interactive experience follows in v1.0.1.
+**v1.0.1 is a stability and honesty patch.** It tightens routing, corrects release-note drift, and improves Dream Chat reliability. The 3 Door Game — an interactive symbolic gameplay layer — remains in progress for a future feature release.
 
 ---
 

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
-  <title>Dream Journal V1.0.0 — Lantern OS</title>
+  <title>Dream Journal v1.0.1 — Lantern OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -717,7 +717,7 @@
   <div class="settings-overlay" id="settings-overlay" onclick="closeSettings()"></div>
   <div class="settings-drawer" id="settings-drawer">
     <div class="drawer-header">
-      <h2>AI Providers</h2>
+      <h2>AI Providers &amp; Discord</h2>
       <button class="drawer-close" onclick="closeSettings()">×</button>
     </div>
     <div class="drawer-body">
@@ -792,6 +792,29 @@
           <a class="provider-getkey" href="https://console.x.ai/" target="_blank" rel="noopener">Get key →</a>
           <button class="provider-clear" onclick="clearKey('grok','XAI_API_KEY')">Remove</button>
           <span class="save-feedback" id="fb-grok"></span>
+        </div>
+      </div>
+
+      <!-- Discord Bot -->
+      <div class="provider-card" id="card-discord">
+        <div class="provider-top">
+          <div class="provider-icon" style="background:#2c2f33">🎮</div>
+          <span class="provider-name">Discord Bot <span style="font-weight:400;color:var(--muted);font-size:0.78rem">Lantern Lounge</span></span>
+          <span class="provider-status missing" id="status-discord-token">not set</span>
+        </div>
+        <div class="provider-key-row">
+          <input class="provider-key-input" id="key-discord-token" type="password" placeholder="Bot token from Discord Developer Portal" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('discord-token','DISCORD_BOT_TOKEN','key-discord-token')">Save</button>
+        </div>
+        <div class="provider-key-row" style="margin-top:8px;">
+          <input class="provider-key-input" id="key-discord-guild" type="text" placeholder="Guild ID (numeric)" autocomplete="off" spellcheck="false">
+          <button class="provider-save-btn" onclick="saveKey('discord-guild','LANTERN_DISCORD_GUILD_ID','key-discord-guild')">Save</button>
+        </div>
+        <div class="provider-actions">
+          <button class="provider-clear" onclick="clearKey('discord-token','DISCORD_BOT_TOKEN')">Remove Token</button>
+          <button class="provider-clear" onclick="clearKey('discord-guild','LANTERN_DISCORD_GUILD_ID')">Remove Guild</button>
+          <span class="save-feedback" id="fb-discord-token"></span>
+          <span class="save-feedback" id="fb-discord-guild"></span>
         </div>
       </div>
     </div>
@@ -994,6 +1017,19 @@
       inputEl.value = "";
       inputEl.style.height = "auto";
       toggleDebug();
+      return;
+    }
+    // Explicitly reject other bang commands so they don't silently behave like normal chat
+    const bangMatch = text.match(/^!(\S+)/);
+    if (bangMatch) {
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      const cmdName = bangMatch[1].toLowerCase();
+      const errRow = document.createElement("div");
+      errRow.className = "msg-row agent";
+      errRow.innerHTML = `<div class="msg-label">System</div><div class="bubble" style="color:var(--danger);">Unsupported command: !${escapeHtml(cmdName)}</div>`;
+      messagesEl.appendChild(errRow);
+      scrollToBottom();
       return;
     }
     if (emptyState) emptyState.style.display = "none";
@@ -1311,6 +1347,16 @@
         if (!configured) anyMissing = true;
       }
       document.getElementById("settings-btn").classList.toggle("has-error", anyMissing && data._any === false);
+      // Discord Bot status
+      const discordToken = !!(data["DISCORD_BOT_TOKEN"]);
+      const discordGuild = !!(data["LANTERN_DISCORD_GUILD_ID"]);
+      const discordStatusEl = document.getElementById("status-discord-token");
+      const discordCardEl = document.getElementById("card-discord");
+      if (discordStatusEl) {
+        discordStatusEl.textContent = (discordToken && discordGuild) ? "ready" : (discordToken ? "token only" : "not set");
+        discordStatusEl.className = `provider-status ${(discordToken && discordGuild) ? "ok" : "missing"}`;
+      }
+      if (discordCardEl) discordCardEl.classList.toggle("connected", discordToken && discordGuild);
     } catch { /* non-critical */ }
   }
 

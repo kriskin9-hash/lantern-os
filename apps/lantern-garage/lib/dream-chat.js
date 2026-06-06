@@ -45,7 +45,7 @@ const AGENT_PERSONAS = [
 
 function selectAgent(message) {
   const lower = String(message || "").toLowerCase();
-  const scores = AGENT_PERSONAS.map((agent) => {
+  const scores = AGENT_PERSONAS.map((agent, index) => {
     let score = 0;
     const keywords = {
       lantern: ["light", "flame", "steady", "safe", "home", "glow", "protect", "lantern"],
@@ -59,11 +59,16 @@ function selectAgent(message) {
     for (const kw of agentKeys) {
       if (lower.includes(kw)) score += 10;
     }
-    score += Math.random() * 3;
-    return { agent, score };
+    return { agent, score, index };
   });
-  scores.sort((a, b) => b.score - a.score);
+  scores.sort((a, b) => b.score - a.score || a.index - b.index);
   return scores[0].agent;
+}
+
+function parseBangCommand(input) {
+  const m = String(input || "").trim().match(/^!(\S+)(?:\s+(.*))?$/);
+  if (!m) return null;
+  return { name: m[1].toLowerCase(), args: (m[2] || "").trim() };
 }
 
 // Door-series canon (from caad/README.md) — keeps the persona grounded offline.
@@ -357,6 +362,7 @@ module.exports = {
   AGENT_PERSONAS,
   DREAM_DOORS,
   selectAgent,
+  parseBangCommand,
   dreamChatReply,
   generateLocalReply,
 };

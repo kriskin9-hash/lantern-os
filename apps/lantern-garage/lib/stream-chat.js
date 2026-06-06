@@ -1,6 +1,6 @@
 const https = require("https");
 const http = require("http");
-const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, generateLocalReply } = require("./dream-chat");
+const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, generateLocalReply } = require("./dream-chat");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 
@@ -36,6 +36,14 @@ async function handleStreamChat(req, url, res) {
           .map(h => ({ role: h.role === "assistant" ? "assistant" : "user", text: String(h.text).slice(0, 1000) }));
       }
     } catch { /* message stays empty */ }
+  }
+
+  // Reject unsupported bang commands explicitly so they don't silently fall through as chat text
+  const cmd = parseBangCommand(message);
+  if (cmd) {
+    res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+    res.end(JSON.stringify({ error: "unsupported_command", command: cmd.name }));
+    return;
   }
 
   res.writeHead(200, {

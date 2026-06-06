@@ -95,8 +95,12 @@ intent.
 
 - **#168** Restored Discord bot v2 slash commands from commit 8b5cd9; ot.py and ot_v2.py both populated
 
+- Discord bot launcher now loads .env.local and falls back to User/Machine environment variables
+
 ### Added
 
+- **#169** Discord Bot settings integrated into Dream Chat settings drawer (DISCORD_BOT_TOKEN, LANTERN_DISCORD_GUILD_ID)
+- Web UI saves Discord credentials to .env.local; bot reads them automatically on startup
 - Initial workspace governance files for changelog, license, security, support,
   code of conduct, and editor defaults.
 

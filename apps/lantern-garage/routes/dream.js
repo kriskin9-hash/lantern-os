@@ -2,6 +2,7 @@
 const PROVIDER_KEYS = [
   "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
   "XAI_API_KEY", "OLLAMA_BASE_URL", "OLLAMA_MODEL", "ANTHROPIC_MODEL", "OPENAI_MODEL", "GEMINI_MODEL",
+  "DISCORD_BOT_TOKEN", "LANTERN_DISCORD_GUILD_ID",
 ];
 
 module.exports = async function dreamRoutes(req, res, url, deps) {
@@ -205,7 +206,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const raw = await collectRequestBody(req);
       const { key, value } = JSON.parse(raw || "{}");
       if (!key || !PROVIDER_KEYS.includes(key)) { sendJson(res, { error: "unknown_key" }, 400); return true; }
-      const envFilePath = path.join(repoRoot, ".env");
+      const envFilePath = path.join(repoRoot, ".env.local");
       let existing = fs.existsSync(envFilePath) ? fs.readFileSync(envFilePath, "utf8") : "";
       const lines = existing.split("\n").filter(l => !l.startsWith(`${key}=`) && !l.startsWith(`${key} =`));
       if (value) lines.push(`${key}=${value}`);

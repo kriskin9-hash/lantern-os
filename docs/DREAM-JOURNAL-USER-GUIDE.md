@@ -9,7 +9,7 @@
 
 ## What Dream Journal Does
 
-Dream Journal is a private, local-first system for capturing, analyzing, and understanding your dreams. Everything runs on your machine. Nothing is sent anywhere without your permission. Your dream data is yours alone.
+Dream Journal is a private, local-first system for capturing, analyzing, and understanding your dreams. The core experience runs entirely on your machine: entries are stored in plain JSONL files under `data/dream_journal/`, and the Node server defaults to `127.0.0.1`. If you choose to configure AI provider keys (Gemini, Claude, OpenAI, Grok), chat prompts are sent to that provider over HTTPS. No analytics, no telemetry, no cloud sync by default.
 
 It helps you:
 - **Remember** dreams you'd otherwise forget

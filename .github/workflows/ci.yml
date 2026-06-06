@@ -34,19 +34,19 @@ jobs:
           test -f README.md || (echo "README.md missing" && exit 1)
           test -f AGENTS.md || (echo "AGENTS.md missing" && exit 1)
           test -f docs/CONVERGENCE-LOOP.md || (echo "docs/CONVERGENCE-LOOP.md missing" && exit 1)
-          echo "Γ£ô All required top-level files present"
+          echo "All required top-level files present"
 
       - name: Check manifests
         run: |
           test -f manifests/FOUNDRY-MATRIX-RAG-DOLLHOUSE.md || (echo "FOUNDRY-MATRIX-RAG-DOLLHOUSE.md missing" && exit 1)
           test -f manifests/open-issues.md || (echo "open-issues.md missing" && exit 1)
-          echo "Γ£ô All required manifests present"
+          echo "All required manifests present"
 
       - name: Check surfaces
         run: |
           test -f surfaces/shareholder-index/index.html || (echo "shareholder-index/index.html missing" && exit 1)
           test -f surfaces/shareholder-index/styles.css || (echo "shareholder-index/styles.css missing" && exit 1)
-          echo "Γ£ô All required surfaces present"
+          echo "All required surfaces present"
 
       - name: Validate HTML links
         run: |
@@ -89,14 +89,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
+          key: ${{ runner.os }}-pip-ci-${{ hashFiles('tests/**/*.py', 'src/**/*.py') }}
+          restore-keys: ${{ runner.os }}-pip-ci-
 
-      - name: Install dependencies
+      - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-asyncio discord.py dpytest
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install pytest pytest-asyncio discord.py dpytest python-dotenv requests pydantic cryptography
 
       - name: Run pytest
         run: python -m pytest tests -q --tb=short --junitxml=pytest-results.xml
@@ -142,7 +141,9 @@ jobs:
           curl -sf http://127.0.0.1:4177/api/health || (echo "Server did not start" && exit 1)
 
       - name: Run Node API tests
-        run: node tests/test_dream_journal_api.js
+        run: |
+          node tests/test_dream_journal_api.js
+          node tests/test_dream_chat_parser.js
 
       - name: Upload Node test results
         uses: actions/upload-artifact@v7
@@ -163,8 +164,8 @@ jobs:
 
       - name: Verify repo contract
         run: |
-          test -f docs/REPO-CONTRACT.md || echo "ΓÜá docs/REPO-CONTRACT.md missing"
-          echo "Γ£ô Repo contract check"
+          test -f docs/REPO-CONTRACT.md || echo "docs/REPO-CONTRACT.md missing"
+          echo "Repo contract check"
 
       - name: Verify workflow structure
         run: |
@@ -176,8 +177,8 @@ jobs:
           ]
           missing = [p for p in required if not Path(p).exists()]
           if missing:
-              raise SystemExit(f'Γ£ù Missing workflows: {missing}')
-          print('Γ£ô All required workflows present')
+              raise SystemExit(f'Missing workflows: {missing}')
+          print('All required workflows present')
           EOF
 
   # ============================================================================
@@ -193,12 +194,12 @@ jobs:
         run: |
           test -f manifests/cloud-mirrors.json || (echo "cloud-mirrors.json missing" && exit 1)
           python3 -m json.tool manifests/cloud-mirrors.json > /dev/null || (echo "Invalid JSON" && exit 1)
-          echo "Γ£ô Cloud mirrors config valid"
+          echo "Cloud mirrors config valid"
 
       - name: Check MCP contract
         run: |
-          test -f docs/LANTERN-RUNTIME-CICD.md || echo "ΓÜá LANTERN-RUNTIME-CICD.md missing"
-          echo "Γ£ô MCP contract check"
+          test -f docs/LANTERN-RUNTIME-CICD.md || echo "LANTERN-RUNTIME-CICD.md missing"
+          echo "MCP contract check"
 
   # ============================================================================
   # CONVERGENCE: Full convergence loop validation
@@ -219,14 +220,14 @@ jobs:
           # Validate JSON structure
           python3 -c "import json; json.load(open('config/batch-jobs-enhanced.json'))" || (echo "Invalid batch config JSON" && exit 1)
 
-          echo "Γ£ô Batch framework validated by CI/CD"
+          echo "Batch framework validated by CI/CD"
 
       - name: Validate CI/CD from convergence perspective
         run: |
           echo "Checking that convergence loop can validate CI/CD..."
           test -f .github/workflows/ci.yml || (echo "CI workflow missing" && exit 1)
           test -f .github/workflows/deploy.yml || (echo "Deploy workflow missing" && exit 1)
-          echo "Γ£ô CI/CD workflows validated from batch perspective"
+          echo "CI/CD workflows validated from batch perspective"
 
       - name: Test mutual validation loop
         run: |
@@ -234,7 +235,7 @@ jobs:
           echo "- Batch framework validates CI/CD: $(test -f .github/workflows/ci.yml && echo 'YES' || echo 'NO')"
           echo "- CI/CD validates batch framework: $(test -f config/batch-jobs-enhanced.json && echo 'YES' || echo 'NO')"
           echo ""
-          echo "Γ£ô Mutual validation contract is active"
+          echo "Mutual validation contract is active"
 
   # ============================================================================
   # SECURITY: Bandit + pip-audit
@@ -327,6 +328,8 @@ jobs:
           [ "${{ needs.convergence-check.result }}"          != "success" ] && FAILED="$FAILED convergence-check(${{ needs.convergence-check.result }})"
           [ "${{ needs.integration-checks.result }}"         != "success" ] && FAILED="$FAILED integration-checks(${{ needs.integration-checks.result }})"
           [ "${{ needs.convergence-loop-validation.result }}" != "success" ] && FAILED="$FAILED convergence-loop-validation(${{ needs.convergence-loop-validation.result }})"
+          [ "${{ needs.security-scan.result }}"              != "success" ] && FAILED="$FAILED security-scan(${{ needs.security-scan.result }})"
+          [ "${{ needs.csf-cache-validate.result }}"         != "success" ] && FAILED="$FAILED csf-cache-validate(${{ needs.csf-cache-validate.result }})"
 
           if [ -n "$FAILED" ]; then
             echo "FAILED jobs:$FAILED"

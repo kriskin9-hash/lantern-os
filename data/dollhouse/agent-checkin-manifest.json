@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-03T15:56:30.812486+00:00",
+  "generated_at": "2026-06-06T02:54:28.249038+00:00",
   "slots": [
     {
       "slot_id": "checkin-5dd8d5a58a26",
@@ -57,5 +57,13 @@
     }
   ],
   "workspace_mode": "agentic_first",
-  "instructions": "Agents periodically check in and cover all work tasks. Each slot verifies its segment, reports health, and escalates anomalies."
+  "instructions": "Agents periodically check in and cover all work tasks. Each slot verifies its segment, reports health, and escalates anomalies.",
+  "listener": {
+    "agent": "agent_inspector",
+    "mode": "listener",
+    "status": "active",
+    "heartbeat_at": "2026-06-06T02:54:28.249038+00:00",
+    "interval_seconds": 60,
+    "pid": 17748
+  }
 }

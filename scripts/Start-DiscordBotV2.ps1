@@ -45,19 +45,41 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[+] discord.py ready"
 
-# Check environment variables
+# Load .env.local from repo root (shared with web UI settings)
+$envLocalPath = "$repoRoot/.env.local"
+if (Test-Path $envLocalPath) {
+    Get-Content $envLocalPath | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and !$line.StartsWith("#") -and $line.Contains("=")) {
+            $parts = $line.Split("=", 2)
+            $varName = $parts[0].Trim()
+            $varValue = $parts[1].Trim()
+            if ($varName -and -not [Environment]::GetEnvironmentVariable($varName)) {
+                [Environment]::SetEnvironmentVariable($varName, $varValue)
+            }
+        }
+    }
+    Write-Host "[+] Loaded .env.local"
+}
+
+# Check environment variables (process, then user, then machine scope)
 Write-Host ""
 Write-Host "[*] Checking environment..." -ForegroundColor Yellow
 $required = @("DISCORD_BOT_TOKEN", "LANTERN_DISCORD_GUILD_ID")
 $missing = @()
 foreach ($var in $required) {
-    if (-not [Environment]::GetEnvironmentVariable($var)) {
+    $val = [Environment]::GetEnvironmentVariable($var)
+    if (-not $val) { $val = [Environment]::GetEnvironmentVariable($var, "User") }
+    if (-not $val) { $val = [Environment]::GetEnvironmentVariable($var, "Machine") }
+    if (-not $val) {
         $missing += $var
+    } else {
+        [Environment]::SetEnvironmentVariable($var, $val)
     }
 }
 if ($missing) {
     Write-Host "[FATAL] Missing environment variables: $($missing -join ', ')" -ForegroundColor Red
-    Write-Host "Set them before running the bot:"
+    Write-Host "Set them via Dream Chat settings drawer or:"
     Write-Host "  `$env:DISCORD_BOT_TOKEN = 'your_token_here'"
     Write-Host "  `$env:LANTERN_DISCORD_GUILD_ID = 'your_guild_id_here'"
     exit 1
