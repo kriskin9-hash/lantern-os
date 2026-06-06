@@ -34,7 +34,7 @@ export DISCORD_BOT_TOKEN="your-bot-token-here"
 export LANTERN_DISCORD_GUILD_ID="your-guild-id-here"
 
 # Optional (defaults shown)
-export MCP_SERVER_URL="http://127.0.0.1:8787"
+export MCP_SERVER_URL="http://127.0.0.1:8771"
 export LANTERN_STATUS_URL="http://127.0.0.1:4177/api/status"
 ```
 
@@ -144,7 +144,7 @@ In your server, try:
         ┌──────▼──────────────┐
         │  MCP Server         │
         │  (orchestrator)     │
-        │  localhost:8787     │
+        │  localhost:8771     │
         └─────────────────────┘
 ```
 
@@ -181,7 +181,7 @@ The `mcp_bridge.py` module provides:
 
 For issues, check:
 1. `~/.lantern/logs/discord-bot.log`
-2. MCP server health: `curl http://127.0.0.1:8787/health`
+2. MCP server health: `curl http://127.0.0.1:8771/health`
 3. Network connectivity: `ping 127.0.0.1`
 4. Bot token validity via Discord Developer Portal
 
