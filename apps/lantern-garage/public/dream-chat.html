@@ -305,9 +305,11 @@
 
   <div class="messages" id="messages">
     <div class="empty-state dream-door-hero" id="empty-state">
+      <div class="door-bg" id="door-bg"></div>
       <div class="dream-door-art" aria-hidden="true"></div>
-      <h2>The <span>dream</span> door is open.</h2>
-      <p>Step through with a dream, a memory, a thought, or a question.</p>
+      <h2 id="hero-title">The <span>dream</span> door is open.</h2>
+      <p id="hero-sub">Step through with a dream, a memory, a thought, or a question.</p>
+      <div class="scroll-hint" id="scroll-hint">Scroll to enter ↓</div>
     </div>
   </div>
 
@@ -360,6 +362,55 @@
     scrollToBottom();
   }
 
+</script>
+<!-- Parallax dream-door zoom -->
+<script>
+(function() {
+  const messages = document.getElementById('messages');
+  const doorBg = document.getElementById('door-bg');
+  const heroTitle = document.getElementById('hero-title');
+  const heroSub = document.getElementById('hero-sub');
+  const scrollHint = document.getElementById('scroll-hint');
+  const emptyState = document.getElementById('empty-state');
+  if (!messages || !doorBg) return;
+
+  let ticking = false;
+  function updateParallax() {
+    const scrollTop = messages.scrollTop;
+    const maxScroll = messages.scrollHeight - messages.clientHeight;
+    const progress = maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0;
+
+    // Zoom into the doorway: scale 1 -> 2.8
+    const scale = 1 + progress * 1.8;
+    // Slight upward drift to keep door centered
+    const translateY = progress * -8;
+    doorBg.style.transform = 'scale(' + scale + ') translateY(' + translateY + '%)';
+
+    // Fade out text as user scrolls
+    const fadeStart = 0.15;
+    const opacity = progress < fadeStart ? 1 : 1 - ((progress - fadeStart) / (1 - fadeStart));
+    const clampedOpacity = Math.max(0, opacity);
+    if (heroTitle) heroTitle.style.opacity = clampedOpacity;
+    if (heroSub) heroSub.style.opacity = clampedOpacity;
+    if (scrollHint) scrollHint.style.opacity = Math.max(0, 0.7 - progress * 2);
+
+    // Slight parallax on the glow orb
+    const art = emptyState ? emptyState.querySelector('.dream-door-art') : null;
+    if (art) art.style.transform = 'translateY(' + (progress * -20) + 'px)';
+
+    ticking = false;
+  }
+
+  messages.addEventListener('scroll', function() {
+    if (!ticking) {
+      ticking = true;
+      requestAnimationFrame(updateParallax);
+    }
+  }, { passive: true });
+
+  // Initial call
+  updateParallax();
+})();
 </script>
 <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
 <p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS v">Lantern OS</span> · private · local</p>
