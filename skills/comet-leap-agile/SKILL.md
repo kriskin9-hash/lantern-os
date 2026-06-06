@@ -19,6 +19,8 @@ Read these before changing the report:
 
 - `reports/COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.md`
 - `artifacts/COMET-LEAP-TOKEN-BURN-REVENUE-CONVERGENCE-v1.pdf`
+- `archive/reports-2026-06-04/COMET-LEAPER-OPERATING-NARRATIVE-v1.md`
+- `skills/lantern-rag-dollhouse/assets/pdfs/COMET-LEAPER-OPERATING-NARRATIVE-v1.pdf`
 - `manifests/comet-leap-30day-artifacts.md`
 - `manifests/LOOP-2-SUMMARY.md`
 - `manifests/LATEST-ADDS-CONVERGENCE.md`
