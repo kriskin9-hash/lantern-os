@@ -71,7 +71,18 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       await appendJsonlQueued(monthFile, entry);
       // MemOS ingest runs via: python -c "from src.convergence_io.memos_bridge import get_cube; get_cube().ingest_all()"
       // or automatically on each TesseractEngine._convergence_rag() call (lazy load).
-      sendJson(res, { id: dreamId, saved: true, entry, csf: { compressed: false } });
+      // Background CSF compression (non-blocking)
+      let csfStats = { compressed: false };
+      try {
+        const { spawn } = require("child_process");
+        const py = process.platform === "win32" ? "python" : "python3";
+        const script = `from src.csf.dream_compressor import compress_dream_file; compress_dream_file(r'${monthFile}')`;
+        const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
+        proc.on("close", (code) => {
+          // Compression complete; .csf file written alongside .jsonl
+        });
+      } catch { /* compression is non-critical */ }
+      sendJson(res, { id: dreamId, saved: true, entry, csf: csfStats });
     } catch (error) { sendJson(res, { error: error.message }, 400); }
     return true;
   }

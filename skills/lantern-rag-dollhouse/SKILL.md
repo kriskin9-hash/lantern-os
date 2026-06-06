@@ -13,6 +13,7 @@ RAG file, all literal COMET LEAP PDFs/images, or cross-repo dollhouse intake.
 - Flat RAG file: `references/LANTERN-OS-RAG-DOLLHOUSE.flat.md`
 - Asset manifest: `assets/ASSET-MANIFEST.sha256`
 - PDFs: `assets/pdfs/`
+- COMET LEAPER operating narrative: `assets/pdfs/COMET-LEAPER-OPERATING-NARRATIVE-v1.pdf`
 - 30-day art images: `assets/images/comet-leap-30day/`
 - Charts: `assets/images/charts/`
 

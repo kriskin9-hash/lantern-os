@@ -15,6 +15,8 @@ Status: referenced, not yet promoted.
 | Replacement art model DOCX | `C:\tmp\human-flourishing-frameworks-scan\gdrive-replacement-comet\COMET-LEAP-MINI-BUFFET-30DAY-ART-MODEL-v2.docx` | exists |
 | Money/confidence report | `C:\tmp\human-flourishing-frameworks-scan\COMET-LEAPER-FOUNDER-MONEY-CONFIDENCE-REPORT-v1.pdf` | PDF header verified |
 | Truth-only report | `C:\tmp\human-flourishing-frameworks-scan\COMET-LEAPER-FOUNDER-TRUTH-ONLY-REPORT-v2.pdf` | PDF header verified |
+| Operating narrative | `archive/reports-2026-06-04/COMET-LEAPER-OPERATING-NARRATIVE-v1.md` | exists |
+| Operating narrative PDF | `skills/lantern-rag-dollhouse/assets/pdfs/COMET-LEAPER-OPERATING-NARRATIVE-v1.pdf` | PDF header verified |
 | Spin state | `C:\tmp\human-flourishing-frameworks-scan\COMET-LEAP-SPIN-STATE-v1.md` | exists |
 | Spin state PDF | `C:\tmp\human-flourishing-frameworks-scan\COMET-LEAP-SPIN-STATE-v1.pdf` | PDF header verified |
 
