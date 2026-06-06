@@ -655,6 +655,50 @@
       transition: color 0.15s, border-color 0.15s;
     }
     .provider-clear:hover { color: var(--danger); border-color: var(--danger); }
+    .voice-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    .voice-card h3 { font-size: 0.92rem; margin: 0; }
+    .voice-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .voice-row label { font-size: 0.78rem; color: var(--muted); min-width: 40px; }
+    .voice-select {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      color: var(--text);
+      font-size: 0.8rem;
+      min-width: 180px;
+    }
+    .voice-slider {
+      flex: 1;
+      accent-color: var(--accent);
+    }
+    .voice-value {
+      font-size: 0.78rem;
+      color: var(--muted);
+      min-width: 32px;
+      text-align: right;
+    }
+    .voice-test-btn {
+      font-size: 0.78rem;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .voice-test-btn:hover { background: var(--accent); color: #fff; }
     .save-feedback {
       font-size: 0.75rem;
       padding: 2px 4px;
@@ -662,6 +706,60 @@
     }
     .save-feedback.ok { color: var(--green); display: inline; }
     .save-feedback.err { color: var(--danger); display: inline; }
+
+    /* ── Log Dream drawer ── */
+    .logdream-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 100;
+    }
+    .logdream-overlay.open { display: block; }
+    .logdream-drawer {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: min(420px, 100vw);
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      z-index: 101;
+      transform: translateX(100%);
+      transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .logdream-drawer.open { transform: translateX(0); }
+    .logdream-body {
+      flex: 1; overflow-y: auto; padding: 20px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+    .form-group input[type="text"],
+    .form-group textarea,
+    .form-group select {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-size: 0.9rem; font-family: inherit;
+      padding: 8px 10px; outline: none; transition: border-color 0.15s;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--accent); }
+    .form-group textarea { min-height: 80px; resize: vertical; }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+    .range-val { font-size: 0.78rem; color: var(--accent); margin-left: 6px; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; }
+    .checkbox-row input { width: 16px; height: 16px; accent-color: var(--accent); }
+    .tag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .tag-chip {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 3px 10px; font-size: 0.78rem; color: var(--text); cursor: pointer; transition: all 0.15s;
+    }
+    .tag-chip:hover { border-color: var(--danger); color: var(--danger); }
+    .tag-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--text); }
+    .logdream-actions { display: flex; gap: 10px; margin-top: 4px; }
+    .logdream-actions button {
+      flex: 1; background: var(--accent); border: none; color: white;
+      font-size: 0.9rem; font-weight: 600; padding: 10px 14px; border-radius: 10px;
+      cursor: pointer; transition: background 0.15s;
+    }
+    .logdream-actions button:hover { background: var(--accent-hover); }
+    .logdream-actions button.secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .logdream-actions button.secondary:hover { background: var(--border); }
 
     /* ── Debug / Analytics Panel ── */
     .debug-toggle {
@@ -753,6 +851,7 @@
       </select>
       <button class="mcp-toggle" id="mcp-toggle" title="Toggle Keystone MCP mode" onclick="toggleKeystoneMcp()">🔧 MCP</button>
     </div>
+    <button class="settings-btn" id="logdream-btn" title="Log a dream" onclick="openLogDream()" style="margin-left:4px;">✦</button>
     <button class="settings-btn" id="settings-btn" title="Provider settings" onclick="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -868,6 +967,129 @@
           <span class="save-feedback" id="fb-discord-guild"></span>
         </div>
       </div>
+
+      <!-- Voice & Speech -->
+      <div class="voice-card" id="card-voice">
+        <h3>🎙 Voice &amp; Speech</h3>
+        <div class="voice-row">
+          <label>Voice</label>
+          <select class="voice-select" id="voice-select" onchange="saveVoiceSettings()">
+            <option value="">Default system voice</option>
+          </select>
+        </div>
+        <div class="voice-row">
+          <label>Rate</label>
+          <input class="voice-slider" id="voice-rate" type="range" min="0.5" max="2.0" step="0.05" value="0.88" oninput="document.getElementById('voice-rate-val').textContent = this.value; saveVoiceSettings();">
+          <span class="voice-value" id="voice-rate-val">0.88</span>
+        </div>
+        <div class="voice-row">
+          <label>Pitch</label>
+          <input class="voice-slider" id="voice-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.05" oninput="document.getElementById('voice-pitch-val').textContent = this.value; saveVoiceSettings();">
+          <span class="voice-value" id="voice-pitch-val">1.05</span>
+        </div>
+        <div class="voice-row">
+          <button class="voice-test-btn" onclick="testVoice()">Test voice</button>
+          <span class="save-feedback" id="fb-voice"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Dream drawer -->
+  <div class="logdream-overlay" id="logdream-overlay" onclick="closeLogDream()"></div>
+  <div class="logdream-drawer" id="logdream-drawer">
+    <div class="drawer-header">
+      <h2>Log Dream</h2>
+      <button class="drawer-close" onclick="closeLogDream()">×</button>
+    </div>
+    <div class="logdream-body" id="logdream-body">
+      <p class="drawer-hint">Capture a structured dream entry. All fields are optional except the story.</p>
+
+      <div class="form-group">
+        <label for="ld-title">Title</label>
+        <input type="text" id="ld-title" placeholder="e.g. The flying library">
+      </div>
+
+      <div class="form-group">
+        <label for="ld-text">Dream / Story <span style="color:var(--danger)">*</span></label>
+        <textarea id="ld-text" placeholder="What happened…" rows="4"></textarea>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="ld-kind">Kind</label>
+          <select id="ld-kind">
+            <option value="dream">Dream</option>
+            <option value="note">Note</option>
+            <option value="place">Place</option>
+            <option value="character">Character</option>
+            <option value="event">Event</option>
+            <option value="lore">Lore</option>
+            <option value="symbol">Symbol</option>
+            <option value="mirror">Mirror</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="ld-mood">Mood</label>
+          <input type="text" id="ld-mood" placeholder="e.g. curious, anxious">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="ld-lucidity">Lucidity <span class="range-val" id="ld-lucidity-val">0%</span></label>
+          <input type="range" id="ld-lucidity" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent);" oninput="document.getElementById('ld-lucidity-val').textContent=this.value+'%'">
+        </div>
+        <div class="form-group">
+          <label for="ld-clarity">Clarity <span class="range-val" id="ld-clarity-val">50%</span></label>
+          <input type="range" id="ld-clarity" min="0" max="100" value="50" style="width:100%;accent-color:var(--accent);" oninput="document.getElementById('ld-clarity-val').textContent=this.value+'%'">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="ld-technique">Technique</label>
+          <input type="text" id="ld-technique" placeholder="e.g. MILD, WILD, WBTB">
+        </div>
+        <div class="form-group">
+          <label>Sleep Window</label>
+          <input type="text" id="ld-window" placeholder="e.g. 23:00–06:30">
+        </div>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="ld-dreamsign">
+        <label for="ld-dreamsign" style="margin:0;font-size:0.85rem;color:var(--text);">Mark as dreamsign (recurring pattern)</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="ld-recurring">
+        <label for="ld-recurring" style="margin:0;font-size:0.85rem;color:var(--text);">Recurring dream</label>
+      </div>
+
+      <div class="form-group">
+        <label>Emotions</label>
+        <input type="text" id="ld-emotions" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('emotions',this.value);this.value='';}">
+        <div class="tag-chips" id="chips-emotions"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Tags</label>
+        <input type="text" id="ld-tags" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('tags',this.value);this.value='';}">
+        <div class="tag-chips" id="chips-tags"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Symbols / CTF Glyphs</label>
+        <input type="text" id="ld-symbols" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('symbols',this.value);this.value='';}">
+        <div class="tag-chips" id="chips-symbols"></div>
+      </div>
+
+      <div class="logdream-actions">
+        <button class="secondary" onclick="closeLogDream()">Cancel</button>
+        <button onclick="saveLogDream()">Save Entry</button>
+      </div>
+      <p class="drawer-hint" id="ld-feedback" style="text-align:center;min-height:1.2em;"></p>
     </div>
   </div>
 
@@ -1089,6 +1311,40 @@
       toggleDebug();
       return;
     }
+    // !convergence runs the Lantern convergence loop
+    if (text === "!convergence") {
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      const sysRow = document.createElement("div");
+      sysRow.className = "msg-row agent";
+      sysRow.innerHTML = `<div class="msg-label">System</div><div class="bubble">Running convergence loop…</div>`;
+      messagesEl.appendChild(sysRow);
+      scrollToBottom();
+      fetch(`${serverBase}/api/actions/run-loop`, { method: "POST" })
+        .then(async (r) => {
+          const d = await r.json();
+          const out = d.stdout ? d.stdout.slice(0, 800) : "";
+          const err = d.stderr ? d.stderr.slice(0, 400) : "";
+          sysRow.querySelector(".bubble").innerHTML = `<b>Convergence loop</b> ${r.ok ? "✓" : "✗"}<pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(out)}${err ? "\n---stderr---\n" + escapeHtml(err) : ""}</pre>`;
+          scrollToBottom();
+        })
+        .catch((e) => {
+          sysRow.querySelector(".bubble").textContent = `Convergence loop failed: ${e.message}`;
+          scrollToBottom();
+        });
+      return;
+    }
+    // !comet-leap shows COMET-LEAP plan status
+    if (text === "!comet-leap") {
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      const sysRow = document.createElement("div");
+      sysRow.className = "msg-row agent";
+      sysRow.innerHTML = `<div class="msg-label">System</div><div class="bubble"><b>COMET LEAP</b> — Master Plan v1.0<br>Status: APPROVED FOR PRINTING · Confidence: 72%<br><a href="/view?path=lantern-discord/COMET-LEAP-MASTER-PLAN-v1.0.md" target="_blank" style="color:var(--accent);">Open full plan ↗</a></div>`;
+      messagesEl.appendChild(sysRow);
+      scrollToBottom();
+      return;
+    }
     // Explicitly reject other bang commands so they don't silently behave like normal chat
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
@@ -1306,7 +1562,7 @@
           const r = await fetch(`${serverBase}/api/dream/create`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ kind: "dream", text: fullConv, tags: ["chat-log"], source: "dream-chat" }),
+            body: JSON.stringify({ kind: "dream", text: fullConv, tags: ["chat-log"], source: "dream-chat", ctf_glyphs: extractCtfGlyphs(fullConv) }),
           });
           const d = await r.json();
           logBtn.textContent = d.saved ? "✓ Saved to journal" : "Save failed";
@@ -1399,6 +1655,7 @@
     document.getElementById("settings-overlay").classList.add("open");
     document.getElementById("settings-drawer").classList.add("open");
     loadProviderStatus();
+    loadVoiceSettings();
   }
 
   function closeSettings() {
@@ -1486,6 +1743,103 @@
   loadProviderStatus();
 
   // ══════════════════════════════════════════════════════════════════
+  //  Log Dream — structured capture drawer
+  // ══════════════════════════════════════════════════════════════════
+  const logDreamTags = { emotions: [], tags: [], symbols: [] };
+
+  function openLogDream() {
+    document.getElementById("logdream-overlay").classList.add("open");
+    document.getElementById("logdream-drawer").classList.add("open");
+  }
+
+  function closeLogDream() {
+    document.getElementById("logdream-overlay").classList.remove("open");
+    document.getElementById("logdream-drawer").classList.remove("open");
+  }
+
+  function addTagChip(category, value) {
+    const v = value.trim().toLowerCase();
+    if (!v || logDreamTags[category].includes(v)) return;
+    logDreamTags[category].push(v);
+    renderTagChips(category);
+  }
+
+  function removeTagChip(category, value) {
+    logDreamTags[category] = logDreamTags[category].filter(x => x !== value);
+    renderTagChips(category);
+  }
+
+  function renderTagChips(category) {
+    const container = document.getElementById(`chips-${category}`);
+    container.innerHTML = logDreamTags[category].map(v =>
+      `<span class="tag-chip active" onclick="removeTagChip('${category}','${v}')">${escapeHtml(v)} ×</span>`
+    ).join("");
+  }
+
+  function clearLogDream() {
+    document.getElementById("ld-title").value = "";
+    document.getElementById("ld-text").value = "";
+    document.getElementById("ld-kind").value = "dream";
+    document.getElementById("ld-mood").value = "";
+    document.getElementById("ld-lucidity").value = 0;
+    document.getElementById("ld-lucidity-val").textContent = "0%";
+    document.getElementById("ld-clarity").value = 50;
+    document.getElementById("ld-clarity-val").textContent = "50%";
+    document.getElementById("ld-technique").value = "";
+    document.getElementById("ld-window").value = "";
+    document.getElementById("ld-dreamsign").checked = false;
+    document.getElementById("ld-recurring").checked = false;
+    logDreamTags.emotions = []; logDreamTags.tags = []; logDreamTags.symbols = [];
+    renderTagChips("emotions"); renderTagChips("tags"); renderTagChips("symbols");
+    document.getElementById("ld-feedback").textContent = "";
+  }
+
+  async function saveLogDream() {
+    const text = document.getElementById("ld-text").value.trim();
+    if (!text) {
+      document.getElementById("ld-feedback").textContent = "Please enter a dream story.";
+      document.getElementById("ld-feedback").style.color = "var(--danger)";
+      return;
+    }
+    const payload = {
+      kind: document.getElementById("ld-kind").value,
+      name: document.getElementById("ld-title").value.trim(),
+      text,
+      lucidity: Number(document.getElementById("ld-lucidity").value) / 100,
+      clarity: Number(document.getElementById("ld-clarity").value) / 100,
+      mood: document.getElementById("ld-mood").value.trim(),
+      technique: document.getElementById("ld-technique").value.trim(),
+      sleep_window: document.getElementById("ld-window").value.trim(),
+      dreamsign: document.getElementById("ld-dreamsign").checked,
+      recurring: document.getElementById("ld-recurring").checked,
+      emotions: logDreamTags.emotions,
+      tags: logDreamTags.tags,
+      symbols: logDreamTags.symbols,
+      source: "dream-chat-ui",
+    };
+    const fb = document.getElementById("ld-feedback");
+    try {
+      const r = await fetch(`${serverBase}/api/dream/create`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const d = await r.json();
+      if (r.ok && d.saved) {
+        fb.textContent = "✓ Saved to journal";
+        fb.style.color = "var(--green)";
+        setTimeout(() => { clearLogDream(); closeLogDream(); }, 900);
+      } else {
+        fb.textContent = d.error || "Save failed";
+        fb.style.color = "var(--danger)";
+      }
+    } catch (e) {
+      fb.textContent = "Network error: " + e.message;
+      fb.style.color = "var(--danger)";
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════
   //  CTF — Convergence Text Format symbol dictionary
   // ══════════════════════════════════════════════════════════════════
   const CTF = {
@@ -1512,6 +1866,15 @@
 
   const CTF_WORDS = Object.keys(CTF).sort((a,b) => b.length - a.length);
 
+
+  function extractCtfGlyphs(text) {
+    const glyphs = new Set();
+    const ctfValues = Object.values(CTF);
+    for (const sym of ctfValues) {
+      if (text.includes(sym)) glyphs.add(sym);
+    }
+    return Array.from(glyphs);
+  }
   function ctfLookup(word) {
     const lower = word.toLowerCase().trim();
     if (CTF[lower]) return [{ word: lower, sym: CTF[lower] }];
@@ -1645,25 +2008,80 @@
     if (!window.speechSynthesis) return;
     window.speechSynthesis.cancel();
     const clean = text.replace(/\[DOORS:[^\]]+\]/gi, "").replace(/[✦◈⬡⛤⌖⊛ᚱ]/g, "").replace(/[^\x00-\x7F]/g, (c) => {
-      // Keep common unicode but strip heavy symbols
       return c.codePointAt(0) > 0x2FFF ? " " : c;
     }).trim();
     if (!clean) return;
     const utt = new SpeechSynthesisUtterance(clean);
-    utt.rate = 0.88; utt.pitch = 1.05;
+    const prefs = JSON.parse(localStorage.getItem("lantern_tts_prefs") || "{}");
+    utt.rate = prefs.rate ?? 0.88;
+    utt.pitch = prefs.pitch ?? 1.05;
     const voices = window.speechSynthesis.getVoices();
-    const pick = voices.find(v => /samantha|karen|moira|fiona|victoria|female/i.test(v.name))
-               || voices.find(v => v.lang === "en-GB" || v.lang === "en-AU");
-    if (pick) utt.voice = pick;
+    if (prefs.voiceURI) {
+      const pick = voices.find(v => v.voiceURI === prefs.voiceURI);
+      if (pick) utt.voice = pick;
+    } else {
+      const fallback = voices.find(v => /samantha|karen|moira|fiona|victoria|female/i.test(v.name))
+                  || voices.find(v => v.lang === "en-GB" || v.lang === "en-AU");
+      if (fallback) utt.voice = fallback;
+    }
     window.speechSynthesis.speak(utt);
+  }
+
+  function populateVoiceList() {
+    const select = document.getElementById("voice-select");
+    if (!select || !window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices();
+    const current = select.value;
+    // Remove all but the default option
+    while (select.options.length > 1) select.remove(1);
+    voices.forEach(v => {
+      const opt = document.createElement("option");
+      opt.value = v.voiceURI;
+      opt.textContent = `${v.name} (${v.lang})`;
+      select.appendChild(opt);
+    });
+    select.value = current;
+  }
+
+  function saveVoiceSettings() {
+    const prefs = {
+      voiceURI: document.getElementById("voice-select").value || null,
+      rate: parseFloat(document.getElementById("voice-rate").value),
+      pitch: parseFloat(document.getElementById("voice-pitch").value),
+    };
+    localStorage.setItem("lantern_tts_prefs", JSON.stringify(prefs));
+    const fb = document.getElementById("fb-voice");
+    fb.textContent = "✓ saved"; fb.className = "save-feedback ok";
+    setTimeout(() => { fb.textContent = ""; fb.className = "save-feedback"; }, 1500);
+  }
+
+  function loadVoiceSettings() {
+    if (!window.speechSynthesis) return;
+    populateVoiceList();
+    const prefs = JSON.parse(localStorage.getItem("lantern_tts_prefs") || "{}");
+    const select = document.getElementById("voice-select");
+    const rateEl = document.getElementById("voice-rate");
+    const pitchEl = document.getElementById("voice-pitch");
+    if (prefs.voiceURI && select) select.value = prefs.voiceURI;
+    if (prefs.rate && rateEl) { rateEl.value = prefs.rate; document.getElementById("voice-rate-val").textContent = prefs.rate; }
+    if (prefs.pitch && pitchEl) { pitchEl.value = prefs.pitch; document.getElementById("voice-pitch-val").textContent = prefs.pitch; }
+  }
+
+  function testVoice() {
+    const sample = "The dream door is open. Choose an agent and say something.";
+    speakText(sample);
   }
 
   if (window.speechSynthesis) {
     window.speechSynthesis.getVoices();
-    window.speechSynthesis.addEventListener?.("voiceschanged", () => window.speechSynthesis.getVoices());
+    window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+      window.speechSynthesis.getVoices();
+      populateVoiceList();
+    });
   }
 
   initVoice();
+  loadVoiceSettings();
 
 
   // ══════════════════════════════════════════════════════════════════
