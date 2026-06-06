@@ -1,5 +1,18 @@
 // Health, status, system metrics — read-only telemetry endpoints
 const { getRoutingSnapshot } = require("../lib/provider-cache");
+const { execSync } = require("child_process");
+
+function getGitVersion() {
+  try {
+    const commit = execSync("git rev-parse HEAD", { cwd: process.cwd(), encoding: "utf8" }).trim();
+    const tag = execSync("git describe --tags --always", { cwd: process.cwd(), encoding: "utf8" }).trim();
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: process.cwd(), encoding: "utf8" }).trim();
+    const date = execSync("git log -1 --format=%cI", { cwd: process.cwd(), encoding: "utf8" }).trim();
+    return { commit, tag, branch, date };
+  } catch {
+    return { commit: "unknown", tag: "unknown", branch: "unknown", date: new Date().toISOString() };
+  }
+}
 
 module.exports = async function statusRoutes(req, res, url, deps) {
   const { sendJson, readJson, readJsonl, getStatus, getReadiness, getMiningLabStatus,
@@ -50,6 +63,10 @@ module.exports = async function statusRoutes(req, res, url, deps) {
   }
   if (url.pathname === "/api/pcsf/routing") {
     sendJson(res, getRoutingSnapshot());
+    return true;
+  }
+  if (url.pathname === "/api/version") {
+    sendJson(res, { ok: true, version: getGitVersion(), generatedAt: new Date().toISOString() });
     return true;
   }
 };

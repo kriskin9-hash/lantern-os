@@ -313,6 +313,59 @@ def _tool_mesh_prune(max_age_seconds: float = 300.0) -> Dict[str, Any]:
     return {"pruned": removed, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
+def _tool_update_lantern_os(restart: bool = True) -> Dict[str, Any]:
+    """Pull latest master, install dependencies, and optionally restart the server."""
+    import subprocess
+    steps = []
+
+    try:
+        pull = subprocess.run(
+            ["git", "pull", "origin", "master"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=60,
+        )
+        steps.append({"step": "git_pull", "ok": pull.returncode == 0, "output": pull.stdout.strip() or pull.stderr.strip()})
+    except Exception as exc:
+        steps.append({"step": "git_pull", "ok": False, "output": str(exc)})
+
+    try:
+        npm = subprocess.run(
+            ["npm", "install", "--prefix", "apps/lantern-garage"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=120,
+        )
+        steps.append({"step": "npm_install", "ok": npm.returncode == 0, "output": npm.stdout.strip() or npm.stderr.strip()})
+    except Exception as exc:
+        steps.append({"step": "npm_install", "ok": False, "output": str(exc)})
+
+    new_version = {"commit": "unknown", "tag": "unknown"}
+    try:
+        commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10)
+        tag = subprocess.run(["git", "describe", "--tags", "--always"], cwd=REPO_ROOT, capture_output=True, text=True, timeout=10)
+        new_version = {"commit": commit.stdout.strip(), "tag": tag.stdout.strip()}
+    except Exception:
+        pass
+
+    all_ok = all(s["ok"] for s in steps)
+    restart_scheduled = False
+
+    if all_ok and restart:
+        try:
+            if os.name == "nt":
+                subprocess.Popen(
+                    ["powershell.exe", "-Command", "Start-Sleep -Seconds 2; Start-Process node -ArgumentList 'apps/lantern-garage/server.js' -WindowStyle Hidden"],
+                    cwd=REPO_ROOT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+                )
+            else:
+                subprocess.Popen(
+                    ["sh", "-c", "sleep 2 && node apps/lantern-garage/server.js"],
+                    cwd=REPO_ROOT, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            restart_scheduled = True
+        except Exception as exc:
+            steps.append({"step": "restart", "ok": False, "output": str(exc)})
+
+    return {"ok": all_ok, "steps": steps, "version": new_version, "restart_scheduled": restart_scheduled}
+
+
 # ── JSON-RPC Dispatch ──
 
 TOOLS_REGISTRY = {
@@ -327,6 +380,7 @@ TOOLS_REGISTRY = {
     "mesh_status": _tool_mesh_status,
     "mesh_donate": _tool_mesh_donate,
     "mesh_prune": _tool_mesh_prune,
+    "update_lantern_os": _tool_update_lantern_os,
 }
 
 
