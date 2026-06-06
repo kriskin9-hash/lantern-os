@@ -84,7 +84,8 @@ impl StreamingCompressor {
             &self.policy,
         );
 
-        let mut header = ArchiveHeader::new(self.raw_segments.len() as u32, self.total_uncompressed);
+        let mut header =
+            ArchiveHeader::new(self.raw_segments.len() as u32, self.total_uncompressed);
         header.write(writer)?;
 
         // Reserve segment table
@@ -101,8 +102,8 @@ impl StreamingCompressor {
         self.segments.reserve(self.raw_segments.len());
         for raw in &self.raw_segments {
             let seg_offset = writer.stream_position()?;
-            let compressed = zstd::encode_all(&raw[..], 3)
-                .map_err(|e| CsfError::Compression(e.to_string()))?;
+            let compressed =
+                zstd::encode_all(&raw[..], 3).map_err(|e| CsfError::Compression(e.to_string()))?;
             writer.write_all(&compressed)?;
             self.segments.push(SegmentInfo {
                 offset: seg_offset,
@@ -156,7 +157,11 @@ impl SegmentReader {
             });
         }
 
-        Ok(Self { file, header, seg_table })
+        Ok(Self {
+            file,
+            header,
+            seg_table,
+        })
     }
 
     pub fn header(&self) -> &ArchiveHeader {
@@ -179,7 +184,6 @@ impl SegmentReader {
     /// Decompress a segment to its original bytes.
     pub fn decompress_segment(&mut self, index: u32) -> Result<Vec<u8>> {
         let compressed = self.read_segment(index)?;
-        zstd::decode_all(&compressed[..])
-            .map_err(|e| CsfError::Compression(e.to_string()))
+        zstd::decode_all(&compressed[..]).map_err(|e| CsfError::Compression(e.to_string()))
     }
 }

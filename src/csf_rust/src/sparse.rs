@@ -57,15 +57,14 @@ pub fn encode_sparse(
     }
 
     // Final entropy pass — zstd level 3 (fast, good ratio)
-    let compressed = zstd::encode_all(&buf[..], 3)
-        .map_err(|e| CsfError::Compression(e.to_string()))?;
+    let compressed =
+        zstd::encode_all(&buf[..], 3).map_err(|e| CsfError::Compression(e.to_string()))?;
     Ok((meta, compressed))
 }
 
 /// Decode CSR back to dense bytes.
 pub fn decode_sparse(meta: &CsrMetadata, compressed: &[u8]) -> Result<Vec<u8>> {
-    let raw = zstd::decode_all(compressed)
-        .map_err(|e| CsfError::Compression(e.to_string()))?;
+    let raw = zstd::decode_all(compressed).map_err(|e| CsfError::Compression(e.to_string()))?;
 
     let mut output = vec![meta.default_value; meta.original_len];
     let mut cursor = std::io::Cursor::new(&raw);

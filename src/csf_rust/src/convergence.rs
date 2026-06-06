@@ -5,8 +5,8 @@
 //! archive references the same symbol IDs. This saves 15-35% vs concatenating
 //! two gzip streams, which have no cross-file dictionary sharing.
 
-use crate::{CsfError, Result, SecurityPolicy};
 use crate::header::CsfFlags;
+use crate::{CsfError, Result, SecurityPolicy};
 
 /// Archive merger with depth limit to prevent zip-bomb recursion.
 pub struct ArchiveMerger {
@@ -19,6 +19,7 @@ impl ArchiveMerger {
         Self { policy, depth: 0 }
     }
 
+    #[allow(dead_code)]
     fn with_depth(&self, depth: u8) -> Self {
         Self {
             policy: self.policy.clone(),
@@ -42,7 +43,7 @@ impl ArchiveMerger {
 
         // Merge dictionaries: shared symbols keep IDs, new symbols appended.
         let mut unified_dict = base.dictionary.clone();
-        for (token, _id) in &delta.dictionary.token_to_id {
+        for token in delta.dictionary.token_to_id.keys() {
             if !unified_dict.token_to_id.contains_key(token) {
                 let next = unified_dict.next_id;
                 unified_dict.next_id = next.wrapping_add(1);

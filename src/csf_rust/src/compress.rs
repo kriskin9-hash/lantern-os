@@ -8,11 +8,10 @@
 //! Fast-mode upgrade: bypass symbolic layer for speed-critical paths.
 
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
-use std::collections::HashMap;
 use std::io::{Read, Write};
 
 use crate::dictionary::SymbolicDictionary;
-use crate::sparse::{encode_sparse, decode_sparse, CsrMetadata};
+use crate::sparse::{decode_sparse, encode_sparse, CsrMetadata};
 use crate::{CsfError, Result, SecurityPolicy};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,8 +79,8 @@ impl Compressor {
         meta.write(&mut body)?;
         body.write_all(&sparse_compressed)?;
 
-        let final_compressed = zstd::encode_all(&body[..], 3)
-            .map_err(|e| CsfError::Compression(e.to_string()))?;
+        let final_compressed =
+            zstd::encode_all(&body[..], 3).map_err(|e| CsfError::Compression(e.to_string()))?;
         Ok(final_compressed)
     }
 
@@ -121,8 +120,7 @@ pub struct Decompressor;
 
 impl Decompressor {
     pub fn decompress(data: &[u8], policy: &SecurityPolicy) -> Result<Vec<u8>> {
-        let body = zstd::decode_all(data)
-            .map_err(|e| CsfError::Compression(e.to_string()))?;
+        let body = zstd::decode_all(data).map_err(|e| CsfError::Compression(e.to_string()))?;
         let mut cursor = std::io::Cursor::new(&body);
 
         let dict_len = cursor.read_u32::<BigEndian>()? as usize;

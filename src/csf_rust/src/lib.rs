@@ -53,11 +53,11 @@ pub enum CsfError {
 pub type Result<T> = std::result::Result<T, CsfError>;
 
 /// Re-export core types.
-pub use compress::{Compressor, CompressionMode, Decompressor};
+pub use compress::{CompressionMode, Compressor, Decompressor};
 pub use convergence::ArchiveMerger;
 pub use dictionary::SymbolicDictionary;
 pub use header::{ArchiveHeader, CsfFlags};
-pub use search::{SearchIndex, SearchQuery, SearchHit};
+pub use search::{SearchHit, SearchIndex, SearchQuery};
 pub use security::SecurityPolicy;
 pub use sparse::{CsrMatrix, CsrMetadata};
 pub use streaming::{SegmentReader, StreamingCompressor};
@@ -68,6 +68,7 @@ pub use wavefront::Wavefront;
 pub struct Archive {
     segments: Vec<Vec<u8>>,
     dictionary: SymbolicDictionary,
+    #[allow(dead_code)]
     index: Option<SearchIndex>,
     flags: CsfFlags,
 }
@@ -135,5 +136,4 @@ mod tests {
         let seg2 = reader.decompress_segment(2).unwrap();
         assert_eq!(&seg2[..], b"Segment two");
     }
-
 }

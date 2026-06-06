@@ -107,11 +107,7 @@ impl Wavefront {
 
     /// Search within the wavefront without touching segments that fail the
     /// Bloom filter negative check.
-    pub fn search<F>(
-        &mut self,
-        query: &SearchQuery,
-        decompress: F,
-    ) -> Result<Vec<SearchHit>>
+    pub fn search<F>(&mut self, query: &SearchQuery, decompress: F) -> Result<Vec<SearchHit>>
     where
         F: Fn(u32) -> Result<Vec<u8>>,
     {
@@ -134,7 +130,7 @@ impl Wavefront {
         }
         let needle = &query.terms[0];
         for seg in candidates {
-            let data = self.load_segment(seg, |i| decompress(i))?;
+            let data = self.load_segment(seg, &decompress)?;
             let text = std::str::from_utf8(data).unwrap_or("");
             for (offset, _) in text.match_indices(needle) {
                 hits.push(SearchHit {
