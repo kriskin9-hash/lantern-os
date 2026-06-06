@@ -62,9 +62,11 @@ def get_recent():
     if not journal:
         return jsonify({"entries": [], "note": "cognitive_layer_unavailable"})
 
-    # TODO: wire to actual dream_journal.py get_recent() when available
+    limit = request.args.get('limit', 7, type=int)
+    entries = journal.get_recent(limit=limit)
     return jsonify({
-        "entries": [],
+        "entries": entries,
+        "count": len(entries),
         "characters": journal.character_status(),
     })
 

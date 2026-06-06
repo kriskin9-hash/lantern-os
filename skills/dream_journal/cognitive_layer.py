@@ -159,6 +159,35 @@ class CognitiveJournal:
         return "\n".join(lines)
 
 
+    def get_recent(self, limit: int = 7) -> List[Dict]:
+        """Return recent dreams from structured journal JSONL files."""
+        all_dreams: List[Dict] = []
+        search_dirs = [self.data_dir, Path("data/dream_journal"), Path("data/dreamer/notebooks")]
+        for search_dir in search_dirs:
+            if not search_dir.exists():
+                continue
+            for pattern in ("dreams_*.jsonl", "*.jsonl"):
+                for file in sorted(search_dir.glob(pattern)):
+                    try:
+                        with open(file, "r", encoding="utf-8-sig") as f:
+                            for line in f:
+                                if line.strip():
+                                    entry = json.loads(line)
+                                    normalized = {
+                                        "id": entry.get("id") or entry.get("entry_id") or f"{file.stem}-{len(all_dreams)}",
+                                        "content": entry.get("content") or entry.get("text") or "",
+                                        "timestamp": entry.get("timestamp") or entry.get("createdAt") or entry.get("recordedAt") or datetime.now(timezone.utc).isoformat(),
+                                        "kind": entry.get("kind") or entry.get("type") or "dream",
+                                        "emotions": entry.get("emotions") or entry.get("mood") or [],
+                                        "tags": entry.get("tags") or entry.get("symbols") or [],
+                                        "lucidity": entry.get("lucidity", 0.0),
+                                    }
+                                    all_dreams.append(normalized)
+                    except Exception as e:
+                        print(f"[warn] Could not read {file}: {e}")
+        all_dreams.sort(key=lambda d: d.get("timestamp", ""), reverse=True)
+        return all_dreams[:limit]
+
 # Global instance for bot import
 _cognitive_journal: CognitiveJournal | None = None
 
