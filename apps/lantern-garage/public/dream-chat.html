@@ -20,10 +20,7 @@
       <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
     </div>
     <div class="selector-row">
-      <select id="agent-select" title="Agent" aria-label="Select agent">
-        <option value="lantern" selected>Lantern</option>
-      </select>
-      <select id="provider-select" title="Provider" aria-label="Select AI provider">
+      <select id="provider-select" title="Provider" aria-label="Select AI provider" style="display:none;">
         <option value="">Auto</option>
         <option value="claude">Claude</option>
         <option value="openai">OpenAI</option>
@@ -31,7 +28,7 @@
         <option value="grok">Grok</option>
         <option value="ollama">Ollama</option>
       </select>
-      <button class="mcp-toggle" id="mcp-toggle" title="Toggle Keystone MCP mode" onclick="toggleKeystoneMcp()">🔧 MCP</button>
+      <button class="mcp-toggle" id="mcp-toggle" title="Direct mode — talk to the model without persona RP" onclick="toggleKeystoneMcp()">⚡ Direct</button>
     </div>
     <button class="settings-btn" id="logdream-btn" title="Log a dream" onclick="openLogDream()" style="margin-left:4px;">✦</button>
     <button class="settings-btn" id="settings-btn" title="Provider settings" onclick="openSettings()">

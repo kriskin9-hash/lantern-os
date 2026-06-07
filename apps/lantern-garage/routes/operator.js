@@ -84,10 +84,14 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       const { execSync } = require("child_process");
       const steps = [];
 
-      // Step 1: git pull origin master
+      // Step 1: git pull current branch (or fallback to master)
       try {
-        const pull = execSync("git pull origin master", { cwd: repoRoot, encoding: "utf8", timeout: 30000 });
-        steps.push({ step: "git_pull", ok: true, output: pull.trim() });
+        let currentBranch = "master";
+        try {
+          currentBranch = execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf8" }).trim();
+        } catch {}
+        const pull = execSync(`git pull origin ${currentBranch}`, { cwd: repoRoot, encoding: "utf8", timeout: 30000 });
+        steps.push({ step: "git_pull", ok: true, output: pull.trim(), branch: currentBranch });
       } catch (e) {
         steps.push({ step: "git_pull", ok: false, output: e.stdout?.trim() || e.message });
       }

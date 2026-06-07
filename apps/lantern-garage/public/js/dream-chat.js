@@ -4,11 +4,21 @@
   const statusDot = document.getElementById("status-dot");
   const statusLabel = document.getElementById("status-label");
   const emptyState = document.getElementById("empty-state");
-  const agentSelect = document.getElementById("agent-select");
   const providerSelect = document.getElementById("provider-select");
   const mcpToggle = document.getElementById("mcp-toggle");
-  let keystoneMcpEnabled = false;
+  let directModeEnabled = false;
+  let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
+  // Agent is contextual — Lantern is default, others triggered by name in message
+  function detectAgent(msg) {
+    const lower = (msg || "").toLowerCase();
+    if (lower.includes("keystone") || lower.includes("debug")) return "keystone";
+    if (lower.includes("blinkbug") || lower.includes("glitch")) return "blinkbug";
+    if (lower.includes("waterfall") || lower.includes("gentle")) return "waterfall";
+    if (lower.includes("xenon") || lower.includes("navigate")) return "xenon";
+    if (lower.includes("founder") || lower.includes("wish")) return "founder";
+    return "lantern";
+  }
 
   // Telemetry shim (logs to console; replace with real telemetry if needed)
   const TELEMETRY = {
@@ -73,29 +83,11 @@
   }
 
   function toggleKeystoneMcp() {
-    keystoneMcpEnabled = !keystoneMcpEnabled;
-    mcpToggle.classList.toggle("active", keystoneMcpEnabled);
-    document.querySelector(".app").classList.toggle("mcp-mode", keystoneMcpEnabled);
-    document.querySelector(".input-area").classList.toggle("mcp-mode", keystoneMcpEnabled);
-    if (keystoneMcpEnabled) {
-      lockAgentToKeystone();
-    } else {
-      restoreAgentSelector();
-    }
-  }
-
-  function lockAgentToKeystone() {
-    if (!originalAgents.length) return;
-    const keystone = originalAgents.find(a => a.id === "keystone");
-    if (keystone) {
-      agentSelect.innerHTML = `<option value="${keystone.id}">${keystone.name}</option>`;
-      agentSelect.value = keystone.id;
-    }
-  }
-
-  function restoreAgentSelector() {
-    if (!originalAgents.length) return;
-    agentSelect.innerHTML = originalAgents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+    directModeEnabled = !directModeEnabled;
+    keystoneMcpEnabled = directModeEnabled; // legacy compat
+    mcpToggle.classList.toggle("active", directModeEnabled);
+    document.querySelector(".app").classList.toggle("mcp-mode", directModeEnabled);
+    document.querySelector(".input-area").classList.toggle("mcp-mode", directModeEnabled);
   }
   document.addEventListener("keydown", (e) => {
     if (e.key === "d" && !e.ctrlKey && !e.metaKey && !e.altKey && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") {
@@ -138,9 +130,7 @@
         const data = await r.json();
         agents = data.agents || [];
         originalAgents = agents;
-        agentSelect.innerHTML = agents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
-        if (data.default) agentSelect.value = data.default;
-        if (keystoneMcpEnabled) lockAgentToKeystone();
+        originalAgents = agents;
         statusDot.className = "dot online";
         statusLabel.textContent = "online";
         TELEMETRY.log("agents", `Loaded ${agents.length} agents`);
@@ -309,7 +299,7 @@
     appendUserBubble(text);
     inputEl.value = "";
     analytics.messagesSent++;
-    analytics.lastAgent = agents.find((a) => a.id === agentSelect.value)?.name || agentSelect.value;
+    analytics.lastAgent = directModeEnabled ? "Direct" : detectAgent(text);
     analytics.record("send", text.slice(0, 40));
     analytics._msgStart = Date.now();
     streamAgentResponse(text);
@@ -330,7 +320,7 @@
     sendBtn.disabled = true;
     setThinking(true);
 
-    const agentName = agents.find((a) => a.id === agentSelect.value)?.name || "Agent";
+    const agentName = directModeEnabled ? "Model" : (agents.find((a) => a.id === detectAgent(message))?.name || "Lantern");
     const row = document.createElement("div");
     row.className = "msg-row agent";
 
@@ -353,14 +343,14 @@
     let fullText = "";
     let hasTokens = false;
     const provider = providerSelect.value;
-    const agent = agentSelect.value;
+    const agent = directModeEnabled ? "" : detectAgent(message);
     // POST with history for multi-turn context; history excludes current message (already appended)
     const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
 
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: keystoneMcpEnabled }),
+      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: directModeEnabled }),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -520,7 +510,7 @@
     }
 
     // Keystone MCP: extract code blocks as executable commands
-    if (keystoneMcpEnabled && agentSelect.value === "keystone" && text) {
+    if (directModeEnabled && text) {
       const codeBlocks = text.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/g) || [];
       codeBlocks.forEach(block => {
         const cmd = block.replace(/```(?:bash|powershell|sh)?\n?/, "").replace(/```$/, "").trim();
