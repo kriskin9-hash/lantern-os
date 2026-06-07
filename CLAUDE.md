@@ -114,15 +114,38 @@ Copy `.env.example` to `.env` at repo root. Key variables: `ANTHROPIC_API_KEY`, 
 
 `pytest.ini` sets `pythonpath = apps src` so tests can import from both trees without install.
 
-## Monoworkstream Rule (Critical)
+## Per-Agent Workstream Rule (Critical)
 
-This repo enforces **one open feature PR at a time**:
-- No new branches while a PR is open
-- Commits and pushes to a branch that already has an open PR are always allowed
-- `gh-pages` (static site deploy) is exempt — it never counts as a workstream
-- Install hooks: `powershell -ExecutionPolicy Bypass -File scripts/Install-MonoworkstreamHooks.ps1`
-- Emergency bypass: `SKIP_MONOWORKSTREAM=1 git commit ...`
+Each agent gets **one open PR lane at a time**. All agent lanes run concurrently.
 
-Always check for open PRs before creating branches or commits.
+| Branch prefix | Lane |
+|---|---|
+| `claude/` | Claude lane |
+| `gemini/` | Gemini lane |
+| `codex/` | Codex lane |
+| `devin/` | Devin lane |
+| `grok/` | Grok lane |
+| `openai/` | OpenAI lane |
+| anything else | Human lane |
 
-**Note:** Multiple agents running concurrently via `.claude/agent-slots.json` is a core design feature, not a monoworkstream violation. The rule applies to Git branches / PRs, not to active agent slots.
+Rules:
+- A second branch from the same agent prefix is blocked until its first PR is merged/closed
+- Commits/pushes to a branch **that already has an open PR** are always allowed
+- `gh-pages`, `master`, `dev` are exempt
+- Direct push to master is blocked — open a PR, or: `OVERRIDE_MERGE=1 git push origin master`
+- Slop commit messages (empty, < 8 chars, "wip", "placeholder", "temp", etc.) are blocked
+
+Install hooks:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Install-MonoworkstreamHooks.ps1
+```
+
+Bypasses:
+```bash
+SKIP_MONOWORKSTREAM=1 git commit/push   # skip workstream + slop checks
+OVERRIDE_MERGE=1 git push origin master  # allow direct master push
+```
+
+Always check open PRs per-agent before creating a new branch.
+
+**Note:** Multiple agents running concurrently via `.claude/agent-slots.json` is a core design feature. The rule applies to Git branches / PRs, not to active agent slots.

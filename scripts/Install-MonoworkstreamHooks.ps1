@@ -16,14 +16,18 @@ if (-not (Test-Path (Join-Path $sourceDir "pre-commit"))) {
 }
 
 Copy-Item (Join-Path $sourceDir "pre-commit") (Join-Path $hooksDir "pre-commit") -Force
-Copy-Item (Join-Path $sourceDir "pre-push")  (Join-Path $hooksDir "pre-push")  -Force
+Copy-Item (Join-Path $sourceDir "commit-msg") (Join-Path $hooksDir "commit-msg") -Force
+Copy-Item (Join-Path $sourceDir "pre-push")   (Join-Path $hooksDir "pre-push")   -Force
 
-# On Windows, Git hooks need to be executable. Git for Windows respects the shebang.
-# We don't need chmod here because Git for Windows handles .sh files with bash.
-Write-Host "Monoworkstream hooks installed to .git/hooks/"
+Write-Host "Per-agent workstream hooks installed to .git/hooks/"
 Write-Host ""
 Write-Host "Rules enforced:"
-Write-Host "  - pre-commit: blocks new commits while any PR is open"
-Write-Host "  - pre-push:   blocks new pushes while any PR is open + protects master"
+Write-Host "  - pre-commit:  blocks new branch if this agent (claude/gemini/codex/devin/grok) already has an open PR"
+Write-Host "  - commit-msg:  blocks slop messages (empty, too short, WIP, placeholder, etc.)"
+Write-Host "  - pre-push:    same per-agent check on push + master protection"
 Write-Host ""
-Write-Host "Bypass (emergency only): SKIP_MONOWORKSTREAM=1 git commit ..."
+Write-Host "Each agent prefix gets one concurrent PR lane."
+Write-Host "Human branches (no agent prefix) share one lane."
+Write-Host ""
+Write-Host "Bypass workstream gate:  SKIP_MONOWORKSTREAM=1 git commit/push ..."
+Write-Host "Override master push:    OVERRIDE_MERGE=1 git push origin master"

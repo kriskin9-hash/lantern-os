@@ -1,6 +1,6 @@
 {
   "name": "lantern-garage-app",
-  "version": "0.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Local-first Lantern OS garage full-stack app.",
   "scripts": {
@@ -20,7 +20,7 @@
     "test:ui:headed": "npx playwright test ../../tests/test_dream_journal_ui.spec.js --headed",
     "test:all": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone cache ui",
     "dev": "node --watch server.js",
-    "start:master": "git -C ../.. pull origin master && node --watch server.js"
+    "start:master": "git -C ../.. pull origin master && python3 ../../integrations/human-flourishing-frameworks/export_snapshot.py || true && node --watch server.js"
   },
   "engines": {
     "node": ">=20"

@@ -6,6 +6,12 @@ module.exports = async function fileRoutes(req, res, url, deps) {
     const relative = decodeURIComponent(url.pathname.replace(/^\/repo\//, ""));
     const target = path.resolve(repoRoot, relative);
     if (!target.startsWith(repoRoot)) { sendJson(res, { error: "forbidden" }, 403); return true; }
+    if (!fs.existsSync(target)) { sendJson(res, { error: "not_found" }, 404); return true; }
+    const ext = path.extname(target).toLowerCase();
+    if (ext === ".md" || ext === ".txt") {
+      sendHtml(res, renderMarkdownDocument(fs.readFileSync(target, "utf8"), relative));
+      return true;
+    }
     sendFile(res, target);
     return true;
   }
