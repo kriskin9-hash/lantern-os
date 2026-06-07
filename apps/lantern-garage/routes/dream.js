@@ -80,7 +80,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       try {
         const { spawn } = require("child_process");
         const py = process.platform === "win32" ? "python" : "python3";
-        const script = `from src.csf.dream_compressor import compress_dream_file; compress_dream_file(r'${monthFile}')`;
+        const script = `from csf.dream_compressor import compress_dream_file; compress_dream_file(r'${monthFile}')`;
         const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
         proc.on("close", (code) => {
           // Compression complete; .csf file written alongside .jsonl
@@ -97,11 +97,27 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const body = JSON.parse(raw || "{}");
       const message = String(body.message || "").slice(0, maxDreamerTextLength);
       const recentDreams = readRecentDreams(5);
+      const provStart = Date.now();
       const result = await dreamChatReply(message, recentDreams, body.agent || "", body.provider || "");
+      const provLatency = Date.now() - provStart;
       try {
         await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-journal", role: "operator", text: message.slice(0, maxConversationTextLength) });
         await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-journal", role: "lantern", text: String(result.reply || "").slice(0, maxConversationTextLength) });
       } catch { /* logging non-critical */ }
+      // Convergence IO provenance (AAPF) — lightweight Node-side record
+      try {
+        recordChatProvenance({
+          actionId: `chat-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`,
+          agentId: result.agent || "unknown",
+          providerId: result.online ? (body.provider || "auto") : "offline",
+          inputSummary: message.slice(0, 200),
+          outputSummary: String(result.reply || "").slice(0, 200),
+          latencyMs: provLatency,
+          status: result.reply ? "ok" : (result.error ? "error" : "offline"),
+          errorMsg: result.error || "",
+          metadata: { source: result.source || "unknown", threeDoors: !!result.threeDoors },
+        });
+      } catch { /* provenance non-critical */ }
       if (!result.reply) { sendJson(res, { error: result.error || "no_provider_configured", agent: result.agent, online: false }, 503); return true; }
       sendJson(res, { ...result, generatedAt: new Date().toISOString() });
     } catch (error) { sendJson(res, { error: error.message, online: false }); }
@@ -406,6 +422,37 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     return true;
   }
 };
+
+// Lightweight AAPF provenance recorder (Node-side mirror of ConvergenceIO engine)
+function recordChatProvenance({ actionId, agentId, providerId, inputSummary, outputSummary, latencyMs, status, errorMsg, metadata }) {
+  const crypto = require("crypto");
+  const record = {
+    action_id: actionId,
+    timestamp: new Date().toISOString(),
+    actor: { agent_id: agentId, provider_id: providerId, model: "" },
+    action_type: "chat",
+    input_summary: inputSummary,
+    output_summary: outputSummary,
+    capability_claim_id: null,
+    nap_profile_id: null,
+    dcf_ref: null,
+    tier: "wanderer",
+    consent_state: "implicit",
+    data_classifications: ["dream_content"],
+    authority_check: "passed",
+    boundary: "local",
+    latency_ms: latencyMs,
+    status,
+    error_msg: errorMsg,
+    metadata: metadata || {},
+  };
+  const payload = JSON.stringify(record, Object.keys(record).sort());
+  record.integrity_hash = crypto.createHash("sha256").update(payload).digest("hex");
+  const provenanceDir = require("path").join(require("path").resolve(__dirname, "..", "..", ".."), "data", "provenance");
+  if (!require("fs").existsSync(provenanceDir)) require("fs").mkdirSync(provenanceDir, { recursive: true });
+  const provenancePath = require("path").join(provenanceDir, "actions.jsonl");
+  require("fs").appendFileSync(provenancePath, JSON.stringify(record) + "\n", "utf8");
+}
 
 // Shared helper — read all dream entries from monthly JSONL files
 function loadDreamEntries(fs, path, repoRoot, sorted = false) {

@@ -6,6 +6,7 @@ const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
+const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 
@@ -614,6 +615,43 @@ async function handleStreamChat(req, url, res) {
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
   if (message && (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local")) {
+    // Attempt 1: Unified Agent Connector (health-checked, provider-ranked, Python-side SSE)
+    if (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local") {
+      try {
+        let sseDone = false;
+        let sseErr = null;
+        const sseStream = unifiedAgentStreamSSE(message, agent.id, requestedProvider || "ollama", dreamContext);
+        sseStream.onData((parsed) => {
+          if (parsed.token) { fullReply += parsed.token; sendToken(parsed.token); }
+          if (parsed.done) { sseDone = true; }
+        });
+        sseStream.onError((err) => { sseErr = err; sseDone = true; });
+        await new Promise((resolve) => {
+          const check = setInterval(() => {
+            if (sseDone) { clearInterval(check); resolve(); }
+          }, 50);
+        });
+        if (sseErr) throw sseErr;
+        if (fullReply) {
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          await appendConversationEntry({
+            recordedAt: new Date().toISOString(),
+            surface: "dream-chat-stream",
+            role: "lantern",
+            text: cleanText.slice(0, maxConversationTextLength),
+          }).catch(() => {});
+          recordProviderSuccess("ollama");
+          sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+          return;
+        }
+      } catch (err) {
+        recordProviderFailure("ollama", `unified_connector: ${err.message}`);
+        fullReply = "";
+        // Fall through to direct HTTP attempt
+      }
+    }
+
+    // Attempt 2: Direct HTTP to Ollama
     try {
       const payload = JSON.stringify({
         model: ollamaModel,
