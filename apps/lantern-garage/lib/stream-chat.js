@@ -1,9 +1,13 @@
 const https = require("https");
 const http = require("http");
+const path = require("path");
 const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, generateLocalReply } = require("./dream-chat");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
+const { swarmOrchestrate } = require("./swarm-orchestrator");
+
+const repoRoot = path.resolve(__dirname, "../../../");
 
 const maxConversationTextLength = 4000;
 
@@ -58,9 +62,96 @@ async function handleStreamChat(req, url, res) {
     } catch { /* message stays empty */ }
   }
 
-  // Reject unsupported bang commands explicitly so they don't silently fall through as chat text
+  // Handle bang commands
   const cmd = parseBangCommand(message);
   if (cmd) {
+    if (cmd.name === "swarm") {
+      // Parse: !swarm <mode> <job> <message...>
+      // or:   !swarm <job> <message...>  (default mode = single)
+      const parts = cmd.args.split(/\s+/);
+      const knownModes = ["single", "parallel", "consensus", "council"];
+      const knownJobs = ["chat", "coding", "reasoning", "vision", "summarize", "creative", "research"];
+      let mode = "single";
+      let job = "chat";
+      let swarmMessage = cmd.args;
+      if (knownModes.includes(parts[0])) {
+        mode = parts.shift();
+      }
+      if (knownJobs.includes(parts[0])) {
+        job = parts.shift();
+      }
+      swarmMessage = parts.join(" ") || "Hello swarm";
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`Swarm ${mode} · ${job} · routing…\n\n`);
+      const agent = selectAgent(swarmMessage);
+      const systemPrompt = `${agent.systemPrompt}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic.`;
+
+      swarmOrchestrate({ job, mode, systemPrompt, message: swarmMessage, history })
+        .then((result) => {
+          const words = result.text.split(" ");
+          for (const word of words) sendToken(word + " ");
+          const meta = { agent: agent.name, online: true, swarm: { provider: result.provider, model: result.model, mode, job } };
+          if (result.consensus) meta.swarm.consensus = result.consensus;
+          if (result.council) meta.swarm.council = result.council;
+          sendDone(result.provider, meta);
+          res.end();
+        })
+        .catch((err) => {
+          sendToken(`Swarm failed: ${err.message}\n`);
+          sendDone("failed", { error: err.message });
+          res.end();
+        });
+      return;
+    }
+
+    if (cmd.name === "converge") {
+      const { spawn } = require("child_process");
+      const py = spawn("python", ["src/convergence_io_engine.py", "loop"], { cwd: repoRoot });
+      let stdout = "";
+      py.stdout.on("data", (d) => { stdout += d.toString(); });
+      py.stderr.on("data", (d) => { stdout += d.toString(); });
+      py.on("close", () => {
+        try {
+          const result = JSON.parse(stdout);
+          const status = result.promotion_ready ? "✅ Converged" : "⚠️ Needs review";
+          const version = result.version?.build || result.version?.tag || "unknown";
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+          });
+          res.write(`event: token\ndata: ${JSON.stringify({ token: status + " (score: " + result.convergence_score + ")\n" })}\n\n`);
+          result.phases.forEach((p) => {
+            res.write(`event: token\ndata: ${JSON.stringify({ token: "- " + p.name + ": " + p.status + "\n" })}\n\n`);
+          });
+          res.write(`event: done\ndata: ${JSON.stringify({ done: true, agent: "Convergence", online: true, version })}\n\n`);
+          res.end();
+        } catch (exc) {
+          res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+          });
+          res.write(`event: token\ndata: ${JSON.stringify({ token: "Convergence output:\n" + stdout.slice(0, 2000) })}\n\n`);
+          res.write(`event: done\ndata: ${JSON.stringify({ done: true })}\n\n`);
+          res.end();
+        }
+      });
+      return;
+    }
+
     res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
     res.end(JSON.stringify({ error: "unsupported_command", command: cmd.name }));
     return;
@@ -244,14 +335,12 @@ async function handleStreamChat(req, url, res) {
 
   // Snapshot provider availability from the 60s PCSF cache (avoids per-request env re-reads)
   const providerState = getProviderState();
-  const anyProviderConfigured = !!({
-    ...providerState.gemini,
-    ...providerState.anthropic,
-    ...providerState.openai,
-    ...providerState.xai,
-  }).hasKey || !!(providerState.gemini.hasKey || providerState.anthropic.hasKey ||
+  const anyProviderConfigured = !!(
+    providerState.gemini.hasKey || providerState.anthropic.hasKey ||
     providerState.openai.hasKey || providerState.xai.hasKey ||
-    process.env.OLLAMA_BASE_URL
+    providerState.mistral.hasKey || providerState.cohere.hasKey ||
+    providerState.perplexity.hasKey || providerState.deepseek.hasKey ||
+    providerState.openrouter.hasKey || process.env.OLLAMA_BASE_URL
   );
 
   let fullReply = "";

@@ -138,6 +138,86 @@
       "required": false,
       "state": "absent",
       "purpose": "Comma-separated cloud mirror URLs for redundancy reporting."
+    },
+    {
+      "key": "MISTRAL_API_KEY",
+      "group": "provider",
+      "required": false,
+      "state": "absent",
+      "purpose": "Enables Mistral AI streaming via api.mistral.ai. Codestral for coding, Mistral Large for chat.",
+      "get_key_url": "https://console.mistral.ai/api-keys/"
+    },
+    {
+      "key": "MISTRAL_MODEL",
+      "group": "model",
+      "required": false,
+      "default": "mistral-large-latest",
+      "state": "absent",
+      "purpose": "Override the default Mistral model"
+    },
+    {
+      "key": "COHERE_API_KEY",
+      "group": "provider",
+      "required": false,
+      "state": "absent",
+      "purpose": "Enables Cohere streaming via api.cohere.com. Command R+ for long-context RAG and summarization.",
+      "get_key_url": "https://dashboard.cohere.com/api-keys"
+    },
+    {
+      "key": "COHERE_MODEL",
+      "group": "model",
+      "required": false,
+      "default": "command-r-plus",
+      "state": "absent",
+      "purpose": "Override the default Cohere model"
+    },
+    {
+      "key": "PERPLEXITY_API_KEY",
+      "group": "provider",
+      "required": false,
+      "state": "absent",
+      "purpose": "Enables Perplexity search-augmented streaming via api.perplexity.ai. Includes live web citations.",
+      "get_key_url": "https://www.perplexity.ai/settings/api"
+    },
+    {
+      "key": "PERPLEXITY_MODEL",
+      "group": "model",
+      "required": false,
+      "default": "sonar-pro",
+      "state": "absent",
+      "purpose": "Override the default Perplexity model"
+    },
+    {
+      "key": "DEEPSEEK_API_KEY",
+      "group": "provider",
+      "required": false,
+      "state": "absent",
+      "purpose": "Enables DeepSeek streaming via api.deepseek.com. DeepSeek-Reasoner for math and logic.",
+      "get_key_url": "https://platform.deepseek.com/api_keys"
+    },
+    {
+      "key": "DEEPSEEK_MODEL",
+      "group": "model",
+      "required": false,
+      "default": "deepseek-chat",
+      "state": "absent",
+      "purpose": "Override the default DeepSeek model"
+    },
+    {
+      "key": "OPENROUTER_API_KEY",
+      "group": "provider",
+      "required": false,
+      "state": "absent",
+      "purpose": "Enables OpenRouter unified gateway to 100+ models. Fallback and price optimization.",
+      "get_key_url": "https://openrouter.ai/settings/keys"
+    },
+    {
+      "key": "OPENROUTER_MODEL",
+      "group": "model",
+      "required": false,
+      "default": "openai/gpt-4.1-mini",
+      "state": "absent",
+      "purpose": "Override the default OpenRouter model"
     }
   ],
   "provider_settings_api": {
