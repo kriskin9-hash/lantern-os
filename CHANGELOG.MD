@@ -7,6 +7,20 @@ release date. This project is currently private and local-first, so release
 notes should be honest about what was verified locally and what remains design
 intent.
 
+## [1.2.1] — 2026-06-07 — Start:master Auto-Sync, Moon Heartbeat, Markdown Renderer
+
+### Boot
+- `start:master` now fetches, merges, AND pushes local commits before starting the server
+- Full sync cycle: `git fetch` → `git merge --ff-only` (fallback: full merge) → `git push` → HFF seed → `node --watch`
+
+### UI
+- Moon heartbeat indicator with `moon-drift` animation (9s cycle, lag-aware speed)
+- `/repo/*.md` and `/repo/*.txt` render as styled HTML via Lantern Reader
+- Human Flourishing Frameworks dashboard live with 62 Bayesian beliefs, real-time 30s polling
+
+### Versioning
+- `version.json`, root `package.json`, and garage `package.json` all set to `1.2.1`
+
 ## [1.2.0] — 2026-06-07 — Autostart, UX Grounding, HFF Integration, Slop Gates
 
 ### Startup

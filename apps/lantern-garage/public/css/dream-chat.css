@@ -813,16 +813,13 @@
 
 /* ── Moon heartbeat ─────────────────────────────────────────────────────── */
 @keyframes moon-drift {
-  0%   { transform: rotate(-3deg) translateY(0px); }
-  25%  { transform: rotate(0deg)  translateY(-3px); }
-  50%  { transform: rotate(3deg)  translateY(0px); }
-  75%  { transform: rotate(0deg)  translateY(-2px); }
-  100% { transform: rotate(-3deg) translateY(0px); }
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 
 .moon-heartbeat {
   display: inline-block;
-  animation: moon-drift 9s ease-in-out infinite;
+  animation: moon-drift 9s linear infinite;
   will-change: transform;
 }
 

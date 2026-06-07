@@ -9,6 +9,7 @@ const { swarmOrchestrate } = require("./swarm-orchestrator");
 const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
+const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -19,10 +20,11 @@ const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How a
 
 // Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
 function extractDoors(text) {
-  const match = text.match(/\[DOORS:\s*([^\]]+)\]/i);
+  // Match complete [DOORS: A | B | C] or incomplete [DOORS: A | B | C (no closing bracket)
+  const match = text.match(/\[DOORS:\s*([^\]]+)\]?/i);
   if (!match) return { cleanText: text.trim(), doors: [] };
   const doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
-  const cleanText = text.replace(/\[DOORS:[^\]]+\]/i, "").replace(/\n{3,}/g, "\n\n").trim();
+  const cleanText = text.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trim();
   return { cleanText, doors };
 }
 
@@ -30,6 +32,9 @@ function doorsOrFallback(text, isKeystoneDebug = false) {
   if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
   const { cleanText, doors } = extractDoors(text);
   const finalDoors = doors.length === 3 ? doors : [...doors, ...FALLBACK_DOORS].slice(0, 3);
+  if (doors.length > 0) {
+    try { saveDoorChoice(null, finalDoors); } catch {}
+  }
   return { cleanText, suggestions: finalDoors };
 }
 
@@ -203,9 +208,15 @@ async function handleStreamChat(req, url, res) {
   // Keystone debug prompt — raw dev access, no persona, no doors
   const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
+  // CSF long-term memory + door state (query-time relevance filtered)
+  const csfContext = formatCSFContextForPrompt(message);
+  const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
+
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them.${DOORS_INSTRUCTION}`;
+    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}`;
+
+  console.log(`[Stream] systemPrompt: ${systemPrompt.length} chars, csfBlock: ${csfBlock.length} chars, message: "${message.slice(0, 60)}"`);
 
   const sendToken = (token) => sse.sendToken(res, token);
   const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
@@ -283,13 +294,14 @@ async function handleStreamChat(req, url, res) {
       sendToken(word + " ");
       await new Promise((r) => setTimeout(r, 30));
     }
+    const { cleanText: localClean, suggestions: localDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
     await appendConversationEntry({
       recordedAt: new Date().toISOString(),
       surface: "dream-chat-stream",
       role: "lantern",
-      text: fullReply.slice(0, maxConversationTextLength),
+      text: localClean.slice(0, maxConversationTextLength),
     }).catch(() => {});
-    sendDone("offline", { agent: agent.name, online: false, source: "local_fallback", suggestions: FALLBACK_DOORS });
+    sendDone("local_fallback", { agent: agent.name, online: false, cleanText: localClean, suggestions: localDoors });
   };
 
   await appendConversationEntry({
@@ -379,6 +391,7 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      console.log(`[Stream] Gemini fullReply (${fullReply.length} chars): ${fullReply.slice(-200)}`);
       const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
@@ -390,6 +403,7 @@ async function handleStreamChat(req, url, res) {
       sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors });
       return;
     } catch (err) {
+      console.log(`[Stream] Gemini ${geminiModel} failed: ${err.message}`);
       recordProviderFailure("gemini", err.message);
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
@@ -474,6 +488,7 @@ async function handleStreamChat(req, url, res) {
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
+      console.log(`[Stream] Claude failed: ${err.message}`);
       recordProviderFailure("anthropic", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
@@ -549,6 +564,7 @@ async function handleStreamChat(req, url, res) {
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
+      console.log(`[Stream] OpenAI failed: ${err.message}`);
       recordProviderFailure("openai", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
