@@ -11,6 +11,15 @@ node --version   # v18+ recommended
 python --version # v3.10+ recommended
 ```
 
+**Local must be on master, synced with remote:**
+
+```bash
+git checkout master
+git pull origin master
+```
+
+All local dev and autostart boots run from the `master` branch. Feature branches are for PRs only — never run the server from a feature branch. Always merge upstream before starting.
+
 Install dependencies:
 
 ```bash
