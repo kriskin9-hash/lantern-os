@@ -202,6 +202,18 @@
           sysRow.querySelector(".bubble").innerHTML =
             `<b>Auto-update</b> ${d.ok ? "✓" : "✗"}<br><pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(steps)}${d.restart_scheduled ? "\n✓ restart_scheduled" : ""}</pre>`;
           scrollToBottom();
+          if (d.ok && d.restart_scheduled) {
+            const msg = document.createElement("div");
+            msg.className = "msg-row agent";
+            msg.innerHTML = `<div class="msg-label">System</div><div class="bubble">Restarting… hard reload in 3s</div>`;
+            messagesEl.appendChild(msg);
+            scrollToBottom();
+            setTimeout(() => {
+              if ('caches' in window) caches.keys().then(names => names.forEach(n => caches.delete(n)));
+              if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+              window.location.reload(true);
+            }, 3000);
+          }
         })
         .catch((e) => {
           sysRow.querySelector(".bubble").textContent = `Auto-update failed: ${e.message}`;

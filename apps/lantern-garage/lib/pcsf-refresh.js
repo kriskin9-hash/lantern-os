@@ -96,7 +96,9 @@ function refreshHealthPcsf(repoRoot) {
   let changed = false;
 
   // Update provider key snapshot
-  const provCheck = data.checks.find(c => c.check_id === "settings_providers");
+  const checks = data.checks || data.health_checks || [];
+  const checkList = Array.isArray(checks) ? checks : Object.values(checks);
+  const provCheck = checkList.find(c => c.check_id === "settings_providers");
   if (provCheck && provCheck.current_snapshot) {
     const snap = provCheck.current_snapshot;
     for (const key of PROVIDER_KEYS) {
