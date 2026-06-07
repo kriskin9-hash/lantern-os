@@ -36,19 +36,29 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
+  // Skip non-HTTP(S) schemes (chrome-extension:, data:, about:, etc.)
+  // These cannot be cached and will crash the Cache API
+  if (!url.protocol.startsWith("http")) {
+    return;
+  }
+
   // API calls: network-first
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
-          // Cache GET API responses for offline fallback
           if (event.request.method === "GET" && res.ok) {
             const clone = res.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+            caches.open(CACHE_NAME).then((c) => c.put(event.request, clone)).catch(() => {});
           }
           return res;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => caches.match(event.request).then((cached) => {
+          if (cached) return cached;
+          return new Response(JSON.stringify({ error: "offline" }), {
+            status: 503, headers: { "Content-Type": "application/json" }
+          });
+        }))
     );
     return;
   }
@@ -59,11 +69,12 @@ self.addEventListener("fetch", (event) => {
       const fetched = fetch(event.request).then((res) => {
         if (res.ok) {
           const clone = res.clone();
-          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone));
+          caches.open(CACHE_NAME).then((c) => c.put(event.request, clone)).catch(() => {});
         }
         return res;
       }).catch(() => cached);
-      return cached || fetched;
+      // Always return a valid Response — never undefined
+      return cached || fetched || new Response("Not found", { status: 404 });
     })
   );
 });

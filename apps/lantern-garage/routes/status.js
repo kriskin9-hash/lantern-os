@@ -2,12 +2,12 @@
 const { getRoutingSnapshot } = require("../lib/provider-cache");
 const { execSync } = require("child_process");
 
-function getGitVersion() {
+function getGitVersion(repoRoot) {
   try {
-    const commit = execSync("git rev-parse HEAD", { cwd: process.cwd(), encoding: "utf8" }).trim();
-    const tag = execSync("git describe --tags --always", { cwd: process.cwd(), encoding: "utf8" }).trim();
-    const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: process.cwd(), encoding: "utf8" }).trim();
-    const date = execSync("git log -1 --format=%cI", { cwd: process.cwd(), encoding: "utf8" }).trim();
+    const commit = execSync("git rev-parse HEAD", { cwd: repoRoot, encoding: "utf8" }).trim();
+    const tag = execSync("git describe --tags --always", { cwd: repoRoot, encoding: "utf8" }).trim();
+    const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repoRoot, encoding: "utf8" }).trim();
+    const date = execSync("git log -1 --format=%cI", { cwd: repoRoot, encoding: "utf8" }).trim();
     return { commit, tag, branch, date };
   } catch {
     return { commit: "unknown", tag: "unknown", branch: "unknown", date: new Date().toISOString() };
@@ -18,6 +18,11 @@ module.exports = async function statusRoutes(req, res, url, deps) {
   const { sendJson, readJson, readJsonl, getStatus, getReadiness, getMiningLabStatus,
     getActionCapabilities, getOperatorFeedbackMemory, getAccessModel, getCloudMirrorStatus } = deps;
 
+  if (url.pathname === "/favicon.ico") {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
   if (url.pathname === "/api/health") {
     sendJson(res, { ok: true, service: "lantern-garage", generatedAt: new Date().toISOString() });
     return true;
@@ -66,7 +71,7 @@ module.exports = async function statusRoutes(req, res, url, deps) {
     return true;
   }
   if (url.pathname === "/api/version") {
-    sendJson(res, { ok: true, version: getGitVersion(), generatedAt: new Date().toISOString() });
+    sendJson(res, { ok: true, version: getGitVersion(deps.repoRoot), generatedAt: new Date().toISOString() });
     return true;
   }
 };

@@ -279,9 +279,48 @@
       saveDraft();
     }
 
-    document.getElementById('sendBtn').addEventListener('click', send);
+    async function saveToDreamer(text) {
+      try {
+        await fetch('/api/dreamer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: 'dreamer', kind: 'note', text, tags: ['chat'] }),
+        });
+      } catch { /* offline — localStorage already has it */ }
+    }
+    async function loadDreamerEntries() {
+      try {
+        const r = await fetch('/api/dreamer?user=dreamer', { cache: 'no-store' });
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data.entries || !data.entries.length) return;
+        const chat = document.getElementById('chat');
+        // Only prepend if we haven't already loaded them
+        if (chat.dataset.dreamerLoaded) return;
+        chat.dataset.dreamerLoaded = 'true';
+        data.entries.forEach((entry) => {
+          const div = document.createElement('div');
+          div.className = 'msg agent';
+          const time = entry.recordedAt ? new Date(entry.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+          div.innerHTML = `<div class="meta">${(entry.kind || 'note').toUpperCase()} · ${time}</div>` + escapeHtml(entry.text || '');
+          chat.insertBefore(div, chat.firstChild);
+        });
+      } catch { /* offline */ }
+    }
+    document.getElementById('sendBtn').addEventListener('click', () => {
+      const text = document.getElementById('msgInput').value.trim();
+      if (!text) return;
+      send();
+      saveToDreamer(text);
+    });
     document.getElementById('msgInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const text = document.getElementById('msgInput').value.trim();
+        if (!text) return;
+        send();
+        saveToDreamer(text);
+      }
     });
     document.getElementById('msgInput').addEventListener('input', function() {
       this.style.height = 'auto';
@@ -315,6 +354,7 @@
 
     render();
     loadDraft();
+    loadDreamerEntries();
   </script>
 </body>
 </html>

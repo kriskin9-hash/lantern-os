@@ -11,6 +11,9 @@
   let originalAgents = [];
 
   let isStreaming = false;
+  // Three Doors game state
+  let threeDoorsActive = false;
+  let threeDoorsUserId = null;
   // Conversation history for multi-turn context — [{role:"user"|"assistant", text:"..."}]
   const conversationHistory = [];
 
@@ -256,18 +259,50 @@
       scrollToBottom();
       return;
     }
-    // Explicitly reject other bang commands so they don't silently behave like normal chat
-    const bangMatch = text.match(/^!(\S+)/);
-    if (bangMatch) {
+    // !three-doors / !threedoors / !doors — start the Three Doors game
+    const THREE_DOORS_TRIGGERS = ["!threedoors", "!three-doors", "!three doors", "!doors"];
+    if (THREE_DOORS_TRIGGERS.includes(text.toLowerCase())) {
       inputEl.value = "";
       inputEl.style.height = "auto";
-      const cmdName = bangMatch[1].toLowerCase();
-      const errRow = document.createElement("div");
-      errRow.className = "msg-row agent";
-      errRow.innerHTML = `<div class="msg-label">System</div><div class="bubble" style="color:var(--danger);">Unsupported command: !${escapeHtml(cmdName)}</div>`;
-      messagesEl.appendChild(errRow);
-      scrollToBottom();
+      threeDoorsUserId = `web-${Date.now()}`;
+      threeDoorsActive = true;
+      playThreeDoors({ action: "start", userId: threeDoorsUserId });
       return;
+    }
+
+    // If in Three Doors mode and message looks like a door choice
+    if (threeDoorsActive) {
+      const lower = text.toLowerCase().trim();
+      const choiceMatch = lower.match(/^[abc]$/) || lower.match(/(?:door|choose|pick)\s+([abc])/);
+      if (choiceMatch) {
+        const choice = choiceMatch[1] || choiceMatch[0];
+        inputEl.value = "";
+        inputEl.style.height = "auto";
+        playThreeDoors({ action: "choose", choice, userId: threeDoorsUserId });
+        return;
+      }
+      // Exit Three Doors mode on non-choice, non-command input
+      if (!lower.startsWith("!")) {
+        threeDoorsActive = false;
+        threeDoorsUserId = null;
+      }
+    }
+
+    // Allow backend-streaming bang commands through; reject truly unknown ones
+    const STREAMING_BANGS = ["swarm", "converge"];
+    const bangMatch = text.match(/^!(\S+)/);
+    if (bangMatch) {
+      const cmdName = bangMatch[1].toLowerCase();
+      if (!STREAMING_BANGS.includes(cmdName)) {
+        inputEl.value = "";
+        inputEl.style.height = "auto";
+        const errRow = document.createElement("div");
+        errRow.className = "msg-row agent";
+        errRow.innerHTML = `<div class="msg-label">System</div><div class="bubble" style="color:var(--danger);">Unsupported command: !${escapeHtml(cmdName)}</div>`;
+        messagesEl.appendChild(errRow);
+        scrollToBottom();
+        return;
+      }
     }
     if (emptyState) emptyState.style.display = "none";
     appendUserBubble(text);
@@ -552,6 +587,66 @@
 
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ── Three Doors game ─────────────────────────────────────────────────────
+  async function playThreeDoors({ action, choice, userId }) {
+    const sysRow = document.createElement("div");
+    sysRow.className = "msg-row agent";
+    sysRow.innerHTML = `<div class="msg-label">Lantern</div><div class="bubble">${action === "start" ? "Opening the Three Doors…" : "…"}</div>`;
+    messagesEl.appendChild(sysRow);
+    scrollToBottom();
+
+    try {
+      const body = { action, userId };
+      if (choice) body.choice = choice;
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (data.error) {
+        sysRow.querySelector(".bubble").textContent = `Three Doors: ${data.error}`;
+        threeDoorsActive = false;
+        threeDoorsUserId = null;
+        scrollToBottom();
+        return;
+      }
+
+      const lines = [data.text, ""];
+      if (data.fox_present) lines.push("🦊 The fox is with you.");
+      if (data.doors && data.doors.length === 3) {
+        lines.push("", "**Choose a door:**");
+        for (const d of data.doors) {
+          lines.push(`**${d.label}.** ${d.name} — ${d.description}`);
+        }
+      }
+
+      sysRow.querySelector(".bubble").innerHTML = escapeHtml(lines.join("\n"))
+        .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+        .replace(/\n/g, "<br>");
+
+      // Add door banner
+      if (data.doors && data.doors.length === 3) {
+        appendDoorsBanner(sysRow, data.doors.map((d) => d.name));
+      }
+
+      // Show image prompt badge when SD is available
+      if (data.image_prompt) {
+        const imgNote = document.createElement("div");
+        imgNote.className = "source-badge";
+        imgNote.textContent = `🎨 ${data.image_prompt.slice(0, 120)}…`;
+        sysRow.appendChild(imgNote);
+      }
+
+      scrollToBottom();
+    } catch (e) {
+      sysRow.querySelector(".bubble").textContent = `Three Doors error: ${e.message}`;
+      threeDoorsActive = false;
+      threeDoorsUserId = null;
+      scrollToBottom();
+    }
   }
 
   // ── Settings drawer ─────────────────────────────────────────────────────
