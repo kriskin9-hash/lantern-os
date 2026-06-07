@@ -2,8 +2,8 @@
   "pcsf_type": "model",
   "pcsf_version": "2.0.0",
   "component": "model",
-  "description": "Model configuration layer. Declares default and override models per provider, max token budgets, streaming posture, and full model rosters as of June 2026.",
-  "generated_at": "2026-06-05T18:00:00Z",
+  "description": "Model configuration layer. Declares default and override models per provider, max token budgets, streaming posture, and full model rosters as of June 2026. Swarm orchestration enabled with job-type routing.",
+  "generated_at": "2026-06-06T20:00:00Z",
   "state": "available",
   "models": [
     {
@@ -100,8 +100,109 @@
       ],
       "endpoint": "http://127.0.0.1:11434",
       "docs": "https://ollama.com/library"
+    },
+    {
+      "provider_id": "mistral",
+      "default_model": "mistral-large-latest",
+      "override_env": "MISTRAL_MODEL",
+      "max_tokens": 1024,
+      "stream": true,
+      "context_window": 128000,
+      "notes": "Fast European provider. Codestral excellent for coding. Mistral Large good for chat and creative tasks.",
+      "available_models": [
+        {"id": "mistral-large-latest", "tier": "flagship", "cost": "$2/$6 per 1M tok", "context": "128K"},
+        {"id": "codestral-latest", "tier": "coding", "cost": "$1/$3 per 1M tok", "context": "32K"},
+        {"id": "mistral-medium", "tier": "balanced", "cost": "$0.60/$1.80 per 1M tok", "context": "32K"}
+      ],
+      "deprecated": [],
+      "endpoint": "api.mistral.ai",
+      "docs": "https://docs.mistral.ai/getting-started/models/"
+    },
+    {
+      "provider_id": "cohere",
+      "default_model": "command-r-plus",
+      "override_env": "COHERE_MODEL",
+      "max_tokens": 1024,
+      "stream": true,
+      "context_window": 128000,
+      "notes": "Command R+ excellent for long-context RAG and summarization. Good for research tasks.",
+      "available_models": [
+        {"id": "command-r-plus", "tier": "flagship", "cost": "$3/$15 per 1M tok", "context": "128K"},
+        {"id": "command-r", "tier": "balanced", "cost": "$0.50/$1.50 per 1M tok", "context": "128K"},
+        {"id": "command-light", "tier": "fast", "cost": "$0.08/$0.30 per 1M tok", "context": "4K"}
+      ],
+      "deprecated": [],
+      "endpoint": "api.cohere.com",
+      "docs": "https://docs.cohere.com/docs/command-beta"
+    },
+    {
+      "provider_id": "perplexity",
+      "default_model": "sonar-pro",
+      "override_env": "PERPLEXITY_MODEL",
+      "max_tokens": 1024,
+      "stream": true,
+      "context_window": 128000,
+      "notes": "Search-augmented generation. Every answer includes live web citations. Best for research.",
+      "available_models": [
+        {"id": "sonar-pro", "tier": "flagship", "cost": "$3/$15 per 1M tok", "context": "128K", "search": true},
+        {"id": "sonar", "tier": "balanced", "cost": "$1/$1 per 1M tok", "context": "128K", "search": true},
+        {"id": "sonar-reasoning", "tier": "reasoning", "cost": "$2/$8 per 1M tok", "context": "128K", "search": true}
+      ],
+      "deprecated": [],
+      "endpoint": "api.perplexity.ai",
+      "docs": "https://docs.perplexity.ai/guides/getting-started"
+    },
+    {
+      "provider_id": "deepseek",
+      "default_model": "deepseek-chat",
+      "override_env": "DEEPSEEK_MODEL",
+      "max_tokens": 1024,
+      "stream": true,
+      "context_window": 64000,
+      "notes": "Chinese provider with strong reasoning models. DeepSeek-Reasoner competitive with o1 on math and code.",
+      "available_models": [
+        {"id": "deepseek-chat", "tier": "balanced", "cost": "$0.14/$0.28 per 1M tok", "context": "64K"},
+        {"id": "deepseek-reasoner", "tier": "reasoning", "cost": "$0.55/$2.19 per 1M tok", "context": "64K"}
+      ],
+      "deprecated": [],
+      "endpoint": "api.deepseek.com",
+      "docs": "https://platform.deepseek.com/api-docs"
+    },
+    {
+      "provider_id": "openrouter",
+      "default_model": "openai/gpt-4.1-mini",
+      "override_env": "OPENROUTER_MODEL",
+      "max_tokens": 1024,
+      "stream": true,
+      "context_window": 128000,
+      "notes": "Unified gateway to 100+ models. Useful for fallback and price optimization. Always sends HTTP-Referer and X-Title headers.",
+      "available_models": [
+        {"id": "openai/gpt-4.1-mini", "tier": "fast", "cost": "$0.40/$1.60 per 1M tok", "context": "1M"},
+        {"id": "anthropic/claude-haiku-4-5", "tier": "fast", "cost": "$0.25/$1.25 per 1M tok", "context": "200K"},
+        {"id": "google/gemini-2.5-flash", "tier": "balanced", "cost": "free/cheap", "context": "1M"},
+        {"id": "meta-llama/llama-4-scout", "tier": "long-context", "cost": "$0.50/$1.50 per 1M tok", "context": "10M"}
+      ],
+      "deprecated": [],
+      "endpoint": "openrouter.ai",
+      "docs": "https://openrouter.ai/docs"
     }
   ],
+  "swarm_orchestration": {
+    "enabled": true,
+    "module": "apps/lantern-garage/lib/swarm-orchestrator.js",
+    "job_types": ["chat", "coding", "reasoning", "vision", "summarize", "creative", "research"],
+    "modes": ["single", "parallel", "consensus", "council"],
+    "default_mode": "single",
+    "job_routing": {
+      "chat": ["gemini", "anthropic", "openai"],
+      "coding": ["anthropic", "openai", "mistral"],
+      "reasoning": ["openai", "deepseek", "anthropic"],
+      "vision": ["gemini", "xai", "openai"],
+      "summarize": ["gemini", "cohere", "openai"],
+      "creative": ["anthropic", "xai", "mistral"],
+      "research": ["perplexity", "openrouter", "cohere"]
+    }
+  },
   "global_constraints": {
     "max_response_tokens": 1024,
     "system_prompt_max_chars": 2000,

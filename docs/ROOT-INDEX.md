@@ -13,11 +13,11 @@ Lantern OS is a local-first knowledge, memory, orchestration, and evidence syste
 
 | Layer | Role | Primary Surfaces | Public-Safe? | Notes |
 |---|---|---|---|---|
-| Product Surface | What users can see/use | Dream Journal, Dream Chat, 3 Doors, Discord/Lounge, portfolio case study | Partly | Use synthetic data and honest runtime claims. |
+| Product Surface | What users can see/use | Dream Journal, Dream Chat, HFF Dashboard, 3 Doors, Discord/Lounge, portfolio case study | Partly | Use synthetic data and honest runtime claims. HFF is direct-linked as a peer surface before any root promotion. |
 | Runtime Engine | How AI actions are routed and governed | Convergence IO, PCSF, CCF, AAPF, NAP, DCF | Yes, with abstraction | Show architecture; avoid sensitive claim charts. |
 | Memory / Archive | How knowledge is stored, searched, converged | CSF, CADD, RAG Dollhouse, flat RAG exports | Partly | Public docs can describe high-level behavior; keep private records private. |
 | Symbolic / Lore | Dream-language, characters, realms, symbolic traversal | Lantern, Blinkbug, Keystone, Three Doors, Synthesasia, ImaginVerse, Wish Door | Yes, with disclaimers | Always frame as creative/symbolic, not literal claims. |
-| Math / Theory | Foundations and metaphors | Ternary addressing, sparse matrices, Bayesian updating, Free Energy, tesseract model | Yes, if reality-checked | Separate implemented math from conceptual anchors. |
+| Math / Theory | Foundations and metaphors | Ternary addressing, sparse matrices, Bayesian updating, HFF Bayesian world model, Free Energy, tesseract model | Yes, if reality-checked | Separate implemented math from conceptual anchors. HFF Bayesian claims require validation receipts before promotion. |
 | Private IP | Invention candidates and patent-sensitive material | 207-claim packet, 200+ idea backlog, novelty evidence, counsel notes | No | Keep private by default. |
 | Cash / Services | Immediate commercial lane | Local RAG cleanup sprint, repo cleanup, report packets, portfolio/job-hunt package | Yes | Use as practical monetization path. |
 
@@ -28,6 +28,14 @@ Lantern OS is a local-first knowledge, memory, orchestration, and evidence syste
 Dream Journal is the public product surface: a privacy-aware symbolic journaling app for dreams, notes, places, characters, lore, symbols, emotional tagging, and reflective AI interaction.
 
 Portfolio framing: Dream Journal is the user-facing layer; Convergence IO is the engineering credential; CSF/CADD is the memory and export layer.
+
+### HFF Dashboard
+
+Human Flourishing Frameworks is now tracked as a direct-linked Lantern surface at `/hff` and `/hff/index.html`. In the first release phase it is a peer launcher surface, not a root takeover.
+
+Safe phrase:
+
+> HFF is an advisory research dashboard for human-flourishing world-model experiments. Public claims require validation receipts and reviewed claim packets before promotion.
 
 ### Convergence IO
 
@@ -70,6 +78,7 @@ The internal invention backlog is large and should be treated as private. Public
 | Need | Go To | File |
 |---|---|---|
 | Understand the whole system | Root index | `docs/ROOT-INDEX.md` |
+| Launch HFF public surface | HFF dashboard | `/hff` / `apps/lantern-garage/public/hff/index.html` |
 | Navigate knowledge center | Knowledge center root | `docs/knowledge-center/ROOT.md` |
 | Prepare portfolio/job hunt | Portfolio roadmap | `docs/PORTFOLIO-PIVOT-ROADMAP.md` |
 | Avoid overclaiming math | Math/lore reality check | `docs/MATH-LORE-REALITY-CHECK.md` |
@@ -81,7 +90,8 @@ The internal invention backlog is large and should be treated as private. Public
 ## Current Priority
 
 1. Stabilize public portfolio story around Dream Journal + Convergence IO + CSF.
-2. Create a clean public root index and knowledge center root.
-3. Keep invention mechanics private until legal review.
-4. Build Synthesasia as a symbolic language spec with triadic emotion syntax.
-5. Separate implemented math from conceptual math in every outward-facing artifact.
+2. Keep HFF as a direct-linked peer surface first; defer root promotion until route, API, calibration, uncertainty-reporting, migration, and claim-packet gates pass.
+3. Create a clean public root index and knowledge center root.
+4. Keep invention mechanics private until legal review.
+5. Build Synthesasia as a symbolic language spec with triadic emotion syntax.
+6. Separate implemented math from conceptual math in every outward-facing artifact.

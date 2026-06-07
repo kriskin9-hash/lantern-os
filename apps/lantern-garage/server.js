@@ -166,4 +166,28 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 server.listen(port, host, () => {
   console.log(`Lantern Garage app listening on ${host}:${port}`);
   refreshAllPcsf(repoRoot);
+  // Ollama cold-start probe
+  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+  const httpLib = ollamaBase.startsWith("https") ? require("https") : require("http");
+  httpLib.get(`${ollamaBase}/api/tags`, (r) => {
+    let d = "";
+    r.on("data", c => d += c);
+    r.on("end", () => {
+      try {
+        const j = JSON.parse(d);
+        const models = j.models?.map(m => m.name) || [];
+        const hasModel = models.includes(ollamaModel) || models.some(m => m.startsWith(ollamaModel));
+        if (hasModel) {
+          console.log(`[Ollama] Local model ready: ${ollamaModel} (${models.length} models available)`);
+        } else {
+          console.log(`[Ollama] Running but model '${ollamaModel}' not found. Available: ${models.slice(0, 5).join(", ") || "none"}. Run: ollama pull ${ollamaModel}`);
+        }
+      } catch {
+        console.log("[Ollama] Responded but tags unreadable");
+      }
+    });
+  }).on("error", () => {
+    console.log("[Ollama] Not running on default port 11434. Local fallback disabled.");
+  });
 });

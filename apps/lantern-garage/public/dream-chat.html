@@ -20,10 +20,10 @@
       <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
     </div>
     <div class="selector-row">
-      <select id="agent-select" title="Agent">
+      <select id="agent-select" title="Agent" aria-label="Select agent">
         <option value="lantern" selected>Lantern</option>
       </select>
-      <select id="provider-select" title="Provider">
+      <select id="provider-select" title="Provider" aria-label="Select AI provider">
         <option value="">Auto</option>
         <option value="claude">Claude</option>
         <option value="openai">OpenAI</option>
@@ -39,7 +39,7 @@
         <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
     </button>
-    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()" style="margin-left:4px;background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:6px;color:var(--text);">🌙</button>
+    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()" style="margin-left:4px;">🌙</button>
     <div class="status-dot">
       <div class="dot" id="status-dot"></div>
       <span id="status-label">connecting…</span>
@@ -156,18 +156,18 @@
         <h3>🎙 Voice &amp; Speech</h3>
         <div class="voice-row">
           <label>Voice</label>
-          <select class="voice-select" id="voice-select" onchange="saveVoiceSettings()">
+          <select class="voice-select" id="voice-select" onchange="saveVoiceSettings()" aria-label="Voice selection">
             <option value="">Default system voice</option>
           </select>
         </div>
         <div class="voice-row">
           <label>Rate</label>
-          <input class="voice-slider" id="voice-rate" type="range" min="0.5" max="2.0" step="0.05" value="0.88" oninput="document.getElementById('voice-rate-val').textContent = this.value; saveVoiceSettings();">
+          <input class="voice-slider" id="voice-rate" type="range" min="0.5" max="2.0" step="0.05" value="0.88" aria-label="Speech rate" oninput="document.getElementById('voice-rate-val').textContent = this.value; saveVoiceSettings();">
           <span class="voice-value" id="voice-rate-val">0.88</span>
         </div>
         <div class="voice-row">
           <label>Pitch</label>
-          <input class="voice-slider" id="voice-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.05" oninput="document.getElementById('voice-pitch-val').textContent = this.value; saveVoiceSettings();">
+          <input class="voice-slider" id="voice-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.05" aria-label="Speech pitch" oninput="document.getElementById('voice-pitch-val').textContent = this.value; saveVoiceSettings();">
           <span class="voice-value" id="voice-pitch-val">1.05</span>
         </div>
         <div class="voice-row">
@@ -308,7 +308,9 @@
   <div class="messages" id="messages">
     <div class="empty-state dream-door-hero" id="empty-state">
       <div class="door-bg" id="door-bg"></div>
+      <div class="hero-above" id="hero-above">Lantern OS</div>
       <div class="dream-door-art" aria-hidden="true"></div>
+      <div class="hero-below" id="hero-below">ORION</div>
       <h2 id="hero-title">The <span>dream</span> door is open.</h2>
       <p id="hero-sub">Step through with a dream, a memory, a thought, or a question.</p>
       <div class="scroll-hint" id="scroll-hint">Scroll to enter ↓</div>
@@ -363,33 +365,46 @@
   const doorBg = document.getElementById('door-bg');
   const heroTitle = document.getElementById('hero-title');
   const heroSub = document.getElementById('hero-sub');
+  const heroAbove = document.getElementById('hero-above');
+  const heroBelow = document.getElementById('hero-below');
   const scrollHint = document.getElementById('scroll-hint');
   const emptyState = document.getElementById('empty-state');
   if (!messages || !doorBg) return;
 
+  const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let ticking = false;
+  function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
   function updateParallax() {
+    if (prefersReducedMotion) { ticking = false; return; }
     const scrollTop = messages.scrollTop;
     const maxScroll = messages.scrollHeight - messages.clientHeight;
-    const progress = maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0;
+    const rawProgress = maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0;
+    const progress = easeOutCubic(rawProgress);
 
-    // Zoom into the doorway: scale 1 -> 2.8
-    const scale = 1 + progress * 1.8;
-    // Slight upward drift to keep door centered
+    // Zoom into the doorway light: scale 1 -> 3.0
+    // transform-origin: center center handles centering; no translateX needed
+    const scale = 1 + progress * 2.0;
     const translateY = progress * -8;
     doorBg.style.transform = 'scale(' + scale + ') translateY(' + translateY + '%)';
 
-    // Fade out text as user scrolls
-    const fadeStart = 0.15;
-    const opacity = progress < fadeStart ? 1 : 1 - ((progress - fadeStart) / (1 - fadeStart));
+    // Fade out hero content — starts fading early so it feels responsive
+    const fadeStart = 0.08;
+    const opacity = rawProgress < fadeStart ? 1 : 1 - ((rawProgress - fadeStart) / (1 - fadeStart));
     const clampedOpacity = Math.max(0, opacity);
-    if (heroTitle) heroTitle.style.opacity = clampedOpacity;
-    if (heroSub) heroSub.style.opacity = clampedOpacity;
-    if (scrollHint) scrollHint.style.opacity = Math.max(0, 0.7 - progress * 2);
+    const yOff = progress * -14;
+    if (heroTitle) { heroTitle.style.opacity = clampedOpacity; heroTitle.style.transform = 'translateY(' + yOff + 'px)'; }
+    if (heroSub) { heroSub.style.opacity = clampedOpacity; heroSub.style.transform = 'translateY(' + (yOff * 0.6) + 'px)'; }
+    if (heroAbove) { heroAbove.style.opacity = clampedOpacity; heroAbove.style.transform = 'translateY(' + (yOff * 0.8) + 'px)'; }
+    if (heroBelow) { heroBelow.style.opacity = clampedOpacity; heroBelow.style.transform = 'translateY(' + (yOff * 1.2) + 'px)'; }
+    if (scrollHint) scrollHint.style.opacity = Math.max(0, 0.7 - rawProgress * 4);
 
-    // Slight parallax on the glow orb
+    // Glow orb drifts up and fades
     const art = emptyState ? emptyState.querySelector('.dream-door-art') : null;
-    if (art) art.style.transform = 'translateY(' + (progress * -20) + 'px)';
+    if (art) {
+      art.style.transform = 'translateY(' + (progress * -24) + 'px) scale(' + (1 - progress * 0.25) + ')';
+      art.style.opacity = 0.9 - progress * 0.55;
+    }
 
     ticking = false;
   }
@@ -401,56 +416,6 @@
     }
   }, { passive: true });
 
-  // Initial call
-  updateParallax();
-})();
-</script>
-<!-- Parallax dream-door zoom -->
-<script>
-(function() {
-  const messages = document.getElementById('messages');
-  const doorBg = document.getElementById('door-bg');
-  const heroTitle = document.getElementById('hero-title');
-  const heroSub = document.getElementById('hero-sub');
-  const scrollHint = document.getElementById('scroll-hint');
-  const emptyState = document.getElementById('empty-state');
-  if (!messages || !doorBg) return;
-
-  let ticking = false;
-  function updateParallax() {
-    const scrollTop = messages.scrollTop;
-    const maxScroll = messages.scrollHeight - messages.clientHeight;
-    const progress = maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0;
-
-    // Zoom into the doorway: scale 1 -> 2.8
-    const scale = 1 + progress * 1.8;
-    // Slight upward drift to keep door centered
-    const translateY = progress * -8;
-    doorBg.style.transform = 'scale(' + scale + ') translateY(' + translateY + '%)';
-
-    // Fade out text as user scrolls
-    const fadeStart = 0.15;
-    const opacity = progress < fadeStart ? 1 : 1 - ((progress - fadeStart) / (1 - fadeStart));
-    const clampedOpacity = Math.max(0, opacity);
-    if (heroTitle) heroTitle.style.opacity = clampedOpacity;
-    if (heroSub) heroSub.style.opacity = clampedOpacity;
-    if (scrollHint) scrollHint.style.opacity = Math.max(0, 0.7 - progress * 2);
-
-    // Slight parallax on the glow orb
-    const art = emptyState ? emptyState.querySelector('.dream-door-art') : null;
-    if (art) art.style.transform = 'translateY(' + (progress * -20) + 'px)';
-
-    ticking = false;
-  }
-
-  messages.addEventListener('scroll', function() {
-    if (!ticking) {
-      ticking = true;
-      requestAnimationFrame(updateParallax);
-    }
-  }, { passive: true });
-
-  // Initial call
   updateParallax();
 })();
 </script>

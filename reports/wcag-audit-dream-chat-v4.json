@@ -1,0 +1,110 @@
+{
+  "url": "http://127.0.0.1:4177/dream-chat.html",
+  "timestamp": "2026-06-07T00:32:45.288Z",
+  "issues": [
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.2.2 Pause, Stop, Hide",
+      "element": ".door-bg",
+      "message": "Parallax scroll effect has no reduced-motion media query guard",
+      "fix": "Wrap parallax in @media (prefers-reduced-motion: no-preference) or disable via JS"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<A id=\"\">",
+      "message": "Touch target 32.5x44.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<BUTTON id=\"theme-toggle\">",
+      "message": "Touch target 33.0x44.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<DIV id=\"settings-overlay\">",
+      "message": "Touch target 0.0x0.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<BUTTON id=\"\">",
+      "message": "Touch target 68.0x25.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<BUTTON id=\"\">",
+      "message": "Touch target 68.0x25.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<BUTTON id=\"\">",
+      "message": "Touch target 68.0x25.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<BUTTON id=\"\">",
+      "message": "Touch target 68.0x25.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    },
+    {
+      "impact": "moderate",
+      "rule": "WCAG 2.5.5 Target Size",
+      "element": "<BUTTON id=\"\">",
+      "message": "Touch target 104.0x25.0px (need 44x44)",
+      "fix": "Increase padding or explicit size"
+    }
+  ],
+  "passed": [
+    {
+      "rule": "WCAG 1.4.3",
+      "message": "All sampled text/background pairs meet 4.5:1 contrast"
+    },
+    {
+      "rule": "WCAG 2.4.7",
+      "message": "All focusable elements have visible focus indicators"
+    },
+    {
+      "rule": "WCAG 1.1.1",
+      "message": "All images have alt text or ARIA labels"
+    },
+    {
+      "rule": "WCAG 1.3.1",
+      "message": "All form inputs have labels"
+    },
+    {
+      "rule": "WCAG 4.1.2",
+      "message": "All buttons have accessible names"
+    },
+    {
+      "rule": "WCAG 1.3.1",
+      "message": "Heading hierarchy is sequential"
+    },
+    {
+      "rule": "WCAG 2.2.2",
+      "message": "Parallax present but no reduced-motion query active on this client"
+    },
+    {
+      "rule": "WCAG 2.1.2",
+      "message": "Focusable elements count: 64 (manual check required for trap)"
+    }
+  ],
+  "screenshots": [],
+  "summary": {
+    "totalIssues": 9,
+    "serious": 0,
+    "moderate": 9,
+    "passed": 8
+  }
+}

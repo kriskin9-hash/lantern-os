@@ -12,6 +12,11 @@ const PROVIDERS = [
   { id: "openai",    env: ["OPENAI_API_KEY"] },
   { id: "xai",       env: ["XAI_API_KEY"] },
   { id: "ollama",    env: [] }, // always key-free; reachability checked separately
+  { id: "mistral",   env: ["MISTRAL_API_KEY"] },
+  { id: "cohere",    env: ["COHERE_API_KEY"] },
+  { id: "perplexity", env: ["PERPLEXITY_API_KEY"] },
+  { id: "deepseek",  env: ["DEEPSEEK_API_KEY"] },
+  { id: "openrouter", env: ["OPENROUTER_API_KEY"] },
 ];
 
 // Per-provider state
@@ -58,7 +63,8 @@ function refreshProviderCache() {
 
 /**
  * Return current provider state map, refreshing if the TTL has expired.
- * Returns { gemini, anthropic, openai, xai, ollama } each with {hasKey, ...}.
+ * Returns { gemini, anthropic, openai, xai, ollama, mistral, cohere, perplexity, deepseek, openrouter }
+ * each with {hasKey, ...}.
  */
 function getProviderState() {
   const now = Date.now();

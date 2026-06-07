@@ -27,7 +27,7 @@ jobs:
     name: Validate repo structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Check required files
         run: |
@@ -79,9 +79,9 @@ jobs:
     name: Python tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -101,7 +101,7 @@ jobs:
         run: python -m pytest tests -q --tb=short --junitxml=pytest-results.xml
 
       - name: Upload test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pytest-results
@@ -112,9 +112,9 @@ jobs:
     name: Node tests (Playwright, etc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -146,7 +146,7 @@ jobs:
           node tests/test_dream_chat_parser.js
 
       - name: Upload Node test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: node-test-results
@@ -160,7 +160,7 @@ jobs:
     name: Convergence validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Verify repo contract
         run: |
@@ -188,7 +188,7 @@ jobs:
     name: Integration & cloud readiness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Check cloud mirrors config
         run: |
@@ -210,7 +210,7 @@ jobs:
     needs: [validate-repo, integration-checks]
     if: always()
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Validate convergence batch framework
         run: |
@@ -244,9 +244,9 @@ jobs:
     name: Security scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -269,7 +269,7 @@ jobs:
         run: pip-audit --format=json --output=pip-audit-results.json || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-scan-results
@@ -285,9 +285,9 @@ jobs:
     name: CSF cache validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 

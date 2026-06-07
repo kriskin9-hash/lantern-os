@@ -1,4 +1,4 @@
-// Hub, surfaces directory, and static file catch-all
+// Hub, surfaces directory, HFF alias, and static file catch-all
 module.exports = async function surfaceRoutes(req, res, url, deps) {
   const { fs, path, sendJson, sendFile, repoRoot, publicRoot, __dirname: dir } = deps;
 
@@ -6,6 +6,12 @@ module.exports = async function surfaceRoutes(req, res, url, deps) {
     sendFile(res, path.resolve(repoRoot, "central-hub.html"));
     return true;
   }
+
+  if (url.pathname === "/hff") {
+    sendFile(res, path.resolve(publicRoot, "hff/index.html"));
+    return true;
+  }
+
   if (url.pathname.startsWith("/surfaces/")) {
     const surfacesRoot = path.resolve(dir, "../../surfaces");
     const surfacePath = url.pathname.slice("/surfaces/".length) || "index.html";

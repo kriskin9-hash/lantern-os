@@ -124,7 +124,9 @@
   // ── Load agents ────────────────────────────────────────────────────────
   async function loadAgents() {
     try {
+      TELEMETRY.log("agents", "Fetching /api/agents");
       const r = await fetch(`${serverBase}/api/agents`, { signal: AbortSignal.timeout(3000) });
+      TELEMETRY.log("agents", `/api/agents response`, { ok: r.ok, status: r.status });
       if (r.ok) {
         const data = await r.json();
         agents = data.agents || [];
@@ -134,9 +136,13 @@
         if (keystoneMcpEnabled) lockAgentToKeystone();
         statusDot.className = "dot online";
         statusLabel.textContent = "online";
+        TELEMETRY.log("agents", `Loaded ${agents.length} agents`);
         return;
       }
-    } catch {}
+      TELEMETRY.warn("agents", `Non-OK response loading agents: ${r.status}`);
+    } catch (err) {
+      TELEMETRY.error("agents", `Failed to load agents: ${err.message}`, { serverBase });
+    }
     statusDot.className = "dot";
     statusLabel.textContent = "offline";
   }
@@ -150,6 +156,27 @@
     }
   });
 
+  // ── Autoupdate helper ───────────────────────────────────────────────────
+  function triggerAutoupdate(label) {
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">System</div><div class="bubble"><b>${label}</b> — checking for updates…</div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+    fetch(`${serverBase}/api/actions/update`, { method: "POST" })
+      .then(r => r.json())
+      .then(d => {
+        const steps = d.steps?.map(s => `${s.ok ? "✓" : "✗"} ${s.step}`).join(" · ") || "";
+        row.querySelector(".bubble").innerHTML =
+          `<b>${label}</b> ${d.ok ? "✓" : "✗"} <code>${d.version?.tag || "?"}</code><br><small style="opacity:0.85">${steps}</small>`;
+        scrollToBottom();
+      })
+      .catch(e => {
+        row.querySelector(".bubble").textContent = `${label} failed: ${e.message}`;
+        scrollToBottom();
+      });
+  }
+
   // ── Send ────────────────────────────────────────────────────────────────
   function sendMessage() {
     const text = inputEl.value.trim();
@@ -161,10 +188,22 @@
       toggleDebug();
       return;
     }
+<<<<<<< HEAD
+    // !autoupdate pulls latest code, installs deps, and restarts server
+    if (text === "!autoupdate") {
+      inputEl.value = "";
+      inputEl.style.height = "auto";
+      triggerAutoupdate("Auto-update");
+      return;
+    }
+    // !convergence runs the Lantern convergence loop + version check + auto-update
+=======
     // !convergence runs the Lantern convergence loop + version check
+>>>>>>> a53a7ae95f03d3eb13d9723854c1b771978b10e4
     if (text === "!convergence") {
       inputEl.value = "";
       inputEl.style.height = "auto";
+      triggerAutoupdate("Auto-update");
       const sysRow = document.createElement("div");
       sysRow.className = "msg-row agent";
       sysRow.innerHTML = `<div class="msg-label">System</div><div class="bubble">Running convergence loop…</div>`;
@@ -205,10 +244,11 @@
         });
       return;
     }
-    // !comet-leap shows COMET-LEAP plan status
+    // !comet-leap shows COMET-LEAP plan status + auto-update
     if (text === "!comet-leap") {
       inputEl.value = "";
       inputEl.style.height = "auto";
+      triggerAutoupdate("Auto-update");
       const sysRow = document.createElement("div");
       sysRow.className = "msg-row agent";
       sysRow.innerHTML = `<div class="msg-label">System</div><div class="bubble"><b>COMET LEAP</b> — Master Plan v1.0<br>Status: APPROVED FOR PRINTING · Confidence: 72%<br><a href="/view?path=lantern-discord/COMET-LEAP-MASTER-PLAN-v1.0.md" target="_blank" style="color:var(--accent);">Open full plan ↗</a></div>`;

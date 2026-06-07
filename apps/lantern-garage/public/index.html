@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#ff424d">
   <link rel="manifest" href="/manifest.json">
-  <title>Dream Journal — Lantern OS</title>
+  <title>Lantern OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -246,18 +246,18 @@
 
   <div class="hero">
     <span class="hero-icon">🌙</span>
-    <h1>Dream <span>Journal</span></h1>
-    <p class="tagline" id="hero-tagline">A private, local-first dream journal. No telemetry. No cloud lock-in.</p>
-    <p class="sub"><span id="hero-edition">Lantern OS</span> · <span data-version-badge="">checking version…</span> · <span id="hero-git">checking git…</span></p>
+    <h1>Lantern <span>OS</span></h1>
+    <p class="tagline" id="hero-tagline">A private, local-first operating cockpit. No telemetry. No cloud lock-in.</p>
+    <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">checking version…</span> · <span id="hero-git">checking git…</span></p>
   </div>
 
   <div class="panels">
     <a class="panel primary" href="/dream-chat.html">
       <span class="panel-icon">💬</span>
       <span class="panel-label">Open App</span>
-      <h2>Dream Chat</h2>
+      <h2>Dream Journal</h2>
       <p id="panel-chat-desc">Checking provider status…</p>
-      <span class="panel-arrow">Open dream chat →</span>
+      <span class="panel-arrow">Open Dream Journal →</span>
     </a>
 
     <a class="panel" href="/dream-journal/index.html">
@@ -283,6 +283,14 @@
       <p id="panel-github-desc">Open source. Self-host in one command. No account required.</p>
       <span class="panel-arrow">View on GitHub →</span>
     </a>
+
+    <a class="panel" href="/knowledgecenter.html">
+      <span class="panel-icon">📚</span>
+      <span class="panel-label">Learn</span>
+      <h2>Knowledge Center</h2>
+      <p>Docs, changelog, and guides for Lantern OS.</p>
+      <span class="panel-arrow">Open knowledge center →</span>
+    </a>
   </div>
 
   <div class="features" id="live-features">
@@ -290,7 +298,7 @@
     <div class="feature"><div class="icon">🔮</div><h3 id="stat-agents-label">Agents</h3><p id="stat-agents">Checking available agents…</p></div>
     <div class="feature"><div class="icon">📊</div><h3>Readiness</h3><p id="stat-readiness">Checking system readiness…</p></div>
     <div class="feature"><div class="icon">💾</div><h3>Export</h3><p>JSONL or CSV download. Your data, always portable.</p></div>
-    <div class="feature"><div class="icon">�</div><h3>Providers</h3><p id="stat-providers">Checking AI providers…</p></div>
+    <div class="feature"><div class="icon">🔌</div><h3>Providers</h3><p id="stat-providers">Checking AI providers…</p></div>
     <div class="feature"><div class="icon">⚡</div><h3>Server</h3><p id="stat-server">Checking server status…</p></div>
   </div>
 
@@ -374,9 +382,9 @@
     const shortCommit = g?.commit ? g.commit.slice(0, 7) : '—';
     const commitDate = g?.date ? fmtDate(g.date) : '';
 
-    $('hero-edition').textContent = 'Lantern OS · ' + branch;
+    $('hero-edition').textContent = 'Orion Edition · ' + branch;
     $('hero-git').textContent = shortCommit + (commitDate ? ' · ' + commitDate : '');
-    $('status-right').textContent = 'Lantern OS · ' + branch + ' · v' + v;
+    $('status-right').textContent = 'Lantern OS · ' + branch + ' · ' + v;
 
     // Version badges
     document.querySelectorAll('[data-version-badge]').forEach(el => {

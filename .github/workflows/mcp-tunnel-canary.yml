@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Validate tunnel URL shape
         shell: python
@@ -46,7 +46,7 @@ jobs:
           ./scripts/Test-LanternMcpConnector.ps1 -BaseUrl $env:MCP_BASE_URL -AllowRemote -OutputPath ./mcp-tunnel-canary-result.json
 
       - name: Upload canary result
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: mcp-tunnel-canary-result
           path: ./mcp-tunnel-canary-result.json
