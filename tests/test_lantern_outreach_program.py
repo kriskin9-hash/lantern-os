@@ -23,6 +23,7 @@ def test_dashboard_links_to_outreach_program():
     assert 'Outreach Program' in text
 
 
+@pytest.mark.skip(reason="cloud-server.js removed in cleanup PR #230")
 def test_cloud_server_uses_public_bind_and_holds_local_actions():
     text = Path('apps/lantern-garage/cloud-server.js').read_text(encoding='utf-8')
     required = [

@@ -96,7 +96,13 @@ Lantern personas provide different interaction modes over the same backend pipel
 
 ## Getting Started
 
-For the main local web surface:
+For the main local web surface (dev mode with auto-restart):
+
+```bash
+npm run dev --prefix apps/lantern-garage
+```
+
+Or for a one-shot start:
 
 ```bash
 npm start --prefix apps/lantern-garage
@@ -114,29 +120,22 @@ The longer local setup, optional MCP server, optional Discord bot, and validatio
 
 ## Architecture
 
-```text
-lantern-os/
-├── apps/
-│   └── lantern-garage/          # Web server, Dream Journal UI, REST API, PWA assets
-│       ├── server.js            # Main Node.js entry point
-│       ├── routes/              # Domain API routes
-│       ├── lib/                 # Chat, streaming, and storage helpers
-│       └── public/              # Browser UI, manifest, service worker
-├── src/
-│   ├── convergence_io_engine.py # Convergence inspection and orchestration
-│   ├── unified_agent_connector.py
-│   ├── csf/                     # CSF memory/archive components
-│   ├── mcp_server/              # MCP server and local agent tool surface
-│   └── discord_lounge_bot/      # Discord integration
-├── data/
-│   ├── internal-rag-house/      # Source-linked internal RAG index
-│   └── pcsf/                    # Provider capacity and agent state files
-├── manifests/                   # Contracts, validation receipts, repo state, gates
-├── csf/ingest/                  # CSF/CADD ingest queue and implementation notes
-├── docs/                        # User, architecture, connector, and operating docs
-├── scripts/                     # Local validation, export, orchestration, setup scripts
-└── tests/                       # Node.js and Python tests
-```
+| Path | Purpose |
+|------|---------|
+| [`apps/lantern-garage/server.js`](apps/lantern-garage/server.js) | Main Node.js entry point — loads routes, deps, starts HTTP server |
+| [`apps/lantern-garage/routes/`](apps/lantern-garage/routes/) | Domain API route handlers (dream, dreamer, status, rag, operator, files, surfaces) |
+| [`apps/lantern-garage/lib/`](apps/lantern-garage/lib/) | Chat, streaming, storage, and PCSF helpers |
+| [`apps/lantern-garage/public/`](apps/lantern-garage/public/) | Browser UI (dream-chat.html, index.html), PWA manifest |
+| [`src/convergence_io_engine.py`](src/convergence_io_engine.py) | Convergence inspection and orchestration — `health`, `loop`, `inspect`, `converge` |
+| [`src/unified_agent_connector.py`](src/unified_agent_connector.py) | Unified agent greet/health/inspect connector |
+| [`src/mcp_server/`](src/mcp_server/) | MCP server and local agent tool surface (port 8771) |
+| [`src/csf/`](src/csf/) | CSF memory/archive components |
+| [`src/discord_lounge_bot/`](src/discord_lounge_bot/) | Discord integration |
+| [`data/pcsf/`](data/pcsf/) | Provider capacity and agent state files |
+| [`manifests/`](manifests/) | Contracts, validation receipts, repo state, gates |
+| [`csf/ingest/`](csf/ingest/) | CSF/CADD ingest queue — each file is a ready-to-implement task spec |
+| [`docs/`](docs/) | User, architecture, connector, and operating docs |
+| [`tests/`](tests/) | Node.js and Python tests |
 
 ---
 
@@ -394,20 +393,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Update-InternalHou
 
 | Document | Purpose |
 |---|---|
-| [AGENTS.md](AGENTS.md) | Required operating instructions for AI coding agents. |
-| [QUICKSTART.md](QUICKSTART.md) | Full startup guide — turn on every service. |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, branch model, and repo rules. |
-| [docs/DREAM-JOURNAL-USER-GUIDE.md](docs/DREAM-JOURNAL-USER-GUIDE.md) | Dream Journal user guide. |
-| [docs/DREAM-JOURNAL-QUICKSTART.md](docs/DREAM-JOURNAL-QUICKSTART.md) | Dream Journal quick start. |
-| [docs/CONVERGENCE-LOOP.md](docs/CONVERGENCE-LOOP.md) | 12-step convergence operating method. |
-| [manifests/CONVERGENCE-LOOP-AGENT-FLEET.md](manifests/CONVERGENCE-LOOP-AGENT-FLEET.md) | 36-slot convergence-agent design and receipt contract. |
-| [docs/MCP-CONNECTOR.md](docs/MCP-CONNECTOR.md) | Local-first MCP connector and safety contract. |
-| [docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md](docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md) | Agent slot registration, dispatch gate, and orchestrator dependency. |
-| [docs/ACTION-POOLING-AND-BATCHING.md](docs/ACTION-POOLING-AND-BATCHING.md) | Work pooling and batching method. |
-| [docs/CSF-FORMAT-SPECIFICATION.md](docs/CSF-FORMAT-SPECIFICATION.md) | CSF archive format specification. |
-| [caad/dollhouse-csf-upgrade.md](caad/dollhouse-csf-upgrade.md) | CADD intake flow for CSF archives. |
-| [docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md](docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md) | Evidence and claim-labeling guidance for reports. |
-| [docs/REPO-CONTRACT.md](docs/REPO-CONTRACT.md) | Repository scope and cleanup contract. |
+| [AGENTS.md](AGENTS.md) | **Start here for agents** — manifests, route map, delegate table, monoworkstream rules |
+| [QUICKSTART.md](QUICKSTART.md) | Full startup guide — turn on every service |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, branch model, and repo rules |
+| [CHANGELOG.MD](CHANGELOG.MD) | Release history |
+| [docs/DREAM-JOURNAL-USER-GUIDE.md](docs/DREAM-JOURNAL-USER-GUIDE.md) | Dream Journal user guide |
+| [docs/DREAM-JOURNAL-QUICKSTART.md](docs/DREAM-JOURNAL-QUICKSTART.md) | Dream Journal quick start |
+| [docs/DREAM-JOURNAL-API-ENDPOINTS.md](docs/DREAM-JOURNAL-API-ENDPOINTS.md) | Full API endpoint reference |
+| [docs/CONVERGENCE-LOOP.md](docs/CONVERGENCE-LOOP.md) | 12-step convergence operating method |
+| [manifests/CONVERGENCE-LOOP-AGENT-FLEET.md](manifests/CONVERGENCE-LOOP-AGENT-FLEET.md) | 36-slot convergence-agent design and receipt contract |
+| [manifests/dream-journal-v1-agent-slots.json](manifests/dream-journal-v1-agent-slots.json) | Active work queue with priority + description |
+| [docs/MCP-CONNECTOR.md](docs/MCP-CONNECTOR.md) | Local-first MCP connector and safety contract |
+| [docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md](docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md) | Agent slot registration, dispatch gate, and orchestrator dependency |
+| [docs/ACTION-POOLING-AND-BATCHING.md](docs/ACTION-POOLING-AND-BATCHING.md) | Work pooling and batching method |
+| [docs/CSF-FORMAT-SPECIFICATION.md](docs/CSF-FORMAT-SPECIFICATION.md) | CSF archive format specification |
+| [caad/README.md](caad/README.md) | CADD (Capture, Assess, Distill, Dock) spec overview |
+| [caad/dollhouse-csf-upgrade.md](caad/dollhouse-csf-upgrade.md) | CADD intake flow for CSF archives |
+| [docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md](docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md) | Evidence and claim-labeling guidance for reports |
+| [docs/REPO-CONTRACT.md](docs/REPO-CONTRACT.md) | Repository scope and cleanup contract |
 
 ---
 

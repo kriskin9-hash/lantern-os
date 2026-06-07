@@ -22,17 +22,21 @@ python -m pip install -r requirements.txt
 
 ## 1. Start the Core Web Server (Required)
 
+**Development (recommended — auto-restarts on file changes):**
+
 ```bash
+npm run dev --prefix apps/lantern-garage
+```
+
+**Production / one-shot:**
+
+```bash
+npm start --prefix apps/lantern-garage
+# or directly:
 node apps/lantern-garage/server.js
 ```
 
 Open `http://127.0.0.1:4177` — the Dream Journal chat UI.
-
-Or with npm:
-
-```bash
-npm start --prefix apps/lantern-garage
-```
 
 **What you get:**
 - Dream Journal chat UI (`/`)
