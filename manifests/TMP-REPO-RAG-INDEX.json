@@ -4,7 +4,7 @@
   "indexVersion": "1.0.0",
   "repos": [
     {
-      "localFolder": "C:\\Users\\alexp\\OneDrive\\Documents\\GitHub\\lantern-os",
+      "localFolder": "C:\\Users\\angela\\Github\\lantern-os",
       "githubOrigin": "https://github.com/alex-place/lantern-os.git",
       "ragState": "local_inspected",
       "isPrimaryOrchestrator": true,
@@ -83,10 +83,10 @@
       "notes": "No .git directory."
     },
     {
-      "localFolder": "C:\\Users\\alexp\\Documents\\gm-agent-orchestrator",
+      "localFolder": "C:\\Users\\angela\\Documents\\gm-agent-orchestrator",
       "githubOrigin": null,
-      "ragState": "held",
-      "notes": "Referenced by convergence loop. Verify remote before promotion."
+      "ragState": "not_yet_cloned",
+      "notes": "Not present on this machine. Skipped by convergence loop."
     }
   ],
   "ciCdCheckout": [
