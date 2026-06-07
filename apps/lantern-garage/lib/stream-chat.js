@@ -39,6 +39,7 @@ function doorsOrFallback(text, isKeystoneDebug = false) {
 }
 
 async function handleStreamChat(req, url, res) {
+  console.log("[Stream] handleStreamChat entered");
   const { collectRequestBody } = require("./http-utils");
   const parsed = await parseStreamChatRequest(req, url, {
     normalizeDreamerUser,
@@ -323,7 +324,76 @@ async function handleStreamChat(req, url, res) {
 
   let fullReply = "";
 
-  // Provider 1: Gemini (streaming) — checked first for Auto mode
+  // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
+  // When no specific cloud provider is requested, try Ollama first for lower
+  // latency, zero cost, and offline resilience. Cloud providers are fallbacks.
+  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+  const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
+  console.log(`[Stream] Ollama gate: ollamaLocalFirst=${ollamaLocalFirst}, message=${!!message}, isKeystoneDebug=${isKeystoneDebug}, requestedProvider="${requestedProvider}"`);
+  if (ollamaLocalFirst && message && !isKeystoneDebug) {
+    console.log(`[Stream] Trying Ollama at ${ollamaBase} model=${ollamaModel}`);
+    try {
+      const payload = JSON.stringify({
+        model: ollamaModel,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...history.map(h => ({ role: h.role, content: h.text })),
+          { role: "user", content: message },
+        ],
+      });
+      const ollamaUrl = new URL(ollamaBase);
+      await new Promise((resolve, reject) => {
+        const req2 = http.request({
+          hostname: ollamaUrl.hostname,
+          port: ollamaUrl.port || 11434,
+          path: "/api/chat",
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
+          let buf = "";
+          upstream.on("data", (chunk) => {
+            buf += chunk.toString();
+            const lines = buf.split("\n");
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const parsed = JSON.parse(line);
+                if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
+              } catch {}
+            }
+          });
+          upstream.on("end", () => resolve());
+          upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(120000, () => { req2.destroy(); reject(new Error("ollama_timeout")); });
+        req2.write(payload);
+        req2.end();
+      });
+      if (fullReply) {
+        console.log(`[Stream] Ollama local-first OK (${fullReply.length} chars, model: ${ollamaModel})`);
+        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+        await appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-chat-stream",
+          role: "lantern",
+          text: cleanText.slice(0, maxConversationTextLength),
+        }).catch(() => {});
+        recordProviderSuccess("ollama");
+        sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+        return;
+      }
+    } catch (err) {
+      console.log(`[Stream] Ollama local-first failed: ${err.message} — falling through to cloud`);
+      fullReply = "";
+    }
+  }
+
+  // Provider 1: Gemini (streaming) — cloud fallback
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && message && (!requestedProvider || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
     // Gemini model fallback chain: primary -> fallbacks on 429/quota
@@ -627,9 +697,7 @@ async function handleStreamChat(req, url, res) {
     }
   }
 
-  // Provider 5: Ollama (streaming)
-  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+  // Provider 5: Ollama (streaming) — last-resort fallback (local-first already tried above)
   if (message && (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local")) {
     // Attempt 1: Unified Agent Connector (health-checked, provider-ranked, Python-side SSE)
     if (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local") {
