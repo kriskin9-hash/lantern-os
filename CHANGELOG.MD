@@ -65,7 +65,7 @@ intent.
 - Dream Journal V1.0.0 — local-first, private, no account required
 - `node apps/lantern-garage/server.js` — single command startup on port 4177
 - Modular route architecture: 7 domain modules under `apps/lantern-garage/routes/`
-- `cloud-server.js` unified with server.js — Railway/Render deploy via PORT env
+- `cloud-server.js` unified with server.js — Railway deploy via PORT env
 
 ### Dream Chat
 - Multi-provider streaming: Gemini 2.5-flash (primary), Claude haiku-4-5, OpenAI, Grok, Ollama

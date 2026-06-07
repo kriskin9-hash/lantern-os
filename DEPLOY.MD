@@ -7,7 +7,7 @@ Lantern OS deploys through **two lanes**:
 | Lane | Target | Use Case |
 |------|--------|----------|
 | **GitHub Pages** | Static `gh-pages` branch | Public-facing Dream Journal UI (no backend required) |
-| **Cloud Runtime** | Railway / Render / AWS / Docker | Full chat + API backend |
+| **Cloud Runtime** | Railway / AWS / Docker | Full chat + API backend |
 
 The canonical local surface runs at `http://127.0.0.1:4177`.
 
@@ -64,13 +64,6 @@ docker run -p 8080:8080 -e GEMINI_API_KEY="..." lantern-os
 3. Add env vars: `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, etc.
 4. Deploys auto-trigger on `master` push
 
-### Render
-1. Create Web Service from `alex-place/lantern-os`
-2. Set root directory: `apps/lantern-garage`
-3. Build command: `npm install`
-4. Start command: `npm run start:cloud`
-5. Add env vars as above
-
 ### AWS ECS
 See `archive/aws-deployment/AWS-DEPLOYMENT-GUIDE.md` for full CloudFormation stack.
 
@@ -98,7 +91,7 @@ docker restart <container_id>
 sudo systemctl restart lantern-os
 ```
 
-### Cloud (Railway/Render)
+### Cloud (Railway)
 - Dashboard → Deploy → Redeploy latest commit
 - Or push any commit to `master`
 
@@ -112,12 +105,10 @@ sudo systemctl restart lantern-os
 | Local Node | ~2s | Module load, env parse, route mount |
 | Docker | ~5s | Image startup + Node boot |
 | Railway | ~10-30s | Container spin-up if auto-stop enabled |
-| Render | ~15-45s | Free tier spins down after 15 min idle |
 | AWS ECS Fargate | ~30-60s | Task provisioning |
 
 ### Mitigating cold starts
 - Keep `min_machines_running = 1` on Railway
-- Use Render paid tier ($7/mo) to prevent spin-down
 - AWS ECS: use Fargate Spot with warm pool
 
 ---
@@ -152,7 +143,7 @@ git push origin <commit>:gh-pages --force
 ```
 
 ### Cloud
-Railway / Render: dashboard → previous deploy → rollback
+Railway: dashboard → previous deploy → rollback
 
 ---
 
