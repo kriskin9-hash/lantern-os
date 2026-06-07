@@ -246,3 +246,23 @@ def test_convergence_loop_includes_safety_telemetry(tmp_path):
     assert "safety" in result
     assert "cpu_temp_c" in result["safety"]
     assert "mem_percent" in result["safety"]
+
+
+def test_deterministic_slot_id_on_retry(tmp_path):
+    from convergence_io_engine import SlotManager
+    slots = SlotManager(path=tmp_path / "slots.json")
+    ctx = {"persona": "lantern", "request_id": "req-001"}
+    # First claim
+    id1 = slots.claim("dream_journal", "req-001", context=ctx)
+    assert id1 is not None
+    # Retry with same context returns the same active slot
+    id2 = slots.claim("dream_journal", "req-001", context=ctx)
+    assert id2 == id1
+    # Different context gets a different slot
+    ctx2 = {"persona": "keystone", "request_id": "req-001"}
+    id3 = slots.claim("dream_journal", "req-001", context=ctx2)
+    assert id3 != id1
+    # After release, same context creates a new slot with same deterministic ID
+    slots.release(id1)
+    id4 = slots.claim("dream_journal", "req-001", context=ctx)
+    assert id4 == id1
