@@ -74,6 +74,7 @@ The route architecture is modular. Each file handles one domain:
 | [`apps/lantern-garage/lib/dream-chat.js`](apps/lantern-garage/lib/dream-chat.js) | Non-streaming chat + persona selection |
 | [`apps/lantern-garage/lib/dreamer-store.js`](apps/lantern-garage/lib/dreamer-store.js) | `readRecentDreams()`, notebook storage |
 | [`apps/lantern-garage/lib/conversation-store.js`](apps/lantern-garage/lib/conversation-store.js) | append/read conversation JSONL |
+| [`apps/lantern-garage/lib/csf-memory.js`](apps/lantern-garage/lib/csf-memory.js) | CSF long-term memory reader, door state persistence |
 
 **Rule: If you need a route, read `routes/dream.js`. If you need streaming, read `lib/stream-chat.js`. Don't read `server.js` — it's just glue.**
 
@@ -91,6 +92,8 @@ python -m pytest tests/test_dashboard_ux.py tests/test_dreamer_integration.py -q
 
 | File | What it defines |
 |------|----------------|
+| [`csf/ingest/2026-06-07-hff-mcp-integration-fixes.md`](csf/ingest/2026-06-07-hff-mcp-integration-fixes.md) | Human Flourishing Frameworks + MCP integration |
+| [`csf/ingest/2026-06-06-elephant-door-memories.md`](csf/ingest/2026-06-06-elephant-door-memories.md) | Elephant Door anchor memories + Three Doors state |
 | [`csf/ingest/convergence-kvcache-compression.md`](csf/ingest/convergence-kvcache-compression.md) | FlowKV tiered history compression |
 | [`csf/ingest/convergence-stable-diffusion-doors.md`](csf/ingest/convergence-stable-diffusion-doors.md) | Local SD image gen per door |
 | [`csf/ingest/convergence-asmr-tts-chain.md`](csf/ingest/convergence-asmr-tts-chain.md) | ElevenLabs/OpenAI TTS provider chain |

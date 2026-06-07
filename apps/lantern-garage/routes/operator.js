@@ -101,18 +101,23 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       }
 
       // Step 3: get new version
-      let newVersion = { commit: "unknown", tag: "unknown" };
+      let newVersion = { commit: "unknown", tag: "unknown", semver: "unknown" };
       try {
         const commit = execSync("git rev-parse HEAD", { cwd: repoRoot, encoding: "utf8" }).trim();
         const tag = execSync("git describe --tags --always", { cwd: repoRoot, encoding: "utf8" }).trim();
         newVersion = { commit, tag };
+        try {
+          const vj = JSON.parse(require("fs").readFileSync(path.join(repoRoot, "apps/lantern-garage/public/version.json"), "utf8"));
+          if (vj.version) newVersion.semver = vj.version;
+        } catch {}
       } catch {}
 
       const allOk = steps.every(s => s.ok);
+      const pullOutput = steps.find(s => s.step === "git_pull")?.output || "";
+      const codeChanged = allOk && !pullOutput.includes("Already up to date");
 
-      // Step 4: schedule restart if everything passed
-      // Priority: PM2 > watchdog.js > raw spawn (most stable to least)
-      if (allOk) {
+      // Step 4: schedule restart only if new code was actually pulled
+      if (codeChanged) {
         setTimeout(() => {
           try {
             const { execSync } = require("child_process");
@@ -146,7 +151,7 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
         }, 1000);
       }
 
-      sendJson(res, { ok: allOk, steps, version: newVersion, restart_scheduled: allOk }, allOk ? 200 : 500);
+      sendJson(res, { ok: allOk, steps, version: newVersion, restart_scheduled: codeChanged }, allOk ? 200 : 500);
     } catch (err) {
       sendJson(res, { ok: false, error: err.message }, 500);
     }
