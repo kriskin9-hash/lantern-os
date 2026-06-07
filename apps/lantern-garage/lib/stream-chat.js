@@ -6,6 +6,8 @@ const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
+const sse = require("./stream-chat/sse");
+const { parseStreamChatRequest } = require("./stream-chat/request");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -31,36 +33,12 @@ function doorsOrFallback(text, isKeystoneDebug = false) {
 }
 
 async function handleStreamChat(req, url, res) {
-  let message = "";
-  let user = "dreamer";
-  let requestedAgent = "";
-  let requestedProvider = "";
-  let history = []; // [{role:"user"|"assistant", text:"..."}]
-  let mcpFlag = false;
-  if (req.method === "GET") {
-    message = String(url.searchParams.get("message") || "").slice(0, 4000).trim();
-    user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
-    requestedAgent = String(url.searchParams.get("agent") || "").trim();
-    requestedProvider = String(url.searchParams.get("provider") || "").trim().toLowerCase();
-  } else {
-    try {
-      const { collectRequestBody } = require("./http-utils");
-      const rawBody = await collectRequestBody(req);
-      const body = JSON.parse(rawBody || "{}");
-      mcpFlag = !!body.mcp;
-      message = String(body.message || "").slice(0, 4000).trim();
-      user = normalizeDreamerUser(body.user || "dreamer");
-      requestedAgent = String(body.agent || "").trim();
-      requestedProvider = String(body.provider || "").trim().toLowerCase();
-      // Conversation history — last N turns from the client [{role, text}]
-      if (Array.isArray(body.history)) {
-        history = body.history
-          .filter(h => h && typeof h.role === "string" && typeof h.text === "string")
-          .slice(-6) // max 3 exchanges = 6 turns
-          .map(h => ({ role: h.role === "assistant" ? "assistant" : "user", text: String(h.text).slice(0, 1000) }));
-      }
-    } catch { /* message stays empty */ }
-  }
+  const { collectRequestBody } = require("./http-utils");
+  const parsed = await parseStreamChatRequest(req, url, {
+    normalizeDreamerUser,
+    collectRequestBody,
+  });
+  let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
 
   // Handle bang commands
   const cmd = parseBangCommand(message);
@@ -157,13 +135,7 @@ async function handleStreamChat(req, url, res) {
     return;
   }
 
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
-    "Access-Control-Allow-Origin": "*",
-    "X-Accel-Buffering": "no",
-  });
+  sse.writeStreamHeaders(res);
 
   const allRecent = readRecentDreams(12);
   // Adaptive Focus Memory: high-lucidity / high-tag entries stay Full,
@@ -234,13 +206,8 @@ async function handleStreamChat(req, url, res) {
     ? KEYSTONE_DEBUG_PROMPT
     : `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them.${DOORS_INSTRUCTION}`;
 
-  const sendToken = (token) => {
-    res.write(`data: ${JSON.stringify({ type: "token", text: token })}\n\n`);
-  };
-  const sendDone = (source, extra = {}) => {
-    res.write(`data: ${JSON.stringify({ type: "done", source, ...extra })}\n\n`);
-    res.end();
-  };
+  const sendToken = (token) => sse.sendToken(res, token);
+  const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
   // Human-readable error translator — turns internal codes into plain language
   function humanError(err) {
     const msg = String(err?.message || err || "");
@@ -295,9 +262,7 @@ async function handleStreamChat(req, url, res) {
     return msg;
   }
 
-  const sendError = (msg) => {
-    res.write(`data: ${JSON.stringify({ type: "error", text: msg })}\n\n`);
-  };
+  const sendError = (msg) => sse.sendError(res, msg);
   const sendFail = (reason) => {
     sendError(humanError(reason));
     sendDone("failed", { agent: agent.name, online: false });

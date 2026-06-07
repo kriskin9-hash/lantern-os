@@ -1,5 +1,0 @@
-[build]
-builder = "dockerfile"
-
-[deploy]
-startCommand = "gunicorn app_autonomous:app --bind 0.0.0.0:$PORT"

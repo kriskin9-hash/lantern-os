@@ -71,28 +71,6 @@ jobs:
             -w "HTTP %{http_code} — %{size_download} bytes\n" \
             || echo "Smoke test skipped (DNS propagation may take time)"
 
-  # ── Railway ─────────────────────────────────────────────────────────────────
-  deploy-railway:
-    name: Trigger Railway deploy
-    runs-on: ubuntu-latest
-    env:
-      RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
-    steps:
-      - name: Ping Railway deploy hook or skip
-        run: |
-          if [ -n "$RAILWAY_DEPLOY_HOOK" ]; then
-            echo "Triggering Railway deploy..."
-            curl -s -X POST "$RAILWAY_DEPLOY_HOOK" \
-              --fail-with-body \
-              && echo "✓ Railway deploy triggered" \
-              || echo "⚠ Railway webhook returned error (non-fatal)"
-          else
-            echo "⚠ RAILWAY_DEPLOY_HOOK secret not set."
-            echo "Railway auto-deploys via its GitHub integration when connected."
-            echo "Add secret RAILWAY_DEPLOY_HOOK to enable explicit webhook trigger."
-          fi
-        continue-on-error: true
-
   # ── Smoke Test ────────────────────────────────────────────────────────────
   smoke-test:
     name: Post-deploy smoke test
@@ -133,7 +111,7 @@ jobs:
   # ── Summary ─────────────────────────────────────────────────────────────────
   summary:
     name: Deploy summary
-    needs: [deploy-pages, deploy-railway, smoke-test]
+    needs: [deploy-pages, smoke-test]
     runs-on: ubuntu-latest
     steps:
       - name: Print deploy targets
@@ -142,5 +120,4 @@ jobs:
           echo "✓ GitHub Pages: https://alex-place.github.io/lantern-os/"
           echo "✓ Dream Journal UI: https://alex-place.github.io/lantern-os/dream/"
           echo "✓ Dream Chat: https://alex-place.github.io/lantern-os/dream/dream-chat.html"
-          echo "✓ Railway: connect at https://railway.app (auto-deploy from master)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

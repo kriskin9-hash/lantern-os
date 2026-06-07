@@ -1,13 +1,12 @@
 {
   "name": "lantern-os",
-  "version": "1.2.0001",
+  "version": "1.2.0002",
   "private": true,
   "description": "Lantern OS — Dream Journal",
   "scripts": {
     "setup": "node scripts/ensure-rust.js && node scripts/build-csf-rust.js",
     "postinstall": "npm run setup",
     "start": "node apps/lantern-garage/server.js",
-    "start:cloud": "node apps/lantern-garage/cloud-server.js",
     "dev": "node apps/lantern-garage/server.js"
   },
   "engines": {

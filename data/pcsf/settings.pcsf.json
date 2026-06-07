@@ -3,11 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "settings",
   "description": "Runtime configuration layer. Declares all env vars the system reads, their purpose, defaults, and current resolved states (key present = true, absent = false — values never stored here).",
-<<<<<<< HEAD
   "generated_at": "2026-06-06T22:46:28.015Z",
-=======
-  "generated_at": "2026-06-06T21:24:22.636Z",
->>>>>>> a53a7ae95f03d3eb13d9723854c1b771978b10e4
   "state": "available",
   "env_file": ".env",
   "env_file_loader": "apps/lantern-garage/server.js (startup, regex ^[A-Z0-9_]+)",

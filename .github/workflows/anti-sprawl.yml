@@ -7,7 +7,7 @@ on:
 env:
   MAX_NEW_FILES: 25
   MAX_NEW_MARKDOWN: 4
-  ALLOWED_TOP_LEVEL: src,apps,services,docs,tests,scripts,config,data,ops,integrations,skills,docker,manifests,surfaces,archive,.github
+  ALLOWED_TOP_LEVEL: src,apps,docs,tests,scripts,config,data,ops,integrations,skills,manifests,surfaces,archive,.github
 
 jobs:
   anti-sprawl:

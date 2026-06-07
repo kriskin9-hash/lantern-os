@@ -47,7 +47,7 @@ jobs:
 
       - name: Validate server
         working-directory: apps/lantern-garage
-        run: node --check server.js && node --check cloud-server.js
+        run: node --check server.js
 
       - name: Build release zip — Dream Journal Web App
         run: |
@@ -55,9 +55,7 @@ jobs:
           zip -r "_release/lantern-dream-journal-${{ steps.version.outputs.version }}.zip" \
             apps/lantern-garage/public/ \
             apps/lantern-garage/server.js \
-            apps/lantern-garage/cloud-server.js \
             apps/lantern-garage/package.json \
-            railway.json \
             -x "*/node_modules/*" "*.DS_Store" "**/__pycache__/*"
           echo "✓ Dream Journal web app bundle:"
           ls -lh _release/
@@ -135,11 +133,7 @@ jobs:
             cd apps/lantern-garage && npm install && node server.js
             ```
 
-            Node.js v20+ required. No database, no Docker, no environment variables needed for local use.
-
-            ## Deploy to Railway
-
-            Connect your fork at [railway.app](https://railway.app) — `railway.json` is pre-configured.
+            Node.js v20+ required. No database, no environment variables needed for local use.
 
             ## What's coming in v1.0.1
 
