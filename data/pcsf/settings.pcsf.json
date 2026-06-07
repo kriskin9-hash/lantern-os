@@ -3,7 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "settings",
   "description": "Runtime configuration layer. Declares all env vars the system reads, their purpose, defaults, and current resolved states (key present = true, absent = false — values never stored here).",
-  "generated_at": "2026-06-07T20:31:57.096Z",
+  "generated_at": "2026-06-07T18:33:09.916Z",
   "state": "available",
   "env_file": ".env",
   "env_file_loader": "apps/lantern-garage/server.js (startup, regex ^[A-Z0-9_]+)",
@@ -85,7 +85,7 @@
       "group": "provider",
       "required": false,
       "default": "http://127.0.0.1:11434",
-      "state": "absent",
+      "state": "present",
       "purpose": "Base URL for local Ollama instance. Defaults to localhost."
     },
     {
@@ -93,7 +93,7 @@
       "group": "model",
       "required": false,
       "default": "llama3",
-      "state": "absent",
+      "state": "present",
       "purpose": "Ollama model to use. Must be pulled via 'ollama pull <model>'."
     },
     {

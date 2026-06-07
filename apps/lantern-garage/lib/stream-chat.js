@@ -10,6 +10,7 @@ const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
+const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -165,7 +166,7 @@ async function handleStreamChat(req, url, res) {
   // about app dev, repo state, and convergence. Direct API access from the UX.
   const isKeystoneDebug = agent.id === "keystone" && mcpFlag;
 
-  const dreamContext = recentDreams.length > 0
+  let dreamContext = recentDreams.length > 0
     ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
         `${i + 1}. ${String(d.text || d.content || "").slice(0, 200)}`
       ).join("\n")}`
@@ -323,6 +324,19 @@ async function handleStreamChat(req, url, res) {
   );
 
   let fullReply = "";
+
+  // ── Convergance OS: Route intent and select model profile ─────────────────
+  let converganceDecision = null;
+  try {
+    converganceDecision = await converganceRoute(message, { requestedProvider });
+    console.log(`[Convergance] intent=${converganceDecision.intent} profile=${converganceDecision.profileId} provider=${converganceDecision.provider} ollama=${converganceDecision.ollamaAvailable}`);
+    // Inject behavior preamble into system prompt context
+    if (converganceDecision.behaviorRules && dreamContext) {
+      dreamContext = buildBehaviorPreamble(converganceDecision) + "\n" + dreamContext;
+    }
+  } catch (e) {
+    console.error("[Convergance] Router error (non-fatal):", e.message);
+  }
 
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
   // When no specific cloud provider is requested, try Ollama first for lower
