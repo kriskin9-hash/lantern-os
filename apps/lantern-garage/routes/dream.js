@@ -476,6 +476,17 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     } catch (err) { sendJson(res, { error: err.message }, 500); }
     return true;
   }
+
+  // ── Door choice persistence ─────────────────────────────────────────────
+  if (url.pathname === "/api/dream/door-choice" && req.method === "POST") {
+    try {
+      const body = JSON.parse(await collectRequestBody(req));
+      const { saveDoorChoice } = require("../lib/csf-memory");
+      saveDoorChoice(body.choice || null, body.doors || []);
+      sendJson(res, { ok: true });
+    } catch (err) { sendJson(res, { error: err.message }, 500); }
+    return true;
+  }
 };
 
 // Lightweight AAPF provenance recorder (Node-side mirror of ConvergenceIO engine)

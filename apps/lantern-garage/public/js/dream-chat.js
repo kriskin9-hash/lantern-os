@@ -172,9 +172,12 @@
     fetch(`${serverBase}/api/actions/update`, { method: "POST" })
       .then(r => r.json())
       .then(d => {
-        const steps = d.steps?.map(s => `${s.ok ? "✓" : "✗"} ${s.step}`).join(" · ") || "";
+        const ver = d.version?.semver || d.version?.tag || "?";
+        const pullOutput = d.steps?.find(s => s.step === "git_pull")?.output || "";
+        const alreadyUpToDate = pullOutput.includes("Already up to date");
+        const status = alreadyUpToDate ? "Already up to date" : (d.ok ? "Updated" : "Failed");
         row.querySelector(".bubble").innerHTML =
-          `<b>${label}</b> ${d.ok ? "✓" : "✗"} <code>${d.version?.tag || "?"}</code><br><small style="opacity:0.85">${steps}</small>`;
+          `<b>${status}</b> · v${ver}`;
         scrollToBottom();
       })
       .catch(e => {
@@ -205,9 +208,13 @@
       fetch(`${serverBase}/api/actions/update`, { method: "POST" })
         .then(async (r) => {
           const d = await r.json();
+          const ver = d.version?.semver || d.version?.tag || "?";
+          const pullOutput = (d.steps || []).find(s => s.step === "git_pull")?.output || "";
+          const alreadyUpToDate = pullOutput.includes("Already up to date");
+          const status = alreadyUpToDate ? "Already up to date" : (d.ok ? "Updated" : "Failed");
           const steps = (d.steps || []).map(s => `${s.ok ? "✓" : "✗"} ${s.step}`).join("\n");
           sysRow.querySelector(".bubble").innerHTML =
-            `<b>Auto-update</b> ${d.ok ? "✓" : "✗"}<br><pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(steps)}${d.restart_scheduled ? "\n✓ restart_scheduled" : ""}</pre>`;
+            `<b>${status}</b> · v${ver}<br><pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(steps)}${d.restart_scheduled ? "\n✓ restart_scheduled" : ""}</pre>`;
           scrollToBottom();
           if (d.ok && d.restart_scheduled) {
             const msg = document.createElement("div");
@@ -246,7 +253,7 @@
           const d = await loopR.json();
           const rawOut = d.stdout || "";
           const rawErr = d.stderr || "";
-          const tag = versionD?.version?.tag || "unknown";
+          const tag = versionD?.version?.semver || versionD?.version?.tag || "unknown";
           const commit = versionD?.version?.commit ? versionD.version.commit.slice(0, 7) : "?";
 
           // Extract JSON from stdout (convergence loop prints it at the end)
@@ -377,7 +384,9 @@
                 fullText += evt.text;
                 analytics.tokensReceived++;
                 cursor.remove();
-                bubble.textContent = fullText;
+                // Hide [DOORS:...] tag from the user during streaming
+                const visibleText = fullText.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trimEnd();
+                bubble.textContent = visibleText;
                 bubble.appendChild(cursor);
                 scrollToBottom();
               }
@@ -463,6 +472,11 @@
         btn.textContent = s;
         btn.onclick = () => {
           if (isStreaming) return;
+          fetch(`${serverBase}/api/dream/door-choice`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ choice: s, doors: suggestions }),
+          }).catch(() => {});
           inputEl.value = s;
           inputEl.dispatchEvent(new Event("input"));
           sendMessage();
@@ -472,10 +486,7 @@
       row.appendChild(chips);
     }
 
-    // ── Three Doors banner ──────────────────────────────────────────────────────
-    if (Array.isArray(suggestions) && suggestions.length === 3) {
-      appendDoorsBanner(row, suggestions);
-    }
+    // ── Three Doors banner (disabled — appendDoorsBanner not yet implemented) ──
     // Show image prompt when AI suggests SD generation for doors
     if (imagePrompt) {
       const imgNote = document.createElement("div");

@@ -1,6 +1,8 @@
 // Health, status, system metrics — read-only telemetry endpoints
 const { getRoutingSnapshot } = require("../lib/provider-cache");
 const { execSync } = require("child_process");
+const path = require("path");
+const fs = require("fs");
 
 function getGitVersion(repoRoot) {
   try {
@@ -8,9 +10,14 @@ function getGitVersion(repoRoot) {
     const tag = execSync("git describe --tags --always", { cwd: repoRoot, encoding: "utf8" }).trim();
     const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repoRoot, encoding: "utf8" }).trim();
     const date = execSync("git log -1 --format=%cI", { cwd: repoRoot, encoding: "utf8" }).trim();
-    return { commit, tag, branch, date };
+    let semver = tag;
+    try {
+      const vj = JSON.parse(fs.readFileSync(path.join(repoRoot, "apps/lantern-garage/public/version.json"), "utf8"));
+      if (vj.version) semver = vj.version;
+    } catch {}
+    return { commit, tag, branch, date, semver };
   } catch {
-    return { commit: "unknown", tag: "unknown", branch: "unknown", date: new Date().toISOString() };
+    return { commit: "unknown", tag: "unknown", branch: "unknown", date: new Date().toISOString(), semver: "unknown" };
   }
 }
 
