@@ -65,13 +65,15 @@ function collectRequestBody(req, maxBytes = 64000, timeoutMs = 30000) {
       req.destroy();
     }, timeoutMs);
     req.on("data", (chunk) => {
-      chunks.push(chunk);
       totalBytes += chunk.length;
       if (totalBytes > maxBytes) {
         clearTimeout(timer);
+        req.removeAllListeners("data");
+        req.resume();
         reject(new Error("request_body_too_large"));
-        req.destroy();
+        return;
       }
+      chunks.push(chunk);
     });
     req.on("end", () => {
       clearTimeout(timer);
