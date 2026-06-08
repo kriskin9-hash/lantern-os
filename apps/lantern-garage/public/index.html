@@ -305,6 +305,14 @@
       <span class="panel-arrow">Open Dream Journal →</span>
     </a>
 
+    <a class="panel" href="/three-doors-game.html" style="--doors-accent:#a78bfa">
+      <span class="panel-icon">🚪</span>
+      <span class="panel-label">Dream Game</span>
+      <h2>Three Doors</h2>
+      <p>A branching dream-world exploration. Follow the fox through moss, bells, crowns, and convergence. No AI key needed — plays offline.</p>
+      <span class="panel-arrow" style="color:var(--doors-accent)">Enter the Moss Door →</span>
+    </a>
+
     <a class="panel" href="/dream-journal/index.html">
       <span class="panel-icon">📓</span>
       <span class="panel-label">Members Only</span>
@@ -376,6 +384,7 @@
         <tr><td>Pattern Recognition</td><td><span class="pill live">Ready</span></td><td>See what symbols, emotions, and themes appear most in your dreams.</td></tr>
         <tr><td>Download Your Data</td><td><span class="pill live">Ready</span></td><td>Export everything as a backup file. Your data is always yours.</td></tr>
         <tr><td>World Status Dashboard</td><td><span class="pill live">Ready</span></td><td>Live dashboard at <code>/flourishing</code> showing how the world is doing.</td></tr>
+        <tr><td>Three Doors Game</td><td><span class="pill live">Ready</span></td><td>Branching dream-world exploration with 7 scenes, fox companion, and SD image prompts. Plays offline.</td></tr>
         <tr><td>AI Chat</td><td><span class="pill optional" id="pill-ai-chat">Optional</span></td><td id="note-ai-chat">Chat with an AI about your dreams. Requires you to add an API key.</td></tr>
         <tr><td>Voice Recording</td><td><span class="pill held">Coming Later</span></td><td>Record dreams by voice instead of typing. Coming in a future update.</td></tr>
         <tr><td>Dream Art Generation</td><td><span class="pill held">Coming Later</span></td><td>AI generates images from your dream descriptions. Planned for future.</td></tr>
@@ -508,15 +517,7 @@
     if (readinessWarn > 0) readinessText += ' · ' + readinessWarn + ' warnings';
     $('stat-readiness').textContent = readinessText;
 
-    // Wallet (honest — show if data exists)
-    const wallet = status?.wallet || {};
-    const cleared = wallet.clearedCashUsd ?? 0;
-    const pending = wallet.pendingInvoiceUsd ?? 0;
-    if (cleared > 0 || pending > 0) {
-      $('benchmark-subtitle').textContent = 'Cleared $' + cleared + ' · Pending $' + pending + ' · ' + (arc.humanTrialDemoReadiness ? arc.humanTrialDemoReadiness + '% demo ready' : 'demo readiness not measured');
-    } else {
-      $('benchmark-subtitle').textContent = 'Real-time feature status from this instance. No financial claims.';
-    }
+    $('benchmark-subtitle').textContent = 'Real-time feature status from this instance.';
 
     // Server stat
     $('stat-server').textContent = serverOnline ? 'Node.js running on port ' + (health?.port || '4177') : 'Server not responding';
