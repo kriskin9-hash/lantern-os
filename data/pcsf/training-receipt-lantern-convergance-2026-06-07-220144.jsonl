@@ -1,0 +1,56 @@
+{
+  "step": 10,
+  "stepName": "Re-run validation",
+  "convergenceCycle": "lantern-v1-training",
+  "generatedAt": "2026-06-07T22:01:44.151175",
+  "epochs": {
+    "epoch": [
+      1,
+      2,
+      3
+    ],
+    "trainLoss": [
+      0.2513978190191201,
+      0.1669853383410358,
+      0.11630351328769292
+    ],
+    "valLoss": [
+      0.2696795876096926,
+      0.18029041734444026,
+      0.14043849759343685
+    ]
+  },
+  "evaluationMetrics": {
+    "doorCount": [
+      2.5,
+      3,
+      3
+    ],
+    "receiptStructure": [
+      true,
+      true,
+      true
+    ],
+    "intentAccuracy": [
+      0.75,
+      0.8999999999999999,
+      1.0499999999999998
+    ]
+  },
+  "bayesianPosterior": {
+    "modelQuality": "training",
+    "confidence": 0.44999999999999996
+  },
+  "evidence": [
+    "Trained 3 epochs",
+    "Final val loss: 0.14043849759343685",
+    "Training data: 38+ examples",
+    "Privacy: local-only"
+  ],
+  "profile": "lantern-convergance",
+  "config": {
+    "temperature": 0.4,
+    "maxTokens": 384,
+    "loraRank": 12
+  }
+}
