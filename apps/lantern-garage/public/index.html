@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ff424d">
+  <meta name="theme-color" content="#06b6d4">
   <link rel="manifest" href="/manifest.json">
   <title>Lantern OS</title>
   <style>
@@ -16,9 +16,9 @@
       --border: #e5e7eb;
       --text: #111827;
       --muted: #6b7280;
-      --accent: #ff424d;
-      --accent-dim: #ffe5e7;
-      --accent-hover: #e63a44;
+      --accent: #0ea5e9;
+      --accent-dim: #cffafe;
+      --accent-hover: #06b6d4;
       --green: #10b981;
       --gold: #f59e0b;
       --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
@@ -33,9 +33,9 @@
       --border: #1f2937;
       --text: #f3f4f6;
       --muted: #9ca3af;
-      --accent: #ff424d;
-      --accent-dim: #3a1a1c;
-      --accent-hover: #ff5a63;
+      --accent: #06b6d4;
+      --accent-dim: #164e63;
+      --accent-hover: #0891b2;
       --green: #34d399;
       --gold: #fbbf24;
       --shadow: 0 2px 8px rgba(0,0,0,0.3);
@@ -177,12 +177,12 @@
     /* ── Panels grid ── */
     .section-label {
       font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
+      font-weight: 700;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 14px;
-      margin-top: 40px;
+      color: var(--accent);
+      margin-bottom: 16px;
+      margin-top: 44px;
     }
     .panels-primary { margin-bottom: 12px; }
     .panel-full {
@@ -249,8 +249,8 @@
     }
     .panel-icon { font-size: 26px; }
     .panel-label {
-      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em;
-      text-transform: uppercase; color: var(--muted);
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--accent);
     }
     .panel h2 { font-size: 1.05rem; font-weight: 700; line-height: 1.25; }
     .panel p { font-size: 0.84rem; color: var(--muted); line-height: 1.5; }
@@ -348,8 +348,8 @@
       display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
       font-size: 0.78rem; color: var(--muted);
     }
-    .footer-inner a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
-    .footer-inner a:hover { color: var(--accent); }
+    .footer-inner a { color: var(--accent); text-decoration: none; font-weight: 600; transition: text-decoration 0.15s; }
+    .footer-inner a:hover { text-decoration: underline; }
     .footer-inner .sep { opacity: 0.3; }
     .footer-inner .ml { margin-left: auto; }
     @media (max-width: 480px) { .footer-inner .ml { margin-left: 0; } }
@@ -381,7 +381,7 @@
   <div class="hero">
     <span class="hero-icon">🪔</span>
     <h1>Your dreams.<br><span>Your data.</span> Your Lantern.</h1>
-    <p class="tagline" id="hero-tagline">A private dream journal that runs on your own computer. Write, reflect, and explore — no account, no ads, no cloud required.</p>
+    <p class="tagline" id="hero-tagline">A private dream journal that runs entirely on your computer. Write what you remember, talk with an AI companion, and find patterns over time—no account, no ads, no cloud required.</p>
     <div class="hero-cta-row">
       <a class="btn-primary" href="/dream-chat.html">✦ Open Dream Journal</a>
       <a class="btn-ghost" href="/three-doors-game.html">🚪 Play Three Doors</a>
@@ -397,7 +397,7 @@
       <div class="panel-full-body">
         <div class="tag">Dream Journal</div>
         <h2>Write & reflect on your dreams</h2>
-        <p id="panel-chat-desc">Record what you remember, talk to an AI companion, and build your private dream archive. Everything stays on your computer.</p>
+        <p id="panel-chat-desc">Record dreams and reflections, chat with an AI about what they mean, and discover patterns in your inner world. Everything stays on your device.</p>
       </div>
       <span class="panel-full-arrow">Open Journal →</span>
     </a>
@@ -410,7 +410,7 @@
       <span class="panel-icon">🚪</span>
       <span class="panel-label">Dream Game</span>
       <h2>Three Doors</h2>
-      <p>A branching story game. Follow the fox through seven dreamscapes — no login, plays offline.</p>
+      <p>Explore seven dreamscapes with your fox companion in this branching story. No login, plays offline.</p>
       <span class="panel-arrow" style="color:#a78bfa">Enter the Moss Door →</span>
     </a>
 
@@ -456,7 +456,7 @@
   </div>
 
   <!-- ── Feature strip ── -->
-  <p class="section-label">What you get</p>
+  <p class="section-label">What's included</p>
   <div class="features" id="live-features">
     <div class="feature"><div class="icon">✍️</div><h3>Write freely</h3><p id="stat-capture">Dreams, reflections, symbols — stored as plain files on your computer.</p></div>
     <div class="feature"><div class="icon">🧠</div><h3 id="stat-agents-label">AI companion</h3><p id="stat-agents">Chat with an AI that knows your journal. Works with Gemini, Claude, or OpenAI.</p></div>
