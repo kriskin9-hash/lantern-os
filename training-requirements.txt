@@ -1,0 +1,26 @@
+# Training dependencies for Convergance OS v1 LoRA fine-tuning
+# Install with: pip install -r training-requirements.txt
+
+# Core ML framework
+torch>=2.0.0
+transformers>=4.36.0
+
+# LoRA and quantization
+peft>=0.7.0
+bitsandbytes>=0.41.0
+
+# Training utilities
+trl>=0.7.0
+datasets>=2.14.0
+accelerate>=0.24.0
+
+# Utilities
+pydantic>=2.0.0
+tqdm>=4.66.0
+
+# Optional: For GGUF conversion
+llama-cpp-python>=0.2.0  # For GGUF support if needed
+
+# Optional: For monitoring
+wandb>=0.15.0  # Weights & Biases for training metrics
+tensorboard>=2.13.0
