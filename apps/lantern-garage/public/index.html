@@ -241,11 +241,11 @@
   </style>
 </head>
 <body>
-<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()">🌙</button>
+<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()"><span class="mandala-icon spin-slow"></span></button>
 <div class="page">
 
   <div class="hero">
-    <span class="hero-icon">🌙</span>
+    <span class="hero-icon"><span class="mandala-icon spin-slow"></span></span>
     <h1>Lantern <span>OS</span></h1>
     <p class="tagline" id="hero-tagline">Your dreams, your data, your rules. A private journal designed to run on your computer. Built for privacy-first operation.</p>
     <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">checking version…</span> · <span id="hero-git">checking git…</span></p>
@@ -353,8 +353,6 @@
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const isDark = stored ? stored === 'dark' : prefersDark;
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = isDark ? '🌙' : '☀️';
   })();
   function toggleTheme() {
     const html = document.documentElement;
@@ -362,8 +360,6 @@
     const next = isDark ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     localStorage.setItem('lantern-theme', next);
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
   }
 </script>
 <script>
