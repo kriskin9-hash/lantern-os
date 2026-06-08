@@ -27,7 +27,7 @@ jobs:
     name: Validate repo structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check required files
         run: |
@@ -79,7 +79,7 @@ jobs:
     name: Python tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -112,7 +112,7 @@ jobs:
     name: Node tests (Playwright, etc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-node@v6
         with:
@@ -160,7 +160,7 @@ jobs:
     name: Convergence validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify repo contract
         run: |
@@ -188,7 +188,7 @@ jobs:
     name: Integration & cloud readiness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check cloud mirrors config
         run: |
@@ -210,7 +210,7 @@ jobs:
     needs: [validate-repo, integration-checks]
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Validate convergence batch framework
         run: |
@@ -244,7 +244,7 @@ jobs:
     name: Security scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -285,7 +285,7 @@ jobs:
     name: CSF cache validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
@@ -321,7 +321,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
