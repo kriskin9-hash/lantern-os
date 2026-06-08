@@ -33,7 +33,7 @@ module.exports = async function flourishingRoutes(req, res, url, deps) {
 
   // Dashboard page
   if (url.pathname === "/flourishing" || url.pathname === "/flourishing/") {
-    sendFile(res, path.resolve(publicRoot, "hff.html"));
+    sendFile(res, path.resolve(publicRoot, "flourishing.html"));
     return true;
   }
 
