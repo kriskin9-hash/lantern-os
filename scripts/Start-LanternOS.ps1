@@ -1,11 +1,12 @@
-#Requires -Version 7
 <#
 .SYNOPSIS
-    Start the full Lantern OS stack: MCP Server + Discord Bot.
+    Start the full Lantern OS stack: all services (Lanterns Garage, Image Gen, MCP, Ollama).
 .DESCRIPTION
-    1. Starts MCP server in background
-    2. Waits for health check
-    3. Starts Discord bot in foreground
+    1. Checks prerequisites (Node, Python, Ollama)
+    2. Cleans up stale processes
+    3. Starts all services in parallel
+    4. Launches Dream Chat in Chrome
+    Compatible with PowerShell 5.1+ (Windows) and PowerShell Core (Linux/WSL)
 #>
 
 param(
