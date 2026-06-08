@@ -14,11 +14,11 @@
 <body>
 <div class="app">
   <header>
-    <a href="/" class="back-link" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1.1rem;margin-right:4px;">←</a>
+    <a href="/" class="back-link" title="Back to home">←</a>
     <div class="logo">🔮</div>
     <div class="title-block">
       <h1>Dream Journal</h1>
-      <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
+      <a href="/repo/CHANGELOG.MD" target="_blank" class="app-version">Lantern OS · private · local</a>
     </div>
     <div class="selector-row">
       <select id="agent-select" title="Personality mode" aria-label="Select personality">
@@ -34,13 +34,13 @@
       </select>
       <button class="mcp-toggle" id="mcp-toggle" title="Direct mode — talk to the model without persona RP" onclick="toggleKeystoneMcp()">⚡ Direct</button>
     </div>
-    <button class="settings-btn" id="logdream-btn" title="Record a new dream" onclick="openLogDream()" style="margin-left:4px;">✦</button>
+    <button class="settings-btn" id="logdream-btn" title="Record a new dream" onclick="openLogDream()">✦</button>
     <button class="settings-btn" id="settings-btn" title="Settings & AI keys" onclick="openSettings()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
       </svg>
     </button>
-    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()" style="margin-left:4px;"><span class="mandala-icon spin-slow"></span></button>
+    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()"><span class="mandala-icon spin-slow"></span></button>
     <div class="status-dot">
       <div class="dot" id="status-dot"></div>
       <span id="status-label">connecting…</span>
