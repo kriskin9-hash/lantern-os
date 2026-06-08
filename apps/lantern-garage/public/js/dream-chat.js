@@ -1069,4 +1069,93 @@
   initVoice();
   loadVoiceSettings();
 
+  // ── Three Doors Game Integration ────────────────────────────────────────
+  let doorsGameState = null;
+  let doorsUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+  async function startThreeDoors() {
+    console.log("[Doors] Starting game...");
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">🚪 Three Doors</div><div class="bubble"><b>Opening the first door...</b></div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: doorsUserId, action: "start" }),
+      });
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (data.error) {
+        row.querySelector(".bubble").textContent = `⚠️ Error: ${data.error}`;
+        return;
+      }
+
+      doorsGameState = data;
+      renderDoorsScene(row, data);
+    } catch (error) {
+      console.error("[Doors] Error:", error);
+      row.querySelector(".bubble").textContent = `❌ Failed to start game: ${error.message}`;
+    }
+  }
+
+  function renderDoorsScene(row, scene) {
+    const bubble = row.querySelector(".bubble");
+    const html = `
+      <div style="margin: 8px 0;">
+        <div style="margin-bottom: 12px; line-height: 1.6;">${scene.text}</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          ${(scene.doors || [])
+            .map((door) => `
+            <button onclick="window.chooseDoorsPath('${door.label}')"
+              style="padding: 8px 12px; background: #334155; border: 1px solid #475569; color: #f1f5f9; border-radius: 6px; cursor: pointer; font-size: 13px;">
+              ${door.label}. ${door.name}
+            </button>
+          `)
+            .join("")}
+        </div>
+        ${scene.image_prompt ? `<div style="color: #9ca3af; font-size: 12px; margin-top: 12px; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">📸 Ready: ${scene.image_prompt.substring(0, 100)}...</div>` : ""}
+      </div>
+    `;
+    bubble.innerHTML = html;
+  }
+
+  window.chooseDoorsPath = async (doorLabel) => {
+    if (!doorsGameState) return;
+
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">🚪 Choosing door ${doorLabel}...</div><div class="bubble"><em>traversing...</em></div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: doorsUserId, action: "choose", choice: doorLabel }),
+      });
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (data.error) {
+        row.querySelector(".bubble").textContent = `⚠️ ${data.error}`;
+        return;
+      }
+
+      doorsGameState = data;
+      renderDoorsScene(row, data);
+    } catch (error) {
+      console.error("[Doors] Choice error:", error);
+      row.querySelector(".bubble").textContent = `❌ Failed: ${error.message}`;
+    }
+  };
+
+  window.startThreeDoors = startThreeDoors;
 
