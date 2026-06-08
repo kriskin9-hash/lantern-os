@@ -118,7 +118,7 @@ impl StreamingCompressor {
     }
 
     /// Finalize and write archive to `writer`.
-    pub fn finalize<W: Write + Seek>(mut self, writer: &mut W) -> Result<()> {
+    pub fn finalize<W: Read + Write + Seek>(mut self, writer: &mut W) -> Result<()> {
         // Final dictionary train on remaining window
         let _ = self.dictionary.train(
             std::str::from_utf8(&self.window)
@@ -144,7 +144,6 @@ impl StreamingCompressor {
         header.dictionary_offset = dict_offset;
 
         // Write sparse metadata placeholder (spec §4.1)
-        let sparse_offset = writer.stream_position()?;
         // placeholder: row_count=0, col_count=0, nonzero_count=0, no defaults
         writer.write_all(&0u64.to_be_bytes())?; // row_count
         writer.write_all(&0u32.to_be_bytes())?;  // col_count
@@ -152,7 +151,6 @@ impl StreamingCompressor {
 
         // Compress and write each segment (raw zstd for bit-perfect roundtrip)
         self.segments.reserve(self.raw_segments.len());
-        let data_start = writer.stream_position()?;
         for raw in &self.raw_segments {
             let seg_offset = writer.stream_position()?;
             let compressed =
@@ -166,23 +164,13 @@ impl StreamingCompressor {
             });
         }
 
-        // Write footer
-        let body_end = writer.stream_position()?;
-        // Footer checksum covers everything from header end to footer start
-        let mut body_buf = Vec::new();
-        writer.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
-        let body_len = body_end - HEADER_SIZE as u64;
-        body_buf.resize(body_len as usize, 0);
-        writer.read_exact(&mut body_buf)?;
-        let footer = Footer::new(footer_checksum(&body_buf));
-        writer.seek(SeekFrom::Start(body_end))?;
-        footer.write(writer)?;
+        let data_end = writer.stream_position()?;
 
-        // Patch header with dictionary offset
+        // Patch header with dictionary offset — must come before footer checksum
         writer.seek(SeekFrom::Start(0))?;
         header.write(writer)?;
 
-        // Patch segment table
+        // Patch segment table — must come before footer checksum
         writer.seek(SeekFrom::Start(seg_table_offset))?;
         for seg in &self.segments {
             writer.write_all(&seg.offset.to_be_bytes())?;
@@ -190,6 +178,15 @@ impl StreamingCompressor {
             writer.write_all(&seg.uncompressed_len.to_be_bytes())?;
             writer.write_all(&seg.flags.to_be_bytes())?;
         }
+
+        // Write footer — checksum covers body after header (now fully patched)
+        let body_len = data_end - HEADER_SIZE as u64;
+        let mut body_buf = vec![0u8; body_len as usize];
+        writer.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
+        writer.read_exact(&mut body_buf)?;
+        let footer = Footer::new(footer_checksum(&body_buf));
+        writer.seek(SeekFrom::Start(data_end))?;
+        footer.write(writer)?;
 
         Ok(())
     }
@@ -287,7 +284,7 @@ impl SegmentReader {
         file.read_exact(&mut body)?;
         let expected = footer_checksum(&body);
         if expected != footer.checksum {
-            return Err(CsfError::Checksum { expected: footer.checksum as u64, got: expected as u64 });
+            return Err(CsfError::Checksum { expected: expected as u64, got: footer.checksum as u64 });
         }
 
         // Validate segment table offsets are within file bounds
