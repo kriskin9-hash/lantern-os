@@ -28,4 +28,19 @@ convergence:
 	pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/Invoke-LanternConvergenceLoop.ps1 -Root . -Output manifests/evidence/convergence-local.json -CloudVirtualization
 
 quickstart:
-	pwsh -NoProfile -ExecutionPolicy Bypass -File ./start-dual-servers.ps1
+	@echo ""
+	@echo "📚 REQUIRED READING:"
+	@echo "   Before starting, read:"
+	@echo "   • QUICKSTART.md — how to run both servers"
+	@echo "   • AGENTS.md — workflow and git rules"
+	@echo ""
+	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DualServers.ps1
+
+quickstart-no-browser:
+	pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DualServers.ps1 -NoChrome
+
+dev:
+	npm run dev --prefix apps/lantern-garage
+
+stop-services:
+	pwsh -NoProfile -Command "Get-Process node,ollama -ErrorAction SilentlyContinue | Stop-Process -Force"
