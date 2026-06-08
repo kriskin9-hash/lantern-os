@@ -60,12 +60,18 @@ function buildProviderMessages(systemPrompt, compacted, currentMessage) {
   ];
 }
 
-// Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
+// Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array.
+// Local models (Ollama) sometimes use commas instead of pipes — fall back gracefully.
 function extractDoors(text) {
   // Match complete [DOORS: A | B | C] or incomplete [DOORS: A | B | C (no closing bracket)
   const match = text.match(/\[DOORS:\s*([^\]]+)\]?/i);
   if (!match) return { cleanText: text.trim(), doors: [] };
-  const doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
+  let doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
+  // Fallback: if pipe-split didn't produce 3 doors, try comma-before-capital split
+  if (doors.length < 3) {
+    const commaSplit = match[1].split(/,\s*(?=[A-Z])/).map(d => d.trim()).filter(Boolean).slice(0, 3);
+    if (commaSplit.length > doors.length) doors = commaSplit;
+  }
   const cleanText = text.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trim();
   return { cleanText, doors };
 }

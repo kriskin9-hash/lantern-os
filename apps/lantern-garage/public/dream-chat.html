@@ -308,9 +308,22 @@
     </div>
   </div>
 
+  <!-- System status bar -->
+  <div class="system-bar" id="system-bar" aria-label="System status">
+    <span class="sbar-chip" id="sbar-write">✍️ <span>Write</span></span>
+    <span class="sbar-sep">·</span>
+    <span class="sbar-chip" id="sbar-chat">🧠 <span>AI Chat</span></span>
+    <span class="sbar-sep">·</span>
+    <span class="sbar-chip" id="sbar-search">🔍 <span>Search</span></span>
+    <span class="sbar-sep">·</span>
+    <span class="sbar-chip" id="sbar-private">🔑 <span>Private</span></span>
+    <span class="sbar-sep">·</span>
+    <span class="sbar-chip" id="sbar-online">✅ <span>Online</span></span>
+  </div>
+
   <div class="messages" id="messages">
     <div class="empty-state" id="empty-state">
-      <div class="moon-door moon-heartbeat" aria-hidden="true"><span class="mandala-icon wobble"></span></div>
+      <div class="moon-door moon-heartbeat" aria-hidden="true"><span class="mandala-icon spin-slow"></span></div>
       <h2>Start Your Dream Journal</h2>
       <p>Write about a dream, reflect on your thoughts, or ask the AI to help you explore what it means. Everything stays private on your computer.</p>
     </div>
@@ -357,6 +370,61 @@
 <script src="js/dream-chat.js"></script>
 <script src="js/convergance-sync.js"></script>
 <script src="js/update-checker.js"></script>
+<script>
+(function() {
+  var base = (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost')
+    ? window.location.origin : 'http://127.0.0.1:4177';
+
+  function setChip(id, text, state) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.querySelector('span').textContent = text;
+    el.className = 'sbar-chip' + (state ? ' ' + state : '');
+  }
+
+  // ✍️ Write — entry count
+  fetch(base + '/api/dream/stats', { cache: 'no-store', signal: AbortSignal.timeout(4000) })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(d) {
+      var n = d && (d.total || d.count || d.totalEntries || 0);
+      setChip('sbar-write', n === 1 ? '1 entry saved' : (n || 0) + ' entries saved', n > 0 ? 'ok' : '');
+    }).catch(function() { setChip('sbar-write', 'Write'); });
+
+  // 🧠 AI Chat — agent count
+  fetch(base + '/api/agents', { cache: 'no-store', signal: AbortSignal.timeout(4000) })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(d) {
+      var agents = d && d.agents ? d.agents : [];
+      var names = agents.map(function(a) { return a.name; }).join(', ');
+      setChip('sbar-chat', agents.length + ' agents: ' + (names || '—'), agents.length > 0 ? 'ok' : '');
+    }).catch(function() { setChip('sbar-chat', 'AI Chat'); });
+
+  // 🔑 Private — provider count
+  fetch(base + '/api/settings/providers', { cache: 'no-store', signal: AbortSignal.timeout(4000) })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(d) {
+      if (!d) return;
+      var keys = ['ANTHROPIC_API_KEY','OPENAI_API_KEY','GEMINI_API_KEY','XAI_API_KEY',
+                  'ELEVENLABS_API_KEY','OLLAMA_BASE_URL','DISCORD_BOT_TOKEN',
+                  'ANTHROPIC_MODEL','OPENAI_MODEL','GEMINI_MODEL'];
+      var configured = keys.filter(function(k) { return !!d[k]; }).length;
+      setChip('sbar-private', configured + ' of ' + keys.length + ' providers configured', configured > 0 ? 'ok' : 'warn');
+    }).catch(function() { setChip('sbar-private', 'Private'); });
+
+  // ✅ Online — health
+  fetch(base + '/api/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+    .then(function(r) { return r.ok ? r.json() : null; })
+    .then(function(d) {
+      setChip('sbar-online', d && d.ok ? 'Node.js · port 4177' : 'Offline', d && d.ok ? 'ok' : 'err');
+    }).catch(function() { setChip('sbar-online', 'Offline', 'err'); });
+
+  // 🔍 Search — static until search endpoint wired
+  fetch(base + '/api/dream/search?q=__probe__&limit=0', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+    .then(function(r) { return r.ok ? 'ready' : null; })
+    .then(function(s) { setChip('sbar-search', s ? 'Ready' : 'Search', s ? 'ok' : ''); })
+    .catch(function() { setChip('sbar-search', 'Search'); });
+})();
+</script>
 <p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS ">Lantern OS</span> · private · local</p>
 <!-- Version badge auto-loader -->
 <script>

@@ -184,9 +184,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     const choiceMatch = text.toLowerCase().match(/(?:door|choose|pick)\s+([abc])/) || text.toLowerCase().match(/^[abc]$/);
     const choice = choiceMatch ? choiceMatch[1] : "";
     const action = choice ? "choose" : "start";
-    const script = action === "choose"
-      ? `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); s=e.choose_door("${choice}"); print(__import__('json').dumps(e.to_api_response(s) if s else {"error":"invalid_choice"}))`
-      : `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); print(__import__('json').dumps(e.to_api_response(e.start_game())))`;
+    const script = `import sys,json; from three_doors_engine import ThreeDoorsEngine; req=json.loads(sys.stdin.read()); e=ThreeDoorsEngine(req['userId']); result=e.to_api_response(e.start_game()) if req['action']=='start' else (lambda s: e.to_api_response(s) if s else {"error":"invalid_choice"})(e.choose_door(req['choice'])); print(json.dumps(result))`;
     try {
       const result = await new Promise((resolve, reject) => {
         const proc = spawn(py, ["-c", script], { cwd: _repoRoot, env: { ...process.env, PYTHONPATH: _path.join(_repoRoot, "src") } });
@@ -195,6 +193,8 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
         proc.stderr.on("data", (c) => (err += c));
         proc.on("close", (code) => { if (code !== 0) reject(new Error(err || `exit ${code}`)); else resolve(out.trim()); });
         proc.on("error", reject);
+        proc.stdin.write(JSON.stringify({ userId, action, choice }));
+        proc.stdin.end();
       });
       const data = JSON.parse(result);
       if (data.error) {

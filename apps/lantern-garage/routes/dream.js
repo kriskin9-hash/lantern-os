@@ -491,6 +491,48 @@ print(json.dumps(result))`;
     } catch (err) { sendJson(res, { error: err.message }, 500); }
     return true;
   }
+
+  // ── Convergence Models 3 — live status from Ollama ────────────────────
+  if (url.pathname === "/api/dream/lantern-models" && req.method === "GET") {
+    const LANTERN_MODELS = [
+      { id: "lantern-csf-dream",   role: "dream",       icon: "🌙", base: "mistral",        description: "Three Doors game · Elephant Oasis · dream narrative" },
+      { id: "lantern-convergance", role: "convergence", icon: "◈",  base: "qwen2.5-coder",  description: "Convergence receipts · AAPF provenance · structured output" },
+      { id: "lantern-pcsf",        role: "pcsf",        icon: "⌖",  base: "qwen2.5-coder",  description: "PCSF state manifests · system receipts · agent declarations" },
+    ];
+    const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+    try {
+      const ollamaUrl = new URL(ollamaBase);
+      const tagsRaw = await new Promise((resolve, reject) => {
+        const r = require("http").request({
+          hostname: ollamaUrl.hostname, port: ollamaUrl.port || 11434,
+          path: "/api/tags", method: "GET",
+        }, (upstream) => {
+          let d = ""; upstream.on("data", c => d += c);
+          upstream.on("end", () => { try { resolve(JSON.parse(d)); } catch { resolve({}); } });
+          upstream.on("error", reject);
+        });
+        r.on("error", reject);
+        r.setTimeout(4000, () => { r.destroy(); reject(new Error("timeout")); });
+        r.end();
+      });
+      const pulledIds = (tagsRaw.models || []).map(m => String(m.name || "").replace(/:latest$/, "").toLowerCase());
+      const pulledFull = tagsRaw.models || [];
+      const models = LANTERN_MODELS.map(m => {
+        const entry = pulledFull.find(p => String(p.name || "").toLowerCase().startsWith(m.id));
+        return {
+          ...m,
+          loaded: pulledIds.some(id => id === m.id),
+          size_gb: entry ? Math.round((entry.size / 1e9) * 100) / 100 : null,
+          modified_at: entry ? entry.modified_at : null,
+        };
+      });
+      const loaded = models.filter(m => m.loaded).length;
+      sendJson(res, { convergence_models: models, loaded, total: LANTERN_MODELS.length, healthy: loaded === LANTERN_MODELS.length, ollama_base: ollamaBase });
+    } catch (err) {
+      sendJson(res, { convergence_models: LANTERN_MODELS.map(m => ({ ...m, loaded: false, size_gb: null })), loaded: 0, total: LANTERN_MODELS.length, healthy: false, error: err.message }, 200);
+    }
+    return true;
+  }
 };
 
 // Lightweight AAPF provenance recorder (Node-side mirror of ConvergenceIO engine)
