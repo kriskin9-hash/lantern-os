@@ -148,6 +148,60 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
+    if (cmd.name === "doors" || cmd.name === "door") {
+      const { spawn } = require("child_process");
+      const doorTypes = cmd.args || "elephant garden cosmic";
+      
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`◈ Generating mystical doors…\n\n`);
+      sendToken(`Door types: ${doorTypes}\n`);
+      sendToken(`Style: Abstract, dreamlike, not cartoonish\n\n`);
+      
+      const py = spawn("python", ["scripts/generate-door-images.py", "generate"], { cwd: repoRoot });
+      let stdout = "";
+      let stderr = "";
+      
+      py.stdout.on("data", (d) => {
+        stdout += d.toString();
+        sendToken(d.toString());
+      });
+      
+      py.stderr.on("data", (d) => {
+        stderr += d.toString();
+        sendToken(`⚠️ ${d.toString()}`);
+      });
+      
+      py.on("close", (code) => {
+        if (code === 0) {
+          sendToken(`\n✅ Door images generated successfully!\n`);
+          sendToken(`Check: data/images/three-doors/\n`);
+          sendDone("doors", { agent: "DoorGenerator", online: true, count: 3 });
+        } else {
+          sendToken(`\n❌ Generation failed (exit ${code})\n`);
+          sendToken(`Make sure Stable Diffusion is running: python -m launch --api\n`);
+          sendDone("doors", { agent: "DoorGenerator", online: false, error: stderr });
+        }
+        res.end();
+      });
+      
+      py.on("error", (err) => {
+        sendToken(`\n❌ Failed to spawn generator: ${err.message}\n`);
+        sendDone("doors", { agent: "DoorGenerator", online: false, error: err.message });
+        res.end();
+      });
+      
+      return;
+    }
+
     if (cmd.name === "converge" || cmd.name === "convergance") {
       const { spawn } = require("child_process");
       const py = spawn("python", ["src/convergence_io_engine.py", "loop"], { cwd: repoRoot });
@@ -503,68 +557,113 @@ Interpret this convergence result and provide:
   }
 
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
-  // When no specific cloud provider is requested, try Ollama first for lower
-  // latency, zero cost, and offline resilience. Cloud providers are fallbacks.
+  // When no specific cloud provider is requested, try all local Ollama models in sequence
+  // for lower latency, zero cost, and offline resilience. Cloud providers are fallbacks.
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+  
+  // Model chain: task-specific ordering with fallbacks
+  const OLLAMA_MODEL_CHAIN = {
+    // CSF/dream tasks: custom model first, then general models
+    csf: [
+      "lantern-csf-dream",
+      "mistral",
+      "qwen2.5-coder",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ],
+    // Coding tasks: coder model first
+    coding: [
+      "qwen2.5-coder",
+      "lantern-csf-dream",
+      "mistral",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ],
+    // Creative/dream tasks: custom CSF model first
+    creative: [
+      "lantern-csf-dream",
+      "mistral",
+      "qwen2.5-coder",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ],
+    // Default: balanced chain
+    default: [
+      "lantern-csf-dream",
+      "qwen2.5-coder",
+      "mistral",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ]
+  };
+  
+  // Select model chain based on intent or use default
+  const intent = converganceDecision?.intent || "default";
+  const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
+  
   const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
-  console.log(`[Stream] Ollama gate: ollamaLocalFirst=${ollamaLocalFirst}, message=${!!message}, isKeystoneDebug=${isKeystoneDebug}, requestedProvider="${requestedProvider}"`);
+  console.log(`[Stream] Ollama gate: ollamaLocalFirst=${ollamaLocalFirst}, message=${!!message}, isKeystoneDebug=${isKeystoneDebug}, requestedProvider="${requestedProvider}", intent=${intent}`);
+  
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
-    console.log(`[Stream] Trying Ollama at ${ollamaBase} model=${ollamaModel}`);
-    try {
-      const payload = JSON.stringify({
-        model: ollamaModel,
-        stream: true,
-        messages: buildProviderMessages(systemPrompt, compacted, message),
-      });
-      const ollamaUrl = new URL(ollamaBase);
-      await new Promise((resolve, reject) => {
-        const req2 = http.request({
-          hostname: ollamaUrl.hostname,
-          port: ollamaUrl.port || 11434,
-          path: "/api/chat",
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-        }, (upstream) => {
-          if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
-          let buf = "";
-          upstream.on("data", (chunk) => {
-            buf += chunk.toString();
-            const lines = buf.split("\n");
-            buf = lines.pop();
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const parsed = JSON.parse(line);
-                if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
-              } catch {}
-            }
-          });
-          upstream.on("end", () => resolve());
-          upstream.on("error", reject);
+    console.log(`[Stream] Trying Ollama models in sequence: ${modelChain.join(" → ")}`);
+    
+    for (const ollamaModel of modelChain) {
+      try {
+        console.log(`[Stream] Trying Ollama model: ${ollamaModel}`);
+        const payload = JSON.stringify({
+          model: ollamaModel,
+          stream: true,
+          messages: buildProviderMessages(systemPrompt, compacted, message),
         });
-        req2.on("error", reject);
-        req2.setTimeout(120000, () => { req2.destroy(); reject(new Error("ollama_timeout")); });
-        req2.write(payload);
-        req2.end();
-      });
-      if (fullReply) {
-        console.log(`[Stream] Ollama local-first OK (${fullReply.length} chars, model: ${ollamaModel})`);
-        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
-        await appendConversationEntry({
-          recordedAt: new Date().toISOString(),
-          surface: "dream-chat-stream",
-          role: "lantern",
-          text: cleanText.slice(0, maxConversationTextLength),
-        }).catch(() => {});
-        recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
-        return;
+        const ollamaUrl = new URL(ollamaBase);
+        await new Promise((resolve, reject) => {
+          const req2 = http.request({
+            hostname: ollamaUrl.hostname,
+            port: ollamaUrl.port || 11434,
+            path: "/api/chat",
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          }, (upstream) => {
+            if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
+            let buf = "";
+            upstream.on("data", (chunk) => {
+              buf += chunk.toString();
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                  const parsed = JSON.parse(line);
+                  if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
+                } catch {}
+              }
+            });
+            upstream.on("end", () => resolve());
+            upstream.on("error", reject);
+          });
+          req2.on("error", reject);
+          req2.setTimeout(120000, () => { req2.destroy(); reject(new Error("ollama_timeout")); });
+          req2.write(payload);
+          req2.end();
+        });
+        
+        if (fullReply) {
+          console.log(`[Stream] Ollama success with ${ollamaModel} (${fullReply.length} chars)`);
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          await appendConversationEntry({
+            recordedAt: new Date().toISOString(),
+            surface: "dream-chat-stream",
+            role: "lantern",
+            text: cleanText.slice(0, maxConversationTextLength),
+          }).catch(() => {});
+          recordProviderSuccess("ollama");
+          sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions, model: ollamaModel });
+          return;
+        }
+      } catch (err) {
+        console.log(`[Stream] Ollama model ${ollamaModel} failed: ${err.message} — trying next model`);
+        fullReply = "";
+        continue; // Try next model in chain
       }
-    } catch (err) {
-      console.log(`[Stream] Ollama local-first failed: ${err.message} — falling through to cloud`);
-      fullReply = "";
     }
+    
+    console.log(`[Stream] All Ollama models failed — falling through to cloud providers`);
   }
 
   // Provider 1: Gemini (streaming) — cloud fallback
