@@ -1,0 +1,8 @@
+{
+  "version": "1",
+  "updated_at": "2026-06-07T22:20:00Z",
+  "objective": "Stabilize convergence loop: fix SlotManager claim bug, reduce memory pressure, and wire objective manifest + drift detection into Phase 4",
+  "priority": 1,
+  "tags": ["convergence", "infrastructure", "memory"],
+  "owner": "keystone"
+}

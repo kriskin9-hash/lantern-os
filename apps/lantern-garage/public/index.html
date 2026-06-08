@@ -238,94 +238,147 @@
       color: var(--accent);
       transform: scale(1.05);
     }
+
+    /* Mandala Convergence Icon */
+    .mandala-icon {
+      --mandala-svg: url('/mandala-network.svg');
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      background: var(--mandala-svg);
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      vertical-align: -0.125em;
+      font-size: inherit;
+      color: inherit;
+      filter: drop-shadow(0 0 2px currentColor);
+    }
+    /* Health colors */
+    .mandala-icon.healthy { color: var(--green); }
+    .mandala-icon.warning { color: var(--gold); }
+    .mandala-icon.critical { color: var(--accent); }
+    /* Speed indicates lag: slow=lag, fast=healthy */
+    .mandala-icon.spin-slow {
+      animation: mandala-spin 5s linear infinite;
+    }
+    .mandala-icon.spin-normal {
+      animation: mandala-spin 2.5s linear infinite;
+    }
+    .mandala-icon.spin-fast {
+      animation: mandala-spin 1s linear infinite;
+    }
+    .mandala-icon.wobble {
+      animation: mandala-wobble 2s ease-in-out infinite;
+    }
+    @keyframes mandala-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes mandala-wobble {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    /* Dark mode: higher contrast */
+    [data-theme="dark"] .mandala-icon {
+      filter: drop-shadow(0 0 4px currentColor) brightness(1.3);
+    }
   </style>
 </head>
 <body>
-<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()">🌙</button>
+<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()"><span class="mandala-icon spin-slow"></span></button>
 <div class="page">
 
   <div class="hero">
-    <span class="hero-icon">🌙</span>
+    <span class="hero-icon"><span class="mandala-icon spin-slow"></span></span>
     <h1>Lantern <span>OS</span></h1>
-    <p class="tagline" id="hero-tagline">A private, local-first operating cockpit. No telemetry. No cloud lock-in.</p>
+    <p class="tagline" id="hero-tagline">Your dreams, your data, your rules. A private journal designed to run on your computer. Built for privacy-first operation.</p>
     <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">checking version…</span> · <span id="hero-git">checking git…</span></p>
   </div>
 
   <div class="panels">
     <a class="panel primary" href="/dream-chat.html">
       <span class="panel-icon">💬</span>
-      <span class="panel-label">Open App</span>
-      <h2>Dream Journal</h2>
-      <p id="panel-chat-desc">Checking provider status…</p>
+      <span class="panel-label">Launch Product</span>
+      <h2>Dream Journal Orion</h2>
+      <p id="panel-chat-desc">Write your dreams and reflect. Chat with AI. Record what matters. Free and private. Checking provider status…</p>
       <span class="panel-arrow">Open Dream Journal →</span>
     </a>
 
     <a class="panel" href="/dream-journal/index.html">
       <span class="panel-icon">📓</span>
-      <span class="panel-label">Journal</span>
-      <h2>Full Journal</h2>
-      <p id="panel-journal-desc">Checking notebook entries…</p>
-      <span class="panel-arrow">Open journal →</span>
+      <span class="panel-label">Members Only</span>
+      <h2>Full Journal Orion</h2>
+      <p id="panel-journal-desc">Deep archive, synthesis, and advanced analysis. For Patreon supporters and Synthesasia Guild members. Checking entries…</p>
+      <span class="panel-arrow">View if you have access →</span>
     </a>
 
     <a class="panel patreon" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener">
       <span class="panel-icon">✦</span>
-      <span class="panel-label">Support</span>
-      <h2>Patreon</h2>
-      <p id="panel-patreon-desc">Help keep Lantern OS independent. Early access + direct line to the founder.</p>
-      <span class="panel-arrow">Support on Patreon →</span>
+      <span class="panel-label">Synthesasia Guild</span>
+      <h2>Join the Community</h2>
+      <p id="panel-patreon-desc">Support Lantern on Patreon or join the Discord. Get Full Journal Orion access and community benefits.</p>
+      <span class="panel-arrow">Become a member →</span>
     </a>
 
     <a class="panel" href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener">
       <span class="panel-icon">⚙️</span>
-      <span class="panel-label">Source</span>
-      <h2>GitHub</h2>
-      <p id="panel-github-desc">Open source. Self-host in one command. No account required.</p>
+      <span class="panel-label">Code</span>
+      <h2>See the Code</h2>
+      <p id="panel-github-desc">It's all open source. Run it yourself. No account needed. Complete privacy.</p>
       <span class="panel-arrow">View on GitHub →</span>
     </a>
 
     <a class="panel" href="/knowledgecenter.html">
       <span class="panel-icon">📚</span>
       <span class="panel-label">Learn</span>
-      <h2>Knowledge Center</h2>
-      <p>Docs, changelog, and guides for Lantern OS.</p>
-      <span class="panel-arrow">Open knowledge center →</span>
+      <h2>Help & Guides</h2>
+      <p>How to use Lantern, what's new, troubleshooting, and more.</p>
+      <span class="panel-arrow">Open guides →</span>
     </a>
 
     <a class="panel" href="/flourishing">
       <span class="panel-icon">🌍</span>
-      <span class="panel-label">HFF</span>
-      <h2>Human Flourishing</h2>
-      <p>Bayesian world-model dashboard — beliefs, sensors, flourishing scores, and violations. No separate service required.</p>
-      <span class="panel-arrow">Open HFF Dashboard →</span>
+      <span class="panel-label">Monitor</span>
+      <h2>How's the World?</h2>
+      <p>Live dashboard showing if humanity and nature are flourishing. Real data, real insights.</p>
+      <span class="panel-arrow">Check world status →</span>
+    </a>
+
+    <a class="panel" href="/settings/providers.html" id="provider-panel">
+      <span class="panel-icon">⚡</span>
+      <span class="panel-label">Configuration</span>
+      <h2>Provider Settings</h2>
+      <p id="provider-panel-desc">View AI provider status, configure keys, and manage orchestrator health. Checking…</p>
+      <span class="panel-arrow">Configure providers →</span>
     </a>
   </div>
 
   <div class="features" id="live-features">
-    <div class="feature"><div class="icon">📓</div><h3>Capture</h3><p id="stat-capture">Dream, note, symbol, lore, mirror, and place entries.</p></div>
-    <div class="feature"><div class="icon">🔮</div><h3 id="stat-agents-label">Agents</h3><p id="stat-agents">Checking available agents…</p></div>
-    <div class="feature"><div class="icon">📊</div><h3>Readiness</h3><p id="stat-readiness">Checking system readiness…</p></div>
-    <div class="feature"><div class="icon">💾</div><h3>Export</h3><p>JSONL or CSV download. Your data, always portable.</p></div>
-    <div class="feature"><div class="icon">🔌</div><h3>Providers</h3><p id="stat-providers">Checking AI providers…</p></div>
-    <div class="feature"><div class="icon">⚡</div><h3>Server</h3><p id="stat-server">Checking server status…</p></div>
+    <div class="feature"><div class="icon">✍️</div><h3>Write</h3><p id="stat-capture">Record dreams, reflections, ideas. All stored locally on your computer.</p></div>
+    <div class="feature"><div class="icon">🧠</div><h3 id="stat-agents-label">AI Chat</h3><p id="stat-agents">Talk to an AI that understands your dreams. Checking…</p></div>
+    <div class="feature"><div class="icon">🔍</div><h3>Search</h3><p id="stat-readiness">Find patterns in your dreams over time. Checking…</p></div>
+    <div class="feature"><div class="icon">💾</div><h3>Download</h3><p>Export all your data anytime. You own it completely.</p></div>
+    <div class="feature"><div class="icon">🔑</div><h3>Private</h3><p id="stat-providers">No tracking, no ads, no data sales. Checking…</p></div>
+    <div class="feature"><div class="icon">✅</div><h3>Online</h3><p id="stat-server">Server running on your computer. Ready to go. Checking…</p></div>
   </div>
 
   <div class="benchmark">
     <div class="benchmark-header">
-      <h2>System state</h2>
-      <p id="benchmark-subtitle">Real-time feature status from this instance.</p>
+      <h2>What's Working Right Now</h2>
+      <p id="benchmark-subtitle">Features available on your copy of Lantern.</p>
     </div>
     <table>
-      <thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+      <thead><tr><th>Feature</th><th>Status</th><th>What It Does</th></tr></thead>
       <tbody id="benchmark-body">
-        <tr><td>Quick capture</td><td><span class="pill live">Live</span></td><td>Dream, note, place, character, event, lore, symbol, mirror.</td></tr>
-        <tr><td>Lucid dreaming tools</td><td><span class="pill live">Live</span></td><td>Lucidity scale, technique logging, dream-sign flags.</td></tr>
-        <tr><td>Symbol analytics</td><td><span class="pill live">Live</span></td><td>Top tags, emotions, and symbols from saved entries.</td></tr>
-        <tr><td>Export</td><td><span class="pill live">Live</span></td><td>JSONL/CSV backup download.</td></tr>
-        <tr><td>HFF Dashboard</td><td><span class="pill live">Live</span></td><td>Bayesian world-model at <code>/flourishing</code>. Direct Node.js integration — no separate service.</td></tr>
-        <tr><td>AI reflection chat</td><td><span class="pill optional" id="pill-ai-chat">Optional</span></td><td id="note-ai-chat">Streams when a provider key is configured.</td></tr>
-        <tr><td>Voice transcription</td><td><span class="pill held">Held</span></td><td>Web Speech API in browser. Not claimed for V1.</td></tr>
-        <tr><td>Dream art generation</td><td><span class="pill held">Held</span></td><td>Not claimed for V1.</td></tr>
+        <tr><td>Write & Save Dreams</td><td><span class="pill live">Ready</span></td><td>Record your dreams, reflections, and ideas. Everything saved locally.</td></tr>
+        <tr><td>Lucid Dreaming Tracking</td><td><span class="pill live">Ready</span></td><td>Log lucid dreams, techniques you tried, and dream signs to watch for.</td></tr>
+        <tr><td>Pattern Recognition</td><td><span class="pill live">Ready</span></td><td>See what symbols, emotions, and themes appear most in your dreams.</td></tr>
+        <tr><td>Download Your Data</td><td><span class="pill live">Ready</span></td><td>Export everything as a backup file. Your data is always yours.</td></tr>
+        <tr><td>World Status Dashboard</td><td><span class="pill live">Ready</span></td><td>Live dashboard at <code>/flourishing</code> showing how the world is doing.</td></tr>
+        <tr><td>AI Chat</td><td><span class="pill optional" id="pill-ai-chat">Optional</span></td><td id="note-ai-chat">Chat with an AI about your dreams. Requires you to add an API key.</td></tr>
+        <tr><td>Voice Recording</td><td><span class="pill held">Coming Later</span></td><td>Record dreams by voice instead of typing. Coming in a future update.</td></tr>
+        <tr><td>Dream Art Generation</td><td><span class="pill held">Coming Later</span></td><td>AI generates images from your dream descriptions. Planned for future.</td></tr>
       </tbody>
     </table>
   </div>
@@ -353,8 +406,6 @@
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const isDark = stored ? stored === 'dark' : prefersDark;
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = isDark ? '🌙' : '☀️';
   })();
   function toggleTheme() {
     const html = document.documentElement;
@@ -362,8 +413,6 @@
     const next = isDark ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     localStorage.setItem('lantern-theme', next);
-    const btn = document.getElementById('theme-toggle');
-    if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
   }
 </script>
 <script>

@@ -731,8 +731,8 @@ class ConvergenceLoop:
             tick_results: List[PhaseResult] = []
             any_fail = False
             for num, key, desc in self.PHASES:
-                # Skip external-facing phases on internal ticks
-                if tick < max_ticks - 1 and key in external_io_phases:
+                # External-facing phases run after the main loop
+                if key in external_io_phases:
                     continue
                 # Cache hit for read-only phases when repo hasn't changed
                 if not hash_changed and tick > 0 and key in self._CACHEABLE_PHASES and key in self._phase_cache:
@@ -781,6 +781,22 @@ class ConvergenceLoop:
             if safety.get("throttle"):
                 time.sleep(0.01 * self.external_dilation)
 
+        # Run external-facing phases unconditionally after main loop
+        for num, key, desc in self.PHASES:
+            if key in external_io_phases:
+                start = time.time()
+                method = getattr(self, f"_phase_{key}")
+                try:
+                    result = method()
+                except Exception as exc:
+                    result = PhaseResult(
+                        phase=num, name=key, status="fail",
+                        issues_found=[str(exc)],
+                        elapsed_ms=round((time.time() - start) * 1000, 2),
+                    )
+                audit.append(result)
+                self.results.append(result)
+
         total_ms = round((time.time() - overall_start) * 1000, 2)
         promotion_ready = all(r.status == "pass" for r in self.results)
         # Convergence score: 0.0–1.0 based on pass ratio and speed
@@ -789,7 +805,7 @@ class ConvergenceLoop:
         score = round(pass_count / max(len(all_statuses), 1), 3) if total_ms < 5000 else round(pass_count / max(len(all_statuses), 1) * 0.9, 3)
 
         status = "clean" if promotion_ready else "needs_review"
-        drift = self._detect_drift(previous_receipt)
+        drift = self._detect_drift()
         return {
             "timestamp": _now(),
             "status": status,
@@ -841,15 +857,26 @@ class ConvergenceLoop:
         return PhaseResult(3, "read_manifests", "pass", evidence={"manifests": len(manifests)})
 
     def _phase_state_objective(self) -> PhaseResult:
-        readme = self.repo_root / "README.md"
         objective = "unknown"
-        if readme.exists():
-            text = readme.read_text(encoding="utf-8")
-            for line in text.splitlines()[:20]:
-                if "Current Focus" in line or "Focus" in line:
-                    objective = line.strip()
-                    break
-        return PhaseResult(4, "state_objective", "pass", evidence={"objective": objective})
+        source = "none"
+        objective_path = self.repo_root / "manifests" / "objective-current.json"
+        if objective_path.exists():
+            try:
+                obj = json.loads(objective_path.read_text(encoding="utf-8"))
+                objective = obj.get("objective", "unknown")
+                source = "manifest"
+            except Exception:
+                pass
+        if objective == "unknown":
+            readme = self.repo_root / "README.md"
+            if readme.exists():
+                text = readme.read_text(encoding="utf-8")
+                for line in text.splitlines()[:20]:
+                    if "Current Focus" in line or "Focus" in line:
+                        objective = line.strip()
+                        source = "readme"
+                        break
+        return PhaseResult(4, "state_objective", "pass", evidence={"objective": objective, "source": source})
 
     def _phase_retire_old(self) -> PhaseResult:
         retired = []
@@ -932,12 +959,14 @@ class ConvergenceLoop:
         ready = all(r.status == "pass" for r in self.results)
         return PhaseResult(13, "promote_or_hold", "pass" if ready else "hold", evidence={"ready": ready})
 
-    def _detect_drift(self, previous_receipt: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+<<<<<<< HEAD
+    def _detect_drift(self) -> Dict[str, Any]:
         """Compare current results with previous receipt."""
-        if previous_receipt is None:
+        if not self._previous_receipt_path.exists():
             return {"status": "first_run", "drift": []}
         try:
-            prev_phases = {p["name"]: p for p in previous_receipt.get("phases", [])}
+            prev = json.loads(self._previous_receipt_path.read_text(encoding="utf-8"))
+            prev_phases = {p["name"]: p for p in prev.get("phases", [])}
             drift = []
             for r in self.results:
                 prev_p = prev_phases.get(r.name)

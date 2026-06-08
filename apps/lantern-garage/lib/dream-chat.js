@@ -119,35 +119,82 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   const text = String(message || "").trim();
 
   // ── Three Doors game intercept ──
+  // Primary: lantern-csf-dream (Ollama LLM — game rules + active state in system prompt)
+  // Fallback: Python ThreeDoorsEngine (scripted state machine, offline-capable)
   const threeDoors = handleThreeDoorsServer(text);
   if (threeDoors) {
+    const _path = require("path");
+    const _repoRoot = _path.resolve(__dirname, "..", "..");
+    const tdOllamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+    const tdModel = process.env.OLLAMA_MODEL || "lantern-csf-dream";
+
+    // ── Primary: lantern-csf-dream via Ollama ──
+    try {
+      const tdPayload = JSON.stringify({
+        model: tdModel,
+        stream: false,
+        messages: [{ role: "user", content: text }],
+      });
+      const tdUrl = new URL(tdOllamaBase);
+      const tdResult = await new Promise((resolve, reject) => {
+        const req3 = http.request({
+          hostname: tdUrl.hostname,
+          port: tdUrl.port || 11434,
+          path: "/api/chat",
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(tdPayload) },
+        }, (upstream) => {
+          let raw = "";
+          upstream.on("data", (c) => (raw += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(raw);
+              const content = String(json.message?.content || "").trim();
+              const doorsMatch = content.match(/\[DOORS:\s*([^\]]+)\]/i);
+              const doors = doorsMatch
+                ? doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean)
+                : [];
+              resolve({ content, doors });
+            } catch { resolve({ content: "", doors: [] }); }
+          });
+          upstream.on("error", reject);
+        });
+        req3.on("error", reject);
+        req3.setTimeout(30000, () => { req3.destroy(); reject(new Error("timeout")); });
+        req3.write(tdPayload);
+        req3.end();
+      });
+      if (tdResult.content) {
+        const cleanReply = tdResult.content.replace(/\[DOORS:[^\]]*\]/i, "").trim();
+        return {
+          reply: cleanReply,
+          agent: "Lantern",
+          suggestions: tdResult.doors.length > 0 ? tdResult.doors : undefined,
+          online: true,
+          source: "ollama",
+          threeDoors: true,
+        };
+      }
+    } catch (_e) { /* Ollama unavailable — fall through to Python engine */ }
+
+    // ── Fallback: Python ThreeDoorsEngine ──
     const { spawn } = require("child_process");
-    const path = require("path");
-    const repoRoot = path.resolve(__dirname, "..", "..");
     const py = process.platform === "win32" ? "python" : "python3";
     const userId = threeDoors.userId || "web-anon";
     const choiceMatch = text.toLowerCase().match(/(?:door|choose|pick)\s+([abc])/) || text.toLowerCase().match(/^[abc]$/);
     const choice = choiceMatch ? choiceMatch[1] : "";
     const action = choice ? "choose" : "start";
-
-    let script = "";
-    if (action === "choose") {
-      script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); s=e.choose_door("${choice}"); print(__import__('json').dumps(e.to_api_response(s) if s else {"error":"invalid_choice"}))`;
-    } else {
-      script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); print(__import__('json').dumps(e.to_api_response(e.start_game())))`;
-    }
-
+    const script = `import sys,json; from three_doors_engine import ThreeDoorsEngine; req=json.loads(sys.stdin.read()); e=ThreeDoorsEngine(req['userId']); result=e.to_api_response(e.start_game()) if req['action']=='start' else (lambda s: e.to_api_response(s) if s else {"error":"invalid_choice"})(e.choose_door(req['choice'])); print(json.dumps(result))`;
     try {
       const result = await new Promise((resolve, reject) => {
-        const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
+        const proc = spawn(py, ["-c", script], { cwd: _repoRoot, env: { ...process.env, PYTHONPATH: _path.join(_repoRoot, "src") } });
         let out = "", err = "";
         proc.stdout.on("data", (c) => (out += c));
         proc.stderr.on("data", (c) => (err += c));
-        proc.on("close", (code) => {
-          if (code !== 0) reject(new Error(err || `exit ${code}`));
-          else resolve(out.trim());
-        });
+        proc.on("close", (code) => { if (code !== 0) reject(new Error(err || `exit ${code}`)); else resolve(out.trim()); });
         proc.on("error", reject);
+        proc.stdin.write(JSON.stringify({ userId, action, choice }));
+        proc.stdin.end();
       });
       const data = JSON.parse(result);
       if (data.error) {
@@ -156,24 +203,11 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       const lines = [data.text, ""];
       if (data.fox_present) lines.push("🦊 The fox is with you.");
       lines.push("", "**Choose a door:**");
-      for (const d of data.doors) {
-        lines.push(`**${d.label}.** ${d.name} — ${d.description}`);
-      }
-      if (data.image_prompt) {
-        lines.push("", `🎨 *Image prompt for AI generators:* ${data.image_prompt}`);
-      }
-      return {
-        reply: lines.join("\n"),
-        agent: "Lantern",
-        suggestions: data.doors.map(d => d.name),
-        online: true,
-        threeDoors: true,
-        scene_key: data.scene_key,
-        image_prompt: data.image_prompt,
-        image_available: data.image_available,
-      };
-    } catch (e) {
-      return { reply: `Three Doors engine error: ${e.message}`, agent: "Lantern", suggestions: [], online: false, threeDoors: true };
+      for (const d of data.doors) lines.push(`**${d.label}.** ${d.name} — ${d.description}`);
+      if (data.image_prompt) lines.push("", `🎨 *Image prompt:* ${data.image_prompt}`);
+      return { reply: lines.join("\n"), agent: "Lantern", suggestions: data.doors.map(d => d.name), online: true, source: "python_engine", threeDoors: true, scene_key: data.scene_key, image_prompt: data.image_prompt };
+    } catch (_e2) {
+      return { reply: "Three Doors: no engine available. Try starting Ollama with `ollama serve`.", agent: "Lantern", suggestions: [], online: false, threeDoors: true };
     }
   }
 
@@ -229,7 +263,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       const geminiModel = rp.startsWith("gemini-") ? rp : (process.env.GEMINI_MODEL || "gemini-2.5-flash");
       const payload = JSON.stringify({
         contents: [{ role: "user", parts: [{ text: `${agent.systemPrompt}\n\n${userPrompt}` }] }],
-        generationConfig: { maxOutputTokens: 256, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: 512, temperature: 0.7 },
       });
       const reply = await new Promise((resolve, reject) => {
         const req2 = https.request({
@@ -268,7 +302,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     try {
       const payload = JSON.stringify({
         model: process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
-        max_tokens: 256,
+        max_tokens: 512,
         system: agent.systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
       });
@@ -311,7 +345,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   if (openaiKey && (!rp || rp === "openai" || rp === "gpt")) {
     try {
       const payload = JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         messages: [
           { role: "system", content: agent.systemPrompt },
           { role: "user", content: userPrompt },
@@ -351,7 +385,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   // Provider 3: Ollama
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+  const ollamaModel = process.env.OLLAMA_MODEL || "lantern-csf-dream";
   if (!rp || rp === "ollama" || rp === "local") { try {
     const payload = JSON.stringify({
       model: ollamaModel,
@@ -378,18 +412,24 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
         upstream.on("end", () => {
           try {
             const json = JSON.parse(data);
-            resolve(String(json.message?.content || "").trim());
-          } catch { resolve(""); }
+            const content = String(json.message?.content || "").trim();
+            const doorsMatch = content.match(/\[DOORS:\s*([^\]]+)\]/i);
+            const ollamaDoors = doorsMatch
+              ? doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean)
+              : [];
+            resolve({ content, doors: ollamaDoors });
+          } catch { resolve({ content: "", doors: [] }); }
         });
         upstream.on("error", reject);
       });
       req2.on("error", reject);
-      req2.setTimeout(8000, () => { req2.destroy(); reject(new Error("timeout")); });
+      req2.setTimeout(30000, () => { req2.destroy(); reject(new Error("timeout")); });
       req2.write(payload);
       req2.end();
     });
-    if (reply) {
-      return { reply, agent: agent.name, suggestions, online: true };
+    if (reply && reply.content) {
+      const ollamaSuggestions = reply.doors && reply.doors.length > 0 ? reply.doors : suggestions;
+      return { reply: reply.content, agent: agent.name, suggestions: ollamaSuggestions, online: true, source: "ollama" };
     }
   } catch (err) { console.error("Ollama API error:", err.message); /* fall through */ }
   }
