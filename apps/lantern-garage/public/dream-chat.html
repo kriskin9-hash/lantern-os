@@ -349,6 +349,28 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
     ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* Streaming cursor */
+    .stream-cursor {
+      display: inline-block; width: 2px; height: 1em;
+      background: var(--accent); margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.7s step-end infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* Quick-start chips */
+    .starter-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
+    .starter-chip {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); font-size: 0.82rem; font-family: inherit;
+      padding: 6px 14px; border-radius: 20px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .starter-chip:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Error / muted agent text */
+    .message.agent.error .message-content { color: var(--muted); font-style: italic; }
   </style>
 </head>
 <body>
@@ -356,21 +378,28 @@
   <!-- Minimal header -->
   <header class="app-header">
     <div class="header-brand">
-      <span class="header-brand-icon">💭</span>
+      <span class="header-brand-icon">🪔</span>
       <span>Dream Journal</span>
     </div>
     <div class="header-controls">
       <button class="icon-btn" id="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
       <button class="icon-btn" id="theme-toggle" onclick="toggleTheme()" title="Theme">🌙</button>
+      <a href="/" class="icon-btn" title="Home" style="text-decoration:none;font-size:13px;color:var(--muted);">⌂</a>
     </div>
   </header>
 
   <!-- Chat area -->
   <div class="chat-container" id="messages">
-    <div class="empty-state">
-      <div class="empty-icon">💭</div>
-      <h2>Start Your Dream Journey</h2>
-      <p>Write about a dream, reflect on your thoughts, or ask for help exploring what it means. Everything stays private on your device.</p>
+    <div class="empty-state" id="empty-state">
+      <div class="empty-icon">🪔</div>
+      <h2>The dream door is open.</h2>
+      <p>Write about a dream, a symbol, or a feeling. Your local models are ready.</p>
+      <div class="starter-chips">
+        <button class="starter-chip" onclick="fillPrompt('Last night I dreamed that ')">Last night I dreamed that…</button>
+        <button class="starter-chip" onclick="fillPrompt('A symbol appeared: ')">A symbol appeared</button>
+        <button class="starter-chip" onclick="fillPrompt('I keep having a recurring dream about ')">Recurring dream</button>
+        <button class="starter-chip" onclick="fillPrompt('I want to remember this: ')">Quick note</button>
+      </div>
     </div>
   </div>
 
@@ -460,68 +489,178 @@
 
 <script src="js/dream-chat.js"></script>
 <script>
-  // Modern theme toggle
+  // ── Theme toggle ───────────────────────────────────────────────────
   function toggleTheme() {
     const html = document.documentElement;
-    const current = html.getAttribute('data-theme') || 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
+    const next = (html.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     localStorage.setItem('lantern-theme', next);
     updateThemeIcon();
   }
   function updateThemeIcon() {
     const btn = document.getElementById('theme-toggle');
-    const current = document.documentElement.getAttribute('data-theme') || 'dark';
-    btn.textContent = current === 'dark' ? '☀️' : '🌙';
+    btn.textContent = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? '☀️' : '🌙';
   }
   updateThemeIcon();
 
-  // Modal controls
-  function openSettings() {
-    document.getElementById('settings-modal').classList.add('open');
-  }
-  function closeSettings() {
-    document.getElementById('settings-modal').classList.remove('open');
-  }
+  // ── Modal controls ─────────────────────────────────────────────────
+  function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
+  function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+  function openLogDream() { alert('Dream logging coming soon'); closeSettings(); }
+  function saveKey() {}
 
-  // Placeholder for dream logging
-  function openLogDream() {
-    alert('Dream logging coming soon');
-    closeSettings();
-  }
+  // ── Conversation state ─────────────────────────────────────────────
+  let isSending = false;
+  const history = [];
 
-  // Message sending
-  function sendMessage() {
+  // Fallback messages — shown ONLY when all providers fail (never as a normal reply)
+  const FALLBACKS = [
+    "The lantern flickers. No model responded — is Ollama running? (ollama serve)",
+    "Dream interpreter offline. Add an API key in Settings, or start your local models.",
+    "All paths are quiet right now. Try again in a moment, or check Settings.",
+    "The thread went dark. Ollama may be starting up — give it a moment and retry.",
+    "No provider answered. Check Settings for API keys, or run: ollama pull lantern-csf-dream",
+  ];
+
+  // ── Quick-start chip fill ──────────────────────────────────────────
+  function fillPrompt(text) {
     const input = document.getElementById('input');
-    const text = input.value.trim();
-    if (!text) return;
-    addMessage('user', text);
-    input.value = '';
+    input.value = text;
+    input.focus();
     input.style.height = 'auto';
-    setTimeout(() => addMessage('agent', 'Dream interpreter ready to help...'), 500);
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
   }
 
-  function addMessage(role, text) {
+  // ── DOM helpers ────────────────────────────────────────────────────
+  function hideEmptyState() {
+    const el = document.getElementById('empty-state');
+    if (el) el.style.display = 'none';
+  }
+
+  function addUserBubble(text) {
+    hideEmptyState();
     const container = document.getElementById('messages');
-    if (container.querySelector('.empty-state')) {
-      container.innerHTML = '';
-    }
     const msg = document.createElement('div');
-    msg.className = `message ${role}`;
-    msg.innerHTML = `<div class="message-content">${text}</div>`;
+    msg.className = 'message user';
+    msg.innerHTML = `<div class="message-content">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
     container.appendChild(msg);
     container.scrollTop = container.scrollHeight;
   }
 
-  // Auto-expand textarea
+  function createAgentBubble(isError) {
+    const container = document.getElementById('messages');
+    const msg = document.createElement('div');
+    msg.className = 'message agent' + (isError ? ' error' : '');
+    const bubble = document.createElement('div');
+    bubble.className = 'message-content';
+    const cursor = document.createElement('span');
+    cursor.className = 'stream-cursor';
+    bubble.appendChild(cursor);
+    msg.appendChild(bubble);
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+    return { msg, bubble, cursor };
+  }
+
+  // ── Main send ──────────────────────────────────────────────────────
+  async function sendMessage() {
+    const input = document.getElementById('input');
+    const text = input.value.trim();
+    if (!text || isSending) return;
+
+    isSending = true;
+    document.getElementById('send-btn').disabled = true;
+
+    addUserBubble(text);
+    input.value = '';
+    input.style.height = 'auto';
+    history.push({ role: 'user', text });
+
+    const { msg, bubble, cursor } = createAgentBubble(false);
+    const container = document.getElementById('messages');
+
+    let fullText = '';
+    let didError = false;
+
+    try {
+      const provider = document.getElementById('provider-select')?.value || '';
+      const resp = await fetch('/api/dream/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          user: 'dream-chat',
+          agent: '',
+          provider,
+          history: history.slice(-10),
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === 'token' && evt.text) {
+              fullText += evt.text;
+              cursor.remove();
+              bubble.textContent = fullText;
+              bubble.appendChild(cursor);
+              container.scrollTop = container.scrollHeight;
+            } else if (evt.type === 'error') {
+              // Server reported an error — may be followed by local fallback tokens, so don't stop
+              didError = true;
+              if (!fullText) {
+                bubble.style.color = 'var(--muted)';
+              }
+            } else if (evt.type === 'done' && evt.cleanText) {
+              fullText = evt.cleanText;
+            }
+          } catch { /* skip malformed line */ }
+        }
+      }
+    } catch (e) {
+      didError = true;
+    }
+
+    // Remove streaming cursor
+    cursor.remove();
+
+    if (!fullText) {
+      // All providers failed — show random fallback as an error note
+      fullText = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+      msg.classList.add('error');
+      bubble.style.color = 'var(--muted)';
+      bubble.style.fontStyle = 'italic';
+    }
+
+    bubble.textContent = fullText;
+
+    if (!didError) {
+      history.push({ role: 'assistant', text: fullText });
+    }
+
+    isSending = false;
+    document.getElementById('send-btn').disabled = false;
+  }
+
+  // ── Auto-expand textarea ───────────────────────────────────────────
   document.getElementById('input').addEventListener('input', e => {
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
   });
-
-  // Stub functions
-  function saveKey() {}
-  function openLogDream() { alert('Coming soon'); closeSettings(); }
 </script>
 </body>
 </html>

@@ -23,7 +23,8 @@ module.exports = async function surfaceRoutes(req, res, url, deps) {
   }
 
   // Static file catch-all
-  const staticPath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+  let staticPath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+  if (staticPath.endsWith("/")) staticPath += "index.html";
   const target = path.resolve(publicRoot, staticPath);
   if (!target.startsWith(publicRoot)) { sendJson(res, { error: "forbidden" }, 403); return true; }
   sendFile(res, target);

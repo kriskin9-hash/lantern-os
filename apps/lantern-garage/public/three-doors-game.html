@@ -7,6 +7,13 @@
 <title>Three Doors — Lantern OS</title>
 <link rel="stylesheet" href="css/dream-chat.css">
 <style>
+  /* ── Override dream-chat.css scroll lock for this page ── */
+  html, body { overflow: auto !important; height: auto !important; min-height: 100dvh; }
+  ::-webkit-scrollbar { display: block !important; width: 4px; }
+  * { -ms-overflow-style: auto !important; scrollbar-width: thin !important; }
+  .app { height: auto !important; min-height: 100dvh; }
+  .chat-container { overflow: visible !important; flex: none !important; max-height: none !important; }
+
   /* ── Three Doors additions on top of dream-chat.css ── */
   .doors-banner {
     display: flex;
@@ -596,7 +603,7 @@ function resetGame() {
   document.getElementById("chat").innerHTML = "";
   gameState = null;
   userId = "web-" + Math.random().toString(36).slice(2, 9);
-  document.getElementById("quick-chips").innerHTML = "";
+  document.getElementById("choice-buttons").innerHTML = "";
   startGame();
 }
 
