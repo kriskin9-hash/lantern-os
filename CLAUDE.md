@@ -4,16 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ⚠️ Required Reading (All Agents)
 
-Before any work on Lantern OS, read these in order:
+**READ FIRST (every session and before each commit):**
 
-1. **[SECURITY.md](SECURITY.md)** — Critical vulnerabilities fixed 2026-06-08, security best practices, input validation rules
-2. **[SKILLS.md](SKILLS.md)** — Available capabilities, persona routing, provider chain, integration points
+1. **[QUICKSTART.md](QUICKSTART.md)** — Dual-boot system (port 4177 stable + 4178 dev), autostart setup
+2. **[AGENTS.md](AGENTS.md)** — Monoworkstream rules, git workflow, agent capabilities
+3. **[PROVIDERS.md](PROVIDERS.md)** — All 10 AI providers, configuration, fallback chain, environment variables
+4. **[SECURITY.md](SECURITY.md)** — Critical vulnerabilities, input validation, security best practices
+5. **[SKILLS.md](SKILLS.md)** — Available capabilities, persona routing, provider chain
+
+**Automatic Enforcement:**
+- Git `post-checkout` hook: reminds you to read docs after branch changes
+- Git `prepare-commit-msg` hook: injects checklist before commits
+- `make quickstart`: prints required reading before starting servers
 
 These documents are non-negotiable for safe, compliant contributions.
 
 ## Project Overview
 
 Lantern OS is a local-first OS cockpit built by a solo developer (Alex Place). The primary deliverable is a **Dream Journal** — a freeform RP chat interface backed by a Node.js server, with a Python MCP server and optional Discord bot.
+
+## Quickstart (Read QUICKSTART.md First)
+
+**Dual-Boot System** (recommended for development):
+```bash
+make quickstart
+# Starts TWO servers simultaneously:
+# - Port 4177: Stable release (master branch)
+# - Port 4178: Development (current branch, hot-reload)
+# Opens http://127.0.0.1:4177 in Chrome
+```
+
+**Single Server** (development only):
+```bash
+npm run dev --prefix apps/lantern-garage
+# Starts only port 4177 with hot-reload (your current branch)
+```
+
+**Autostart** (Windows PC reboot auto-start):
+```bash
+# See QUICKSTART.md section 1 for complete setup
+```
 
 ## Commands
 

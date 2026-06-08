@@ -78,11 +78,16 @@ class DoorLoRATrainer:
         print("[DOOR LORA TRAINING]")
         print("="*60)
         
-        # Check for GPU
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print(f"[Device] Using: {device}")
-        if device.type == "cpu":
-            print("[WARNING] CPU training will be very slow. GPU recommended.")
+        # Check for GPU - use GPU if available with memory optimizations
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            print(f"[Device] Using: {device}")
+            print(f"[GPU] {torch.cuda.get_device_name(0)}")
+            print("[INFO] GPU training with memory optimizations enabled")
+        else:
+            device = torch.device("cpu")
+            print(f"[Device] Using: {device}")
+            print("[INFO] CPU training - will be slow")
         
         # Prepare dataset
         print("\n[Dataset] Loading door images...")
@@ -99,12 +104,19 @@ class DoorLoRATrainer:
             pipe = StableDiffusionPipeline.from_pretrained(
                 "runwayml/stable-diffusion-v1-5",
                 torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
-                use_safetensors=True
+                use_safetensors=True,
+                variant="fp16" if device.type == "cuda" else None
             )
+            # Enable memory optimizations
+            if device.type == "cuda":
+                pipe.enable_attention_slicing()
+                pipe.enable_vae_slicing()
             pipe = pipe.to(device)
             print("[Model] Base model loaded successfully")
         except Exception as e:
             print(f"[ERROR] Failed to load model: {e}")
+            import traceback
+            traceback.print_exc()
             return False
         
         # Configure LoRA
@@ -141,6 +153,8 @@ class DoorLoRATrainer:
             
             for batch_idx, batch in enumerate(dataloader):
                 images = batch["image"].to(device)
+                if device.type == "cuda":
+                    images = images.to(torch.float16)
                 captions = batch["caption"]
                 
                 # Encode images to latents
