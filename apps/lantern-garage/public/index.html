@@ -238,6 +238,38 @@
       color: var(--accent);
       transform: scale(1.05);
     }
+
+    /* Mandala Convergence Icon */
+    .mandala-icon {
+      --mandala-svg: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="95" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="1.5" fill="none"><circle cx="100" cy="100" r="70"/><circle cx="100" cy="100" r="50"/><circle cx="100" cy="100" r="30"/><circle cx="100" cy="20" r="8" fill="currentColor"/><circle cx="100" cy="180" r="8" fill="currentColor"/><circle cx="20" cy="100" r="8" fill="currentColor"/><circle cx="180" cy="100" r="8" fill="currentColor"/><circle cx="141.4" cy="58.6" r="8" fill="currentColor"/><circle cx="141.4" cy="141.4" r="8" fill="currentColor"/><circle cx="58.6" cy="141.4" r="8" fill="currentColor"/><circle cx="58.6" cy="58.6" r="8" fill="currentColor"/><line x1="100" y1="100" x2="100" y2="20"/><line x1="100" y1="100" x2="100" y2="180"/><line x1="100" y1="100" x2="20" y2="100"/><line x1="100" y1="100" x2="180" y2="100"/><line x1="100" y1="100" x2="141.4" y2="58.6"/><line x1="100" y1="100" x2="58.6" y2="141.4"/><line x1="100" y1="100" x2="141.4" y2="141.4"/><line x1="100" y1="100" x2="58.6" y2="58.6"/></g><circle cx="100" cy="100" r="8" fill="currentColor"/></svg>');
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      background: var(--mandala-svg);
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+      vertical-align: -0.125em;
+      font-size: inherit;
+      color: inherit;
+    }
+    .mandala-icon.spin-slow {
+      animation: mandala-spin 4s linear infinite;
+    }
+    .mandala-icon.spin-fast {
+      animation: mandala-spin 1s linear infinite;
+    }
+    .mandala-icon.wobble {
+      animation: mandala-wobble 2s ease-in-out infinite;
+    }
+    @keyframes mandala-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes mandala-wobble {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
   </style>
 </head>
 <body>
