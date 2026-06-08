@@ -148,41 +148,155 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
-    if (cmd.name === "converge") {
+    if (cmd.name === "converge" || cmd.name === "convergance") {
       const { spawn } = require("child_process");
       const py = spawn("python", ["src/convergence_io_engine.py", "loop"], { cwd: repoRoot });
       let stdout = "";
+      let stderr = "";
       py.stdout.on("data", (d) => { stdout += d.toString(); });
-      py.stderr.on("data", (d) => { stdout += d.toString(); });
-      py.on("close", () => {
+      py.stderr.on("data", (d) => { stderr += d.toString(); });
+      
+      const timeout = setTimeout(() => {
+        py.kill();
+        sse.writeStreamHeaders(res);
+        sse.sendError(res, "Convergence engine timeout (60s)");
+        sse.sendDone(res, "failed");
+      }, 60000);
+
+      py.on("close", (code) => {
+        clearTimeout(timeout);
+        
+        if (code !== 0) {
+          sse.writeStreamHeaders(res);
+          sse.sendError(res, `Convergence engine failed (exit ${code}): ${stderr.slice(0, 500)}`);
+          sse.sendDone(res, "failed");
+          return;
+        }
+
         try {
           const result = JSON.parse(stdout);
-          const status = result.promotion_ready ? "✅ Converged" : "⚠️ Needs review";
-          const version = result.version?.build || result.version?.tag || "unknown";
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
+          
+          // Build 12-step convergence context for AI interpretation
+          const convergenceContext = `
+12-Step Convergence Analysis:
+Overall Score: ${result.convergence_score || 0}/100
+Status: ${result.promotion_ready ? "PROMOTION READY" : "NEEDS REVIEW"}
+Version: ${result.version?.build || result.version?.tag || "unknown"}
+
+Phase Results:
+${result.phases ? result.phases.map((p, i) => `${i + 1}. ${p.name}: ${p.status}`).join("\n") : "No phase data"}
+
+Key Metrics:
+- Total phases: ${result.phases?.length || 0}
+- Passed: ${result.phases?.filter(p => p.status === "pass").length || 0}
+- Failed: ${result.phases?.filter(p => p.status === "fail").length || 0}
+- Skipped: ${result.phases?.filter(p => p.status === "skip").length || 0}
+
+Interpret this convergence result and provide:
+1. Executive summary (2-3 sentences)
+2. Top 3 blockers or risks
+3. Recommended next actions
+4. Confidence assessment for each of the 12 steps
+`;
+
+          sse.writeStreamHeaders(res);
+          const sendToken = (token) => sse.sendToken(res, token);
+          const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+
+          // Stream the raw convergence data first
+          sendToken(`◈ 12-Step Convergence Analysis\n\n`);
+          sendToken(`Score: ${result.convergence_score || 0}/100\n`);
+          sendToken(`Status: ${result.promotion_ready ? "✅ Ready" : "⚠️ Review Needed"}\n\n`);
+          
+          if (result.phases) {
+            sendToken(`Phase Breakdown:\n`);
+            result.phases.forEach((p, i) => {
+              const icon = p.status === "pass" ? "✓" : p.status === "fail" ? "✗" : "○";
+              sendToken(`${icon} ${i + 1}. ${p.name}: ${p.status}\n`);
+            });
+            sendToken(`\n`);
+          }
+
+          // Now use AI to interpret and provide contextual feedback
+          const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+          const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+          
+          const payload = JSON.stringify({
+            model: ollamaModel,
+            stream: true,
+            messages: [
+              { role: "system", content: "You are a convergence analyst. Interpret 12-step convergence results and provide actionable feedback. Be concise, specific, and prioritized." },
+              { role: "user", content: convergenceContext }
+            ],
           });
-          res.write(`event: token\ndata: ${JSON.stringify({ token: status + " (score: " + result.convergence_score + ")\n" })}\n\n`);
-          result.phases.forEach((p) => {
-            res.write(`event: token\ndata: ${JSON.stringify({ token: "- " + p.name + ": " + p.status + "\n" })}\n\n`);
+
+          const ollamaUrl = new URL(ollamaBase);
+          const req2 = http.request({
+            hostname: ollamaUrl.hostname,
+            port: ollamaUrl.port || 11434,
+            path: "/api/chat",
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          }, (upstream) => {
+            if (upstream.statusCode !== 200) {
+              upstream.resume();
+              sendToken(`\n⚠️ AI interpretation unavailable. Raw data shown above.\n`);
+              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score });
+              res.end();
+              return;
+            }
+            
+            let buf = "";
+            upstream.on("data", (chunk) => {
+              buf += chunk.toString();
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                  const parsed = JSON.parse(line);
+                  if (parsed.message?.content) {
+                    sendToken(parsed.message.content);
+                  }
+                } catch {}
+              }
+            });
+            upstream.on("end", () => {
+              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score });
+              res.end();
+            });
+            upstream.on("error", () => {
+              sendToken(`\n⚠️ AI interpretation error. Raw data shown above.\n`);
+              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score });
+              res.end();
+            });
           });
-          res.write(`event: done\ndata: ${JSON.stringify({ done: true, agent: "Convergence", online: true, version })}\n\n`);
-          res.end();
+          
+          req2.on("error", () => {
+            sendToken(`\n⚠️ Ollama unavailable. Raw data shown above.\n`);
+            sendDone("convergence", { agent: "Convergence", online: false, score: result.convergence_score });
+            res.end();
+          });
+          req2.setTimeout(30000, () => { req2.destroy(); });
+          req2.write(payload);
+          req2.end();
+
         } catch (exc) {
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-          });
-          res.write(`event: token\ndata: ${JSON.stringify({ token: "Convergence output:\n" + stdout.slice(0, 2000) })}\n\n`);
-          res.write(`event: done\ndata: ${JSON.stringify({ done: true })}\n\n`);
+          sse.writeStreamHeaders(res);
+          sse.sendError(res, `Convergence parse error: ${exc.message}\n\nRaw output:\n${stdout.slice(0, 1000)}`);
+          sse.sendDone(res, "failed");
           res.end();
         }
       });
+      
+      py.on("error", (err) => {
+        clearTimeout(timeout);
+        sse.writeStreamHeaders(res);
+        sse.sendError(res, `Convergence engine spawn error: ${err.message}`);
+        sse.sendDone(res, "failed");
+        res.end();
+      });
+      
       return;
     }
 

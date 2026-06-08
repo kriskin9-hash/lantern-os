@@ -292,7 +292,7 @@
     }
 
     // Allow backend-streaming bang commands through; reject truly unknown ones
-    const STREAMING_BANGS = ["swarm", "converge"];
+    const STREAMING_BANGS = ["swarm", "converge", "convergance"];
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
       const cmdName = bangMatch[1].toLowerCase();
