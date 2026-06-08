@@ -11,7 +11,7 @@ use crate::header::{ArchiveHeader, HEADER_SIZE};
 use crate::{CsfError, Result, SecurityPolicy};
 
 const SEG_TABLE_ENTRY_SIZE: usize = 28; // offset:8 + compressed_len:8 + uncompressed_len:8 + flags:4
-const FOOTER_SIZE: usize = 16;
+pub const FOOTER_SIZE: usize = 16;
 const FOOTER_MAGIC: &[u8] = b"ENDCSF";
 
 /// Segment flags (spec §4.3 extension).
