@@ -12,7 +12,7 @@
       --border: #3a3048;
       --text: #e8e0f0;
       --muted: #a090b8;
-      --accent: #7b68ee;
+      --accent: #06b6d4;
       --accent2: #ff8c42;
       --user-bubble: #3a3058;
       --agent-bubble: #2a2540;
@@ -130,7 +130,7 @@
       gap: 0.45rem;
       padding: 0.65rem 1rem;
       border-top: 1px solid var(--border);
-      background: linear-gradient(135deg, rgba(123, 104, 238, 0.14), rgba(255, 140, 66, 0.08));
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(255, 140, 66, 0.08));
       flex-shrink: 0;
     }
     .notepad-head {
@@ -177,6 +177,7 @@
 <body>
   <div class="app">
     <header>
+      <a href="/" style="display:inline-block;color:var(--muted);text-decoration:none;font-size:0.78rem;margin-bottom:4px;">← Home</a>
       <h1>Lantern Dream Journal</h1>
       <p>Freeform RP. Local-only. Say anything.</p>
     </header>
@@ -208,13 +209,30 @@
     </div>
   </div>
 
+  <style>
+    .stream-cursor {
+      display: inline-block; width: 2px; height: 1em;
+      background: var(--accent); margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.7s step-end infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  </style>
   <script>
     const STORAGE_KEY = 'lantern_dream_chat_v2';
     const DRAFT_KEY = 'lantern_dream_notepad_draft_v1';
+    const FALLBACKS = [
+      'The lantern flickers — no model answered. Is Ollama running? Try: ollama serve',
+      'All threads quiet. Add an API key in Settings, or start your local models.',
+      'Dream interpreter offline. Run: ollama pull lantern-csf-dream',
+      'The signal went dark. Ollama may still be starting — give it a moment and retry.',
+      'No provider answered. Start Ollama or add a cloud key in Settings.',
+    ];
+    let isSending = false;
+    const chatHistory = [];
 
     function loadMessages() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch { return []; }
     }
     function saveMessages(msgs) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
@@ -232,23 +250,99 @@
       div.innerHTML = `<div class="meta">${role === 'user' ? 'You' : 'Lantern'} &middot; ${time}</div>` + escapeHtml(text);
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
+      return div;
     }
     function render() {
       const chat = document.getElementById('chat');
       chat.innerHTML = '';
       loadMessages().forEach(m => appendMessage(m.role, m.text));
     }
-    function send() {
-      const input = document.getElementById('msgInput');
-      const text = input.value.trim();
-      if (!text) return;
+
+    async function submitMessage(text) {
+      if (!text || isSending) return;
+      isSending = true;
+      document.getElementById('sendBtn').disabled = true;
+
       const msgs = loadMessages();
       msgs.push({ role: 'user', text, time: new Date().toISOString() });
       saveMessages(msgs);
       appendMessage('user', text);
-      input.value = '';
-      input.style.height = 'auto';
+      chatHistory.push({ role: 'user', text });
+      saveToDreamer(text);
+
+      const chat = document.getElementById('chat');
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const agentDiv = document.createElement('div');
+      agentDiv.className = 'msg agent';
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'meta';
+      metaDiv.textContent = `Lantern · ${time}`;
+      const textNode = document.createTextNode('');
+      const cursor = document.createElement('span');
+      cursor.className = 'stream-cursor';
+      agentDiv.appendChild(metaDiv);
+      agentDiv.appendChild(textNode);
+      agentDiv.appendChild(cursor);
+      chat.appendChild(agentDiv);
+      chat.scrollTop = chat.scrollHeight;
+
+      let fullText = '', didError = false;
+      try {
+        const resp = await fetch('/api/dream/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, user: 'dream-journal', agent: '', provider: '', history: chatHistory.slice(-10) }),
+          signal: AbortSignal.timeout(90000),
+        });
+        if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n'); buf = lines.pop() || '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const evt = JSON.parse(line.slice(6));
+              if (evt.type === 'token' && evt.text) {
+                fullText += evt.text;
+                textNode.textContent = fullText.replace(/\[DOORS:[^\]]*\]?/gi, '').trimEnd();
+                chat.scrollTop = chat.scrollHeight;
+              } else if (evt.type === 'error') {
+                didError = true;
+              } else if (evt.type === 'done' && evt.cleanText) {
+                fullText = evt.cleanText;
+              }
+            } catch { /* malformed SSE line */ }
+          }
+        }
+      } catch { didError = true; }
+
+      cursor.remove();
+      if (!fullText) {
+        fullText = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+        textNode.textContent = fullText;
+        agentDiv.style.color = 'var(--muted)';
+        agentDiv.style.fontStyle = 'italic';
+        didError = true;
+      } else {
+        textNode.textContent = fullText;
+      }
+
+      if (!didError) {
+        chatHistory.push({ role: 'assistant', text: fullText });
+        const saved = loadMessages();
+        saved.push({ role: 'agent', text: fullText, time: new Date().toISOString() });
+        saveMessages(saved);
+      }
+
+      isSending = false;
+      document.getElementById('sendBtn').disabled = false;
     }
+
     function updateDraftStats() {
       const draft = document.getElementById('draftInput').value.trim();
       const words = draft ? draft.split(/\s+/).length : 0;
@@ -267,10 +361,11 @@
       const draftInput = document.getElementById('draftInput');
       const draft = draftInput.value.trim();
       if (!draft) return;
-      document.getElementById('msgInput').value = `!convergence\n\nDream fragments:\n${draft}\n\nWhat converges here?`;
-      send();
+      const text = `!convergence\n\nDream fragments:\n${draft}\n\nWhat converges here?`;
       draftInput.value = '';
       saveDraft();
+      document.getElementById('msgInput').value = '';
+      submitMessage(text);
     }
     function addDreamPrompts() {
       const draftInput = document.getElementById('draftInput');
@@ -296,7 +391,6 @@
         const data = await r.json();
         if (!data.entries || !data.entries.length) return;
         const chat = document.getElementById('chat');
-        // Only prepend if we haven't already loaded them
         if (chat.dataset.dreamerLoaded) return;
         chat.dataset.dreamerLoaded = 'true';
         data.entries.forEach((entry) => {
@@ -308,19 +402,24 @@
         });
       } catch { /* offline */ }
     }
+
     document.getElementById('sendBtn').addEventListener('click', () => {
-      const text = document.getElementById('msgInput').value.trim();
+      const input = document.getElementById('msgInput');
+      const text = input.value.trim();
       if (!text) return;
-      send();
-      saveToDreamer(text);
+      input.value = '';
+      input.style.height = 'auto';
+      submitMessage(text);
     });
     document.getElementById('msgInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        const text = document.getElementById('msgInput').value.trim();
+        const input = document.getElementById('msgInput');
+        const text = input.value.trim();
         if (!text) return;
-        send();
-        saveToDreamer(text);
+        input.value = '';
+        input.style.height = 'auto';
+        submitMessage(text);
       }
     });
     document.getElementById('msgInput').addEventListener('input', function() {
@@ -340,6 +439,7 @@
     document.getElementById('clearBtn').addEventListener('click', () => {
       if (confirm('Clear all chat history?')) {
         localStorage.removeItem(STORAGE_KEY);
+        chatHistory.length = 0;
         render();
       }
     });
