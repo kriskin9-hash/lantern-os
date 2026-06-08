@@ -227,8 +227,10 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
   if (url.pathname === "/api/dream/doors" && req.method === "POST") {
     try {
       const raw = await collectRequestBody(req);
-      const body = JSON.parse(raw || "{}");
-      const userId = String(body.userId || "web-anon");
+      let body;
+      try { body = JSON.parse(raw || "{}"); } catch { sendJson(res, { error: "invalid_json" }, 400); return true; }
+      if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
+      const userId = String(body.userId || "web-anon").slice(0, 256);
       const action = String(body.action || "start");
       const choice = String(body.choice || "");
 
@@ -263,16 +265,19 @@ print(json.dumps(result))`;
 
       const data = JSON.parse(result);
       sendJson(res, { ...data, generatedAt: new Date().toISOString() });
-    } catch (error) { sendJson(res, { error: error.message }, 500); }
+    } catch (error) { sendJson(res, { error: error.message, code: error.message === "request_body_too_large" ? 413 : 500 }, error.message === "request_body_too_large" ? 413 : 500); }
     return true;
   }
 
   if (url.pathname === "/api/dream/doors/image" && req.method === "POST") {
     try {
       const raw = await collectRequestBody(req);
-      const body = JSON.parse(raw || "{}");
-      const userId = String(body.userId || "web-anon");
-      const doorIdx = Number(body.doorIndex || 0);
+      let body;
+      try { body = JSON.parse(raw || "{}"); } catch { sendJson(res, { error: "invalid_json" }, 400); return true; }
+      if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
+      const userId = String(body.userId || "web-anon").slice(0, 256);
+      const rawDoorIdx = Number(body.doorIndex);
+      const doorIdx = Number.isFinite(rawDoorIdx) && rawDoorIdx >= 0 ? Math.floor(rawDoorIdx) : 0;
 
       const sdUrl = process.env.STABLE_DIFFUSION_URL || process.env.SD_WEBUI_URL;
       if (!sdUrl) {

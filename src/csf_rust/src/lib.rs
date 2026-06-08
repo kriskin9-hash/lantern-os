@@ -256,4 +256,138 @@ mod tests {
         let out = reader.decompress_segment(0).unwrap();
         assert_eq!(&out[..], b"flag check");
     }
+
+    // ── Security hardening tests (#262) ──────────────────────────────────────
+
+    fn strict_policy(max_segments: usize, max_seg_bytes: usize, max_archive: u64) -> SecurityPolicy {
+        SecurityPolicy {
+            max_segments,
+            max_segment_bytes: max_seg_bytes,
+            max_archive_bytes: max_archive,
+            ..SecurityPolicy::default()
+        }
+    }
+
+    #[test]
+    fn untrusted_rejects_too_many_segments() {
+        let mut archive = Archive::new();
+        archive.add_segment(b"seg a");
+        archive.add_segment(b"seg b");
+        archive.add_segment(b"seg c");
+        let tmp = write_archive_to_tmp(&archive);
+
+        let policy = strict_policy(2, usize::MAX, u64::MAX);
+        let result = SegmentReader::validate_with_policy(tmp.path(), &policy);
+        assert!(result.is_err(), "3 segments must be rejected when max=2");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("segment count"), "error should mention segment count, got: {msg}");
+    }
+
+    #[test]
+    fn untrusted_rejects_oversized_archive() {
+        let mut archive = Archive::new();
+        archive.add_segment(b"hello world");
+        let tmp = write_archive_to_tmp(&archive);
+
+        let policy = strict_policy(usize::MAX, usize::MAX, 1); // max 1 byte total
+        let result = SegmentReader::validate_with_policy(tmp.path(), &policy);
+        assert!(result.is_err(), "archive exceeding max_archive_bytes must be rejected");
+    }
+
+    #[test]
+    fn untrusted_rejects_oversized_compressed_segment() {
+        // Write a real archive, patch the compressed_len in the seg table to a huge value,
+        // re-sign the footer checksum so validate reaches the segment table check.
+        let mut archive = Archive::new();
+        archive.add_segment(b"patch target");
+        let tmp = write_archive_to_tmp(&archive);
+
+        let mut bytes = std::fs::read(tmp.path()).unwrap();
+        let file_len = bytes.len();
+        let footer_start = file_len - streaming::FOOTER_SIZE;
+
+        // compressed_len is at header(64) + offset_field(8) = byte 72
+        const COMP_LEN_OFFSET: usize = 64 + 8;
+        bytes[COMP_LEN_OFFSET..COMP_LEN_OFFSET + 8]
+            .copy_from_slice(&u64::MAX.to_be_bytes());
+
+        // Re-sign the footer so checksum passes and we reach the segment size check
+        let body_checksum = streaming::footer_checksum(&bytes[64..footer_start]);
+        // ENDCSF magic is bytes footer_start..footer_start+6
+        bytes[footer_start + 6..footer_start + 10]
+            .copy_from_slice(&body_checksum.to_be_bytes());
+
+        std::fs::write(tmp.path(), &bytes).unwrap();
+
+        let policy = strict_policy(usize::MAX, 1024, u64::MAX); // max 1024 bytes per segment
+        let result = SegmentReader::validate_with_policy(tmp.path(), &policy);
+        assert!(result.is_err(), "segment with compressed_len=u64::MAX must be rejected");
+    }
+
+    #[test]
+    fn segment_offset_past_eof_rejected() {
+        // Patch segment offset to point past the footer; re-sign footer.
+        let mut archive = Archive::new();
+        archive.add_segment(b"bounds check");
+        let tmp = write_archive_to_tmp(&archive);
+
+        let mut bytes = std::fs::read(tmp.path()).unwrap();
+        let file_len = bytes.len();
+        let footer_start = file_len - streaming::FOOTER_SIZE;
+
+        // offset field is at header(64) = byte 64
+        const SEG_OFFSET_FIELD: usize = 64;
+        bytes[SEG_OFFSET_FIELD..SEG_OFFSET_FIELD + 8]
+            .copy_from_slice(&(u64::MAX - 1).to_be_bytes());
+
+        // Re-sign footer
+        let body_checksum = streaming::footer_checksum(&bytes[64..footer_start]);
+        bytes[footer_start + 6..footer_start + 10]
+            .copy_from_slice(&body_checksum.to_be_bytes());
+
+        std::fs::write(tmp.path(), &bytes).unwrap();
+
+        let result = SegmentReader::validate(tmp.path());
+        assert!(result.is_err(), "segment offset past EOF must be rejected");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("past footer") || msg.contains("segment"), "got: {msg}");
+    }
+
+    #[test]
+    fn validate_with_policy_passes_on_valid_archive() {
+        let mut archive = Archive::new();
+        archive.add_segment(b"policy pass");
+        let tmp = write_archive_to_tmp(&archive);
+        SegmentReader::validate_with_policy(tmp.path(), &SecurityPolicy::untrusted()).unwrap();
+    }
+
+    #[test]
+    fn untrusted_policy_is_stricter_than_default() {
+        let u = SecurityPolicy::untrusted();
+        let d = SecurityPolicy::default();
+        assert!(u.max_dictionary_bytes < d.max_dictionary_bytes);
+        assert!(u.max_segments < d.max_segments);
+        assert!(u.max_segment_bytes < d.max_segment_bytes);
+        assert!(u.max_convergence_depth < d.max_convergence_depth);
+        assert!(u.max_archive_bytes < d.max_archive_bytes);
+    }
+
+    #[test]
+    fn header_rejects_corrupt_magic() {
+        let mut bytes = vec![0u8; header::HEADER_SIZE];
+        // Write obviously wrong magic
+        bytes[0..8].copy_from_slice(b"NOTCSF!!");
+        let result = ArchiveHeader::read(&mut &bytes[..]);
+        assert!(result.is_err(), "bad magic must be rejected");
+    }
+
+    #[test]
+    fn header_rejects_corrupt_checksum() {
+        let hdr = ArchiveHeader::new(1, 100);
+        let mut buf = Vec::new();
+        hdr.write(&mut buf).unwrap();
+        buf[42] ^= 0x01; // flip one bit in the header checksum
+        let result = ArchiveHeader::read(&mut &buf[..]);
+        assert!(result.is_err(), "tampered header checksum must be rejected");
+    }
 }
