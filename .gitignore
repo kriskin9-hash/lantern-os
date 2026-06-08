@@ -22,6 +22,11 @@ data/dream_journal/*.jsonl
 # Discord subscriber data
 data/discord/subscribers.json
 
+# ─── Training outputs (review locally before promotion) ───────────────────────
+data/training/**/*.jsonl
+data/training/**/*.json
+!data/training/**/README.md
+
 # ─── Rust ─────────────────────────────────────────────────────────────────────
 src/csf_rust/target/
 
