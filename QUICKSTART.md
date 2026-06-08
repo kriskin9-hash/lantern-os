@@ -28,6 +28,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File start-dual-servers.ps1
 
 ## Prerequisites
 
+**First, read the provider documentation:** See [**PROVIDERS.md**](PROVIDERS.md) for inventory of all 10 AI providers, configuration, and current status.
+
 ```bash
 node --version   # v18+ recommended
 python --version # v3.10+ recommended

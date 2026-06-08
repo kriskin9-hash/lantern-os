@@ -3,393 +3,1082 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ff424d">
-  <title>Provider Settings — Lantern OS</title>
-  <link rel="stylesheet" href="/common-layout.css">
+  <meta name="theme-color" content="#06b6d4">
+  <title>AI Provider Settings — Lantern OS</title>
   <style>
-    .app {
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #ffffff;
+      --surface: #f8f9fa;
+      --surface2: #f1f3f5;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #0ea5e9;
+      --accent-hover: #06b6d4;
+      --accent-dim: #cffafe;
+      --green: #10b981;
+      --danger: #ef4444;
+    }
+
+    [data-theme="dark"] {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface2: #1a2332;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #06b6d4;
+      --accent-hover: #0891b2;
+      --accent-dim: #164e63;
+      --green: #34d399;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      scroll-behavior: smooth;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ═══ HEADER ═══ */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
       display: flex;
-      flex-direction: column;
-      height: 100vh;
-      max-width: 900px;
-      margin: 0 auto;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
-    /* Hide scrollbars */
-    ::-webkit-scrollbar { display: none; }
-    * { -ms-overflow-style: none; scrollbar-width: none; }
+    .back-link {
+      text-decoration: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      transition: color 0.2s;
+      cursor: pointer;
+    }
 
-    main {
+    .back-link:hover { color: var(--text); }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       flex: 1;
-      overflow-y: auto;
-      padding: 24px;
     }
 
-    h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-      color: var(--text);
+    .header-icon {
+      font-size: 24px;
     }
 
-    .subtitle {
-      color: var(--muted);
-      font-size: 0.9rem;
-      margin-bottom: 32px;
-    }
-
-    /* Status grid */
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 20px;
-      margin-bottom: 40px;
-    }
-
-    .status-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .status-card h3 {
-      font-size: 0.9rem;
+    .header-title {
+      font-size: 1rem;
       font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 12px;
+      letter-spacing: 0.01em;
     }
 
-    .status-value {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 8px;
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
     }
 
-    .status-detail {
-      font-size: 0.85rem;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-
-    .dot {
-      display: inline-block;
+    .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      margin-right: 6px;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
     }
 
-    .dot.online { background: var(--green); }
-    .dot.warning { background: var(--gold); }
-    .dot.offline { background: var(--accent); }
+    .status-dot.offline {
+      background: var(--muted);
+      animation: none;
+    }
 
-    /* Provider table */
-    .providers-section {
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+
+    .theme-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+
+    .theme-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ═══ MAIN CONTENT ═══ */
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 56px 20px 80px;
+    }
+
+    /* ═══ HERO SECTION ═══ */
+    .hero {
+      margin-bottom: 56px;
+      text-align: center;
+    }
+
+    .hero-icon {
+      font-size: 52px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .hero h1 {
+      font-size: clamp(1.9rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .hero p {
+      font-size: 1rem;
+      color: var(--muted);
+      max-width: 540px;
+      margin: 0 auto 20px;
+      line-height: 1.6;
+    }
+
+    /* ═══ SECTION LABEL ═══ */
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-top: 44px;
+      margin-bottom: 16px;
+    }
+
+    /* ═══ STATUS GRID ═══ */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 44px;
+    }
+
+    .status-item {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
-      overflow: hidden;
-      margin-bottom: 40px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
     }
 
-    .section-header {
-      padding: 18px 24px;
-      border-bottom: 1px solid var(--border);
+    .status-item:hover {
+      border-color: var(--accent);
       background: var(--surface2);
+      transform: translateY(-2px);
     }
 
-    .section-header h2 {
-      font-size: 1.1rem;
+    .status-item-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .status-item-label {
+      font-size: 0.85rem;
       font-weight: 600;
       color: var(--text);
-      margin: 0;
+      margin-bottom: 4px;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
+    .status-item-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 6px;
     }
 
-    th {
-      padding: 12px 24px;
-      text-align: left;
-      font-weight: 600;
+    .status-item-detail {
+      font-size: 0.78rem;
       color: var(--muted);
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      border-bottom: 1px solid var(--border);
+    }
+
+    /* ═══ PROVIDER PANELS ═══ */
+    .provider-panels {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+      margin-bottom: 44px;
+    }
+
+    .provider-panel {
       background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    td {
-      padding: 14px 24px;
-      border-bottom: 1px solid var(--border);
-      color: var(--text);
+    .provider-panel:hover {
+      border-color: var(--accent);
+      background: var(--surface2);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
     }
 
-    tr:last-child td {
-      border-bottom: none;
+    .provider-panel.configured {
+      border-color: var(--green);
     }
 
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 12px;
-      font-weight: 600;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-    }
-
-    .status-badge.configured {
+    .provider-panel.configured .provider-status {
       background: rgba(16, 185, 129, 0.15);
       color: var(--green);
     }
 
-    .status-badge.missing {
-      background: rgba(255, 66, 77, 0.15);
+    .provider-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .provider-icon {
+      font-size: 24px;
+    }
+
+    .provider-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .provider-status {
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(107, 114, 128, 0.15);
+      color: var(--muted);
+    }
+
+    .provider-model {
+      font-size: 0.8rem;
+      color: var(--muted);
+      font-family: ui-monospace, monospace;
+    }
+
+    .provider-strengths {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* ═══ MODAL / DRAWER ═══ */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+      animation: fadeIn 0.2s;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 500px;
+      width: 90vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: slideUp 0.3s;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .modal-icon {
+      font-size: 32px;
+    }
+
+    .modal-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.2s;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text);
+    }
+
+    .form-input,
+    .form-select,
+    .form-range {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus,
+    .form-select:focus,
+    .form-range:focus {
+      border-color: var(--accent);
+    }
+
+    .form-range {
+      padding: 8px 12px;
+    }
+
+    .form-hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .slider-value {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      margin-top: 6px;
+    }
+
+    .slider-value-display {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      background: var(--border);
+    }
+
+    /* ═══ CONSOLE LOG ═══ */
+    .console-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      margin-bottom: 44px;
+    }
+
+    .console-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .console-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .console-count {
+      font-size: 0.7rem;
+      background: var(--accent-dim);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .console-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .console-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+      font-weight: 600;
+    }
+
+    .console-btn:hover {
+      border-color: var(--accent);
       color: var(--accent);
     }
 
-    /* Loading state */
-    .loading {
+    .console-body {
+      padding: 12px 16px;
+      background: var(--bg);
+      min-height: 120px;
+      max-height: 240px;
+      overflow-y: auto;
+      font-size: 0.75rem;
+      font-family: ui-monospace, monospace;
+      line-height: 1.5;
+    }
+
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: var(--muted);
+      min-width: 65px;
+      flex-shrink: 0;
+    }
+
+    .log-level {
+      text-transform: uppercase;
+      font-weight: 700;
+      min-width: 45px;
+      flex-shrink: 0;
+    }
+
+    .log-level.error {
+      color: var(--danger);
+    }
+
+    .log-level.warn {
+      color: #f59e0b;
+    }
+
+    .log-level.info {
+      color: var(--green);
+    }
+
+    .log-message {
+      color: var(--text);
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .log-empty {
       text-align: center;
+      color: var(--muted);
       padding: 40px 20px;
-      color: var(--muted);
+      font-style: italic;
     }
 
-    .spinner {
-      display: inline-block;
-      width: 30px;
-      height: 30px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
+    /* ═══ FOOTER ═══ */
     footer {
-      padding: 12px 24px;
-      border-top: 1px solid var(--border);
-      font-size: 0.8rem;
-      color: var(--muted);
-      text-align: center;
       background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 40px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .footer-link {
+      color: var(--accent);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+      color: var(--accent-hover);
+    }
+
+    .footer-divider {
+      color: var(--border);
+    }
+
+    @media (max-width: 640px) {
+      main {
+        padding: 40px 16px 60px;
+      }
+
+      .hero h1 {
+        font-size: 1.8rem;
+      }
+
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .provider-panels {
+        grid-template-columns: 1fr;
+      }
+
+      .modal {
+        padding: 20px;
+      }
     }
   </style>
 </head>
 <body>
-<div class="app">
+  <!-- Header -->
   <header>
-    <a href="/" class="back-link" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1.1rem;margin-right:4px;">←</a>
-    <div class="logo">⚡</div>
-    <div class="title-block">
-      <h1>AI Providers</h1>
-      <span style="font-size:0.78rem;color:var(--muted);">Lantern OS · settings</span>
+    <a href="/" class="back-link" title="Back to home">←</a>
+    <div class="header-brand">
+      <div class="header-icon">⚡</div>
+      <div class="header-title">AI Providers</div>
     </div>
-    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;" id="status-indicator">
-      <span style="font-size:0.78rem;color:var(--muted);display:flex;align-items:center;gap:5px">
-        <span class="dot online"></span><span id="status-text">checking…</span>
-      </span>
-      <button onclick="toggleTheme()" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 10px;cursor:pointer;color:var(--muted);font-size:14px;" title="Toggle theme">☀</button>
+    <div class="header-actions">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-text" id="status-text">connecting</span>
+      </div>
+      <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">☀</button>
     </div>
   </header>
 
+  <!-- Main Content -->
   <main>
-    <h1>AI Provider Settings</h1>
-    <p class="subtitle">Configure which AI services Lantern uses. All keys are optional — the journal works without any.</p>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-icon">🔮</div>
+      <h1>AI Provider Settings</h1>
+      <p>Configure which AI services power your Lantern experience. Select a provider to fine-tune agent selection, model variants, and performance parameters.</p>
+    </section>
 
-    <!-- Status cards -->
-    <div class="status-grid" id="status-cards">
-      <div class="loading" style="grid-column: 1/-1;">
-        <div class="spinner"></div>
-        <p>Loading orchestrator status…</p>
+    <!-- Status Overview -->
+    <div class="section-label">System Status</div>
+    <div class="status-grid" id="status-grid">
+      <div class="status-item">
+        <div class="status-item-icon">⚙️</div>
+        <div class="status-item-label">Providers</div>
+        <div class="status-item-value" id="provider-count">0/5</div>
+        <div class="status-item-detail">Configured</div>
+      </div>
+      <div class="status-item">
+        <div class="status-item-icon">💾</div>
+        <div class="status-item-label">Memory</div>
+        <div class="status-item-value" id="memory-count">0</div>
+        <div class="status-item-detail">Entries</div>
+      </div>
+      <div class="status-item">
+        <div class="status-item-icon">🔗</div>
+        <div class="status-item-label">Health</div>
+        <div class="status-item-value" id="health-status">—</div>
+        <div class="status-item-detail">System Status</div>
       </div>
     </div>
 
-    <!-- Providers table -->
-    <div class="providers-section">
-      <div class="section-header">
-        <h2>AI Provider Chain</h2>
-      </div>
-      <table id="providers-table">
-        <thead>
-          <tr>
-            <th>Provider</th>
-            <th>Model</th>
-            <th>Status</th>
-            <th>Strengths</th>
-          </tr>
-        </thead>
-        <tbody id="providers-body">
-          <tr><td colspan="4" class="loading"><div class="spinner"></div> Loading…</td></tr>
-        </tbody>
-      </table>
-    </div>
+    <!-- Provider Selection -->
+    <div class="section-label">Select Provider</div>
+    <div class="provider-panels" id="provider-panels"></div>
 
-    <!-- Memory / MemOS status -->
-    <div class="providers-section">
-      <div class="section-header">
-        <h2>Memory Systems</h2>
+    <!-- Console Log -->
+    <div class="section-label">System Log</div>
+    <div class="console-section">
+      <div class="console-header">
+        <div class="console-title">
+          📋 Event Log
+          <span class="console-count" id="log-count">0</span>
+        </div>
+        <div class="console-actions">
+          <button class="console-btn" onclick="clearLogs()" title="Clear logs">Clear</button>
+          <button class="console-btn" onclick="downloadLogs()" title="Download logs">Export</button>
+        </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th>System</th>
-            <th>Status</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody id="memory-body">
-          <tr><td colspan="3" class="loading"><div class="spinner"></div> Loading…</td></tr>
-        </tbody>
-      </table>
+      <div class="console-body" id="console-body">
+        <div class="log-empty">Initializing system…</div>
+      </div>
     </div>
   </main>
 
+  <!-- Configuration Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-icon" id="modal-icon">⚙️</div>
+        <div class="modal-title" id="modal-title">Configure</div>
+        <button class="modal-close" onclick="closeModal()">×</button>
+      </div>
+
+      <div id="modal-content"></div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveConfiguration()">💾 Save</button>
+        <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
   <footer>
-    <span id="footer-text">Lantern OS · Checking services…</span>
+    <div>Lantern OS · AI Provider Settings</div>
+    <div class="footer-links">
+      <a href="/" class="footer-link">← Back Home</a>
+      <span class="footer-divider">·</span>
+      <a href="/docs" class="footer-link">Documentation</a>
+      <span class="footer-divider">·</span>
+      <span id="footer-time">—</span>
+    </div>
   </footer>
-</div>
 
-<script>
-  const $ = id => document.getElementById(id);
-
-  async function loadStatus() {
-    const [providers, health, memory] = await Promise.all([
-      fetch('/api/settings/providers', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null),
-      fetch('/api/agent/health', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null),
-      fetch('/api/dream/memory/health', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
-        .then(r => r.ok ? r.json() : null)
-        .catch(() => null),
-    ]);
-
-    // Update status indicator
-    const anyProvider = providers && providers._any;
-    const memoryHealthy = memory && memory.available;
-    const isHealthy = anyProvider && memoryHealthy;
-
-    const dot = $('status-indicator').querySelector('.dot');
-    const text = $('status-text');
-    if (isHealthy) {
-      dot.className = 'dot online';
-      text.textContent = 'healthy';
-    } else if (anyProvider || memoryHealthy) {
-      dot.className = 'dot warning';
-      text.textContent = 'degraded';
-    } else {
-      dot.className = 'dot offline';
-      text.textContent = 'offline';
-    }
-
-    // Status cards
-    const configuredCount = providers ? Object.values(providers).filter(v => v === true).length - 1 : 0;
-    const totalProviders = providers ? Object.keys(providers).length - 1 : 10;
-    const memoryCount = memory ? memory.entry_count || 0 : 0;
-
-    $('status-cards').innerHTML = `
-      <div class="status-card">
-        <h3>Providers Configured</h3>
-        <div class="status-value">${configuredCount}/${totalProviders}</div>
-        <div class="status-detail">
-          <span class="dot ${configuredCount > 0 ? 'online' : 'offline'}"></span>
-          ${configuredCount > 0 ? `Ready to stream responses` : `No providers configured. Add keys in settings.`}
-        </div>
-      </div>
-      <div class="status-card">
-        <h3>Memory Status</h3>
-        <div class="status-value">${memoryCount}</div>
-        <div class="status-detail">
-          <span class="dot ${memory && memory.available ? 'online' : (memory && memory.fallback ? 'warning' : 'offline')}"></span>
-          ${memory ? (memory.available ? `MemOS healthy, ${memoryCount} entries` : `Fallback mode, ${memoryCount} entries`) : 'Memory system unavailable'}
-        </div>
-      </div>
-      <div class="status-card">
-        <h3>Orchestrator</h3>
-        <div class="status-value">${isHealthy ? '●' : '○'}</div>
-        <div class="status-detail">
-          <span class="dot ${isHealthy ? 'online' : (anyProvider || memoryHealthy ? 'warning' : 'offline')}"></span>
-          ${isHealthy ? 'Full operational capacity' : (anyProvider || memoryHealthy ? 'Partial service' : 'Degraded')}
-        </div>
-      </div>
-    `;
-
-    // Provider table
-    const providerMap = {
-      'ANTHROPIC_API_KEY': { name: 'Anthropic (Claude)', model: 'Default', strengths: 'Chat, coding, reasoning' },
-      'OPENAI_API_KEY': { name: 'OpenAI (GPT)', model: 'Default', strengths: 'Chat, reasoning, vision' },
-      'GEMINI_API_KEY': { name: 'Google (Gemini)', model: 'Default', strengths: 'Chat, vision, fast' },
-      'XAI_API_KEY': { name: 'xAI (Grok)', model: 'Default', strengths: 'Chat, creative, vision' },
-      'OLLAMA_BASE_URL': { name: 'Ollama (Local)', model: 'Configurable', strengths: 'Privacy, fallback' },
+  <script>
+    // ═══ STATE & CONFIG ═══
+    const PROVIDER_CONFIG = {
+      'ANTHROPIC_API_KEY': {
+        name: 'Anthropic (Claude)',
+        icon: '🧠',
+        agents: ['lantern', 'founder', 'waterfall'],
+        models: ['claude-3-5-sonnet', 'claude-3-opus', 'claude-3-haiku'],
+        defaultModel: 'claude-3-5-sonnet',
+        strengths: 'Chat, coding, reasoning, extended context'
+      },
+      'OPENAI_API_KEY': {
+        name: 'OpenAI (GPT)',
+        icon: '🔥',
+        agents: ['blinkbug', 'keystone'],
+        models: ['gpt-4-turbo', 'gpt-4-vision', 'gpt-3.5-turbo'],
+        defaultModel: 'gpt-4-turbo',
+        strengths: 'Chat, vision, reasoning, multimodal'
+      },
+      'GEMINI_API_KEY': {
+        name: 'Google (Gemini)',
+        icon: '✨',
+        agents: ['xenon', 'founder'],
+        models: ['gemini-2.0-flash', 'gemini-pro-vision', 'gemini-pro'],
+        defaultModel: 'gemini-2.0-flash',
+        strengths: 'Chat, vision, fast, creative'
+      },
+      'XAI_API_KEY': {
+        name: 'xAI (Grok)',
+        icon: '⚡',
+        agents: ['keystone'],
+        models: ['grok-2', 'grok-1'],
+        defaultModel: 'grok-2',
+        strengths: 'Chat, creative, real-time knowledge'
+      },
+      'OLLAMA_BASE_URL': {
+        name: 'Ollama (Local)',
+        icon: '🖥️',
+        agents: ['lantern'],
+        models: ['llama2', 'mistral', 'neural-chat'],
+        defaultModel: 'llama2',
+        strengths: 'Privacy, offline, fallback'
+      }
     };
 
-    let providerRows = '';
-    for (const [key, config] of Object.entries(providerMap)) {
-      if (providers && key in providers) {
-        const isConfigured = providers[key];
-        const status = isConfigured ? 'Configured' : 'Missing';
-        const badge = isConfigured ? 'configured' : 'missing';
-        providerRows += `
-          <tr>
-            <td>${config.name}</td>
-            <td>${config.model}</td>
-            <td><span class="status-badge ${badge}">${status}</span></td>
-            <td>${config.strengths}</td>
-          </tr>
-        `;
+    const AGENTS = {
+      'lantern': { name: 'Lantern', role: 'Steady Guide' },
+      'blinkbug': { name: 'Blinkbug', role: 'Curious Observer' },
+      'keystone': { name: 'Keystone', role: 'Logical Anchor' },
+      'waterfall': { name: 'Waterfall', role: 'Flow Facilitator' },
+      'xenon': { name: 'Xenon', role: 'Cosmic Witness' },
+      'founder': { name: 'Founder', role: 'Visionary' }
+    };
+
+    let logs = [];
+    let currentProvider = null;
+    let providerStatus = {};
+    let providerSettings = {};
+
+    // Load saved provider settings from localStorage
+    function loadProviderSettings() {
+      const saved = localStorage.getItem('lantern-provider-settings');
+      if (saved) {
+        try {
+          providerSettings = JSON.parse(saved);
+        } catch (e) {
+          providerSettings = {};
+        }
       }
     }
-    $('providers-body').innerHTML = providerRows || '<tr><td colspan="4" style="color:var(--muted);">Loading provider status…</td></tr>';
 
-    // Memory table
-    let memoryRows = `
-      <tr>
-        <td>MemOS</td>
-        <td>
-          <span class="status-badge ${memory && memory.available ? 'configured' : 'missing'}">
-            ${memory ? (memory.available ? 'Online' : 'Offline') : 'Unknown'}
-          </span>
-        </td>
-        <td>${memory ? (memory.available ? `${memory.entry_count} entries, last ingest recent` : `Fallback mode, ${memory.entry_count} entries`) : 'Checking…'}</td>
-      </tr>
-    `;
-    $('memory-body').innerHTML = memoryRows;
+    // Save provider settings to localStorage
+    function saveProviderSettings() {
+      localStorage.setItem('lantern-provider-settings', JSON.stringify(providerSettings));
+    }
 
-    // Footer
-    $('footer-text').textContent = `Lantern OS · ${new Date().toLocaleTimeString()} · Providers: ${configuredCount}/${totalProviders} · Memory: ${memoryCount} entries`;
-  }
+    // ═══ LOGGING ═══
+    function addLog(level, message) {
+      const time = new Date().toLocaleTimeString();
+      logs.push({ level, message, time });
+      if (logs.length > 50) logs.shift();
 
-  loadStatus();
-  setInterval(loadStatus, 10_000);
+      const body = document.getElementById('console-body');
+      if (body.querySelector('.log-empty')) {
+        body.innerHTML = '';
+      }
 
-  function toggleTheme() {
-    const h = document.documentElement;
-    const next = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    h.setAttribute('data-theme', next);
-    localStorage.setItem('lantern-theme', next);
-  }
-  (function() {
-    const s = localStorage.getItem('lantern-theme');
-    if (s) document.documentElement.setAttribute('data-theme', s);
-  })();
-</script>
-<script src="/js/common-layout.js" defer></script>
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-level ${level}">${level}</span>
+        <span class="log-message">${escapeHtml(message)}</span>
+      `;
+      body.appendChild(entry);
+      body.scrollTop = body.scrollHeight;
+
+      document.getElementById('log-count').textContent = logs.length;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function clearLogs() {
+      logs = [];
+      document.getElementById('console-body').innerHTML = '<div class="log-empty">Logs cleared.</div>';
+      document.getElementById('log-count').textContent = '0';
+    }
+
+    function downloadLogs() {
+      const csv = logs.map(l => `"${l.time}","${l.level}","${l.message}"`).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lantern-logs-${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ═══ MODAL ═══
+    function openModal(providerKey) {
+      currentProvider = providerKey;
+      const config = PROVIDER_CONFIG[providerKey];
+      const icon = config.icon;
+      const saved = providerSettings[providerKey] || {};
+
+      document.getElementById('modal-icon').textContent = icon;
+      document.getElementById('modal-title').textContent = config.name;
+
+      let agentOptions = config.agents.map(a =>
+        `<option value="${a}" ${saved.agent === a ? 'selected' : ''}>${AGENTS[a].name} — ${AGENTS[a].role}</option>`
+      ).join('');
+
+      let modelOptions = config.models.map(m =>
+        `<option value="${m}" ${(saved.model || config.defaultModel) === m ? 'selected' : ''}>${m}</option>`
+      ).join('');
+
+      const temp = saved.temperature || 0.7;
+      const timeout = saved.timeout || 30;
+
+      document.getElementById('modal-content').innerHTML = `
+        <div class="form-group">
+          <label class="form-label">Primary Agent</label>
+          <select class="form-select" id="agent-select">
+            <option value="">— Select Agent —</option>
+            ${agentOptions}
+          </select>
+          <div class="form-hint">Which agent persona handles requests to this provider?</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Model</label>
+          <select class="form-select" id="model-select">
+            ${modelOptions}
+          </select>
+          <div class="form-hint">Choose the specific model variant to use.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Temperature (Creativity)</label>
+          <input type="range" class="form-range" id="temp-input" min="0" max="2" step="0.1" value="${temp}">
+          <div class="slider-value">
+            <span>Response Creativity</span>
+            <span class="slider-value-display" id="temp-display">${temp.toFixed(1)} — ${getTempLabel(temp)}</span>
+          </div>
+          <div class="form-hint">Lower = focused, logical. Higher = creative, diverse.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Timeout (seconds)</label>
+          <input type="number" class="form-input" id="timeout-input" min="5" max="120" value="${timeout}">
+          <div class="form-hint">How long to wait for a response before timing out.</div>
+        </div>
+      `;
+
+      document.getElementById('temp-input').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById('temp-display').textContent = val.toFixed(1) + ' — ' + getTempLabel(val);
+      });
+
+      document.getElementById('modal-overlay').classList.add('open');
+      addLog('info', `Opened configuration for ${config.name}`);
+    }
+
+    function getTempLabel(val) {
+      if (val < 0.5) return 'Focused';
+      if (val < 1) return 'Balanced';
+      if (val < 1.5) return 'Creative';
+      return 'Chaotic';
+    }
+
+    function closeModal() {
+      document.getElementById('modal-overlay').classList.remove('open');
+    }
+
+    async function saveConfiguration() {
+      if (!currentProvider) return;
+      const config = PROVIDER_CONFIG[currentProvider];
+      const agent = document.getElementById('agent-select')?.value || '';
+      const model = document.getElementById('model-select')?.value || config.defaultModel;
+      const temp = parseFloat(document.getElementById('temp-input')?.value || 0.7);
+      const timeout = parseInt(document.getElementById('timeout-input')?.value || 30);
+
+      // Save to localStorage
+      providerSettings[currentProvider] = {
+        agent,
+        model,
+        temperature: temp,
+        timeout
+      };
+      saveProviderSettings();
+
+      // Log the save
+      const agentName = agent ? AGENTS[agent]?.name : 'default';
+      addLog('info', `✓ Saved ${config.name}: agent=${agentName}, model=${model}, temp=${temp}, timeout=${timeout}s`);
+
+      // Update UI
+      updateUI();
+      closeModal();
+    }
+
+    // ═══ LOAD STATUS ═══
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (!res.ok) throw new Error('API error');
+
+        const data = await res.json();
+        providerStatus = data.providers || {};
+
+        updateUI();
+        addLog('info', '✓ System status loaded');
+
+        document.getElementById('status-dot').classList.remove('offline');
+        document.getElementById('status-text').textContent = 'online';
+      } catch (e) {
+        addLog('warn', `Connection failed: ${e.message}`);
+        document.getElementById('status-dot').classList.add('offline');
+        document.getElementById('status-text').textContent = 'offline';
+      }
+    }
+
+    function updateUI() {
+      let configured = 0;
+
+      // Render provider panels
+      let html = '';
+      for (const [key, config] of Object.entries(PROVIDER_CONFIG)) {
+        const isConfigured = !!providerStatus[key];
+        const saved = providerSettings[key];
+        if (isConfigured) configured++;
+
+        const displayModel = saved?.model || config.defaultModel;
+        const displayAgent = saved?.agent ? AGENTS[saved.agent]?.name : '—';
+
+        html += `
+          <div class="provider-panel ${isConfigured ? 'configured' : ''}" onclick="openModal('${key}')">
+            <div class="provider-header">
+              <div class="provider-icon">${config.icon}</div>
+              <div class="provider-name">${config.name}</div>
+              <div class="provider-status">${saved ? '✓ Set' : (isConfigured ? '✓ Key' : 'Add')}</div>
+            </div>
+            <div class="provider-model">${displayModel}${saved?.agent ? ' · ' + displayAgent : ''}</div>
+            <div class="provider-strengths">${config.strengths}</div>
+          </div>
+        `;
+      }
+
+      document.getElementById('provider-panels').innerHTML = html;
+      document.getElementById('provider-count').textContent = `${configured}/5`;
+      document.getElementById('memory-count').textContent = providerStatus.memory?.entry_count || '0';
+      document.getElementById('health-status').textContent = providerStatus.memory?.available ? '✓' : '○';
+      document.getElementById('footer-time').textContent = new Date().toLocaleTimeString();
+    }
+
+    // ═══ THEME ═══
+    function toggleTheme() {
+      const h = document.documentElement;
+      const next = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      h.setAttribute('data-theme', next);
+      localStorage.setItem('lantern-theme', next);
+    }
+
+    // ═══ INIT ═══
+    (function() {
+      const theme = localStorage.getItem('lantern-theme');
+      if (theme) document.documentElement.setAttribute('data-theme', theme);
+
+      loadProviderSettings();
+      addLog('info', 'Lantern OS Provider Settings');
+      addLog('info', `Loaded ${Object.keys(providerSettings).length} saved configurations`);
+      addLog('info', 'Loading system status…');
+
+      loadStatus();
+      setInterval(loadStatus, 15000);
+      setInterval(() => {
+        document.getElementById('footer-time').textContent = new Date().toLocaleTimeString();
+      }, 1000);
+    })();
+
+    // Close modal on escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+    });
+
+    // Close modal on overlay click
+    document.getElementById('modal-overlay').addEventListener('click', (e) => {
+      if (e.target.id === 'modal-overlay') closeModal();
+    });
+  </script>
 </body>
 </html>
