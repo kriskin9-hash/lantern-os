@@ -52,8 +52,8 @@ impl Footer {
     }
 }
 
-fn footer_checksum(body: &[u8]) -> u32 {
-    (xxhash_rust::xxh32::xxh32(body, 0) as u32)
+pub(crate) fn footer_checksum(body: &[u8]) -> u32 {
+    xxhash_rust::xxh32::xxh32(body, 0)
 }
 
 /// Streaming compressor that never materializes the full uncompressed file.
