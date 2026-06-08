@@ -69,7 +69,8 @@ function queryMemories(message, limit = 3) {
     return { record: r, score };
   });
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.record);
+  // Always return top-N records regardless of score so CSF context is never empty
+  return scored.slice(0, limit).map(s => s.record);
 }
 
 // Query-filtered ingest docs: only return docs relevant to the message
@@ -81,7 +82,8 @@ function queryIngestDocs(message, limit = 2) {
     score: Math.max(relevanceScore(d.name, message), relevanceScore(d.content, message)),
   }));
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.doc);
+  // Always return top-N docs so context is never empty
+  return scored.slice(0, limit).map(s => s.doc);
 }
 
 // Query dream journal entries for relevant context
@@ -102,7 +104,7 @@ function queryDreamEntries(message, limit = 3) {
       return { entry: e, score: relevanceScore(combined, message) };
     });
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.entry);
+  return scored.slice(0, limit).map(s => s.entry);
 }
 
 function loadDoorState() {
