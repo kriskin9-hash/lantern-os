@@ -50,6 +50,7 @@ Install dependencies:
 
 ```bash
 npm install --prefix apps/lantern-garage
+pip install fastapi uvicorn diffusers torch pillow  # For image generation (optional)
 python -m pip install -r requirements.txt
 ```
 

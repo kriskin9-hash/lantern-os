@@ -299,53 +299,47 @@ print(e.sd_prompt_for_state())`;
         body.prompt = promptResult;
       }
 
-      // Use trained LoRA for image generation
-      const { spawn } = require("child_process");
-      const py = process.platform === "win32" ? "python" : "python3";
-      const loraScript = `import sys,json
-from generate_door_lora import generate_door_image
-req = json.loads(sys.stdin.read())
-result = generate_door_image(req['prompt'], req.get('loraPath', 'models/csf-image/checkpoints/lantern-door-lora-final.safetensors'))
-print(json.dumps(result))`;
+      // Use in-house SD server for image generation
+      const sdHost = process.env.SD_HOST || "127.0.0.1";
+      const sdPort = process.env.SD_PORT || "7860";
+      const sdUrl = `http://${sdHost}:${sdPort}/generate`;
       
       const imageResult = await new Promise((resolve, reject) => {
-        const proc = spawn(py, ["-c", loraScript], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
-        let out = "", err = "";
-        let timedOut = false;
-        
-        const timeout = setTimeout(() => {
-          timedOut = true;
-          proc.kill();
-          reject(new Error("LoRA generation timeout (60s)"));
-        }, 60000);
-        
-        proc.stdout.on("data", (c) => (out += c));
-        proc.stderr.on("data", (c) => (err += c));
-        proc.on("close", (code) => {
-          clearTimeout(timeout);
-          if (timedOut) return;
-          if (code !== 0) reject(new Error(err || `exit ${code}`));
-          else resolve(out.trim());
+        const payload = JSON.stringify({
+          prompt: body.prompt,
+          negative_prompt: "cartoon, anime, blurry, distorted",
+          steps: 25,
+          guidance_scale: 7.5,
+          width: 768,
+          height: 512,
         });
-        proc.on("error", (e) => {
-          clearTimeout(timeout);
-          reject(e);
+        
+        const reqSD = http.request({
+          hostname: sdHost,
+          port: sdPort,
+          path: "/generate",
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          let raw = "";
+          upstream.on("data", (c) => (raw += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(raw);
+              resolve(json);
+            } catch { reject(new Error("invalid response from SD server")); }
+          });
         });
-        proc.stdin.write(JSON.stringify(body));
-        proc.stdin.end();
+        reqSD.on("error", reject);
+        reqSD.setTimeout(120000, () => { reqSD.destroy(); reject(new Error("SD server timeout")); });
+        reqSD.write(payload);
+        reqSD.end();
       });
-
-      const data = JSON.parse(imageResult);
-      if (data.error) {
-        sendJson(res, { error: data.error, available: false, generatedAt: new Date().toISOString() }, 500);
-        return true;
-      }
 
       sendJson(res, {
         success: true,
-        image: data.image,
-        device: data.device,
-        prompt: data.prompt,
+        image: imageResult.image,
+        prompt: imageResult.prompt,
         available: true,
         generatedAt: new Date().toISOString(),
       });
