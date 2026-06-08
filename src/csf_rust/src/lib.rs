@@ -60,7 +60,7 @@ pub use header::{ArchiveHeader, CsfFlags};
 pub use search::{SearchHit, SearchIndex, SearchQuery};
 pub use security::SecurityPolicy;
 pub use sparse::{CsrMatrix, CsrMetadata};
-pub use streaming::{SegmentReader, StreamingCompressor};
+pub use streaming::{ArchiveReader, Footer, SegmentReader, StreamingCompressor, segment_flags};
 pub use wavefront::Wavefront;
 
 /// Convenience archive builder.
@@ -87,7 +87,7 @@ impl Archive {
     }
 
     /// Hardened write with security policy enforcement.
-    pub fn write<W: std::io::Write + std::io::Seek>(
+    pub fn write<W: std::io::Read + std::io::Write + std::io::Seek>(
         &self,
         writer: &mut W,
         policy: &SecurityPolicy,

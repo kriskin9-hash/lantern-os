@@ -9,14 +9,14 @@
 //!   csf ping
 
 use std::fs::File;
-use std::io::{BufWriter, Read, Write};
+use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::thread;
 
 use clap::{Parser, Subcommand};
 
-use csf::{Archive, SecurityPolicy, SegmentReader};
+use csf::{Archive, ArchiveReader, SecurityPolicy, SegmentReader};
 
 const CLI_SEGMENT_BYTES: usize = 16 * 1024 * 1024;
 
@@ -89,9 +89,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let segments = archive.segment_count();
-            let mut out = BufWriter::new(File::create(&output)?);
+            let mut out = File::create(&output)?;
             archive.write(&mut out, &sec)?;
-            out.flush()?;
 
             println!(
                 "Compressed {} -> {} ({} segments)",
@@ -101,19 +100,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
         Commands::Decompress { archive, output } => {
-            let mut reader = SegmentReader::open(&archive)?;
-            let segment_count = reader.header().segment_count;
+            SegmentReader::validate(&archive)?;
             let mut out = BufWriter::new(File::create(&output)?);
-            for index in 0..segment_count {
-                let decompressed = reader.decompress_segment(index)?;
-                out.write_all(&decompressed)?;
-            }
+            let total = ArchiveReader::decompress_to_writer(&archive, &mut out)?;
             out.flush()?;
+            let seg_count = SegmentReader::open(&archive)?.header().segment_count;
             println!(
-                "Decompressed {} -> {} ({} segments)",
+                "Decompressed {} -> {} ({} segments, {} bytes)",
                 archive.display(),
                 output.display(),
-                segment_count
+                seg_count,
+                total
             );
         }
         Commands::Search { archive, query } => {
