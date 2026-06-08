@@ -16,7 +16,9 @@ use std::thread;
 
 use clap::{Parser, Subcommand};
 
-use csf::{Compressor, Decompressor, SecurityPolicy};
+use csf::{Archive, SecurityPolicy, SegmentReader};
+
+const CLI_SEGMENT_BYTES: usize = 16 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(name = "csf")]
@@ -74,36 +76,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "untrusted" => SecurityPolicy::untrusted(),
                 _ => SecurityPolicy::default(),
             };
-            let mut file = File::open(&input)?;
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf)?;
 
-            let mut comp = Compressor::new(sec);
-            let text = String::from_utf8_lossy(&buf);
-            let compressed = comp.compress_text(&text)?;
+            let mut input_file = File::open(&input)?;
+            let mut archive = Archive::new();
+            let mut buf = vec![0u8; CLI_SEGMENT_BYTES];
+            loop {
+                let read = input_file.read(&mut buf)?;
+                if read == 0 {
+                    break;
+                }
+                archive.add_segment(&buf[..read]);
+            }
 
+            let segments = archive.segment_count();
             let mut out = BufWriter::new(File::create(&output)?);
-            out.write_all(&compressed)?;
+            archive.write(&mut out, &sec)?;
+            out.flush()?;
+
             println!(
-                "Compressed {} -> {} ({} bytes)",
+                "Compressed {} -> {} ({} segments)",
                 input.display(),
                 output.display(),
-                compressed.len()
+                segments
             );
         }
         Commands::Decompress { archive, output } => {
-            let mut file = File::open(&archive)?;
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf)?;
-            let sec = SecurityPolicy::default();
-            let decompressed = Decompressor::decompress(&buf, &sec)?;
+            let mut reader = SegmentReader::open(&archive)?;
+            let segment_count = reader.header().segment_count;
             let mut out = BufWriter::new(File::create(&output)?);
-            out.write_all(&decompressed)?;
-            println!("Decompressed {} -> {}", archive.display(), output.display());
+            for index in 0..segment_count {
+                let decompressed = reader.decompress_segment(index)?;
+                out.write_all(&decompressed)?;
+            }
+            out.flush()?;
+            println!(
+                "Decompressed {} -> {} ({} segments)",
+                archive.display(),
+                output.display(),
+                segment_count
+            );
         }
         Commands::Search { archive, query } => {
             println!("Searching {} for '{}'...", archive.display(), query);
-            // Simplified: full decompress for prototype.
+            // Simplified: full indexed search is tracked in issue #260.
         }
         Commands::Merge {
             base,
