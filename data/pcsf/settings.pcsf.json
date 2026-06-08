@@ -3,7 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "settings",
   "description": "Runtime configuration layer. Declares all env vars the system reads, their purpose, defaults, and current resolved states (key present = true, absent = false — values never stored here).",
-  "generated_at": "2026-06-08T06:34:25.681Z",
+  "generated_at": "2026-06-08T10:58:27.184Z",
   "state": "available",
   "env_file": ".env",
   "env_file_loader": "apps/lantern-garage/server.js (startup, regex ^[A-Z0-9_]+)",
@@ -85,7 +85,7 @@
       "group": "provider",
       "required": false,
       "default": "http://127.0.0.1:11434",
-      "state": "present",
+      "state": "absent",
       "purpose": "Base URL for local Ollama instance. Defaults to localhost."
     },
     {
@@ -93,14 +93,14 @@
       "group": "model",
       "required": false,
       "default": "llama3",
-      "state": "present",
+      "state": "absent",
       "purpose": "Ollama model to use. Must be pulled via 'ollama pull <model>'."
     },
     {
       "key": "ELEVENLABS_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "present",
+      "state": "absent",
       "purpose": "Enables ElevenLabs TTS proxy for calm, high-quality voice output",
       "get_key_url": "https://elevenlabs.io/app/sign-up"
     },
