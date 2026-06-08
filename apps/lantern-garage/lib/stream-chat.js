@@ -19,6 +19,27 @@ const maxConversationTextLength = 4000;
 // Fallback doors when AI omits the marker or provider fails
 const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
+// KV Cache Compression: tiered history summarization to reduce token costs
+// Turns 0-1 (most recent): Full fidelity
+// Turns 2-3: Compressed (first 200 chars + ellipsis)
+// Turns 4-5: Placeholder (10-word summary)
+function compressHistory(history) {
+  if (!history || history.length === 0) return [];
+  return history.map((h, i) => {
+    const text = String(h.text || h.content || "");
+    const role = h.role;
+    if (i >= history.length - 2) return h; // Full fidelity for most recent 2 turns
+    if (i >= history.length - 4) {
+      // Compressed: first 200 chars
+      return { ...h, text: text.slice(0, 200) + (text.length > 200 ? "…" : "") };
+    }
+    // Placeholder: 10-word summary
+    const words = text.split(/\s+/).slice(0, 10).join(" ");
+    const roleLabel = role === "assistant" ? "Lantern" : "Dreamer";
+    return { ...h, text: `[${roleLabel}: ${words}…]` };
+  });
+}
+
 // Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
 function extractDoors(text) {
   // Match complete [DOORS: A | B | C] or incomplete [DOORS: A | B | C (no closing bracket)
@@ -182,8 +203,9 @@ async function handleStreamChat(req, url, res) {
   })();
 
   // Include prior conversation turns so the model has full context
-  const historyContext = history.length > 0
-    ? `\nPrior conversation turns:\n${history.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
+  const compressedHistory = compressHistory(history);
+  const historyContext = compressedHistory.length > 0
+    ? `\nPrior conversation turns:\n${compressedHistory.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
   // Co-occurrence pairs: symbols that appear together in the same entry strengthen the edge
@@ -353,7 +375,7 @@ async function handleStreamChat(req, url, res) {
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
-          ...history.map(h => ({ role: h.role, content: h.text })),
+          ...compressedHistory.map(h => ({ role: h.role, content: h.text })),
           { role: "user", content: message },
         ],
       });
@@ -517,7 +539,7 @@ async function handleStreamChat(req, url, res) {
         max_tokens: 1024,
         stream: true,
         system: systemPrompt,
-        messages: [...history.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
+        messages: [...compressedHistory.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
       });
       await new Promise((resolve, reject) => {
         const req2 = https.request({
@@ -592,7 +614,7 @@ async function handleStreamChat(req, url, res) {
         stream: true,
         messages: [
           { role: "system", content: systemPrompt },
-          ...history.map(h => ({ role: h.role, content: h.text })),
+          ...compressedHistory.map(h => ({ role: h.role, content: h.text })),
           { role: "user", content: message },
         ],
       });
@@ -668,7 +690,7 @@ async function handleStreamChat(req, url, res) {
         model: xaiModel, stream: true,
         messages: [
           { role: "system", content: systemPrompt },
-          ...history.map(h => ({ role: h.role, content: h.text })),
+          ...compressedHistory.map(h => ({ role: h.role, content: h.text })),
           { role: "user", content: message },
         ],
       });
