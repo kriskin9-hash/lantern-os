@@ -212,11 +212,14 @@ class SlotManager:
                     json.dump(self._cache, f, indent=2)
                 self._dirty = False
 
-    def claim(self, slot_type: str, request_id: str) -> Optional[str]:
+    def claim(self, slot_type: str, request_id: str, context: Optional[Dict[str, Any]] = None) -> Optional[str]:
         with self._lock:
             data = self._read()
             slot_id = f"{slot_type}-{request_id}"
-            data["slots"][slot_id] = {"claimed_at": _now(), "status": "active"}
+            record: Dict[str, Any] = {"claimed_at": _now(), "status": "active"}
+            if context:
+                record["context"] = context
+            data["slots"][slot_id] = record
             self._write(data)
             return slot_id
 

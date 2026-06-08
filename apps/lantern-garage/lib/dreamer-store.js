@@ -1,10 +1,19 @@
 const fs = require("fs");
 const path = require("path");
 const { generateQutritId, generateEntryId } = require("./qutrit");
+const { readFileViaMcp } = require("./mcp-resource-client");
 
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const maxDreamerTextLength = 2000;
 const dreamerNotebookDir = path.join(repoRoot, "data", "dreamer", "notebooks");
+
+// Helper: read file text via MCP resource client, falling back to fs.readFileSync
+function _readText(filePath) {
+  const result = readFileViaMcp(filePath);
+  if (result && result.text) return result.text;
+  if (!fs.existsSync(filePath)) return "";
+  try { return fs.readFileSync(filePath, "utf8"); } catch { return ""; }
+}
 
 function normalizeDreamerUser(value) {
   const user = String(value || "dreamer")
@@ -42,8 +51,9 @@ async function appendDreamerEntry(user, entry) {
 
 function readDreamerNotebook(user) {
   const filePath = dreamerNotebookPath(user);
-  if (!fs.existsSync(filePath)) return [];
-  const lines_text = fs.readFileSync(filePath, "utf8").trim().split("\n").filter(Boolean);
+  const text = _readText(filePath);
+  if (!text) return [];
+  const lines_text = text.trim().split("\n").filter(Boolean);
   return lines_text.map((line) => {
     try { return JSON.parse(line); } catch { return null; }
   }).filter(Boolean);
@@ -65,7 +75,7 @@ function readRecentDreams(limit = 5) {
   // Read only the most recent file(s) until we have enough entries
   for (const file of files) {
     if (entries.length >= limit) break;
-    const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
+    const content = _readText(path.join(dreamDir, file)).trim();
     if (!content) continue;
     const lines = content.split("\n").reverse(); // newest last in JSONL, so reverse
     for (const line of lines) {
