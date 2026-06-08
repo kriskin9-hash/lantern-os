@@ -291,7 +291,7 @@
       return;
     }
     // Allow backend-streaming bang commands through; reject truly unknown ones
-    const STREAMING_BANGS = ["swarm", "converge"];
+    const STREAMING_BANGS = ["swarm", "converge", "three-doors", "threedoors", "doors"];
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
       const cmdName = bangMatch[1].toLowerCase();
@@ -384,7 +384,7 @@
                 fullText += evt.text;
                 analytics.tokensReceived++;
                 cursor.remove();
-                // Hide [DOORS:...] tag from the user during streaming
+                // Strip [DOORS:...] tag during streaming; chips rendered on done
                 const visibleText = fullText.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trimEnd();
                 bubble.textContent = visibleText;
                 bubble.appendChild(cursor);
@@ -401,7 +401,15 @@
                 if (evt.cleanText && evt.cleanText !== fullText) {
                   bubble.textContent = evt.cleanText;
                 }
-                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, evt.suggestions, evt.image_prompt);
+                // Parse [DOORS: A name | B name | C name] from full text if backend didn't extract
+                let suggestions = evt.suggestions;
+                if (!suggestions || suggestions.length === 0) {
+                  const doorsMatch = fullText.match(/\[DOORS:\s*([^\]]+)\]/i);
+                  if (doorsMatch) {
+                    suggestions = doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean);
+                  }
+                }
+                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt);
               }
             } catch { /* skip malformed */ }
           }
