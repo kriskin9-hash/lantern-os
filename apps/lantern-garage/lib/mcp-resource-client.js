@@ -97,9 +97,9 @@ function _readLocalFile(uri) {
   }
 }
 
-/** Read a resource synchronously via local filesystem fallback.
+/** Read a resource synchronously via local filesystem fallback only.
  *  Prefer this for boot-time / sync code paths where async is not possible.
- *  Tries MCP HTTP first, then falls back to fs.readFileSync, then returns defaultValue. */
+ *  For HTTP-first fetching, use readMcpResourceWithFallback instead. */
 function readMcpResourceSync(uri, defaultValue = null) {
   const local = _readLocalFile(uri);
   if (local !== null) return local;
@@ -115,22 +115,24 @@ async function readMcpResourceWithFallback(uri, defaultValue = null) {
   return defaultValue;
 }
 
+// Build reverse map once at module load for O(1) path → URI lookup
+const _PATH_TO_URI = Object.fromEntries(
+  Object.entries(_URI_TO_PATH).map(([uri, p]) => [path.normalize(p), uri])
+);
+
 /** Generic file read with MCP-first fallback. Reads any local path, trying MCP HTTP if
  *  the path maps to a known URI, otherwise direct fs. Returns {text, mimeType} or null. */
 function readFileViaMcp(filePath) {
-  // Try to map filePath back to a URI
   const normalized = path.normalize(filePath);
-  for (const [uri, mappedPath] of Object.entries(_URI_TO_PATH)) {
-    if (path.normalize(mappedPath) === normalized) {
-      const result = _readLocalFile(uri);
-      if (result !== null) {
-        const isJson = typeof result === "object";
-        return {
-          text: isJson ? JSON.stringify(result, null, 2) : result,
-          mimeType: isJson ? "application/json" : "text/plain",
-        };
-      }
-      break;
+  const uri = _PATH_TO_URI[normalized];
+  if (uri) {
+    const result = _readLocalFile(uri);
+    if (result !== null) {
+      const isJson = typeof result === "object";
+      return {
+        text: isJson ? JSON.stringify(result, null, 2) : result,
+        mimeType: isJson ? "application/json" : "text/plain",
+      };
     }
   }
   // Direct fs fallback

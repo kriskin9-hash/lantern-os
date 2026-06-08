@@ -155,6 +155,71 @@ Never claim a skill or fleet slot is active unless confirmed by implementation o
 
 ---
 
+## Quality Gates & Automated Hooks (Critical)
+
+All agent commits are subject to automated quality checks via git pre-commit hooks. **Read `docs/HOOKS.md` for full reference.**
+
+### Four-Layer Validation (Automatic on Every Commit)
+
+| Validator | Enforces | Skip with |
+|-----------|----------|-----------|
+| **Version/Changelog** | Code change → version bump → changelog entry | `SKIP_VERSION_CHECK=1` |
+| **Deployment Readiness** | Server change → deployment.json with rollback plan | `SKIP_DEPLOY_CHECK=1` |
+| **Auto-Update Safety** | Version bump → migration scripts, backwards compatibility | `SKIP_UPDATE_CHECK=1` |
+| **AGENTS.md** | Agent commit → update this file with metadata, runbook, capabilities | `SKIP_AGENT_CHECK=1` |
+
+### When Hooks Block Your Commit
+
+**Example 1: Code changed but version not bumped**
+```
+[!] Code files changed but version not bumped (still 1.2.3)
+→ Fix: Update package.json version, add CHANGELOG.md entry, retry
+```
+
+**Example 2: Agent commit without AGENTS.md update**
+```
+[!] Agent 'claude' not documented in AGENTS.md
+→ Fix: Add/update agent section with metadata, runbook, capabilities
+```
+
+### Agent Documentation Requirements
+
+If you're committing to a branch like `claude/feature-name`, you must document the agent in AGENTS.md:
+
+```markdown
+## Claude Agent
+
+**Status:** active
+**Model:** claude-opus
+**Lane:** claude/
+**Owner:** [Your name]
+
+### Capabilities
+- Feature engineering
+- Documentation writing
+- Code review
+
+### Runbook / Behavior
+How this agent operates and what it focuses on...
+
+### Constraints
+- Max 1 open PR per lane
+- Focus area: [describe]
+```
+
+**Exception:** If your change is docs-only or doesn't touch code, skip with `SKIP_AGENT_CHECK=1`.
+
+### Emergency Bypass (Rare)
+
+For true emergencies only:
+```bash
+SKIP_ALL_CHECKS=1 git commit -m "EMERGENCY: critical hotfix"
+```
+
+**See [`docs/HOOKS.md`](docs/HOOKS.md) for complete reference, examples, and troubleshooting.**
+
+---
+
 ## Monoworkstream Rule (Single-Dev Workflow)
 
 This repo enforces a **single workstream**: only one open feature PR at a time.

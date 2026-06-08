@@ -1,7 +1,7 @@
 // PCSF Live Refresh — update data/pcsf/*.pcsf.json from live provider + journal state on server start
 const fs = require("fs");
 const path = require("path");
-const { readMcpResourceSync } = require("./mcp-resource-client");
+const { readMcpResourceSync, readFileViaMcp } = require("./mcp-resource-client");
 
 const PROVIDER_KEYS = [
   "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY",

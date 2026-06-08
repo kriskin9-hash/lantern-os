@@ -674,6 +674,7 @@ class ConvergenceLoop:
         self.artifacts: Dict[str, Any] = {}
         self._phase_cache: Dict[str, PhaseResult] = {}
         self._repo_hash: Optional[str] = None
+        self._previous_receipt_path = self.repo_root / "manifests" / "evidence" / "convergence-latest.json"
 
     def _repo_state_hash(self) -> str:
         """Fast fingerprint of repo state for cache invalidation."""
@@ -692,6 +693,14 @@ class ConvergenceLoop:
         self.results = []
         audit: List[PhaseResult] = []
         overall_start = time.time()
+
+        # Capture previous receipt before any phase overwrites it
+        previous_receipt: Optional[Dict[str, Any]] = None
+        if self._previous_receipt_path.exists():
+            try:
+                previous_receipt = json.loads(self._previous_receipt_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
 
         safety = self.nap.check()
         if safety.get("abort"):
@@ -780,6 +789,7 @@ class ConvergenceLoop:
         score = round(pass_count / max(len(all_statuses), 1), 3) if total_ms < 5000 else round(pass_count / max(len(all_statuses), 1) * 0.9, 3)
 
         status = "clean" if promotion_ready else "needs_review"
+        drift = self._detect_drift(previous_receipt)
         return {
             "timestamp": _now(),
             "status": status,
@@ -791,6 +801,7 @@ class ConvergenceLoop:
             "internal_ticks": tick + 1,
             "convergence_score": score,
             "adaptive_terminated": tick + 1 < max_ticks,
+            "drift": drift,
         }
 
     def _phase_to_dict(self, r: PhaseResult) -> Dict[str, Any]:
@@ -906,9 +917,13 @@ class ConvergenceLoop:
         receipt_dir = self.repo_root / "manifests" / "evidence"
         receipt_dir.mkdir(parents=True, exist_ok=True)
         receipt_path = receipt_dir / f"convergence-{_now().replace(':', '-').replace('+', '-')}.json"
+        payload = {"phases": [self._phase_to_dict(r) for r in self.results]}
         try:
             with open(receipt_path, "w", encoding="utf-8") as f:
-                json.dump({"phases": [self._phase_to_dict(r) for r in self.results]}, f, indent=2)
+                json.dump(payload, f, indent=2)
+            # Also overwrite latest for drift detection
+            with open(self._previous_receipt_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
         except Exception as exc:
             return PhaseResult(12, "record_evidence", "fail", [str(exc)])
         return PhaseResult(12, "record_evidence", "pass", evidence={"receipt": str(receipt_path)})
@@ -916,6 +931,25 @@ class ConvergenceLoop:
     def _phase_promote_or_hold(self) -> PhaseResult:
         ready = all(r.status == "pass" for r in self.results)
         return PhaseResult(13, "promote_or_hold", "pass" if ready else "hold", evidence={"ready": ready})
+
+    def _detect_drift(self, previous_receipt: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Compare current results with previous receipt."""
+        if previous_receipt is None:
+            return {"status": "first_run", "drift": []}
+        try:
+            prev_phases = {p["name"]: p for p in previous_receipt.get("phases", [])}
+            drift = []
+            for r in self.results:
+                prev_p = prev_phases.get(r.name)
+                if prev_p and prev_p.get("status") != r.status:
+                    drift.append({
+                        "phase": r.name,
+                        "from": prev_p.get("status"),
+                        "to": r.status,
+                    })
+            return {"status": "drift_detected" if drift else "stable", "drift": drift}
+        except Exception:
+            return {"status": "error", "drift": []}
 
 
 class TesseractEngine:
