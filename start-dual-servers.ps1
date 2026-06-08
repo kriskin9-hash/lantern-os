@@ -12,14 +12,19 @@ Get-NetTCPConnection -LocalPort 4178 -ErrorAction SilentlyContinue | Where-Objec
 
 Start-Sleep -Seconds 2
 
-# Start main branch server (port 4177)
-Write-Host "[MAIN] Starting MAIN branch server on port 4177..." -ForegroundColor Green
+# Start main branch server (port 4177) — MASTER ONLY
+Write-Host "[MAIN] Checking out master branch..." -ForegroundColor Green
+cd 'C:\Users\alexp\OneDrive\Documents\GitHub\lantern-os'
+git checkout master
+git pull origin master
+
+Write-Host "[MAIN] Starting MAIN branch server on port 4177 (from master)..." -ForegroundColor Green
 $mainProcess = Start-Process powershell -ArgumentList @"
 `$env:PORT=4177; cd 'C:\Users\alexp\OneDrive\Documents\GitHub\lantern-os\apps\lantern-garage'; npm start
 "@ -PassThru
 
-# Start dev/master branch server (port 4178)
-Write-Host "[DEV] Starting DEV branch server on port 4178..." -ForegroundColor Green
+# Start dev/preview branch server (port 4178)
+Write-Host "[DEV] Starting PREVIEW branch server on port 4178..." -ForegroundColor Green
 $devProcess = Start-Process powershell -ArgumentList @"
 `$env:PORT=4178; cd 'C:\Users\alexp\OneDrive\Documents\GitHub\lantern-os\apps\lantern-garage'; npm start
 "@ -PassThru
