@@ -319,6 +319,43 @@
     <span class="sbar-chip" id="sbar-private">🔑 <span>Private</span></span>
     <span class="sbar-sep">·</span>
     <span class="sbar-chip" id="sbar-online">✅ <span>Online</span></span>
+    <span class="sbar-sep">·</span>
+    <span class="sbar-chip" id="sbar-world" onclick="window.open('/flourishing','_blank')" style="cursor:pointer;" title="Human Flourishing Frameworks — world health dashboard">🌍 <span>World</span></span>
+    <span class="sbar-sep">·</span>
+    <span class="sbar-chip" id="sbar-models" onclick="toggleModelCube()" style="cursor:pointer;" title="Convergence Models 3">🤖 <span>Models</span></span>
+  </div>
+
+  <!-- Convergence Models 3 cube panel -->
+  <div class="model-cube-overlay hidden" id="model-cube-overlay" onclick="toggleModelCube()"></div>
+  <div class="model-cube-panel hidden" id="model-cube-panel">
+    <div class="model-cube-header">
+      <span class="model-cube-title">◈ Convergence Models 3</span>
+      <button class="model-cube-close" onclick="toggleModelCube()">×</button>
+    </div>
+    <div class="model-cube-grid" id="model-cube-grid">
+      <div class="model-card loading" id="mc-lantern-csf-dream">
+        <div class="mc-icon">🌙</div>
+        <div class="mc-name">lantern-csf-dream</div>
+        <div class="mc-role">dream</div>
+        <div class="mc-base">mistral</div>
+        <div class="mc-status">checking…</div>
+      </div>
+      <div class="model-card loading" id="mc-lantern-convergance">
+        <div class="mc-icon">◈</div>
+        <div class="mc-name">lantern-convergance</div>
+        <div class="mc-role">convergence</div>
+        <div class="mc-base">qwen2.5-coder</div>
+        <div class="mc-status">checking…</div>
+      </div>
+      <div class="model-card loading" id="mc-lantern-pcsf">
+        <div class="mc-icon">⌖</div>
+        <div class="mc-name">lantern-pcsf</div>
+        <div class="mc-role">pcsf</div>
+        <div class="mc-base">qwen2.5-coder</div>
+        <div class="mc-status">checking…</div>
+      </div>
+    </div>
+    <div class="model-cube-footer" id="model-cube-footer">Loading model state…</div>
   </div>
 
   <div class="messages" id="messages">
@@ -382,6 +419,48 @@
     el.className = 'sbar-chip' + (state ? ' ' + state : '');
   }
 
+  // 🤖 Convergence Models 3
+  var _modelCubeOpen = false;
+  var _modelData = null;
+  window.toggleModelCube = function() {
+    _modelCubeOpen = !_modelCubeOpen;
+    document.getElementById('model-cube-overlay').classList.toggle('hidden', !_modelCubeOpen);
+    document.getElementById('model-cube-panel').classList.toggle('hidden', !_modelCubeOpen);
+    if (_modelCubeOpen) fetchModelCube();
+  };
+  function fetchModelCube() {
+    fetch(base + '/api/dream/lantern-models', { cache: 'no-store', signal: AbortSignal.timeout(6000) })
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d) return;
+        _modelData = d;
+        d.convergence_models.forEach(function(m) {
+          var card = document.getElementById('mc-' + m.id);
+          if (!card) return;
+          card.className = 'model-card ' + (m.loaded ? 'loaded' : 'missing');
+          card.querySelector('.mc-status').textContent = m.loaded
+            ? '✓ loaded' + (m.size_gb ? ' · ' + m.size_gb + ' GB' : '')
+            : '✗ not built — run: ollama create ' + m.id;
+          var sizeEl = card.querySelector('.mc-size');
+          if (!sizeEl && m.loaded && m.modified_at) {
+            var s = document.createElement('div');
+            s.className = 'mc-size';
+            s.textContent = 'built ' + new Date(m.modified_at).toLocaleDateString();
+            card.appendChild(s);
+          }
+        });
+        var footer = document.getElementById('model-cube-footer');
+        if (footer) {
+          footer.textContent = d.loaded + '/' + d.total + ' models loaded · ollama base: ' + (d.ollama_base || '127.0.0.1:11434') + (d.error ? ' · ⚠ ' + d.error : '');
+        }
+        var label = d.loaded + '/' + d.total + ' models';
+        var state = d.healthy ? 'ok' : d.loaded > 0 ? 'warn' : 'err';
+        setChip('sbar-models', label, state);
+      })
+      .catch(function() { setChip('sbar-models', 'Models', 'err'); });
+  }
+  fetchModelCube();
+
   // ✍️ Write — entry count
   fetch(base + '/api/dream/stats', { cache: 'no-store', signal: AbortSignal.timeout(4000) })
     .then(function(r) { return r.ok ? r.json() : null; })
@@ -410,6 +489,29 @@
       var configured = keys.filter(function(k) { return !!d[k]; }).length;
       setChip('sbar-private', configured + ' of ' + keys.length + ' providers configured', configured > 0 ? 'ok' : 'warn');
     }).catch(function() { setChip('sbar-private', 'Private'); });
+
+  // 🌍 World — HFF flourishing score
+  Promise.all([
+    fetch(base + '/api/flourishing/world/status', { cache: 'no-store', signal: AbortSignal.timeout(4000) }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; }),
+    fetch(base + '/api/flourishing/world/flourishing', { cache: 'no-store', signal: AbortSignal.timeout(4000) }).then(function(r) { return r.ok ? r.json() : null; }).catch(function() { return null; })
+  ]).then(function(results) {
+    var status = results[0], flourish = results[1];
+    if (!status) { setChip('sbar-world', 'World: —', ''); return; }
+    var scopes = (flourish && flourish.by_scope) || {};
+    var keys = Object.keys(scopes);
+    var avg = keys.length
+      ? Math.round(keys.reduce(function(s, k) { return s + (scopes[k].score || 0); }, 0) / keys.length * 100)
+      : null;
+    var seeded = status.belief_count > 0;
+    if (!seeded) {
+      setChip('sbar-world', 'World: not seeded', 'warn');
+    } else if (avg !== null) {
+      var state = avg >= 60 ? 'ok' : avg >= 40 ? 'warn' : 'err';
+      setChip('sbar-world', 'World: ' + avg + '/100', state);
+    } else {
+      setChip('sbar-world', 'World: ' + status.belief_count + ' beliefs', 'ok');
+    }
+  });
 
   // ✅ Online — health
   fetch(base + '/api/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
