@@ -155,6 +155,52 @@ Never claim a skill or fleet slot is active unless confirmed by implementation o
 
 ---
 
+## Quality Gates & Automated Hooks (Critical)
+
+All agent commits are subject to **four automated quality checks** via git pre-commit hooks. See [`docs/HOOKS.md`](docs/HOOKS.md) for full reference.
+
+### Enforcement Summary
+
+| Validator | Rule | Skip with |
+|-----------|------|-----------|
+| **Version/Changelog** | Code changed → version bumped → changelog updated | `SKIP_VERSION_CHECK=1` |
+| **Deployment** | Server changed → deployment.json with rollback plan | `SKIP_DEPLOY_CHECK=1` |
+| **Auto-Update** | Version bumped → migration scripts + backwards compat | `SKIP_UPDATE_CHECK=1` |
+| **AGENTS.md** | Agent commits → document agent metadata + runbook | `SKIP_AGENT_CHECK=1` |
+
+### Agent Documentation (for `claude/*`, `gemini/*`, etc. branches)
+
+When committing to an agent branch, update AGENTS.md with:
+
+```markdown
+## [Agent Name]
+
+**Status:** active  
+**Model:** claude-opus  
+**Lane:** claude/  
+**Owner:** [Your name]  
+
+### Capabilities
+- Feature 1
+- Feature 2
+
+### Runbook / Behavior
+How this agent operates...
+
+### Constraints
+- Max 1 open PR per lane
+- Focus area: [describe]
+```
+
+**Emergency bypass** (rare):
+```bash
+SKIP_ALL_CHECKS=1 git commit -m "EMERGENCY: hotfix"
+```
+
+**See [`docs/HOOKS.md`](docs/HOOKS.md) for examples, troubleshooting, and all validation details.**
+
+---
+
 ## Monoworkstream Rule (Single-Dev Workflow)
 
 This repo enforces a **single workstream**: only one open feature PR at a time.
