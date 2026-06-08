@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { readFileViaMcp } = require("./mcp-resource-client");
 
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
@@ -11,13 +12,22 @@ const DOOR_STATE_PATH = path.join(DREAM_JOURNAL_PATH, "door_state.json");
 let _cache = { memories: null, ingest: null, ts: 0 };
 const CACHE_TTL_MS = 10_000;
 
+// Helper: read a file via MCP resource client, falling back to fs.readFileSync
+function _readText(filePath) {
+  const result = readFileViaMcp(filePath);
+  if (result && result.text) return result.text;
+  if (!fs.existsSync(filePath)) return "";
+  try { return fs.readFileSync(filePath, "utf8"); } catch { return ""; }
+}
+
 function readMemoryRecords(limit = 20) {
   const records = [];
   if (!fs.existsSync(CSF_MEMORY_PATH)) return records;
   const files = fs.readdirSync(CSF_MEMORY_PATH, { recursive: true })
     .filter(f => String(f).endsWith(".jsonl"));
   for (const file of files) {
-    const lines = fs.readFileSync(path.join(CSF_MEMORY_PATH, file), "utf8").trim().split("\n").filter(Boolean);
+    const text = _readText(path.join(CSF_MEMORY_PATH, file));
+    const lines = text.trim().split("\n").filter(Boolean);
     for (const line of lines) {
       try { records.push(JSON.parse(line)); } catch {}
     }
@@ -33,7 +43,7 @@ function readIngestDocs(limit = 3) {
     .sort().reverse()
     .slice(0, limit)
     .map(f => {
-      const content = fs.readFileSync(path.join(CSF_INGEST_PATH, String(f)), "utf8").trim();
+      const content = _readText(path.join(CSF_INGEST_PATH, String(f))).trim();
       return { name: String(f), content: content.slice(0, 400) };
     });
 }
@@ -77,8 +87,9 @@ function queryIngestDocs(message, limit = 2) {
 // Query dream journal entries for relevant context
 function queryDreamEntries(message, limit = 3) {
   const journalFile = path.join(DREAM_JOURNAL_PATH, `dreams_${new Date().toISOString().slice(0, 7)}.jsonl`);
-  if (!fs.existsSync(journalFile)) return [];
-  const lines = fs.readFileSync(journalFile, "utf8").trim().split("\n").filter(Boolean);
+  const text = _readText(journalFile);
+  if (!text) return [];
+  const lines = text.trim().split("\n").filter(Boolean);
   const entries = [];
   for (const line of lines) {
     try { entries.push(JSON.parse(line)); } catch {}
@@ -96,9 +107,8 @@ function queryDreamEntries(message, limit = 3) {
 
 function loadDoorState() {
   try {
-    if (fs.existsSync(DOOR_STATE_PATH)) {
-      return JSON.parse(fs.readFileSync(DOOR_STATE_PATH, "utf8"));
-    }
+    const text = _readText(DOOR_STATE_PATH);
+    if (text) return JSON.parse(text);
   } catch {}
   return { doors: [], lastChoice: null, history: [] };
 }
