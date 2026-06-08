@@ -823,6 +823,24 @@
     let logs = [];
     let currentProvider = null;
     let providerStatus = {};
+    let providerSettings = {};
+
+    // Load saved provider settings from localStorage
+    function loadProviderSettings() {
+      const saved = localStorage.getItem('lantern-provider-settings');
+      if (saved) {
+        try {
+          providerSettings = JSON.parse(saved);
+        } catch (e) {
+          providerSettings = {};
+        }
+      }
+    }
+
+    // Save provider settings to localStorage
+    function saveProviderSettings() {
+      localStorage.setItem('lantern-provider-settings', JSON.stringify(providerSettings));
+    }
 
     // ═══ LOGGING ═══
     function addLog(level, message) {
@@ -876,17 +894,21 @@
       currentProvider = providerKey;
       const config = PROVIDER_CONFIG[providerKey];
       const icon = config.icon;
+      const saved = providerSettings[providerKey] || {};
 
       document.getElementById('modal-icon').textContent = icon;
       document.getElementById('modal-title').textContent = config.name;
 
       let agentOptions = config.agents.map(a =>
-        `<option value="${a}">${AGENTS[a].name} — ${AGENTS[a].role}</option>`
+        `<option value="${a}" ${saved.agent === a ? 'selected' : ''}>${AGENTS[a].name} — ${AGENTS[a].role}</option>`
       ).join('');
 
       let modelOptions = config.models.map(m =>
-        `<option value="${m}" ${m === config.defaultModel ? 'selected' : ''}>${m}</option>`
+        `<option value="${m}" ${(saved.model || config.defaultModel) === m ? 'selected' : ''}>${m}</option>`
       ).join('');
+
+      const temp = saved.temperature || 0.7;
+      const timeout = saved.timeout || 30;
 
       document.getElementById('modal-content').innerHTML = `
         <div class="form-group">
@@ -908,47 +930,64 @@
 
         <div class="form-group">
           <label class="form-label">Temperature (Creativity)</label>
-          <input type="range" class="form-range" id="temp-input" min="0" max="2" step="0.1" value="0.7">
+          <input type="range" class="form-range" id="temp-input" min="0" max="2" step="0.1" value="${temp}">
           <div class="slider-value">
             <span>Response Creativity</span>
-            <span class="slider-value-display" id="temp-display">0.7 — Balanced</span>
+            <span class="slider-value-display" id="temp-display">${temp.toFixed(1)} — ${getTempLabel(temp)}</span>
           </div>
           <div class="form-hint">Lower = focused, logical. Higher = creative, diverse.</div>
         </div>
 
         <div class="form-group">
           <label class="form-label">Timeout (seconds)</label>
-          <input type="number" class="form-input" id="timeout-input" min="5" max="120" value="30">
+          <input type="number" class="form-input" id="timeout-input" min="5" max="120" value="${timeout}">
           <div class="form-hint">How long to wait for a response before timing out.</div>
         </div>
       `;
 
       document.getElementById('temp-input').addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
-        let label = '';
-        if (val < 0.5) label = 'Focused';
-        else if (val < 1) label = 'Balanced';
-        else if (val < 1.5) label = 'Creative';
-        else label = 'Chaotic';
-        document.getElementById('temp-display').textContent = val.toFixed(1) + ' — ' + label;
+        document.getElementById('temp-display').textContent = val.toFixed(1) + ' — ' + getTempLabel(val);
       });
 
       document.getElementById('modal-overlay').classList.add('open');
       addLog('info', `Opened configuration for ${config.name}`);
     }
 
+    function getTempLabel(val) {
+      if (val < 0.5) return 'Focused';
+      if (val < 1) return 'Balanced';
+      if (val < 1.5) return 'Creative';
+      return 'Chaotic';
+    }
+
     function closeModal() {
       document.getElementById('modal-overlay').classList.remove('open');
     }
 
-    function saveConfiguration() {
+    async function saveConfiguration() {
       if (!currentProvider) return;
       const config = PROVIDER_CONFIG[currentProvider];
-      const agent = document.getElementById('agent-select')?.value;
-      const model = document.getElementById('model-select')?.value;
-      const temp = document.getElementById('temp-input')?.value;
+      const agent = document.getElementById('agent-select')?.value || '';
+      const model = document.getElementById('model-select')?.value || config.defaultModel;
+      const temp = parseFloat(document.getElementById('temp-input')?.value || 0.7);
+      const timeout = parseInt(document.getElementById('timeout-input')?.value || 30);
 
-      addLog('info', `✓ Saved ${config.name} config: ${agent || 'default'} agent, temp=${temp}`);
+      // Save to localStorage
+      providerSettings[currentProvider] = {
+        agent,
+        model,
+        temperature: temp,
+        timeout
+      };
+      saveProviderSettings();
+
+      // Log the save
+      const agentName = agent ? AGENTS[agent]?.name : 'default';
+      addLog('info', `✓ Saved ${config.name}: agent=${agentName}, model=${model}, temp=${temp}, timeout=${timeout}s`);
+
+      // Update UI
+      updateUI();
       closeModal();
     }
 
@@ -975,22 +1014,25 @@
 
     function updateUI() {
       let configured = 0;
-      let totalMemory = 0;
 
       // Render provider panels
       let html = '';
       for (const [key, config] of Object.entries(PROVIDER_CONFIG)) {
         const isConfigured = !!providerStatus[key];
+        const saved = providerSettings[key];
         if (isConfigured) configured++;
+
+        const displayModel = saved?.model || config.defaultModel;
+        const displayAgent = saved?.agent ? AGENTS[saved.agent]?.name : '—';
 
         html += `
           <div class="provider-panel ${isConfigured ? 'configured' : ''}" onclick="openModal('${key}')">
             <div class="provider-header">
               <div class="provider-icon">${config.icon}</div>
               <div class="provider-name">${config.name}</div>
-              <div class="provider-status">${isConfigured ? '✓ Set' : 'Add'}</div>
+              <div class="provider-status">${saved ? '✓ Set' : (isConfigured ? '✓ Key' : 'Add')}</div>
             </div>
-            <div class="provider-model">${config.defaultModel}</div>
+            <div class="provider-model">${displayModel}${saved?.agent ? ' · ' + displayAgent : ''}</div>
             <div class="provider-strengths">${config.strengths}</div>
           </div>
         `;
@@ -1016,7 +1058,9 @@
       const theme = localStorage.getItem('lantern-theme');
       if (theme) document.documentElement.setAttribute('data-theme', theme);
 
+      loadProviderSettings();
       addLog('info', 'Lantern OS Provider Settings');
+      addLog('info', `Loaded ${Object.keys(providerSettings).length} saved configurations`);
       addLog('info', 'Loading system status…');
 
       loadStatus();
