@@ -280,8 +280,19 @@
       scrollToBottom();
       return;
     }
+    // Special handling for Three Doors game
+    const threeDoorsMatch = text.match(/^!(?:three-doors|threedoors|doors)\b/i);
+    if (threeDoorsMatch) {
+      if (emptyState) emptyState.style.display = "none";
+      inputEl.value = "";
+      analytics.messagesSent++;
+      analytics.record("send", "Three Doors game started");
+      startThreeDoors();
+      return;
+    }
+
     // Allow backend-streaming bang commands through; reject truly unknown ones
-    const STREAMING_BANGS = ["swarm", "converge", "three-doors", "threedoors", "doors"];
+    const STREAMING_BANGS = ["swarm", "converge"];
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
       const cmdName = bangMatch[1].toLowerCase();
@@ -1108,18 +1119,26 @@
     const bubble = row.querySelector(".bubble");
     const html = `
       <div style="margin: 8px 0;">
-        <div style="margin-bottom: 12px; line-height: 1.6;">${scene.text}</div>
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="margin-bottom: 12px; line-height: 1.6; color: #e2e8f0;">${scene.text}</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
           ${(scene.doors || [])
             .map((door) => `
             <button onclick="window.chooseDoorsPath('${door.label}')"
-              style="padding: 8px 12px; background: #334155; border: 1px solid #475569; color: #f1f5f9; border-radius: 6px; cursor: pointer; font-size: 13px;">
+              style="padding: 8px 12px; background: #4c1d95; border: 1px solid #7c3aed; color: #c4b5fd; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; font-weight: 500;"
+              onmouseover="this.style.background='#6d28d9'; this.style.borderColor='#a78bfa';"
+              onmouseout="this.style.background='#4c1d95'; this.style.borderColor='#7c3aed';">
               ${door.label}. ${door.name}
             </button>
           `)
             .join("")}
         </div>
-        ${scene.image_prompt ? `<div style="color: #9ca3af; font-size: 12px; margin-top: 12px; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">📸 Ready: ${scene.image_prompt.substring(0, 100)}...</div>` : ""}
+        ${scene.image_prompt ? `
+          <div style="background: #1e1b4b; border-left: 3px solid #7c3aed; padding: 8px; border-radius: 4px; margin-top: 12px; font-size: 11px; color: #a78bfa; max-height: 80px; overflow-y: auto;">
+            <div style="font-weight: 600; margin-bottom: 4px;">📸 Stable Diffusion Prompt:</div>
+            <div style="font-family: monospace; line-height: 1.4; color: #c4b5fd;">${scene.image_prompt}</div>
+          </div>
+        ` : ""}
+        ${scene.fox_present ? `<div style="color: #fbbf24; font-size: 12px; margin-top: 8px; font-style: italic;">🦊 The fox is here.</div>` : ""}
       </div>
     `;
     bubble.innerHTML = html;
