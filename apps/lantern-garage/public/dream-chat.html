@@ -13,37 +13,25 @@
 </head>
 <body>
 <div class="app">
-  <header>
-    <a href="/" class="back-link" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1.1rem;margin-right:4px;">←</a>
-    <div class="logo">🔮</div>
-    <div class="title-block">
-      <h1>Dream Journal</h1>
-      <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
-    </div>
-    <div class="selector-row">
-      <select id="agent-select" title="Personality mode" aria-label="Select personality">
-        <option value="lantern" selected>Lantern (Default)</option>
+  <header style="gap: 8px; padding: 8px 12px; height: auto; flex-wrap: nowrap; font-size: 0.9rem;">
+    <a href="/" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1rem;margin-right:2px;">←</a>
+    <span class="mandala-icon spin-slow" style="font-size:1.2rem;"></span>
+    <span style="font-weight:700;margin-right:4px;">Dream Journal</span>
+    <span style="color:var(--muted);font-size:0.8rem;">v1.2.1 · private · local</span>
+    <div style="margin-left:auto; display:flex; gap:6px; align-items:center;">
+      <select id="agent-select" title="Personality" style="font-size:0.8rem;padding:2px 6px;">
+        <option value="lantern" selected>Lantern</option>
       </select>
-      <select id="provider-select" title="Which AI to use" aria-label="Select AI service">
-        <option value="">Auto (pick best)</option>
+      <select id="provider-select" title="AI service" style="font-size:0.8rem;padding:2px 6px;">
+        <option value="">Auto</option>
         <option value="claude">Claude</option>
         <option value="openai">ChatGPT</option>
         <option value="gemini">Gemini</option>
-        <option value="grok">Grok</option>
-        <option value="ollama">Local (Ollama)</option>
       </select>
-      <button class="mcp-toggle" id="mcp-toggle" title="Advanced mode" onclick="toggleKeystoneMcp()">🔧 Advanced</button>
-    </div>
-    <button class="settings-btn" id="logdream-btn" title="Record a new dream" onclick="openLogDream()" style="margin-left:4px;">✦</button>
-    <button class="settings-btn" id="settings-btn" title="Settings & AI keys" onclick="openSettings()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()" style="margin-left:4px;"><span class="mandala-icon spin-slow"></span></button>
-    <div class="status-dot">
-      <div class="dot" id="status-dot"></div>
-      <span id="status-label">connecting…</span>
+      <button class="settings-btn" id="logdream-btn" title="Record dream" style="padding:4px;font-size:0.9rem;">✦</button>
+      <button class="settings-btn" id="settings-btn" title="Settings" style="padding:4px;">⚙️</button>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle theme" style="padding:4px;" onclick="toggleTheme()"><span class="mandala-icon spin-slow" style="font-size:0.9rem;"></span></button>
+      <div class="status-dot" style="width:10px;height:10px;"><div class="dot" id="status-dot" style="width:6px;height:6px;border-radius:50%;background:var(--muted);"></div></div>
     </div>
   </header>
 

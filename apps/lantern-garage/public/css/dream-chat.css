@@ -47,7 +47,12 @@
       font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
       font-size: 15px;
       line-height: 1.6;
+      overflow: hidden;
     }
+
+    /* Hide scrollbars */
+    ::-webkit-scrollbar { display: none; }
+    * { -ms-overflow-style: none; scrollbar-width: none; }
 
     /* ── Layout ── */
     .app {
