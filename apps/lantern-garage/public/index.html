@@ -21,8 +21,9 @@
       --accent-hover: #e63a44;
       --green: #10b981;
       --gold: #f59e0b;
-      --shadow: 0 2px 8px rgba(0,0,0,0.06);
+      --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
       --shadow-hover: 0 4px 16px rgba(0,0,0,0.1);
+      --radius: 14px;
     }
 
     [data-theme="dark"] {
@@ -38,7 +39,7 @@
       --green: #34d399;
       --gold: #fbbf24;
       --shadow: 0 2px 8px rgba(0,0,0,0.3);
-      --shadow-hover: 0 4px 16px rgba(0,0,0,0.4);
+      --shadow-hover: 0 4px 20px rgba(0,0,0,0.45);
     }
 
     html, body {
@@ -50,48 +51,179 @@
       line-height: 1.6;
     }
 
+    /* ── Top nav ── */
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 20px;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 0 var(--border);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.3px;
+      margin-right: 8px;
+    }
+    .nav-brand .brand-icon { font-size: 18px; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex: 1;
+    }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 7px;
+      transition: color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+    .nav-links a.active { color: var(--text); font-weight: 600; }
+    @media (max-width: 580px) { .nav-links { display: none; } }
+    .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .nav-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--muted); cursor: pointer; font-size: 15px;
+      transition: all 0.15s;
+    }
+    .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .nav-cta {
+      font-size: 13px; font-weight: 600; padding: 7px 16px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 8px; cursor: pointer; text-decoration: none;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .nav-cta:hover { background: var(--accent-hover); }
+
+    /* ── Page ── */
     .page {
-      max-width: 860px;
+      max-width: 880px;
       margin: 0 auto;
-      padding: 0 24px 80px;
+      padding: 0 20px 80px;
     }
 
-    /* Hero */
+    /* ── Hero ── */
     .hero {
       text-align: center;
-      padding: 80px 0 56px;
+      padding: 64px 0 48px;
     }
     .hero-icon {
-      font-size: 56px;
+      font-size: 52px;
       display: block;
-      margin-bottom: 20px;
-      filter: drop-shadow(0 0 24px var(--accent-dim));
+      margin-bottom: 18px;
     }
     .hero h1 {
-      font-size: clamp(2rem, 5vw, 3rem);
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
+      font-size: clamp(1.9rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 14px;
+      line-height: 1.15;
     }
     .hero h1 span { color: var(--accent); }
     .hero .tagline {
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       color: var(--muted);
-      max-width: 500px;
-      margin: 0 auto 8px;
+      max-width: 460px;
+      margin: 0 auto 28px;
+      line-height: 1.55;
     }
+    .hero-cta-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: #fff; font-weight: 600;
+      font-size: 15px; padding: 11px 24px; border-radius: 10px;
+      text-decoration: none; transition: background 0.15s, transform 0.1s;
+      border: none; cursor: pointer;
+    }
+    .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface); color: var(--text); font-weight: 500;
+      font-size: 15px; padding: 11px 24px; border-radius: 10px;
+      text-decoration: none; transition: border-color 0.15s, background 0.15s;
+      border: 1px solid var(--border); cursor: pointer;
+    }
+    .btn-ghost:hover { border-color: var(--accent); background: var(--surface2); }
     .hero .sub {
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       color: var(--muted);
-      opacity: 0.7;
+      opacity: 0.6;
     }
 
-    /* CTA panels */
+    /* ── Panels grid ── */
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 14px;
+      margin-top: 40px;
+    }
+    .panels-primary { margin-bottom: 12px; }
+    .panel-full {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 24px 28px;
+      background: var(--surface);
+      border: 1px solid var(--accent-dim);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: var(--text);
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+    .panel-full:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-hover);
+    }
+    .panel-full-icon { font-size: 36px; flex-shrink: 0; }
+    .panel-full-body { flex: 1 }
+    .panel-full-body .tag {
+      font-size: 0.7rem; font-weight: 600; letter-spacing: 0.07em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 4px;
+    }
+    .panel-full-body h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 4px; }
+    .panel-full-body p { font-size: 0.87rem; color: var(--muted); line-height: 1.5; }
+    .panel-full-arrow {
+      flex-shrink: 0; font-size: 0.85rem; font-weight: 600;
+      color: var(--accent); white-space: nowrap;
+    }
+    @media (max-width: 540px) {
+      .panel-full { flex-direction: column; align-items: flex-start; }
+      .panel-full-arrow { align-self: flex-end; }
+    }
+
     .panels {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin: 40px 0;
+      gap: 12px;
     }
     @media (max-width: 560px) { .panels { grid-template-columns: 1fr; } }
 
@@ -99,11 +231,11 @@
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      gap: 10px;
-      padding: 28px 28px 24px;
+      gap: 8px;
+      padding: 22px 22px 18px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: var(--radius);
       text-decoration: none;
       color: var(--text);
       box-shadow: var(--shadow);
@@ -115,266 +247,230 @@
       transform: translateY(-2px);
       box-shadow: var(--shadow-hover);
     }
-    .panel.primary { border-color: var(--accent-dim); }
-    .panel.primary:hover { border-color: var(--accent); }
-    .panel-icon { font-size: 28px; }
+    .panel-icon { font-size: 26px; }
     .panel-label {
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted);
     }
-    .panel h2 {
-      font-size: 1.25rem;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-    .panel p {
-      font-size: 0.88rem;
-      color: var(--muted);
-      line-height: 1.5;
-    }
+    .panel h2 { font-size: 1.05rem; font-weight: 700; line-height: 1.25; }
+    .panel p { font-size: 0.84rem; color: var(--muted); line-height: 1.5; }
     .panel-arrow {
-      margin-top: auto;
-      padding-top: 12px;
-      font-size: 0.82rem;
-      color: var(--accent);
-      font-weight: 600;
+      margin-top: auto; padding-top: 10px;
+      font-size: 0.8rem; color: var(--accent); font-weight: 600;
     }
-    .panel.patreon .panel-arrow { color: var(--accent); }
     .panel.patreon { border-color: var(--accent-dim); }
     .panel.patreon:hover { border-color: var(--accent); }
 
-    /* Feature strip */
+    /* ── Feature strip ── */
     .features {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-      margin: 8px 0 48px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px;
+      margin: 8px 0 44px;
     }
     .feature {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 11px;
       padding: 16px 18px;
       box-shadow: var(--shadow);
       transition: box-shadow 0.2s, transform 0.15s;
     }
-    .feature:hover {
-      box-shadow: var(--shadow-hover);
-      transform: translateY(-1px);
-    }
-    .feature .icon { font-size: 20px; margin-bottom: 6px; }
-    .feature h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
-    .feature p { font-size: 0.78rem; color: var(--muted); }
+    .feature:hover { box-shadow: var(--shadow-hover); transform: translateY(-1px); }
+    .feature .icon { font-size: 18px; margin-bottom: 7px; }
+    .feature h3 { font-size: 0.88rem; font-weight: 600; margin-bottom: 3px; }
+    .feature p { font-size: 0.76rem; color: var(--muted); line-height: 1.45; }
 
-    /* Status bar */
-    .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.78rem;
-      color: var(--muted);
-      padding: 10px 0;
-      border-top: 1px solid var(--border);
-      margin-top: 48px;
-    }
-    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
-    .dot.online { background: var(--green); }
-
-    /* V1 benchmark table */
+    /* ── Benchmark table ── */
     .benchmark {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: var(--radius);
       overflow: hidden;
-      margin-bottom: 48px;
+      margin-bottom: 44px;
       box-shadow: var(--shadow);
     }
     .benchmark-header {
-      padding: 18px 22px 14px;
+      padding: 16px 22px 13px;
       border-bottom: 1px solid var(--border);
     }
-    .benchmark-header h2 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
-    .benchmark-header p { font-size: 0.82rem; color: var(--muted); }
+    .benchmark-header h2 { font-size: 0.97rem; font-weight: 700; margin-bottom: 3px; }
+    .benchmark-header p { font-size: 0.8rem; color: var(--muted); }
     .benchmark table { width: 100%; border-collapse: collapse; }
     .benchmark th, .benchmark td { padding: 11px 22px; text-align: left; font-size: 0.82rem; border-bottom: 1px solid var(--border); }
-    .benchmark th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .benchmark th { color: var(--muted); font-weight: 600; font-size: 0.69rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .benchmark tr:last-child td { border-bottom: none; }
     .pill {
-      display: inline-block;
-      padding: 2px 10px;
-      border-radius: 20px;
-      font-size: 0.72rem;
-      font-weight: 600;
+      display: inline-block; padding: 2px 10px;
+      border-radius: 20px; font-size: 0.7rem; font-weight: 600;
     }
     .pill.live { background: rgba(16,185,129,0.12); color: var(--green); }
     .pill.held { background: var(--surface2); color: var(--muted); }
     .pill.optional { background: var(--accent-dim); color: var(--accent); }
 
-    /* Theme toggle */
-    .theme-toggle {
-      position: fixed;
-      top: 16px;
-      right: 16px;
-      z-index: 100;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--muted);
-      font-size: 18px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      box-shadow: var(--shadow);
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.76rem; color: var(--muted);
+      padding: 12px 0; border-top: 1px solid var(--border); margin-top: 40px;
     }
-    .theme-toggle:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-      transform: scale(1.05);
-    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .dot.online { background: var(--green); }
 
-    /* Mandala Convergence Icon */
+    /* ── Mandala icon ── */
     .mandala-icon {
       --mandala-svg: url('/mandala-network.svg');
-      display: inline-block;
-      width: 1em;
-      height: 1em;
-      background: var(--mandala-svg);
-      background-size: contain;
-      background-repeat: no-repeat;
-      background-position: center;
-      vertical-align: -0.125em;
-      font-size: inherit;
-      color: inherit;
+      display: inline-block; width: 1em; height: 1em;
+      background: var(--mandala-svg); background-size: contain;
+      background-repeat: no-repeat; background-position: center;
+      vertical-align: -0.125em; font-size: inherit; color: inherit;
       filter: drop-shadow(0 0 2px currentColor);
     }
-    /* Health colors */
     .mandala-icon.healthy { color: var(--green); }
     .mandala-icon.warning { color: var(--gold); }
     .mandala-icon.critical { color: var(--accent); }
-    /* Speed indicates lag: slow=lag, fast=healthy */
-    .mandala-icon.spin-slow {
-      animation: mandala-spin 5s linear infinite;
+    .mandala-icon.spin-slow { animation: mandala-spin 5s linear infinite; }
+    .mandala-icon.spin-normal { animation: mandala-spin 2.5s linear infinite; }
+    .mandala-icon.spin-fast { animation: mandala-spin 1s linear infinite; }
+    .mandala-icon.wobble { animation: mandala-wobble 2s ease-in-out infinite; }
+    @keyframes mandala-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes mandala-wobble { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    [data-theme="dark"] .mandala-icon { filter: drop-shadow(0 0 4px currentColor) brightness(1.3); }
+
+    /* ── Footer ── */
+    .site-footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 20px;
+      margin-top: 48px;
     }
-    .mandala-icon.spin-normal {
-      animation: mandala-spin 2.5s linear infinite;
+    .footer-inner {
+      max-width: 880px; margin: 0 auto;
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      font-size: 0.78rem; color: var(--muted);
     }
-    .mandala-icon.spin-fast {
-      animation: mandala-spin 1s linear infinite;
-    }
-    .mandala-icon.wobble {
-      animation: mandala-wobble 2s ease-in-out infinite;
-    }
-    @keyframes mandala-spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    @keyframes mandala-wobble {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-    /* Dark mode: higher contrast */
-    [data-theme="dark"] .mandala-icon {
-      filter: drop-shadow(0 0 4px currentColor) brightness(1.3);
-    }
+    .footer-inner a { color: var(--muted); text-decoration: none; transition: color 0.15s; }
+    .footer-inner a:hover { color: var(--accent); }
+    .footer-inner .sep { opacity: 0.3; }
+    .footer-inner .ml { margin-left: auto; }
+    @media (max-width: 480px) { .footer-inner .ml { margin-left: 0; } }
   </style>
 </head>
 <body>
-<button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()"><span class="mandala-icon spin-slow"></span></button>
+
+<!-- ── Site nav ── -->
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/dream-chat.html">Dream Journal</a>
+    <a href="/three-doors-game.html">Three Doors</a>
+    <a href="/flourishing">World Status</a>
+    <a href="/knowledgecenter.html">Help</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()">☀</button>
+    <a class="nav-cta" href="/dream-chat.html">Open Journal</a>
+  </div>
+</nav>
+
 <div class="page">
 
+  <!-- ── Hero ── -->
   <div class="hero">
-    <span class="hero-icon"><span class="mandala-icon spin-slow"></span></span>
-    <h1>Lantern <span>OS</span></h1>
-    <p class="tagline" id="hero-tagline">Your dreams, your data, your rules. A private journal designed to run on your computer. Built for privacy-first operation.</p>
-    <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">checking version…</span> · <span id="hero-git">checking git…</span></p>
+    <span class="hero-icon">🪔</span>
+    <h1>Your dreams.<br><span>Your data.</span> Your Lantern.</h1>
+    <p class="tagline" id="hero-tagline">A private dream journal that runs on your own computer. Write, reflect, and explore — no account, no ads, no cloud required.</p>
+    <div class="hero-cta-row">
+      <a class="btn-primary" href="/dream-chat.html">✦ Open Dream Journal</a>
+      <a class="btn-ghost" href="/three-doors-game.html">🚪 Play Three Doors</a>
+    </div>
+    <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">v—</span> · <span id="hero-git"></span></p>
   </div>
 
-  <div class="panels">
-    <a class="panel primary" href="/dream-chat.html">
-      <span class="panel-icon">💬</span>
-      <span class="panel-label">Launch Product</span>
-      <h2>Dream Journal Orion</h2>
-      <p id="panel-chat-desc">Write your dreams and reflect. Chat with AI. Record what matters. Free and private. Checking provider status…</p>
-      <span class="panel-arrow">Open Dream Journal →</span>
+  <!-- ── Primary panel ── -->
+  <p class="section-label" style="margin-top:0">Start here</p>
+  <div class="panels-primary">
+    <a class="panel-full" href="/dream-chat.html">
+      <span class="panel-full-icon">💬</span>
+      <div class="panel-full-body">
+        <div class="tag">Dream Journal</div>
+        <h2>Write & reflect on your dreams</h2>
+        <p id="panel-chat-desc">Record what you remember, talk to an AI companion, and build your private dream archive. Everything stays on your computer.</p>
+      </div>
+      <span class="panel-full-arrow">Open Journal →</span>
     </a>
+  </div>
 
-    <a class="panel" href="/three-doors-game.html" style="--doors-accent:#a78bfa">
+  <!-- ── Secondary panels ── -->
+  <p class="section-label">Explore</p>
+  <div class="panels" style="margin-bottom:40px">
+    <a class="panel" href="/three-doors-game.html">
       <span class="panel-icon">🚪</span>
       <span class="panel-label">Dream Game</span>
       <h2>Three Doors</h2>
-      <p>A branching dream-world exploration. Follow the fox through moss, bells, crowns, and convergence. No AI key needed — plays offline.</p>
-      <span class="panel-arrow" style="color:var(--doors-accent)">Enter the Moss Door →</span>
+      <p>A branching story game. Follow the fox through seven dreamscapes — no login, plays offline.</p>
+      <span class="panel-arrow" style="color:#a78bfa">Enter the Moss Door →</span>
+    </a>
+
+    <a class="panel" href="/flourishing">
+      <span class="panel-icon">🌍</span>
+      <span class="panel-label">World Monitor</span>
+      <h2>How's the World?</h2>
+      <p>Live dashboard tracking whether humanity and nature are flourishing. Real data, plain language.</p>
+      <span class="panel-arrow">Check world status →</span>
     </a>
 
     <a class="panel" href="/dream-journal/index.html">
       <span class="panel-icon">📓</span>
       <span class="panel-label">Members Only</span>
-      <h2>Full Journal Orion</h2>
-      <p id="panel-journal-desc">Deep archive, synthesis, and advanced analysis. For Patreon supporters and Synthesasia Guild members. Checking entries…</p>
-      <span class="panel-arrow">View if you have access →</span>
+      <h2>Full Journal</h2>
+      <p id="panel-journal-desc">Deep archive and advanced synthesis for Patreon supporters.</p>
+      <span class="panel-arrow">View archive →</span>
     </a>
 
     <a class="panel patreon" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener">
       <span class="panel-icon">✦</span>
-      <span class="panel-label">Synthesasia Guild</span>
-      <h2>Join the Community</h2>
-      <p id="panel-patreon-desc">Support Lantern on Patreon or join the Discord. Get Full Journal Orion access and community benefits.</p>
+      <span class="panel-label">Community</span>
+      <h2>Join the Guild</h2>
+      <p id="panel-patreon-desc">Support on Patreon, get full journal access, join the Synthesasia Discord.</p>
       <span class="panel-arrow">Become a member →</span>
-    </a>
-
-    <a class="panel" href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener">
-      <span class="panel-icon">⚙️</span>
-      <span class="panel-label">Code</span>
-      <h2>See the Code</h2>
-      <p id="panel-github-desc">It's all open source. Run it yourself. No account needed. Complete privacy.</p>
-      <span class="panel-arrow">View on GitHub →</span>
-    </a>
-
-    <a class="panel" href="/knowledgecenter.html">
-      <span class="panel-icon">📚</span>
-      <span class="panel-label">Learn</span>
-      <h2>Help & Guides</h2>
-      <p>How to use Lantern, what's new, troubleshooting, and more.</p>
-      <span class="panel-arrow">Open guides →</span>
-    </a>
-
-    <a class="panel" href="/flourishing">
-      <span class="panel-icon">🌍</span>
-      <span class="panel-label">Monitor</span>
-      <h2>How's the World?</h2>
-      <p>Live dashboard showing if humanity and nature are flourishing. Real data, real insights.</p>
-      <span class="panel-arrow">Check world status →</span>
     </a>
 
     <a class="panel" href="/settings/providers.html" id="provider-panel">
       <span class="panel-icon">⚡</span>
-      <span class="panel-label">Configuration</span>
-      <h2>Provider Settings</h2>
-      <p id="provider-panel-desc">View AI provider status, configure keys, and manage orchestrator health. Checking…</p>
-      <span class="panel-arrow">Configure providers →</span>
+      <span class="panel-label">Settings</span>
+      <h2>AI Providers</h2>
+      <p id="provider-panel-desc">Configure Gemini, Claude, or OpenAI keys. All optional — works without any key.</p>
+      <span class="panel-arrow">Configure →</span>
+    </a>
+
+    <a class="panel" href="/knowledgecenter.html">
+      <span class="panel-icon">📚</span>
+      <span class="panel-label">Help</span>
+      <h2>Guides & Help</h2>
+      <p>How to get started, what's new, and answers to common questions.</p>
+      <span class="panel-arrow">Open guides →</span>
     </a>
   </div>
 
+  <!-- ── Feature strip ── -->
+  <p class="section-label">What you get</p>
   <div class="features" id="live-features">
-    <div class="feature"><div class="icon">✍️</div><h3>Write</h3><p id="stat-capture">Record dreams, reflections, ideas. All stored locally on your computer.</p></div>
-    <div class="feature"><div class="icon">🧠</div><h3 id="stat-agents-label">AI Chat</h3><p id="stat-agents">Talk to an AI that understands your dreams. Checking…</p></div>
-    <div class="feature"><div class="icon">🔍</div><h3>Search</h3><p id="stat-readiness">Find patterns in your dreams over time. Checking…</p></div>
-    <div class="feature"><div class="icon">💾</div><h3>Download</h3><p>Export all your data anytime. You own it completely.</p></div>
-    <div class="feature"><div class="icon">🔑</div><h3>Private</h3><p id="stat-providers">No tracking, no ads, no data sales. Checking…</p></div>
-    <div class="feature"><div class="icon">✅</div><h3>Online</h3><p id="stat-server">Server running on your computer. Ready to go. Checking…</p></div>
+    <div class="feature"><div class="icon">✍️</div><h3>Write freely</h3><p id="stat-capture">Dreams, reflections, symbols — stored as plain files on your computer.</p></div>
+    <div class="feature"><div class="icon">🧠</div><h3 id="stat-agents-label">AI companion</h3><p id="stat-agents">Chat with an AI that knows your journal. Works with Gemini, Claude, or OpenAI.</p></div>
+    <div class="feature"><div class="icon">🔍</div><h3>Find patterns</h3><p id="stat-readiness">Search and surface recurring symbols, themes, and emotions over time.</p></div>
+    <div class="feature"><div class="icon">💾</div><h3>Always yours</h3><p>Export everything anytime. No lock-in, no subscription, no cloud required.</p></div>
+    <div class="feature"><div class="icon">🔒</div><h3>Fully private</h3><p id="stat-providers">No tracking, no ads, no data sold. Runs entirely on your machine.</p></div>
+    <div class="feature"><div class="icon">🟢</div><h3>Always ready</h3><p id="stat-server">Server running locally. No internet needed to write or read your journal.</p></div>
   </div>
 
+  <!-- ── Status table ── -->
   <div class="benchmark">
     <div class="benchmark-header">
-      <h2>What's Working Right Now</h2>
-      <p id="benchmark-subtitle">Features available on your copy of Lantern.</p>
+      <h2>What's available right now</h2>
+      <p id="benchmark-subtitle">Live status from your Lantern instance.</p>
     </div>
     <table>
       <thead><tr><th>Feature</th><th>Status</th><th>What It Does</th></tr></thead>
@@ -404,10 +500,24 @@
   <div class="status-bar">
     <div class="dot online" id="status-dot"></div>
     <span id="status-label">connecting…</span>
-    <span style="margin-left:auto;opacity:0.5" id="status-right">Lantern OS · checking…</span>
+    <span style="margin-left:auto;opacity:0.5" id="status-right">Lantern OS</span>
   </div>
 
 </div>
+
+<!-- ── Site footer ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span>🪔 Lantern OS</span>
+    <span class="sep">·</span>
+    <a href="/dream-chat.html">Journal</a>
+    <a href="/three-doors-game.html">Three Doors</a>
+    <a href="/flourishing">World Status</a>
+    <a href="/knowledgecenter.html">Help</a>
+    <a href="/changelog.html">Changelog</a>
+    <span class="sep ml">Open source · runs locally · no account needed</span>
+  </div>
+</footer>
 <script>
   /* Theme toggle */
   (function() {
