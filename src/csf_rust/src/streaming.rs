@@ -263,43 +263,70 @@ impl SegmentReader {
         }
     }
 
-    /// Validate footer and archive integrity.
+    /// Validate footer and archive integrity using default security policy.
     pub fn validate<P: AsRef<Path>>(path: P) -> Result<()> {
+        Self::validate_with_policy(path, &SecurityPolicy::default())
+    }
+
+    /// Validate footer and archive integrity, enforcing `policy` limits.
+    ///
+    /// Checks (in order):
+    /// 1. Header magic, version, checksum (from `ArchiveHeader::read`).
+    /// 2. Policy: segment count cap.
+    /// 3. Policy: total uncompressed size cap.
+    /// 4. File length: must fit header + footer.
+    /// 5. Footer magic + xxHash32 body checksum.
+    /// 6. Per-segment: compressed and uncompressed sizes within policy.
+    /// 7. Per-segment: offset + compressed_len does not extend past footer.
+    pub fn validate_with_policy<P: AsRef<Path>>(path: P, policy: &SecurityPolicy) -> Result<()> {
         let mut file = File::open(path)?;
         let header = ArchiveHeader::read(&mut file)?;
 
-        // Seek to footer
+        // Policy: segment count and archive size — checked before any allocation
+        policy.check_segment_count(header.segment_count as usize)?;
+        policy.check_uncompressed_size(header.uncompressed_size)?;
+
         let file_len = file.metadata()?.len();
         if file_len < (HEADER_SIZE + FOOTER_SIZE) as u64 {
             return Err(CsfError::Security("file too short for valid archive"));
         }
         let footer_offset = file_len - FOOTER_SIZE as u64;
+
+        // Footer: magic + body checksum
         file.seek(SeekFrom::Start(footer_offset))?;
         let footer = Footer::read(&mut file)?;
-
-        // Recompute checksum over body
         let body_len = footer_offset - HEADER_SIZE as u64;
         file.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
         let mut body = vec![0u8; body_len as usize];
         file.read_exact(&mut body)?;
         let expected = footer_checksum(&body);
         if expected != footer.checksum {
-            return Err(CsfError::Checksum { expected: expected as u64, got: footer.checksum as u64 });
+            return Err(CsfError::Checksum {
+                expected: expected as u64,
+                got: footer.checksum as u64,
+            });
         }
 
-        // Validate segment table offsets are within file bounds
+        // Segment table: per-entry policy + bounds
         file.seek(SeekFrom::Start(HEADER_SIZE as u64))?;
         for _ in 0..header.segment_count {
-            let mut offset = [0u8; 8];
-            let mut comp = [0u8; 8];
-            let mut uncomp = [0u8; 8];
-            let mut flags = [0u8; 4];
-            file.read_exact(&mut offset)?;
-            file.read_exact(&mut comp)?;
-            file.read_exact(&mut uncomp)?;
-            file.read_exact(&mut flags)?;
-            let seg_offset = u64::from_be_bytes(offset);
-            let seg_comp = u64::from_be_bytes(comp);
+            let mut offset_b = [0u8; 8];
+            let mut comp_b = [0u8; 8];
+            let mut uncomp_b = [0u8; 8];
+            let mut flags_b = [0u8; 4];
+            file.read_exact(&mut offset_b)?;
+            file.read_exact(&mut comp_b)?;
+            file.read_exact(&mut uncomp_b)?;
+            file.read_exact(&mut flags_b)?;
+            let seg_offset = u64::from_be_bytes(offset_b);
+            let seg_comp = u64::from_be_bytes(comp_b);
+            let seg_uncomp = u64::from_be_bytes(uncomp_b);
+
+            // Policy: per-segment size limits prevent allocation-bomb
+            policy.check_segment(seg_comp as usize)?;
+            policy.check_segment(seg_uncomp as usize)?;
+
+            // Bounds: segment must not extend past footer
             if seg_offset.saturating_add(seg_comp) > footer_offset {
                 return Err(CsfError::Security("segment extends past footer"));
             }
