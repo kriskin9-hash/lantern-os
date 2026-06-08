@@ -6,22 +6,25 @@ const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
+const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
+const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
 const maxConversationTextLength = 4000;
 
 // Fallback doors when AI omits the marker or provider fails
-const FALLBACK_DOORS = ["Open the door I just described", "Take me through a different door", "Help me understand what I saw"];
+const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
 // Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
 function extractDoors(text) {
-  const match = text.match(/\[DOORS:\s*([^\]]+)\]/i);
+  // Match complete [DOORS: A | B | C] or incomplete [DOORS: A | B | C (no closing bracket)
+  const match = text.match(/\[DOORS:\s*([^\]]+)\]?/i);
   if (!match) return { cleanText: text.trim(), doors: [] };
   const doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
-  const cleanText = text.replace(/\[DOORS:[^\]]+\]/i, "").replace(/\n{3,}/g, "\n\n").trim();
+  const cleanText = text.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trim();
   return { cleanText, doors };
 }
 
@@ -29,10 +32,14 @@ function doorsOrFallback(text, isKeystoneDebug = false) {
   if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
   const { cleanText, doors } = extractDoors(text);
   const finalDoors = doors.length === 3 ? doors : [...doors, ...FALLBACK_DOORS].slice(0, 3);
+  if (doors.length > 0) {
+    try { saveDoorChoice(null, finalDoors); } catch {}
+  }
   return { cleanText, suggestions: finalDoors };
 }
 
 async function handleStreamChat(req, url, res) {
+  console.log("[Stream] handleStreamChat entered");
   const { collectRequestBody } = require("./http-utils");
   const parsed = await parseStreamChatRequest(req, url, {
     normalizeDreamerUser,
@@ -202,9 +209,15 @@ async function handleStreamChat(req, url, res) {
   // Keystone debug prompt — raw dev access, no persona, no doors
   const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
+  // CSF long-term memory + door state (query-time relevance filtered)
+  const csfContext = formatCSFContextForPrompt(message);
+  const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
+
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them.${DOORS_INSTRUCTION}`;
+    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}`;
+
+  console.log(`[Stream] systemPrompt: ${systemPrompt.length} chars, csfBlock: ${csfBlock.length} chars, message: "${message.slice(0, 60)}"`);
 
   const sendToken = (token) => sse.sendToken(res, token);
   const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
@@ -248,7 +261,7 @@ async function handleStreamChat(req, url, res) {
       return `Ollama returned an error (${msg.replace("ollama_status_", "")}). Is your local model running?`;
     }
     if (msg.includes("ollama_connect_timeout") || msg.includes("ECONNREFUSED")) {
-      return "Ollama is not running locally. Start it with: ollama run llama3";
+      return "Ollama is not running locally. Start it with: ollama serve && ollama pull qwen2.5-coder";
     }
     if (msg.includes("timeout")) {
       return "The provider timed out. Your network or the service may be slow.";
@@ -298,7 +311,76 @@ async function handleStreamChat(req, url, res) {
 
   let fullReply = "";
 
-  // Provider 1: Gemini (streaming) — checked first for Auto mode
+  // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
+  // When no specific cloud provider is requested, try Ollama first for lower
+  // latency, zero cost, and offline resilience. Cloud providers are fallbacks.
+  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+  const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
+  console.log(`[Stream] Ollama gate: ollamaLocalFirst=${ollamaLocalFirst}, message=${!!message}, isKeystoneDebug=${isKeystoneDebug}, requestedProvider="${requestedProvider}"`);
+  if (ollamaLocalFirst && message && !isKeystoneDebug) {
+    console.log(`[Stream] Trying Ollama at ${ollamaBase} model=${ollamaModel}`);
+    try {
+      const payload = JSON.stringify({
+        model: ollamaModel,
+        stream: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...history.map(h => ({ role: h.role, content: h.text })),
+          { role: "user", content: message },
+        ],
+      });
+      const ollamaUrl = new URL(ollamaBase);
+      await new Promise((resolve, reject) => {
+        const req2 = http.request({
+          hostname: ollamaUrl.hostname,
+          port: ollamaUrl.port || 11434,
+          path: "/api/chat",
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
+          let buf = "";
+          upstream.on("data", (chunk) => {
+            buf += chunk.toString();
+            const lines = buf.split("\n");
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const parsed = JSON.parse(line);
+                if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
+              } catch {}
+            }
+          });
+          upstream.on("end", () => resolve());
+          upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(120000, () => { req2.destroy(); reject(new Error("ollama_timeout")); });
+        req2.write(payload);
+        req2.end();
+      });
+      if (fullReply) {
+        console.log(`[Stream] Ollama local-first OK (${fullReply.length} chars, model: ${ollamaModel})`);
+        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+        await appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-chat-stream",
+          role: "lantern",
+          text: cleanText.slice(0, maxConversationTextLength),
+        }).catch(() => {});
+        recordProviderSuccess("ollama");
+        sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+        return;
+      }
+    } catch (err) {
+      console.log(`[Stream] Ollama local-first failed: ${err.message} — falling through to cloud`);
+      fullReply = "";
+    }
+  }
+
+  // Provider 1: Gemini (streaming) — cloud fallback
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && message && (!requestedProvider || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
     // Gemini model fallback chain: primary -> fallbacks on 429/quota
@@ -366,6 +448,7 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      console.log(`[Stream] Gemini fullReply (${fullReply.length} chars): ${fullReply.slice(-200)}`);
       const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
@@ -377,6 +460,7 @@ async function handleStreamChat(req, url, res) {
       sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors });
       return;
     } catch (err) {
+      console.log(`[Stream] Gemini ${geminiModel} failed: ${err.message}`);
       recordProviderFailure("gemini", err.message);
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
@@ -461,6 +545,7 @@ async function handleStreamChat(req, url, res) {
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
+      console.log(`[Stream] Claude failed: ${err.message}`);
       recordProviderFailure("anthropic", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
@@ -536,6 +621,7 @@ async function handleStreamChat(req, url, res) {
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
+      console.log(`[Stream] OpenAI failed: ${err.message}`);
       recordProviderFailure("openai", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
@@ -598,10 +684,45 @@ async function handleStreamChat(req, url, res) {
     }
   }
 
-  // Provider 5: Ollama (streaming)
-  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+  // Provider 5: Ollama (streaming) — last-resort fallback (local-first already tried above)
   if (message && (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local")) {
+    // Attempt 1: Unified Agent Connector (health-checked, provider-ranked, Python-side SSE)
+    if (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local") {
+      try {
+        let sseDone = false;
+        let sseErr = null;
+        const sseStream = unifiedAgentStreamSSE(message, agent.id, requestedProvider || "ollama", dreamContext);
+        sseStream.onData((parsed) => {
+          if (parsed.token) { fullReply += parsed.token; sendToken(parsed.token); }
+          if (parsed.done) { sseDone = true; }
+        });
+        sseStream.onError((err) => { sseErr = err; sseDone = true; });
+        await new Promise((resolve) => {
+          const check = setInterval(() => {
+            if (sseDone) { clearInterval(check); resolve(); }
+          }, 50);
+        });
+        if (sseErr) throw sseErr;
+        if (fullReply) {
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          await appendConversationEntry({
+            recordedAt: new Date().toISOString(),
+            surface: "dream-chat-stream",
+            role: "lantern",
+            text: cleanText.slice(0, maxConversationTextLength),
+          }).catch(() => {});
+          recordProviderSuccess("ollama");
+          sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+          return;
+        }
+      } catch (err) {
+        recordProviderFailure("ollama", `unified_connector: ${err.message}`);
+        fullReply = "";
+        // Fall through to direct HTTP attempt
+      }
+    }
+
+    // Attempt 2: Direct HTTP to Ollama
     try {
       const payload = JSON.stringify({
         model: ollamaModel,

@@ -548,7 +548,7 @@ function renderFleet(queue = {}, status = {}) {
   const rows = items.slice(0, 6);
   if (!rows.length) {
     const row = document.createElement("tr");
-    row.innerHTML = '<td colspan="4" class="muted">No local queue exposed; Render keeps dispatch held.</td>';
+    row.innerHTML = '<td colspan="4" class="muted">No local queue exposed.</td>';
     body.appendChild(row);
   } else {
     rows.forEach((item, index) => {

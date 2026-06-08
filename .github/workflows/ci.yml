@@ -311,12 +311,53 @@ jobs:
           EOF
 
   # ============================================================================
+  # CONVERGENCE: Run full convergence loop, upload artifact, gate PRs
+  # ============================================================================
+  convergence-loop:
+    name: Convergence Loop + Promotion Gate
+    runs-on: ubuntu-latest
+    needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run convergence loop
+        run: python src/convergence_io_engine.py loop > convergence-report.json
+
+      - name: Upload convergence report
+        uses: actions/upload-artifact@v4
+        with:
+          name: convergence-report
+          path: convergence-report.json
+          retention-days: 30
+
+      - name: PR Promotion Gate
+        if: github.event_name == 'pull_request'
+        run: |
+          verdict=$(python3 -c "import json,sys; print(json.load(open('convergence-report.json')).get('promotion_ready','false'))")
+          score=$(python3 -c "import json,sys; print(json.load(open('convergence-report.json')).get('convergence_score',0))")
+          echo "promotion_ready=$verdict"
+          echo "convergence_score=$score"
+          echo "convergence-report=$verdict" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$verdict" != "True" ]; then
+            echo "::error::Convergence loop promotion_ready=$verdict — promotion blocked"
+            exit 1
+          fi
+          echo "Convergence gate passed (score=$score)"
+
+  # ============================================================================
   # SUMMARY: All checks passed
   # ============================================================================
   all-checks:
     name: All checks passed
     runs-on: ubuntu-latest
-    needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation, security-scan, csf-cache-validate]
+    needs: [validate-repo, test-python, test-node, convergence-check, integration-checks, convergence-loop-validation, convergence-loop, security-scan, csf-cache-validate]
     if: always()
     steps:
       - name: Check for failures
@@ -328,6 +369,7 @@ jobs:
           [ "${{ needs.convergence-check.result }}"          != "success" ] && FAILED="$FAILED convergence-check(${{ needs.convergence-check.result }})"
           [ "${{ needs.integration-checks.result }}"         != "success" ] && FAILED="$FAILED integration-checks(${{ needs.integration-checks.result }})"
           [ "${{ needs.convergence-loop-validation.result }}" != "success" ] && FAILED="$FAILED convergence-loop-validation(${{ needs.convergence-loop-validation.result }})"
+          [ "${{ needs.convergence-loop.result }}"           != "success" ] && FAILED="$FAILED convergence-loop(${{ needs.convergence-loop.result }})"
           [ "${{ needs.security-scan.result }}"              != "success" ] && FAILED="$FAILED security-scan(${{ needs.security-scan.result }})"
           [ "${{ needs.csf-cache-validate.result }}"         != "success" ] && FAILED="$FAILED csf-cache-validate(${{ needs.csf-cache-validate.result }})"
 

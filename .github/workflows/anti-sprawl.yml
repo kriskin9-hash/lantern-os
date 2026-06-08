@@ -38,10 +38,11 @@ jobs:
           fi
           echo "new_file_count=$NEW_FILE_COUNT" >> $GITHUB_OUTPUT
 
-          # New top-level directories (guard against empty NEW_FILES causing false-positive)
+          # New top-level directories — skip root-level files (no "/" in path)
+          # e.g. .clauderules, .gitignore, CLAUDE.md live at root and are not dirs
           NEW_TOP_LEVEL=""
           if [ -n "$NEW_FILES" ]; then
-            NEW_TOP_LEVEL=$(echo "$NEW_FILES" | cut -d/ -f1 | sort -u | { grep -vE "^(${ALLOWED_TOP_LEVEL//,/|})$" || true; })
+            NEW_TOP_LEVEL=$(echo "$NEW_FILES" | { grep '/' || true; } | cut -d/ -f1 | sort -u | { grep -vE "^(${ALLOWED_TOP_LEVEL//,/|})$" || true; })
           fi
           echo "new_top_level_dirs<<EOF" >> $GITHUB_OUTPUT
           echo "$NEW_TOP_LEVEL" >> $GITHUB_OUTPUT

@@ -7,6 +7,49 @@ release date. This project is currently private and local-first, so release
 notes should be honest about what was verified locally and what remains design
 intent.
 
+## [1.2.1] — 2026-06-07 — Start:master Auto-Sync, Moon Heartbeat, Markdown Renderer
+
+### Boot
+- `start:master` now fetches, merges, AND pushes local commits before starting the server
+- Full sync cycle: `git fetch` → `git merge --ff-only` (fallback: full merge) → `git push` → HFF seed → `node --watch`
+
+### UI
+- Moon heartbeat indicator with `moon-drift` animation (9s cycle, lag-aware speed)
+- `/repo/*.md` and `/repo/*.txt` render as styled HTML via Lantern Reader
+- Human Flourishing Frameworks dashboard live with 62 Bayesian beliefs, real-time 30s polling
+
+### Versioning
+- `version.json`, root `package.json`, and garage `package.json` all set to `1.2.1`
+
+## [1.2.0] — 2026-06-07 — Autostart, UX Grounding, HFF Integration, Slop Gates
+
+### Startup
+- `Start-Lantern.ps1 -RegisterAutostart` registers Windows Task Scheduler task that fires at boot and login
+- Full boot sequence: `git pull origin master` → HFF seed → `node --watch server.js`
+- Unlimited crash-restart with 1-minute backoff — no human intervention needed
+- Boot logs to `logs\lantern-autostart.log`
+
+### Dream Chat UX
+- Welcome message shifted from door/convergence language to grounded context ("What's on your mind?")
+- Default Ollama model changed from `llama3` to `qwen2.5-coder`
+- Fallback suggestions updated for gaming/rest/building context
+
+### HFF Dashboard
+- Removed Flask child-process proxy; `routes/flourishing.js` reads `data/snapshot.json` directly
+- `export_snapshot.py` seeds WorldModel from `seed_data.py` (62 beliefs, flourishing ~0.50)
+- HFF snapshot excluded from git (runtime-generated on boot)
+- `/flourishing` route ordering fixed (was intercepted by surfaces catch-all)
+
+### CI / Code Quality
+- `slop-check.yml`: 5 parallel CI jobs (secrets, debug statements, OWASP basics, diff size, duplicate detection)
+- `anti-sprawl.yml`: root-level files no longer flagged as new top-level directories
+- `.clauderules` anti-slop ruleset committed at repo root
+- Per-agent workstream hooks: each agent prefix gets one open PR lane; slop commit-msg gate
+
+### Versioning
+- `version.json`, root `package.json`, and garage `package.json` all set to `1.2.0`
+- Stale version strings removed from HTML titles; dynamic badge reads from `version.json`
+
 ## [1.1.0-rc.1] — 2026-06-06 — Parallax Dream Door + Deploy Fix
 
 ### Dream Chat
@@ -65,7 +108,7 @@ intent.
 - Dream Journal V1.0.0 — local-first, private, no account required
 - `node apps/lantern-garage/server.js` — single command startup on port 4177
 - Modular route architecture: 7 domain modules under `apps/lantern-garage/routes/`
-- `cloud-server.js` unified with server.js — Railway/Render deploy via PORT env
+- `cloud-server.js` unified with server.js — Railway deploy via PORT env
 
 ### Dream Chat
 - Multi-provider streaming: Gemini 2.5-flash (primary), Claude haiku-4-5, OpenAI, Grok, Ollama

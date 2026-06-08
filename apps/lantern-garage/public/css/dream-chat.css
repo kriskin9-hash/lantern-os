@@ -810,3 +810,27 @@
   max-width: 380px;
   color: var(--muted);
 }
+
+/* ── Moon heartbeat ─────────────────────────────────────────────────────── */
+@keyframes moon-drift {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.moon-heartbeat {
+  display: inline-block;
+  animation: moon-drift 9s linear infinite;
+  will-change: transform;
+}
+
+/* lag: server responded slowly — moon quickens a little */
+.moon-heartbeat.lag {
+  animation-duration: 3.5s;
+  filter: drop-shadow(0 0 10px rgba(244,199,107,0.5));
+}
+
+/* critical: server unreachable or very slow — moon flutters visibly */
+.moon-heartbeat.critical {
+  animation-duration: 1.4s;
+  filter: drop-shadow(0 0 14px rgba(255,100,50,0.55));
+}

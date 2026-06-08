@@ -1,13 +1,15 @@
 {
   "name": "lantern-os",
-  "version": "1.2.0002",
+  "version": "1.2.1",
   "private": true,
   "description": "Lantern OS — Dream Journal",
   "scripts": {
     "setup": "node scripts/ensure-rust.js && node scripts/build-csf-rust.js",
     "postinstall": "npm run setup",
     "start": "node apps/lantern-garage/server.js",
-    "dev": "node apps/lantern-garage/server.js"
+    "dev": "node apps/lantern-garage/server.js",
+    "convergance": "bash scripts/git-convergance-loop.sh foreground",
+    "setup:convergance": "bash scripts/setup-git-convergance-loop.sh"
   },
   "engines": {
     "node": ">=20"

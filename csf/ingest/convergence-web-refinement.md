@@ -123,19 +123,76 @@ jobs:
 
 ## Validation
 
-- [ ] `python src/convergence_io_engine.py loop` produces artifact in CI
-- [ ] PR with `promotion_ready=false` is blocked by CI gate
-- [ ] `manifests/objective-current.json` changes Phase 4 output
-- [ ] Drift between two runs is detectable and reported
-- [ ] `git tag -l "convergence-good-*"` shows rollback targets
+- [x] `python src/convergence_io_engine.py loop` produces artifact in CI — implemented in `.github/workflows/ci.yml` (job `convergence-loop`)
+- [ ] PR with `promotion_ready=false` is blocked by CI gate — gate logic added; needs live PR test
+- [ ] `manifests/objective-current.json` changes Phase 4 output — Phase B
+- [ ] Drift between two runs is detectable and reported — Phase B
+- [ ] `git tag -l "convergence-good-*"` shows rollback targets — Phase C
 
 ---
 
-## References (pending web search)
+## Validated Research Findings
 
-- GitOps promotion gates (GitLab / GitHub Actions patterns)
-- Evidence-based deployment (Honeycomb / Datadog SRE practices)
-- Monorepo CI convergence (Nx / Bazel / Rush build graph patterns)
-- DORA metrics — deployment frequency, lead time, change failure rate
+### 1. GitOps Promotion Gates (Kargo / Argo CD model)
+**Source:** Akuity — "Kargo: The Missing GitOps Promotion Layer" (2026-03-18)
 
-**Next action:** Run web search on "GitOps promotion gates evidence based deployment" and update References section.
+Key insight: **CI tools are built for synchronous, short-lived tasks; continuous deployment is asynchronous, multi-environment, and approval-gated.** Classic pipelines are linear, stateless, and do not reconcile — they cannot reliably answer "what is actually deployed, and where?"
+
+Kargo solves this with:
+- **Freight model:** Each promotion moves a bundle (container image + Git commit + config values) through defined stages
+- **Stage-gated verification:** Each stage pulls metrics from monitoring to confirm deployment health before promotion continues
+- **Git-backed audit trail:** Rendered manifests go back into Git, making every environment state auditable and reviewable
+- **Set-and-forget promotions:** Developers merge; the pipeline handles the rest with fewer manual handoffs
+
+**Lantern OS applicability:** The convergence loop's `promotion_ready` flag is conceptually identical to Kargo's stage verification. We should treat convergence receipts as "freight verification artifacts" and surface them to CI.
+
+---
+
+### 2. Monorepo CI Convergence Patterns
+**Source:** monorepo.tools (Nx / Turborepo / Bazel canonical reference)
+
+Key capabilities for monorepo CI optimization:
+- **Affected Detection:** Only run tasks for projects changed by a commit — skip everything else
+- **Remote Caching:** Share computation results across the organization; if a teammate already built it, you get the result instantly
+- **Distributed Task Execution:** Distribute work across multiple machines while preserving local developer experience
+- **Task Splitting:** Break large tasks into fine-grained cacheable units; each slice can be cached independently
+- **Deflaking:** Automatically detect flaky tests, quarantine them, and re-run only what failed
+
+**Lantern OS applicability:** The repo is small enough that full Bazel/Nx is overkill, but **affected detection** is directly relevant. The convergence loop should skip phases that don't apply to the files changed in a PR. For example, a docs-only change doesn't need the full 12-phase convergence.
+
+---
+
+### 3. DORA / Four Keys Metrics
+**Source:** Google Cloud — "Use Four Keys metrics like change failure rate to measure your DevOps performance"
+
+The four metrics:
+1. **Deployment Frequency** — how often an organization successfully releases to production
+   - Bucketing: "daily" = median ≥3 days per week with at least one deployment
+   - Must define what counts as a "successful deployment" (full traffic vs. partial rollout)
+2. **Lead Time for Changes** — time from commit to production
+   - Requires SHA mapping from deployment table back to commits table
+   - Median lead time is the standard calculation
+3. **Change Failure Rate** — % of deployments causing failure in production
+   - Links deployment table to incidents (bugs, GitHub issues, incident management system)
+   - Requires deployment ID in incident records for JOIN
+4. **Time to Restore Services** — recovery time from production failure
+   - Needs incident creation time + resolution time + deployment that resolved it
+
+**Lantern OS applicability:** The convergence loop's `promotion_ready` gate is a proxy for Change Failure Rate. We should track:
+- How many PRs passed convergence vs. failed
+- Median time from PR open to merge (Lead Time)
+- How often `master` is promoted (Deployment Frequency)
+- Time from convergence failure to fix (Time to Restore)
+
+These can be extracted from `data/agent-fleet/tesseract-convergence.jsonl` logs.
+
+---
+
+## References
+
+1. Akuity. *Kargo: The Missing GitOps Promotion Layer.* Mar 2026. https://akuity.io/blog/kargo-gitops-promotion-layer
+2. Nx Team. *Monorepo Explained.* https://monorepo.tools/
+3. Google Cloud. *Use Four Keys metrics like change failure rate to measure your DevOps performance.* https://cloud.google.com/blog/products/devops-sre/using-the-four-keys-to-measure-your-devops-performance
+4. Forsgren, Humble, Kim. *Accelerate: The Science of Lean Software and DevOps.* 2018.
+
+**Next action:** Implement Phase B — Objective manifest parser + drift detection (`src/convergence_io_engine.py`).

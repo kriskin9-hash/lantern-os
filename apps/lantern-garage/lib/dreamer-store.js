@@ -49,19 +49,32 @@ function readDreamerNotebook(user) {
   }).filter(Boolean);
 }
 
+// Simple memo cache with TTL for recent dreams (avoids disk I/O on every chat)
+let recentDreamsCache = { entries: [], ts: 0, limit: 0 };
+const RECENT_DREAMS_TTL_MS = 3000;
+
 function readRecentDreams(limit = 5) {
+  const now = Date.now();
+  if (recentDreamsCache.limit >= limit && (now - recentDreamsCache.ts) < RECENT_DREAMS_TTL_MS) {
+    return recentDreamsCache.entries.slice(0, limit);
+  }
   const dreamDir = path.join(repoRoot, "data", "dream_journal");
   if (!fs.existsSync(dreamDir)) return [];
+  const files = fs.readdirSync(dreamDir).filter((f) => f.endsWith(".jsonl")).sort().reverse();
   const entries = [];
-  const files = fs.readdirSync(dreamDir).filter((f) => f.endsWith(".jsonl"));
+  // Read only the most recent file(s) until we have enough entries
   for (const file of files) {
+    if (entries.length >= limit) break;
     const content = fs.readFileSync(path.join(dreamDir, file), "utf-8").trim();
     if (!content) continue;
-    for (const line of content.split("\n")) {
+    const lines = content.split("\n").reverse(); // newest last in JSONL, so reverse
+    for (const line of lines) {
       try { entries.push(JSON.parse(line)); } catch { /* skip */ }
+      if (entries.length >= limit) break;
     }
   }
-  entries.sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
+  // Already in reverse-chronological order due to file+line order
+  recentDreamsCache = { entries, ts: now, limit };
   return entries.slice(0, limit);
 }
 

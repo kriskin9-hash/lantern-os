@@ -519,7 +519,7 @@ def get_connector() -> UnifiedAgentConnector:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--action", choices=["stream", "health", "inspect", "greet"], default="health")
+    parser.add_argument("--action", choices=["stream", "stream-sse", "health", "inspect", "greet"], default="health")
     parser.add_argument("--message", default="")
     parser.add_argument("--persona", default=None)
     parser.add_argument("--provider", default=None)
@@ -567,3 +567,21 @@ if __name__ == "__main__":
         except Exception as e:
             meta = {"error": str(e)}
         print(json.dumps({"text": "".join(out), "meta": meta}, indent=2))
+    elif args.action == "stream-sse":
+        try:
+            gen = c.stream(args.message, persona_id=args.persona, provider=args.provider, context=args.context, temperature=args.temperature, max_tokens=args.max_tokens)
+            meta = {}
+            while True:
+                try:
+                    token = next(gen)
+                    if isinstance(token, str):
+                        print(json.dumps({"token": token}, ensure_ascii=False), flush=True)
+                    else:
+                        meta = dict(token) if hasattr(token, "items") else {}
+                except StopIteration as exc:
+                    if exc.value and isinstance(exc.value, dict):
+                        meta = exc.value
+                    break
+            print(json.dumps({"done": True, "meta": meta}, ensure_ascii=False), flush=True)
+        except Exception as e:
+            print(json.dumps({"done": True, "error": str(e)}, ensure_ascii=False), flush=True)

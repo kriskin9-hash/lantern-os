@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dream Journal · Orion · v1.0.0</title>
+  <title>Dream Journal · Orion — Lantern OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -145,15 +145,32 @@
     .input-meta .hint { font-size: 0.7rem; color: var(--muted); }
     .input-meta .kind-select { font-size: 0.78rem; padding: 3px 22px 3px 7px; }
     .input-meta .agent-select { font-size: 0.78rem; padding: 3px 22px 3px 7px; }
+
+    @keyframes moon-drift {
+      0%   { transform: rotate(-3deg) translateY(0px); }
+      25%  { transform: rotate(0deg)  translateY(-3px); }
+      50%  { transform: rotate(3deg)  translateY(0px); }
+      75%  { transform: rotate(0deg)  translateY(-2px); }
+      100% { transform: rotate(-3deg) translateY(0px); }
+    }
+    .moon-heartbeat {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      animation: moon-drift 9s ease-in-out infinite;
+      will-change: transform;
+    }
+    .moon-heartbeat.lag      { animation-duration: 3.5s; filter: drop-shadow(0 0 10px rgba(244,199,107,0.5)); }
+    .moon-heartbeat.critical { animation-duration: 1.4s; filter: drop-shadow(0 0 14px rgba(255,100,50,0.55)); }
   </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="logo">🌙</div>
+    <div class="logo moon-heartbeat">🌙</div>
     <div class="title-block">
       <h1>Dream Journal</h1>
-      <p>Orion · <span data-version-badge="Orion · ">v1.0.0</span> · local</p>
+      <p>Orion · <span data-version-badge="Orion · ">v1.2.0</span> · local</p>
     </div>
     <div class="header-right">
       <span class="kind-label">Model</span>
@@ -622,6 +639,32 @@
       });
     })
     .catch(() => {});
+})();
+</script>
+<script>
+(function() {
+  var LAG = 600, CRITICAL = 1500, INTERVAL = 4000;
+  function beat() {
+    var moons = document.querySelectorAll('.moon-heartbeat');
+    if (!moons.length) return;
+    var t = Date.now();
+    fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+      .then(function(r) {
+        var ms = Date.now() - t;
+        moons.forEach(function(m) {
+          m.classList.remove('lag', 'critical');
+          if (ms > CRITICAL) m.classList.add('critical');
+          else if (ms > LAG)  m.classList.add('lag');
+        });
+      })
+      .catch(function() {
+        document.querySelectorAll('.moon-heartbeat').forEach(function(m) {
+          m.classList.remove('lag'); m.classList.add('critical');
+        });
+      });
+  }
+  setInterval(beat, INTERVAL);
+  beat();
 })();
 </script>
 </body>

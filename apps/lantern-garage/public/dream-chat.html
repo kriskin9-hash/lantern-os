@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
-  <title>Dream Journal v1.0.1 — Lantern OS</title>
+  <title>Dream Journal — Lantern OS</title>
   <link rel="stylesheet" href="css/dream-chat.css">
 </head>
 <body>
@@ -307,9 +307,9 @@
 
   <div class="messages" id="messages">
     <div class="empty-state" id="empty-state">
-      <div class="moon-door" aria-hidden="true">🌙</div>
-      <h2>The <span>dream</span> door is open.</h2>
-      <p>Step through with a dream, a memory, a thought, or a question.</p>
+      <div class="moon-door moon-heartbeat" aria-hidden="true">🌙</div>
+      <h2>What's on your mind?</h2>
+      <p>Share a dream, a game session, something you're building, or just how you're doing.</p>
     </div>
   </div>
 
@@ -318,7 +318,7 @@
       <input
         type="text"
         id="input"
-        placeholder="Tell me a dream…"
+        placeholder="What's on your mind?"
         autocomplete="off"
         spellcheck="true"
       />
@@ -354,7 +354,6 @@
 <script src="js/dream-chat.js"></script>
 <script src="js/convergance-sync.js"></script>
 <script src="js/update-checker.js"></script>
-<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
 <p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS ">Lantern OS</span> · private · local</p>
 <!-- Version badge auto-loader -->
 <script>
@@ -398,6 +397,33 @@
     localStorage.setItem('lantern-theme', next);
     if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
   }
+</script>
+<script>
+/* Moon heartbeat — pings /api/health and adjusts animation speed by latency */
+(function() {
+  var LAG = 600, CRITICAL = 1500, INTERVAL = 4000;
+  function beat() {
+    var moons = document.querySelectorAll('.moon-heartbeat');
+    if (!moons.length) return;
+    var t = Date.now();
+    fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+      .then(function(r) {
+        var ms = Date.now() - t;
+        moons.forEach(function(m) {
+          m.classList.remove('lag', 'critical');
+          if (ms > CRITICAL) m.classList.add('critical');
+          else if (ms > LAG)  m.classList.add('lag');
+        });
+      })
+      .catch(function() {
+        document.querySelectorAll('.moon-heartbeat').forEach(function(m) {
+          m.classList.remove('lag'); m.classList.add('critical');
+        });
+      });
+  }
+  setInterval(beat, INTERVAL);
+  beat();
+})();
 </script>
 </body>
 </html>

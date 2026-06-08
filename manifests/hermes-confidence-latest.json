@@ -1,0 +1,122 @@
+{
+  "generated_at": "2026-06-07T05:40:40.426441+00:00",
+  "hermes_version": "0.1.0",
+  "gates": [
+    {
+      "id": "G1",
+      "name": "Core journal",
+      "owner": "CI",
+      "checks": [
+        "create",
+        "stats",
+        "search",
+        "read",
+        "export"
+      ]
+    },
+    {
+      "id": "G2",
+      "name": "Real UI browse",
+      "owner": "Dream Journal UI",
+      "checks": [
+        "recent_entries_render"
+      ]
+    },
+    {
+      "id": "G3",
+      "name": "Semantic memory",
+      "owner": "MemOS",
+      "checks": [
+        "memos_health",
+        "save_ingest"
+      ]
+    },
+    {
+      "id": "G4",
+      "name": "Chat context",
+      "owner": "MemOS",
+      "checks": [
+        "chat_semantic_context"
+      ]
+    },
+    {
+      "id": "G5",
+      "name": "Static/server truth",
+      "owner": "Hermes",
+      "checks": [
+        "deploy_label_accuracy"
+      ]
+    },
+    {
+      "id": "G6",
+      "name": "Deploy smoke",
+      "owner": "Hermes",
+      "checks": [
+        "static_url_probe",
+        "api_health_probe"
+      ]
+    },
+    {
+      "id": "G7",
+      "name": "Safety copy",
+      "owner": "Tests+Hermes",
+      "checks": [
+        "no_therapy_claims",
+        "no_cloud_sync_claims"
+      ]
+    },
+    {
+      "id": "G8",
+      "name": "Release confidence",
+      "owner": "Hermes",
+      "checks": [
+        "confidence_table_artifact"
+      ]
+    }
+  ],
+  "scores": {
+    "G1": 0.82,
+    "G2": 0.72,
+    "G3": 0.65,
+    "G4": 0.68,
+    "G5": 0.62,
+    "G6": 0.5,
+    "G7": 0.6,
+    "G8": 0.7
+  },
+  "evidence": {
+    "G1": {
+      "api_test": "273 lines",
+      "chat_test": "234 lines",
+      "py_test": "130 lines"
+    },
+    "G2": {
+      "index_html_lines": "517 lines",
+      "has_recent_entries": true
+    },
+    "G3": {
+      "memos_bridge": "212 lines",
+      "has_ingest": true,
+      "has_health": true
+    },
+    "G4": {
+      "has_chat_context": true
+    },
+    "G5": {
+      "deploy_workflow": "140 lines"
+    },
+    "G6": {
+      "api_health": null,
+      "api_health_detail": "<urlopen error [WinError 10061] No connection could be made because the target machine actively refused it>"
+    },
+    "G7": {
+      "has_safety_tests": false
+    },
+    "G8": {
+      "hermes_script": "hermes_release_check.py",
+      "manifest_dir": "C:\\Users\\alexp\\OneDrive\\Documents\\GitHub\\lantern-os\\manifests"
+    }
+  },
+  "overall_confidence": 0.661,
+  "overall_label": "caution"
+}

@@ -197,7 +197,9 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     .map((d, i) => `Recent entry ${i + 1}: ${String(d.text || "").slice(0, 120)}${d.tags ? ` [tags: ${d.tags.join(", ")}]` : ""}`)
     .join("\n");
 
-  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-3 sentences). Never diagnose or command.`;
+  const noRecords = !recentContext;
+  const honesty = noRecords ? "IMPORTANT: There are no saved dream entries yet. If the dreamer asks about previous dreams, say honestly that you don't have any records yet — never fabricate or guess dream content.\n" : "";
+  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-3 sentences). Never diagnose or command.`;
 
   const rp = String(requestedProvider || "").toLowerCase().trim();
 

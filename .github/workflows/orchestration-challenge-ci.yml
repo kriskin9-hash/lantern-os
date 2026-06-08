@@ -48,7 +48,7 @@ jobs:
           docs = Path('docs/MCP-CONNECTOR.md').read_text(encoding='utf-8')
           script = Path('scripts/Test-LanternMcpConnector.ps1').read_text(encoding='utf-8')
           required_docs = [
-              'Use `http://127.0.0.1:8787`.',
+              'Use `http://127.0.0.1:8771`',
               'List tools, inspect descriptors, verify parameters, then invoke the minimum safe tool.',
               'remote tunnels as untrusted',
           ]

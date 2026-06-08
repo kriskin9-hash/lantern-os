@@ -268,14 +268,6 @@
       <span class="panel-arrow">Open journal →</span>
     </a>
 
-    <a class="panel" href="https://human-flourishing-frameworks.onrender.com/" target="_blank" rel="noopener">
-      <span class="panel-icon">🌍</span>
-      <span class="panel-label">HFF</span>
-      <h2>HFF Dashboard</h2>
-      <p>Direct link to the Bayesian world-model dashboard for humans, animals, ecosystems, resources, sensors, and claim-safe status.</p>
-      <span class="panel-arrow">Open HFF Dashboard →</span>
-    </a>
-
     <a class="panel patreon" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener">
       <span class="panel-icon">✦</span>
       <span class="panel-label">Support</span>
@@ -309,11 +301,11 @@
     </a>
 
     <a class="panel" href="/flourishing">
-      <span class="panel-icon">🌿</span>
-      <span class="panel-label">Framework</span>
+      <span class="panel-icon">🌍</span>
+      <span class="panel-label">HFF</span>
       <h2>Human Flourishing</h2>
-      <p>Observe outcomes, model causes, and optimize for flourishing across all beings.</p>
-      <span class="panel-arrow">Open dashboard →</span>
+      <p>Bayesian world-model dashboard — beliefs, sensors, flourishing scores, and violations. No separate service required.</p>
+      <span class="panel-arrow">Open HFF Dashboard →</span>
     </a>
   </div>
 
@@ -338,12 +330,21 @@
         <tr><td>Lucid dreaming tools</td><td><span class="pill live">Live</span></td><td>Lucidity scale, technique logging, dream-sign flags.</td></tr>
         <tr><td>Symbol analytics</td><td><span class="pill live">Live</span></td><td>Top tags, emotions, and symbols from saved entries.</td></tr>
         <tr><td>Export</td><td><span class="pill live">Live</span></td><td>JSONL/CSV backup download.</td></tr>
-        <tr><td>HFF Dashboard</td><td><span class="pill optional">Linked</span></td><td>Direct product link to the HFF Bayesian world-model dashboard; not embedded or mirrored.</td></tr>
+        <tr><td>HFF Dashboard</td><td><span class="pill live">Live</span></td><td>Bayesian world-model at <code>/flourishing</code>. Direct Node.js integration — no separate service.</td></tr>
         <tr><td>AI reflection chat</td><td><span class="pill optional" id="pill-ai-chat">Optional</span></td><td id="note-ai-chat">Streams when a provider key is configured.</td></tr>
         <tr><td>Voice transcription</td><td><span class="pill held">Held</span></td><td>Web Speech API in browser. Not claimed for V1.</td></tr>
         <tr><td>Dream art generation</td><td><span class="pill held">Held</span></td><td>Not claimed for V1.</td></tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- Recent Journal Entries — real data from backend -->
+  <div class="benchmark" id="recent-entries-section" style="display:none;">
+    <div class="benchmark-header">
+      <h2>Recent journal entries</h2>
+      <p id="recent-subtitle">Latest captures from this instance.</p>
+    </div>
+    <div id="recent-entries-list" style="padding: 0 22px 18px;"></div>
   </div>
 
   <div class="status-bar">
@@ -385,7 +386,7 @@
   }
 
   async function loadState() {
-    const [health, version, git, status, routing, agents, dreamer] = await Promise.all([
+    const [health, version, git, status, routing, agents, dreamer, search] = await Promise.all([
       fetchJson('/api/health'),
       fetchJson('/version.json'),
       fetchJson('/api/version'),
@@ -393,6 +394,7 @@
       fetchJson('/api/pcsf/routing'),
       fetchJson('/api/agents'),
       fetchJson('/api/dreamer?user=dreamer'),
+      fetchJson('/api/dream/search'),
     ]);
 
     // Server + version
@@ -477,6 +479,33 @@
 
     // Server stat
     $('stat-server').textContent = serverOnline ? 'Node.js running on port ' + (health?.port || '4177') : 'Server not responding';
+
+    // Recent journal entries (G2 — real backend data)
+    const recentList = $('recent-entries-list');
+    const recentSection = $('recent-entries-section');
+    if (search && search.results && search.results.length > 0 && recentList && recentSection) {
+      recentSection.style.display = '';
+      const entries = search.results.slice(0, 10);
+      recentList.innerHTML = entries.map(e => {
+        const kind = e.kind || 'dream';
+        const ts = e.timestamp ? fmtDate(e.timestamp) : '';
+        const text = (e.text || e.content || '').slice(0, 140);
+        const tags = (e.tags || []).slice(0, 4).map(t => `<span class="pill" style="background:var(--accent-dim);color:var(--accent);font-size:0.65rem;padding:1px 7px;margin-right:4px;">${t}</span>`).join('');
+        const lucid = typeof e.lucidity === 'number' ? `<span style="font-size:0.7rem;color:var(--muted);margin-left:8px;">lucidity ${e.lucidity.toFixed(1)}</span>` : '';
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:0.85rem;">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+            <span style="font-weight:600;text-transform:capitalize;">${kind}</span>
+            <span style="font-size:0.72rem;color:var(--muted);">${ts}</span>
+            ${lucid}
+          </div>
+          <div style="color:var(--text);line-height:1.45;">${text}${text.length >= 140 ? '…' : ''}</div>
+          <div style="margin-top:4px;">${tags}</div>
+        </div>`;
+      }).join('');
+      $('recent-subtitle').textContent = entries.length + ' latest entr' + (entries.length === 1 ? 'y' : 'ies') + ' from this instance.';
+    } else if (recentSection) {
+      recentSection.style.display = 'none';
+    }
   }
 
   loadState();
@@ -484,6 +513,5 @@
 })();
 </script>
 <script src="/js/update-checker.js" defer></script>
-<script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
 </body>
 </html>

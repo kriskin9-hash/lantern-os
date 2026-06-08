@@ -20,16 +20,17 @@ Current focus: Dream Journal Orion Edition, local/private agent workflows, and p
 4. [Getting Started](#getting-started)
 5. [Architecture](#architecture)
 6. [Core Concepts](#core-concepts)
-7. [PCSF Provider Capacity Fallback](#pcsf-provider-capacity-fallback)
-8. [Convergence and Receipts](#convergence-and-receipts)
-9. [Memory, RAG, and CSF/CADD](#memory-rag-and-csfcadd)
-10. [MCP and Agent Runtime](#mcp-and-agent-runtime)
-11. [Run Locally](#run-locally)
-12. [Testing and Validation](#testing-and-validation)
-13. [Documentation Map](#documentation-map)
-14. [Planned Documentation Migration](#planned-documentation-migration)
-15. [Contributing](#contributing)
-16. [Privacy](#privacy)
+7. [CSF Memory and Door State](#csf-memory-and-door-state)
+8. [PCSF Provider Capacity Fallback](#pcsf-provider-capacity-fallback)
+9. [Convergence and Receipts](#convergence-and-receipts)
+10. [Memory, RAG, and CSF/CADD](#memory-rag-and-csfcadd)
+11. [MCP and Agent Runtime](#mcp-and-agent-runtime)
+12. [Run Locally](#run-locally)
+13. [Testing and Validation](#testing-and-validation)
+14. [Documentation Map](#documentation-map)
+15. [Planned Documentation Migration](#planned-documentation-migration)
+16. [Contributing](#contributing)
+17. [Privacy](#privacy)
 
 ---
 
@@ -96,7 +97,13 @@ Lantern personas provide different interaction modes over the same backend pipel
 
 ## Getting Started
 
-For the main local web surface:
+For the main local web surface (dev mode with auto-restart):
+
+```bash
+npm run dev --prefix apps/lantern-garage
+```
+
+Or for a one-shot start:
 
 ```bash
 npm start --prefix apps/lantern-garage
@@ -114,29 +121,23 @@ The longer local setup, optional MCP server, optional Discord bot, and validatio
 
 ## Architecture
 
-```text
-lantern-os/
-├── apps/
-│   └── lantern-garage/          # Web server, Dream Journal UI, REST API, PWA assets
-│       ├── server.js            # Main Node.js entry point
-│       ├── routes/              # Domain API routes
-│       ├── lib/                 # Chat, streaming, and storage helpers
-│       └── public/              # Browser UI, manifest, service worker
-├── src/
-│   ├── convergence_io_engine.py # Convergence inspection and orchestration
-│   ├── unified_agent_connector.py
-│   ├── csf/                     # CSF memory/archive components
-│   ├── mcp_server/              # MCP server and local agent tool surface
-│   └── discord_lounge_bot/      # Discord integration
-├── data/
-│   ├── internal-rag-house/      # Source-linked internal RAG index
-│   └── pcsf/                    # Provider capacity and agent state files
-├── manifests/                   # Contracts, validation receipts, repo state, gates
-├── csf/ingest/                  # CSF/CADD ingest queue and implementation notes
-├── docs/                        # User, architecture, connector, and operating docs
-├── scripts/                     # Local validation, export, orchestration, setup scripts
-└── tests/                       # Node.js and Python tests
-```
+| Path | Purpose |
+|------|---------|
+| [`apps/lantern-garage/server.js`](apps/lantern-garage/server.js) | Main Node.js entry point — loads routes, deps, starts HTTP server |
+| [`apps/lantern-garage/routes/`](apps/lantern-garage/routes/) | Domain API route handlers (dream, dreamer, status, rag, operator, files, surfaces) |
+| [`apps/lantern-garage/lib/`](apps/lantern-garage/lib/) | Chat, streaming, storage, and PCSF helpers |
+| [`apps/lantern-garage/public/`](apps/lantern-garage/public/) | Browser UI (dream-chat.html, index.html), PWA manifest |
+| [`src/convergence_io_engine.py`](src/convergence_io_engine.py) | Convergence inspection and orchestration — `health`, `loop`, `inspect`, `converge` |
+| [`src/unified_agent_connector.py`](src/unified_agent_connector.py) | Unified agent greet/health/inspect connector |
+| [`src/mcp_server/`](src/mcp_server/) | MCP server and local agent tool surface (port 8771) |
+| [`apps/lantern-garage/lib/csf-memory.js`](apps/lantern-garage/lib/csf-memory.js) | Node.js CSF memory reader — loads long-term memory, ingest docs, and door state into chat context |
+| [`src/csf/`](src/csf/) | CSF memory/archive components |
+| [`src/discord_lounge_bot/`](src/discord_lounge_bot/) | Discord integration |
+| [`data/pcsf/`](data/pcsf/) | Provider capacity and agent state files |
+| [`manifests/`](manifests/) | Contracts, validation receipts, repo state, gates |
+| [`csf/ingest/`](csf/ingest/) | CSF/CADD ingest queue — each file is a ready-to-implement task spec |
+| [`docs/`](docs/) | User, architecture, connector, and operating docs |
+| [`tests/`](tests/) | Node.js and Python tests |
 
 ---
 
@@ -152,6 +153,34 @@ lantern-os/
 | CSF | Convergence-Fitted Searchable Archive for structured symbolic data. |
 | CADD | Capture, Assess, Distill, Dock pipeline for moving material into CSF. |
 | PCSF | Provider Capacity Safety Frame for routing capacity and fallback decisions. |
+
+---
+
+## CSF Memory and Door State
+
+The Dream Chat uses a layered memory system that feeds context into every LLM call:
+
+| Layer | Source | Loaded by |
+|---|---|---|
+| Recent dreams | `data/dream_journal/*.jsonl` (last 12 entries) | [`lib/dreamer-store.js`](apps/lantern-garage/lib/dreamer-store.js) |
+| CSF memory records | `data/csf_memory/**/*.jsonl` (tiered: trace → anchor → entity → skill) | [`lib/csf-memory.js`](apps/lantern-garage/lib/csf-memory.js) |
+| CSF ingest docs | `csf/ingest/*.md` (elephant doors, convergence plans, lore) | [`lib/csf-memory.js`](apps/lantern-garage/lib/csf-memory.js) |
+| Door state | `data/dream_journal/door_state.json` (offered doors + user choices) | [`lib/csf-memory.js`](apps/lantern-garage/lib/csf-memory.js) |
+| Symbol mesh | Co-occurrence pairs extracted from recent dreams | [`lib/stream-chat.js`](apps/lantern-garage/lib/stream-chat.js) |
+| Conversation history | Last 6 turns threaded into API calls | [`lib/stream-chat.js`](apps/lantern-garage/lib/stream-chat.js) |
+
+Three Doors are generated by the LLM at the end of every response as `[DOORS: A | B | C]`. When the user clicks a door suggestion, the choice is persisted to `door_state.json` via `POST /api/dream/door-choice` and loaded back into future prompts so the model remembers which doors were offered and chosen.
+
+The CSF Memory Engine (`src/csf/memory_engine.py`) provides the Python-side tiered promotion flow: trace → correction → anchor → entity → relation → ritual → skill → export. The Node.js reader (`lib/csf-memory.js`) reads these records with a 10-second TTL cache for low-overhead context loading during streaming.
+
+### Planned: Convergence IO Chat Bridge
+
+The Convergence IO engine (`src/convergence_io/engine.py`) orchestrates provider routing with capability gates, provenance recording, and negative authority profiles. The planned bridge will:
+
+1. Replace direct `readRecentDreams()` calls with `ConvergenceIO.route_chat()` for unified routing
+2. Feed CSF memory tiers (anchor, entity, skill) into the LLM context window with priority ordering
+3. Use the PCSF fallback chain to select providers based on memory load (lightweight prompts → local Ollama, heavy context → Gemini/Claude)
+4. Record every door choice as an AAPF provenance entry for auditability
 
 ---
 
@@ -394,20 +423,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Update-InternalHou
 
 | Document | Purpose |
 |---|---|
-| [AGENTS.md](AGENTS.md) | Required operating instructions for AI coding agents. |
-| [QUICKSTART.md](QUICKSTART.md) | Full startup guide — turn on every service. |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, branch model, and repo rules. |
-| [docs/DREAM-JOURNAL-USER-GUIDE.md](docs/DREAM-JOURNAL-USER-GUIDE.md) | Dream Journal user guide. |
-| [docs/DREAM-JOURNAL-QUICKSTART.md](docs/DREAM-JOURNAL-QUICKSTART.md) | Dream Journal quick start. |
-| [docs/CONVERGENCE-LOOP.md](docs/CONVERGENCE-LOOP.md) | 12-step convergence operating method. |
-| [manifests/CONVERGENCE-LOOP-AGENT-FLEET.md](manifests/CONVERGENCE-LOOP-AGENT-FLEET.md) | 36-slot convergence-agent design and receipt contract. |
-| [docs/MCP-CONNECTOR.md](docs/MCP-CONNECTOR.md) | Local-first MCP connector and safety contract. |
-| [docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md](docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md) | Agent slot registration, dispatch gate, and orchestrator dependency. |
-| [docs/ACTION-POOLING-AND-BATCHING.md](docs/ACTION-POOLING-AND-BATCHING.md) | Work pooling and batching method. |
-| [docs/CSF-FORMAT-SPECIFICATION.md](docs/CSF-FORMAT-SPECIFICATION.md) | CSF archive format specification. |
-| [caad/dollhouse-csf-upgrade.md](caad/dollhouse-csf-upgrade.md) | CADD intake flow for CSF archives. |
-| [docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md](docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md) | Evidence and claim-labeling guidance for reports. |
-| [docs/REPO-CONTRACT.md](docs/REPO-CONTRACT.md) | Repository scope and cleanup contract. |
+| [AGENTS.md](AGENTS.md) | **Start here for agents** — manifests, route map, delegate table, monoworkstream rules |
+| [QUICKSTART.md](QUICKSTART.md) | Full startup guide — turn on every service |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development workflow, branch model, and repo rules |
+| [CHANGELOG.MD](CHANGELOG.MD) | Release history |
+| [docs/DREAM-JOURNAL-USER-GUIDE.md](docs/DREAM-JOURNAL-USER-GUIDE.md) | Dream Journal user guide |
+| [docs/DREAM-JOURNAL-QUICKSTART.md](docs/DREAM-JOURNAL-QUICKSTART.md) | Dream Journal quick start |
+| [docs/DREAM-JOURNAL-API-ENDPOINTS.md](docs/DREAM-JOURNAL-API-ENDPOINTS.md) | Full API endpoint reference |
+| [docs/CONVERGENCE-LOOP.md](docs/CONVERGENCE-LOOP.md) | 12-step convergence operating method |
+| [manifests/CONVERGENCE-LOOP-AGENT-FLEET.md](manifests/CONVERGENCE-LOOP-AGENT-FLEET.md) | 36-slot convergence-agent design and receipt contract |
+| [manifests/dream-journal-v1-agent-slots.json](manifests/dream-journal-v1-agent-slots.json) | Active work queue with priority + description |
+| [docs/MCP-CONNECTOR.md](docs/MCP-CONNECTOR.md) | Local-first MCP connector and safety contract |
+| [docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md](docs/LANTERN-ORCHESTRATOR-DEPENDENCY.md) | Agent slot registration, dispatch gate, and orchestrator dependency |
+| [docs/ACTION-POOLING-AND-BATCHING.md](docs/ACTION-POOLING-AND-BATCHING.md) | Work pooling and batching method |
+| [docs/CSF-FORMAT-SPECIFICATION.md](docs/CSF-FORMAT-SPECIFICATION.md) | CSF archive format specification |
+| [caad/README.md](caad/README.md) | CADD (Capture, Assess, Distill, Dock) spec overview |
+| [caad/dollhouse-csf-upgrade.md](caad/dollhouse-csf-upgrade.md) | CADD intake flow for CSF archives |
+| [docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md](docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md) | Evidence and claim-labeling guidance for reports |
+| [docs/REPO-CONTRACT.md](docs/REPO-CONTRACT.md) | Repository scope and cleanup contract |
 
 ---
 

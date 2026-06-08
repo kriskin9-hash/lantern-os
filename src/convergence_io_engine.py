@@ -1132,7 +1132,10 @@ class TesseractEngine:
         return ctx
 
     def _interface_slot_claim(self, ctx: ConvergenceContext) -> ConvergenceContext:
-        slot_id = self.slots.claim("dream_journal", ctx.request_id)
+        slot_id = self.slots.claim(
+            "dream_journal", ctx.request_id,
+            context={"persona": ctx.persona, "request_id": ctx.request_id}
+        )
         ctx.slot_id = slot_id
         return ctx
 

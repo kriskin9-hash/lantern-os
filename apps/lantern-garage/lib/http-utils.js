@@ -56,20 +56,31 @@ function sendHtml(res, html, status = 200) {
   res.end(html);
 }
 
-function collectRequestBody(req, maxBytes = 64000) {
+function collectRequestBody(req, maxBytes = 64000, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
+    const timer = setTimeout(() => {
+      reject(new Error("request_body_timeout"));
+      req.destroy();
+    }, timeoutMs);
     req.on("data", (chunk) => {
       chunks.push(chunk);
       totalBytes += chunk.length;
       if (totalBytes > maxBytes) {
+        clearTimeout(timer);
         reject(new Error("request_body_too_large"));
         req.destroy();
       }
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-    req.on("error", reject);
+    req.on("end", () => {
+      clearTimeout(timer);
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    });
+    req.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
   });
 }
 

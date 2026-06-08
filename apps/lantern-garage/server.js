@@ -77,8 +77,8 @@ const routes = [
   require("./routes/dream"),
   require("./routes/keystone"),
   require("./routes/image"),
-  require("./routes/surfaces"),
   require("./routes/flourishing"),
+  require("./routes/surfaces"),
 ];
 
 async function route(req, res) {
@@ -169,7 +169,7 @@ server.listen(port, host, () => {
   refreshAllPcsf(repoRoot);
   // Ollama cold-start probe
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
   const httpLib = ollamaBase.startsWith("https") ? require("https") : require("http");
   httpLib.get(`${ollamaBase}/api/tags`, (r) => {
     let d = "";
