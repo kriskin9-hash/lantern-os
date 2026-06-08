@@ -19,25 +19,45 @@ const maxConversationTextLength = 4000;
 // Fallback doors when AI omits the marker or provider fails
 const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
-// KV Cache Compression: tiered history summarization to reduce token costs
-// Turns 0-1 (most recent): Full fidelity
-// Turns 2-3: Compressed (first 200 chars + ellipsis)
-// Turns 4-5: Placeholder (10-word summary)
-function compressHistory(history) {
-  if (!history || history.length === 0) return [];
+// Conversation history compaction thresholds
+const FULL_FIDELITY_RECENT_TURNS = 2;
+const MID_FIDELITY_TURNS = 2;
+const MID_FIDELITY_CHAR_LIMIT = 200;
+const LOW_FIDELITY_WORD_LIMIT = 10;
+
+// Conversation history compaction: tiered summarization to reduce provider token costs.
+// Only compacts turns older than the most recent FULL_FIDELITY_RECENT_TURNS exchanges;
+// never re-compacts already-compacted text (FlowKV principle).
+function compactHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) return [];
   return history.map((h, i) => {
-    const text = String(h.text || h.content || "");
-    const role = h.role;
-    if (i >= history.length - 2) return h; // Full fidelity for most recent 2 turns
-    if (i >= history.length - 4) {
-      // Compressed: first 200 chars
-      return { ...h, text: text.slice(0, 200) + (text.length > 200 ? "…" : "") };
+    const text = String(h.text != null ? h.text : (h.content != null ? h.content : ""));
+    const role = h.role || "user";
+    if (i >= history.length - FULL_FIDELITY_RECENT_TURNS) {
+      return { role, text }; // Full fidelity
     }
-    // Placeholder: 10-word summary
-    const words = text.split(/\s+/).slice(0, 10).join(" ");
+    if (i >= history.length - FULL_FIDELITY_RECENT_TURNS - MID_FIDELITY_TURNS) {
+      const truncated = text.length > MID_FIDELITY_CHAR_LIMIT
+        ? text.slice(0, MID_FIDELITY_CHAR_LIMIT) + "…"
+        : text;
+      return { role, text: truncated };
+    }
+    // Low fidelity: first N words only
+    const words = text.trim().split(/\s+/).filter(Boolean).slice(0, LOW_FIDELITY_WORD_LIMIT).join(" ");
     const roleLabel = role === "assistant" ? "Lantern" : "Dreamer";
-    return { ...h, text: `[${roleLabel}: ${words}…]` };
+    const summary = words.length > 0 ? `[${roleLabel}: ${words}…]` : `[${roleLabel}]`;
+    return { role, text: summary };
   });
+}
+
+// Build the provider messages array from compacted history + current message.
+// Single source of truth — all providers call this instead of inlining history.map.
+function buildProviderMessages(systemPrompt, compacted, currentMessage) {
+  return [
+    { role: "system", content: systemPrompt },
+    ...compacted.map(h => ({ role: h.role, content: h.text })),
+    { role: "user", content: currentMessage },
+  ];
 }
 
 // Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
@@ -202,10 +222,11 @@ async function handleStreamChat(req, url, res) {
     return Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([k]) => k);
   })();
 
-  // Include prior conversation turns so the model has full context
-  const compressedHistory = compressHistory(history);
-  const historyContext = compressedHistory.length > 0
-    ? `\nPrior conversation turns:\n${compressedHistory.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
+  // Compact history once; providers reuse this via buildProviderMessages.
+  // historyContext is kept for Keystone debug prompt only — not injected into dream system prompt.
+  const compacted = compactHistory(history);
+  const historyContext = compacted.length > 0
+    ? `\nPrior conversation turns:\n${compacted.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
   // Co-occurrence pairs: symbols that appear together in the same entry strengthen the edge
@@ -251,7 +272,7 @@ async function handleStreamChat(req, url, res) {
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}`;
+    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}`;
 
   console.log(`[Stream] systemPrompt: ${systemPrompt.length} chars, csfBlock: ${csfBlock.length} chars, message: "${message.slice(0, 60)}"`);
 
@@ -373,11 +394,7 @@ async function handleStreamChat(req, url, res) {
       const payload = JSON.stringify({
         model: ollamaModel,
         stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...compressedHistory.map(h => ({ role: h.role, content: h.text })),
-          { role: "user", content: message },
-        ],
+        messages: buildProviderMessages(systemPrompt, compacted, message),
       });
       const ollamaUrl = new URL(ollamaBase);
       await new Promise((resolve, reject) => {
@@ -539,7 +556,7 @@ async function handleStreamChat(req, url, res) {
         max_tokens: 1024,
         stream: true,
         system: systemPrompt,
-        messages: [...compressedHistory.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
+        messages: [...compacted.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
       });
       await new Promise((resolve, reject) => {
         const req2 = https.request({
@@ -612,11 +629,7 @@ async function handleStreamChat(req, url, res) {
       const payload = JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...compressedHistory.map(h => ({ role: h.role, content: h.text })),
-          { role: "user", content: message },
-        ],
+        messages: buildProviderMessages(systemPrompt, compacted, message),
       });
 
       await new Promise((resolve, reject) => {
@@ -688,11 +701,7 @@ async function handleStreamChat(req, url, res) {
       const xaiModel = process.env.XAI_MODEL || "grok-4.3";
       const payload = JSON.stringify({
         model: xaiModel, stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...compressedHistory.map(h => ({ role: h.role, content: h.text })),
-          { role: "user", content: message },
-        ],
+        messages: buildProviderMessages(systemPrompt, compacted, message),
       });
       await new Promise((resolve, reject) => {
         const req2 = require("https").request({
