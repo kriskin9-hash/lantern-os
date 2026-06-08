@@ -3,12 +3,15 @@ module.exports = async function surfaceRoutes(req, res, url, deps) {
   const { fs, path, sendJson, sendFile, repoRoot, publicRoot, __dirname: dir } = deps;
 
   if (url.pathname === "/hub") {
-    sendFile(res, path.resolve(repoRoot, "central-hub.html"));
+    // Hub redirects to home
+    res.writeHead(302, { Location: "/" });
+    res.end();
     return true;
   }
 
-  if (url.pathname === "/hff") {
-    sendFile(res, path.resolve(publicRoot, "hff/index.html"));
+  if (url.pathname === "/hff" || url.pathname === "/hff/") {
+    // HFF dashboard
+    sendFile(res, path.resolve(publicRoot, "flourishing.html"));
     return true;
   }
 

@@ -157,42 +157,28 @@ Never claim a skill or fleet slot is active unless confirmed by implementation o
 
 ## Quality Gates & Automated Hooks (Critical)
 
-All agent commits are subject to automated quality checks via git pre-commit hooks. **Read `docs/HOOKS.md` for full reference.**
+All agent commits are subject to **four automated quality checks** via git pre-commit hooks. See [`docs/HOOKS.md`](docs/HOOKS.md) for full reference.
 
 ### Four-Layer Validation (Automatic on Every Commit)
 
 | Validator | Enforces | Skip with |
 |-----------|----------|-----------|
-| **Version/Changelog** | Code change → version bump → changelog entry | `SKIP_VERSION_CHECK=1` |
+| **Version/Changelog** | Code changed → version bump → changelog entry | `SKIP_VERSION_CHECK=1` |
 | **Deployment Readiness** | Server change → deployment.json with rollback plan | `SKIP_DEPLOY_CHECK=1` |
 | **Auto-Update Safety** | Version bump → migration scripts, backwards compatibility | `SKIP_UPDATE_CHECK=1` |
 | **AGENTS.md** | Agent commit → update this file with metadata, runbook, capabilities | `SKIP_AGENT_CHECK=1` |
 
-### When Hooks Block Your Commit
+### Agent Documentation (for `claude/*`, `gemini/*`, etc. branches)
 
-**Example 1: Code changed but version not bumped**
-```
-[!] Code files changed but version not bumped (still 1.2.3)
-→ Fix: Update package.json version, add CHANGELOG.md entry, retry
-```
-
-**Example 2: Agent commit without AGENTS.md update**
-```
-[!] Agent 'claude' not documented in AGENTS.md
-→ Fix: Add/update agent section with metadata, runbook, capabilities
-```
-
-### Agent Documentation Requirements
-
-If you're committing to a branch like `claude/feature-name`, you must document the agent in AGENTS.md:
+When committing to an agent branch, update AGENTS.md with:
 
 ```markdown
-## Claude Agent
+## [Agent Name]
 
-**Status:** active
-**Model:** claude-opus
-**Lane:** claude/
-**Owner:** [Your name]
+**Status:** active  
+**Model:** claude-opus  
+**Lane:** claude/  
+**Owner:** [Your name]  
 
 ### Capabilities
 - Feature engineering
@@ -200,7 +186,7 @@ If you're committing to a branch like `claude/feature-name`, you must document t
 - Code review
 
 ### Runbook / Behavior
-How this agent operates and what it focuses on...
+How this agent operates...
 
 ### Constraints
 - Max 1 open PR per lane

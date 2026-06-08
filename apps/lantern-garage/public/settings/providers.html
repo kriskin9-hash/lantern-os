@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ff424d">
+  <title>Provider Settings — Lantern OS</title>
+  <link rel="stylesheet" href="/common-layout.css">
+  <style>
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Hide scrollbars */
+    ::-webkit-scrollbar { display: none; }
+    * { -ms-overflow-style: none; scrollbar-width: none; }
+
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 32px;
+    }
+
+    /* Status grid */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .status-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .status-card h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .status-value {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .status-detail {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .dot.online { background: var(--green); }
+    .dot.warning { background: var(--gold); }
+    .dot.offline { background: var(--accent); }
+
+    /* Provider table */
+    .providers-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 40px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .section-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .section-header h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    th {
+      padding: 12px 24px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    td {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+
+    .status-badge.configured {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+    }
+
+    .status-badge.missing {
+      background: rgba(255, 66, 77, 0.15);
+      color: var(--accent);
+    }
+
+    /* Loading state */
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+      background: var(--surface);
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <a href="/" class="back-link" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1.1rem;margin-right:4px;">←</a>
+    <div class="logo">⚡</div>
+    <div class="title-block">
+      <h1>Provider Settings</h1>
+      <a href="/repo/SKILLS.md" target="_blank" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · Orchestrator Health</a>
+    </div>
+    <div style="margin-left:auto;" id="status-indicator">
+      <div class="dot online"></div>
+      <span id="status-text">checking…</span>
+    </div>
+  </header>
+
+  <main>
+    <h1>Orchestrator & Swarm Health</h1>
+    <p class="subtitle">Real-time status of AI providers, memory systems, and agent capacity</p>
+
+    <!-- Status cards -->
+    <div class="status-grid" id="status-cards">
+      <div class="loading" style="grid-column: 1/-1;">
+        <div class="spinner"></div>
+        <p>Loading orchestrator status…</p>
+      </div>
+    </div>
+
+    <!-- Providers table -->
+    <div class="providers-section">
+      <div class="section-header">
+        <h2>AI Provider Chain</h2>
+      </div>
+      <table id="providers-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Model</th>
+            <th>Status</th>
+            <th>Strengths</th>
+          </tr>
+        </thead>
+        <tbody id="providers-body">
+          <tr><td colspan="4" class="loading"><div class="spinner"></div> Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Memory / MemOS status -->
+    <div class="providers-section">
+      <div class="section-header">
+        <h2>Memory Systems</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>System</th>
+            <th>Status</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody id="memory-body">
+          <tr><td colspan="3" class="loading"><div class="spinner"></div> Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer>
+    <span id="footer-text">Lantern OS · Checking services…</span>
+  </footer>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  async function loadStatus() {
+    const [providers, health, memory] = await Promise.all([
+      fetch('/api/settings/providers', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+      fetch('/api/agent/health', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+      fetch('/api/dream/memory/health', { cache: 'no-store', signal: AbortSignal.timeout(5000) })
+        .then(r => r.ok ? r.json() : null)
+        .catch(() => null),
+    ]);
+
+    // Update status indicator
+    const anyProvider = providers && providers._any;
+    const memoryHealthy = memory && memory.available;
+    const isHealthy = anyProvider && memoryHealthy;
+
+    const dot = $('status-indicator').querySelector('.dot');
+    const text = $('status-text');
+    if (isHealthy) {
+      dot.className = 'dot online';
+      text.textContent = 'healthy';
+    } else if (anyProvider || memoryHealthy) {
+      dot.className = 'dot warning';
+      text.textContent = 'degraded';
+    } else {
+      dot.className = 'dot offline';
+      text.textContent = 'offline';
+    }
+
+    // Status cards
+    const configuredCount = providers ? Object.values(providers).filter(v => v === true).length - 1 : 0;
+    const totalProviders = providers ? Object.keys(providers).length - 1 : 10;
+    const memoryCount = memory ? memory.entry_count || 0 : 0;
+
+    $('status-cards').innerHTML = `
+      <div class="status-card">
+        <h3>Providers Configured</h3>
+        <div class="status-value">${configuredCount}/${totalProviders}</div>
+        <div class="status-detail">
+          <span class="dot ${configuredCount > 0 ? 'online' : 'offline'}"></span>
+          ${configuredCount > 0 ? `Ready to stream responses` : `No providers configured. Add keys in settings.`}
+        </div>
+      </div>
+      <div class="status-card">
+        <h3>Memory Status</h3>
+        <div class="status-value">${memoryCount}</div>
+        <div class="status-detail">
+          <span class="dot ${memory && memory.available ? 'online' : (memory && memory.fallback ? 'warning' : 'offline')}"></span>
+          ${memory ? (memory.available ? `MemOS healthy, ${memoryCount} entries` : `Fallback mode, ${memoryCount} entries`) : 'Memory system unavailable'}
+        </div>
+      </div>
+      <div class="status-card">
+        <h3>Orchestrator</h3>
+        <div class="status-value">${isHealthy ? '●' : '○'}</div>
+        <div class="status-detail">
+          <span class="dot ${isHealthy ? 'online' : (anyProvider || memoryHealthy ? 'warning' : 'offline')}"></span>
+          ${isHealthy ? 'Full operational capacity' : (anyProvider || memoryHealthy ? 'Partial service' : 'Degraded')}
+        </div>
+      </div>
+    `;
+
+    // Provider table
+    const providerMap = {
+      'ANTHROPIC_API_KEY': { name: 'Anthropic (Claude)', model: 'Default', strengths: 'Chat, coding, reasoning' },
+      'OPENAI_API_KEY': { name: 'OpenAI (GPT)', model: 'Default', strengths: 'Chat, reasoning, vision' },
+      'GEMINI_API_KEY': { name: 'Google (Gemini)', model: 'Default', strengths: 'Chat, vision, fast' },
+      'XAI_API_KEY': { name: 'xAI (Grok)', model: 'Default', strengths: 'Chat, creative, vision' },
+      'OLLAMA_BASE_URL': { name: 'Ollama (Local)', model: 'Configurable', strengths: 'Privacy, fallback' },
+    };
+
+    let providerRows = '';
+    for (const [key, config] of Object.entries(providerMap)) {
+      if (providers && key in providers) {
+        const isConfigured = providers[key];
+        const status = isConfigured ? 'Configured' : 'Missing';
+        const badge = isConfigured ? 'configured' : 'missing';
+        providerRows += `
+          <tr>
+            <td>${config.name}</td>
+            <td>${config.model}</td>
+            <td><span class="status-badge ${badge}">${status}</span></td>
+            <td>${config.strengths}</td>
+          </tr>
+        `;
+      }
+    }
+    $('providers-body').innerHTML = providerRows || '<tr><td colspan="4" style="color:var(--muted);">Loading provider status…</td></tr>';
+
+    // Memory table
+    let memoryRows = `
+      <tr>
+        <td>MemOS</td>
+        <td>
+          <span class="status-badge ${memory && memory.available ? 'configured' : 'missing'}">
+            ${memory ? (memory.available ? 'Online' : 'Offline') : 'Unknown'}
+          </span>
+        </td>
+        <td>${memory ? (memory.available ? `${memory.entry_count} entries, last ingest recent` : `Fallback mode, ${memory.entry_count} entries`) : 'Checking…'}</td>
+      </tr>
+    `;
+    $('memory-body').innerHTML = memoryRows;
+
+    // Footer
+    $('footer-text').textContent = `Lantern OS · ${new Date().toLocaleTimeString()} · Providers: ${configuredCount}/${totalProviders} · Memory: ${memoryCount} entries`;
+  }
+
+  loadStatus();
+  setInterval(loadStatus, 10_000);
+</script>
+<script src="/js/common-layout.js" defer></script>
+</body>
+</html>

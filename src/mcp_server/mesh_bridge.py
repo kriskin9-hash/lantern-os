@@ -78,9 +78,28 @@ class MeshBridge:
         messages_url: Optional[str] = None,
         donated_resources: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Register a new peer node (or re-register an existing one)."""
-        peer_id = str(uuid.uuid4())[:8]
+        """Register a new peer node (or re-register an existing one).
+
+        If a peer with the same mcp_url already exists, updates its
+        last_seen, status, and name in place rather than creating a
+        duplicate entry with a new ID.
+        """
         async with self._lock:
+            # Dedup: look up existing peer by mcp_url before allocating a new ID
+            existing = next(
+                (p for p in self._peers.values() if p.mcp_url == mcp_url),
+                None,
+            )
+            if existing is not None:
+                existing.last_seen = datetime.now(timezone.utc).isoformat()
+                existing.status = "online"
+                existing.name = name
+                if donated_resources is not None:
+                    existing.donated_resources = donated_resources
+                logger.info("Mesh peer re-registered (updated): %s (%s)", name, existing.peer_id)
+                return existing.to_dict()
+
+            peer_id = str(uuid.uuid4())[:8]
             peer = MeshPeer(
                 peer_id=peer_id,
                 name=name,

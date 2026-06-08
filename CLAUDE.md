@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ Required Reading (All Agents)
+
+Before any work on Lantern OS, read these in order:
+
+1. **[SECURITY.md](SECURITY.md)** — Critical vulnerabilities fixed 2026-06-08, security best practices, input validation rules
+2. **[SKILLS.md](SKILLS.md)** — Available capabilities, persona routing, provider chain, integration points
+
+These documents are non-negotiable for safe, compliant contributions.
+
 ## Project Overview
 
 Lantern OS is a local-first OS cockpit built by a solo developer (Alex Place). The primary deliverable is a **Dream Journal** — a freeform RP chat interface backed by a Node.js server, with a Python MCP server and optional Discord bot.

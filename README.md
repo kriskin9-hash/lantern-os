@@ -12,6 +12,12 @@ Current focus: Dream Journal Orion Edition, local/private agent workflows, and p
 
 ---
 
+## ⚠️ Required Reading for All Agents
+
+- **[SECURITY.md](SECURITY.md)** — Critical security fixes, vulnerability guidelines, best practices
+- **[SKILLS.md](SKILLS.md)** — Available capabilities, personas, providers, integration points
+- **[CLAUDE.md](CLAUDE.md)** — Agent-specific guidance and instructions
+
 ## Table of Contents
 
 1. [Overview](#overview)
