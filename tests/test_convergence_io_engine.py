@@ -271,6 +271,32 @@ def test_deterministic_slot_id_on_retry(tmp_path):
     assert id4 == id1
 
 
+def test_trace_tree_structures_spans_and_finds_slowest(tmp_path):
+    engine = _build_engine(tmp_path)
+    # Mock internals so converge returns quickly without real work
+    engine._surface = lambda ctx, msg: ctx
+    engine._interface_mcp = lambda ctx: ctx
+    engine._interface_slot_claim = lambda ctx: ctx
+    engine._convergence_csf = lambda ctx: ctx
+    engine._convergence_rag = lambda ctx: ctx
+    engine._core_inference = lambda ctx, msg: {"text": "ok", "provider": "mock"}
+    engine._convergence_log = lambda ctx, msg, result: None
+    engine._interface_slot_release = lambda ctx: None
+    engine._surface_render = lambda ctx, result: {"text": result.get("text", "ok"), "source": "mock"}
+    try:
+        result = engine.converge("test message")
+        trace_tree = result.get("trace_tree")
+        assert trace_tree is not None
+        assert "spans" in trace_tree
+        assert "slowest" in trace_tree
+        # Should have spans for all the layers
+        span_names = [s["op"] for s in trace_tree["spans"]]
+        assert "persona_select" in span_names or "mcp_bridge" in span_names
+    finally:
+        engine._queue_depth = 0
+        engine._executor.shutdown(wait=False)
+
+
 def test_backpressure_returns_429_when_queue_saturated(tmp_path):
     engine = _build_engine(tmp_path)
     engine._max_queue_depth = 2

@@ -51,6 +51,12 @@ try:
 except Exception:
     _CSF_CACHE_AVAILABLE = False
 
+try:
+    from convergence_io.status_cube import StatusCube
+    _STATUS_CUBE_AVAILABLE = True
+except Exception:
+    _STATUS_CUBE_AVAILABLE = False
+
 
 class Layer(IntEnum):
     SURFACE = 0
@@ -721,6 +727,12 @@ class ConvergenceLoop:
         self._phase_cache: Dict[str, PhaseResult] = {}
         self._repo_hash: Optional[str] = None
         self._previous_receipt_path = self.repo_root / "manifests" / "evidence" / "convergence-latest.json"
+        self._status_cube: Optional[Any] = None
+        if _STATUS_CUBE_AVAILABLE:
+            try:
+                self._status_cube = StatusCube.load(self.repo_root / "data" / "status-cube.json")
+            except Exception:
+                pass
 
     def _repo_state_hash(self) -> str:
         """Fast fingerprint of repo state for cache invalidation."""
@@ -1426,205 +1438,80 @@ class ConvergenceLoop:
         """
         Navigate 4D Status Cube for safe routing matrix.
         Axes: x (location), y (lane), z (boundary), t (timeline)
+        Uses real StatusCube if available, falls back to heuristics.
         """
         issues = []
-        evidence = {
-            "cube_dimensions": {},
-            "current_coordinates": {},
-            "navigation_status": "unknown"
-        }
-        
-        # x-axis: location (body, device, repo, product)
-        location_checks = [
-            ("Repo root", self.repo_root),
-            ("Apps directory", self.repo_root / "apps"),
-            ("Skills directory", self.repo_root / "skills"),
-            ("Scripts directory", self.repo_root / "scripts"),
-        ]
-        evidence["cube_dimensions"]["x_location"] = [name for name, path in location_checks if path.exists()]
-        
-        # y-axis: module lane (repo control, report, dollhouse, wallet, device, product)
-        lane_checks = [
-            ("Repo control plane", self.repo_root / ".git"),
-            ("Report lane", self.repo_root / "reports"),
-            ("Dollhouse lane", self.repo_root / "skills" / "lantern-rag-dollhouse"),
-            ("Wallet lane", self.repo_root / "data" / "wallet"),
-            ("Device lane", self.repo_root / "profiles"),
-            ("Product lane", self.repo_root / "apps"),
-        ]
-        evidence["cube_dimensions"]["y_lane"] = [name for name, path in lane_checks if path.exists()]
-        
-        # z-axis: boundary (proven, candidate, held, blocked)
-        boundary_state = "proven"
-        if (self.repo_root / ".git" / "HEAD").exists():
-            try:
-                result = subprocess.run(
-                    ["git", "status", "--porcelain"],
-                    cwd=self.repo_root, capture_output=True, text=True, timeout=5
-                )
-                if result.stdout.strip():
-                    boundary_state = "candidate"  # uncommitted changes
-            except Exception:
-                pass
-        evidence["cube_dimensions"]["z_boundary"] = boundary_state
-        
-        # t-axis: timeline (current evidence, last validation, next receipt)
-        evidence_dir = self.repo_root / "manifests" / "evidence"
-        if evidence_dir.exists():
-            receipts = list(evidence_dir.glob("convergence-*.json"))
-            if receipts:
-                latest = max(receipts, key=lambda p: p.stat().st_mtime)
-                evidence["cube_dimensions"]["t_timeline"] = {
-                    "last_validation": latest.stat().st_mtime,
-                    "receipt_count": len(receipts)
-                }
-            else:
-                evidence["cube_dimensions"]["t_timeline"] = {"last_validation": None, "receipt_count": 0}
-        else:
-            evidence["cube_dimensions"]["t_timeline"] = {"last_validation": None, "receipt_count": 0}
-        
-        # Calculate navigation score
-        nav_score = 0.0
-        nav_score += 0.3 * (len(evidence["cube_dimensions"]["x_location"]) / len(location_checks))
-        nav_score += 0.3 * (len(evidence["cube_dimensions"]["y_lane"]) / len(lane_checks))
-        nav_score += 0.2 if boundary_state == "proven" else 0.1
-        nav_score += 0.2 if evidence["cube_dimensions"]["t_timeline"]["receipt_count"] > 0 else 0.0
-        
-        evidence["navigation_score"] = round(nav_score, 3)
-        evidence["current_coordinates"] = {
-            "x": f"{len(evidence['cube_dimensions']['x_location'])}/{len(location_checks)}",
-            "y": f"{len(evidence['cube_dimensions']['y_lane'])}/{len(lane_checks)}",
-            "z": boundary_state,
-            "t": f"{evidence['cube_dimensions']['t_timeline']['receipt_count']} receipts"
-        }
-        
-        if nav_score >= 0.7:
+        evidence: Dict[str, Any] = {"navigation_status": "unknown"}
+
+        if self._status_cube:
+            # Seed artifacts from repo structure
+            for loc in ["repo", "apps", "skills", "scripts", "docs", "archive", "data", "surfaces"]:
+                p = self.repo_root / loc
+                if p.exists():
+                    self._status_cube.place(
+                        f"location-{loc}", path=str(p.relative_to(self.repo_root)),
+                        x=loc, y="control", z="proven" if loc != "archive" else "held"
+                    )
+            report = self._status_cube.phase_12_navigate("repo", "control")
+            evidence = report
             evidence["navigation_status"] = "cube_navigable"
-        elif nav_score >= 0.4:
-            evidence["navigation_status"] = "partial_navigation"
-            issues.append("Partial Status Cube navigation - missing location or lane dimensions")
+            if report.get("artifacts_count", 0) == 0:
+                issues.append("Status Cube empty - no artifacts placed")
         else:
-            evidence["navigation_status"] = "navigation_blocked"
-            issues.append("Status Cube navigation blocked - insufficient dimensional coverage")
-        
+            # Fallback heuristic
+            evidence["cube_dimensions"] = {"x_location": ["repo"], "y_lane": ["control"]}
+            evidence["navigation_status"] = "partial_navigation"
+            issues.append("StatusCube module not available - using fallback heuristic")
+
         return PhaseResult(12, "navigate_status_cube", "pass" if not issues else "fail", issues, evidence)
 
     def _phase_project_future_states(self) -> PhaseResult:
         """
         Project future states from past/present using comet-leap integration.
-        Pattern: Past Work -> Present Pitch -> Expected Future Outcome -> Actual Result
+        Uses StatusCube projection if available.
         """
         issues = []
-        evidence = {
-            "past_work": [],
-            "present_pitch": [],
-            "future_projections": [],
-            "projection_status": "unknown"
-        }
-        
-        # Check for past work evidence (commits, receipts, reports)
-        past_checks = [
-            ("Git history", self.repo_root / ".git"),
-            ("Evidence receipts", self.repo_root / "manifests" / "evidence"),
-            ("Convergence reports", self.repo_root / "reports"),
-            ("Changelog", self.repo_root / "CHANGELOG.MD"),
-        ]
-        evidence["past_work"] = [name for name, path in past_checks if path.exists()]
-        
-        # Check for present pitch (manifests, open issues, session summaries)
-        present_checks = [
-            ("Open issues", self.repo_root / "manifests" / "open-issues.md"),
-            ("Session summaries", self.repo_root / "manifests" / "SESSION-WORK-SUMMARY-2026-05-27.md"),
-            ("Convergence plans", self.repo_root / "csf" / "ingest"),
-            ("Batch jobs", self.repo_root / "config" / "batch-jobs.json"),
-        ]
-        evidence["present_pitch"] = [name for name, path in present_checks if path.exists()]
-        
-        # Check for future projection infrastructure (comet-leap, status cube, bayesian)
-        future_checks = [
-            ("Comet-leap agile", self.repo_root / "skills" / "comet-leap-agile" / "SKILL.md"),
-            ("Status cube", self.repo_root / "skills" / "super-jarvis-lantern-os" / "SKILL.md"),
-            ("Bayesian world model", self.repo_root / "skills" / "bayesian-world-model" / "SKILL.md"),
-            ("HFF integration", self.repo_root / "integrations" / "human-flourishing-frameworks"),
-        ]
-        evidence["future_projections"] = [name for name, path in future_checks if path.exists()]
-        
-        # Calculate projection capability
-        projection_score = 0.0
-        projection_score += 0.35 * (len(evidence["past_work"]) / len(past_checks))
-        projection_score += 0.35 * (len(evidence["present_pitch"]) / len(present_checks))
-        projection_score += 0.3 * (len(evidence["future_projections"]) / len(future_checks))
-        
-        evidence["projection_score"] = round(projection_score, 3)
-        
-        if projection_score >= 0.7 and len(evidence["future_projections"]) >= 2:
+        evidence: Dict[str, Any] = {"projection_status": "unknown"}
+
+        if self._status_cube:
+            report = self._status_cube.phase_13_project()
+            evidence = report.get("projections", {})
             evidence["projection_status"] = "future_projection_capable"
-        elif projection_score >= 0.4:
-            evidence["projection_status"] = "partial_projection"
-            issues.append("Partial future state projection - missing comet-leap or status cube integration")
+            if not evidence.get("total_projections", 0):
+                issues.append("No artifacts to project - cube is empty")
         else:
-            evidence["projection_status"] = "projection_disabled"
-            issues.append("Future state projection disabled - insufficient past/present/future infrastructure")
-        
+            evidence["projection_status"] = "partial_projection"
+            issues.append("StatusCube not available - cannot project future states")
+
         return PhaseResult(14, "project_future_states", "pass" if not issues else "fail", issues, evidence)
 
     def _phase_update_bayesian_beliefs(self) -> PhaseResult:
         """
         Update Bayesian belief system across 5 dimensions:
         health, animal, ecosystem, economy, culture
+        Uses real StatusCube BayesianBelief if available.
         """
         issues = []
-        evidence = {
-            "belief_dimensions": {},
-            "belief_posteriors": {},
-            "belief_status": "unknown"
-        }
-        
-        # Check for HFF integration and belief system
-        belief_checks = {
-            "health": [
-                ("HFF health sensors", self.repo_root / "integrations" / "human-flourishing-frameworks" / "sensors.py"),
-                ("HFF API health", self.repo_root / "src" / "hff-api" / "live_sensors.py"),
-            ],
-            "animal": [
-                ("HFF animal tracking", self.repo_root / "integrations" / "human-flourishing-frameworks" / "world_model.py"),
-            ],
-            "ecosystem": [
-                ("HFF ecosystem", self.repo_root / "integrations" / "human-flourishing-frameworks" / "README.md"),
-            ],
-            "economy": [
-                ("Wallet ledger", self.repo_root / "data" / "wallet" / "ledger.jsonl"),
-                ("Cash loop", self.repo_root / "data" / "cash-loop"),
-            ],
-            "culture": [
-                ("Lore", self.repo_root / "lore" / "LORE.md"),
-                ("Three doors", self.repo_root / "src" / "three_doors_engine.py"),
-            ],
-        }
-        
-        for dimension, checks in belief_checks.items():
-            available = [name for name, path in checks if path.exists()]
-            evidence["belief_dimensions"][dimension] = {
-                "available": available,
-                "count": len(available),
-                "total": len(checks)
-            }
-            # Simulate posterior (in real system, this would be actual Bayesian update)
-            evidence["belief_posteriors"][dimension] = round(len(available) / len(checks), 3) if checks else 0.0
-        
-        # Calculate overall belief system health
-        avg_posterior = sum(evidence["belief_posteriors"].values()) / len(evidence["belief_posteriors"]) if evidence["belief_posteriors"] else 0.0
-        evidence["avg_belief_posterior"] = round(avg_posterior, 3)
-        
-        if avg_posterior >= 0.6:
+        evidence: Dict[str, Any] = {"belief_status": "unknown"}
+
+        if self._status_cube:
+            # Derive observations from repo state
+            observations: Dict[str, bool] = {}
+            observations["health"] = (self.repo_root / "apps" / "lantern-garage").exists()
+            observations["economy"] = (self.repo_root / "data" / "wallet").exists() if (self.repo_root / "data" / "wallet").exists() else False
+            observations["culture"] = (self.repo_root / "lore" / "LORE.md").exists()
+            observations["animal"] = (self.repo_root / "integrations" / "human-flourishing-frameworks").exists()
+            observations["ecosystem"] = observations["animal"]
+
+            report = self._status_cube.phase_14_update_beliefs(observations)
+            evidence = report.get("belief_report", {})
             evidence["belief_status"] = "belief_system_active"
-        elif avg_posterior >= 0.3:
-            evidence["belief_status"] = "partial_beliefs"
-            issues.append("Partial Bayesian belief system - some dimensions lack sensor integration")
+            if evidence.get("overall_confidence", 0.0) < 0.3:
+                issues.append("Bayesian confidence low - more evidence needed")
         else:
-            evidence["belief_status"] = "belief_system_inactive"
-            issues.append("Bayesian belief system inactive - insufficient dimension coverage")
-        
+            evidence["belief_status"] = "partial_beliefs"
+            issues.append("StatusCube not available - using static belief estimates")
+
         return PhaseResult(15, "update_bayesian_beliefs", "pass" if not issues else "fail", issues, evidence)
 
     def _phase_run_validation(self) -> PhaseResult:
@@ -1892,6 +1779,12 @@ class TesseractEngine:
                 self._cache_manager = CsfCacheManager()
             except Exception:
                 pass
+        self._status_cube: Optional[Any] = None
+        if _STATUS_CUBE_AVAILABLE:
+            try:
+                self._status_cube = StatusCube.load(self.data_dir / "status-cube.json")
+            except Exception:
+                pass
 
     def _init_cells(self) -> None:
         for layer in Layer:
@@ -1954,7 +1847,8 @@ class TesseractEngine:
                 }
                 for future in as_completed(futures):
                     layer, op = futures[future]
-                    trace.append(self._enter(layer, op))
+                    _span = self._enter(layer, op)
+                    trace.append(_span)
                     try:
                         ctx_update = future.result(timeout=2.0)
                         # Fast selective merge: only copy non-empty fields
@@ -1965,14 +1859,15 @@ class TesseractEngine:
                         if ctx_update.mcp_tools:
                             ctx.mcp_tools = ctx_update.mcp_tools
                     except Exception as exc:
-                        trace.append(self._exit(layer, op, start_total, error=str(exc)))
+                        trace.append(self._exit(layer, op, _span, error=str(exc)))
                         self.metrics.record_error(f"{layer.name}.{op}")
                     else:
-                        trace.append(self._exit(layer, op, start_total))
+                        trace.append(self._exit(layer, op, _span))
 
-                trace.append(self._enter(Layer.INTERFACE, "slot_claim"))
+                _span = self._enter(Layer.INTERFACE, "slot_claim")
+                trace.append(_span)
                 ctx = self._interface_slot_claim(ctx)
-                trace.append(self._exit(Layer.INTERFACE, "slot_claim", start_total))
+                trace.append(self._exit(Layer.INTERFACE, "slot_claim", _span))
 
                 # Convergence layer parallel (csf + rag enrich context independently)
                 conv_futures = {
@@ -1981,7 +1876,8 @@ class TesseractEngine:
                 }
                 for future in as_completed(conv_futures):
                     op = conv_futures[future]
-                    trace.append(self._enter(Layer.CONVERGENCE, op))
+                    _span = self._enter(Layer.CONVERGENCE, op)
+                    trace.append(_span)
                     try:
                         ctx_update = future.result(timeout=3.0)
                         if ctx_update.csf_segments:
@@ -1989,27 +1885,31 @@ class TesseractEngine:
                         if ctx_update.lore_hints:
                             ctx.lore_hints.extend(ctx_update.lore_hints)
                     except Exception as exc:
-                        trace.append(self._exit(Layer.CONVERGENCE, op, start_total, error=str(exc)))
+                        trace.append(self._exit(Layer.CONVERGENCE, op, _span, error=str(exc)))
                         self.metrics.record_error(f"CONVERGENCE.{op}")
                     else:
-                        trace.append(self._exit(Layer.CONVERGENCE, op, start_total))
+                        trace.append(self._exit(Layer.CONVERGENCE, op, _span))
 
-                trace.append(self._enter(Layer.CORE, "inference_stream"))
+                _span = self._enter(Layer.CORE, "inference_stream")
+                trace.append(_span)
                 result = self._core_inference(ctx, message)
-                trace.append(self._exit(Layer.CORE, "inference_stream", start_total))
+                trace.append(self._exit(Layer.CORE, "inference_stream", _span))
                 circuit.record_success()
 
-                trace.append(self._enter(Layer.CONVERGENCE, "log_dollhouse"))
+                _span = self._enter(Layer.CONVERGENCE, "log_dollhouse")
+                trace.append(_span)
                 self._convergence_log(ctx, message, result)
-                trace.append(self._exit(Layer.CONVERGENCE, "log_dollhouse", start_total))
+                trace.append(self._exit(Layer.CONVERGENCE, "log_dollhouse", _span))
 
-                trace.append(self._enter(Layer.INTERFACE, "slot_release"))
+                _span = self._enter(Layer.INTERFACE, "slot_release")
+                trace.append(_span)
                 self._interface_slot_release(ctx)
-                trace.append(self._exit(Layer.INTERFACE, "slot_release", start_total))
+                trace.append(self._exit(Layer.INTERFACE, "slot_release", _span))
 
-                trace.append(self._enter(Layer.SURFACE, "render_reply"))
+                _span = self._enter(Layer.SURFACE, "render_reply")
+                trace.append(_span)
                 surface_result = self._surface_render(ctx, result)
-                trace.append(self._exit(Layer.SURFACE, "render_reply", start_total))
+                trace.append(self._exit(Layer.SURFACE, "render_reply", _span))
             except Exception as exc:
                 circuit.record_failure()
                 self.metrics.record_error("converge")
@@ -2029,13 +1929,15 @@ class TesseractEngine:
             self.metrics.record_throughput("requests")
             # Adaptive quality feedback: slow responses degrade persona weight
             quality = max(0.0, 1.0 - (total_ms / 10000))
+            trace_tree = self._build_trace_tree(trace)
             self._log({
                 "timestamp": _now(), "message_preview": message[:120],
                 "persona": ctx.persona, "provider": result.get("provider", "unknown"),
-                "total_ms": total_ms, "trace": trace,
+                "total_ms": total_ms, "trace": trace, "trace_tree": trace_tree,
                 "result_preview": str(result.get("text", ""))[:120],
                 "quality_score": round(quality, 3),
             })
+            surface_result["trace_tree"] = trace_tree
             return surface_result
         finally:
             with self._queue_lock:
@@ -2225,8 +2127,9 @@ class TesseractEngine:
     def _enter(self, layer: Layer, op: str) -> Dict[str, Any]:
         return {"layer": layer.name, "op": op, "phase": "enter", "at_ms": round(time.time() * 1000, 2)}
 
-    def _exit(self, layer: Layer, op: str, start: float, error: Optional[str] = None) -> Dict[str, Any]:
-        elapsed = round((time.time() - start) * 1000, 2)
+    def _exit(self, layer: Layer, op: str, enter_record: Dict[str, Any], error: Optional[str] = None) -> Dict[str, Any]:
+        enter_at = enter_record.get("at_ms", 0)
+        elapsed = round((time.time() * 1000 - enter_at), 2)
         target = self.target_latency_ms(layer)
         status = "ok" if error is None and elapsed < target * 3 else "slow" if error is None else "error"
         result: Dict[str, Any] = {
@@ -2236,6 +2139,25 @@ class TesseractEngine:
         if error:
             result["error"] = error
         return result
+
+    def _build_trace_tree(self, trace: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Pair enter/exit records into a structured trace tree and find the slowest span."""
+        spans: List[Dict[str, Any]] = []
+        stack: List[Dict[str, Any]] = []
+        for entry in trace:
+            if entry.get("phase") == "enter":
+                stack.append(entry)
+            elif entry.get("phase") == "exit" and stack:
+                enter = stack.pop()
+                if enter.get("layer") == entry.get("layer") and enter.get("op") == entry.get("op"):
+                    spans.append({
+                        "layer": enter.get("layer"),
+                        "op": enter.get("op"),
+                        "elapsed_ms": entry.get("elapsed_ms", 0),
+                        "status": entry.get("status", "ok"),
+                    })
+        slowest = max(spans, key=lambda s: s["elapsed_ms"], default=None)
+        return {"spans": spans, "slowest": slowest}
 
     def _log(self, record: Dict[str, Any]) -> None:
         try:
