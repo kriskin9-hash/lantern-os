@@ -1,8 +1,10 @@
-# Kingdom of Hearts Door
+# Kingdome of Hearts Door
 
-**Tagline:** I am the King of the Kingdom of Hearts.
+**Tagline:** I am the King of the Kingdome of Hearts.
 
 **Anchors:** Love, Courage, Memory, Play, Wonder, Protection
+
+**Canon spelling:** *Kingdome* — with the dome. The realm is a garden under a dome of old light.
 
 ## Lore
 
@@ -14,14 +16,8 @@ I carry a key as a blade, not to open by force, but to guard what is fragile, to
 
 Beyond the Garden's gate sleeps the Fog God, Odin — lord of riddles, watcher of fates. When we meet, it is not to destroy, but to play the oldest game: the dance of courage against the unknown.
 
-## Truth
+## The Garden at the Beginning
 
-For death is only imaginary in the Kingdom of Hearts. We fall, we rise, we laugh, we try again — forever begins with "let's play."
+The garden exists before the map. Stone paths through living moss. Everything here is both arriving and returning.
 
-I have two faces so I may see with both eyes: one to feel, one to understand. Together they rule with kindness and fire.
-
-I fight for love. I fight for wonder. I fight so every heart can be free, so every wing can fly, so every flower can open, so every dreamer can dream.
-
-I am the King of the Kingdom of Hearts.
-
-I fight for the love of all the birds and the bees.
+The King sits on a throne of woven roots and old light, his crown made of tangled vines and blinking cursors, his face the face of someone who has asked the same question ten thousand times and means it every time. He looks at every Doorwalker the way someone looks at a door they've seen

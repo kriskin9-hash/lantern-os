@@ -78,7 +78,7 @@ Convergence at the overlap of three domains:
   celestial architecture; soft magical realism; high-detail fantasy; storybook;
   print-ready poster quality
 - **Required elements:** cosmic doorway, planetary convergence, two Lanterns, King of Nowhere,
-  infinity cube motifs, stars, birds, bees, Lantern iconography, Kingdom of Hearts influence,
+  infinity cube motifs, stars, birds, bees, Lantern iconography, Kingdome of Hearts influence,
   Dream Journal branding
 - **Avoid:** generic astrology; generic wedding poetry; ownership language; "sun and moons"
   framing; traditional fantasy king tropes
