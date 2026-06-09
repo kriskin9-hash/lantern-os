@@ -6,6 +6,18 @@
  * v1+: LoRA/QLoRA adapters on OSS base models.
  */
 
+const THREE_DOORS_PREAMBLE = `
+You are running the !three-doors game.
+Return:
+1. A short symbolic scene.
+2. Exactly three doors.
+3. Each door must be viable, distinct, tempting, and costly.
+4. Do not rank the doors.
+5. Preserve prior chosen door state.
+6. End with one hidden marker:
+[DOORS: door one | door two | door three]
+`;
+
 const MODEL_PROFILES = {
   "lantern-csf-dream": {
     id: "lantern-csf-dream",
@@ -95,4 +107,4 @@ function getAllProfiles() {
   return Object.values(MODEL_PROFILES);
 }
 
-module.exports = { MODEL_PROFILES, getProfile, getAllProfiles, isOllamaModelAvailable };
+module.exports = { MODEL_PROFILES, getProfile, getAllProfiles, isOllamaModelAvailable, THREE_DOORS_PREAMBLE };
