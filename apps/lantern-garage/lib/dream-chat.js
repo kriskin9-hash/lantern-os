@@ -119,65 +119,11 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   const text = String(message || "").trim();
 
   // ── Three Doors game intercept ──
-  // Primary: lantern-csf-dream (Ollama LLM — game rules + active state in system prompt)
-  // Fallback: Python ThreeDoorsEngine (scripted state machine, offline-capable)
+  // Python ThreeDoorsEngine (scripted state machine, offline-capable)
   const threeDoors = handleThreeDoorsServer(text);
   if (threeDoors) {
     const _path = require("path");
     const _repoRoot = _path.resolve(__dirname, "..", "..");
-    const tdOllamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-    const tdModel = process.env.OLLAMA_MODEL || "lantern-csf-dream";
-
-    // ── Primary: lantern-csf-dream via Ollama ──
-    try {
-      const tdPayload = JSON.stringify({
-        model: tdModel,
-        stream: false,
-        messages: [{ role: "user", content: text }],
-      });
-      const tdUrl = new URL(tdOllamaBase);
-      const tdResult = await new Promise((resolve, reject) => {
-        const req3 = http.request({
-          hostname: tdUrl.hostname,
-          port: tdUrl.port || 11434,
-          path: "/api/chat",
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(tdPayload) },
-        }, (upstream) => {
-          let raw = "";
-          upstream.on("data", (c) => (raw += c));
-          upstream.on("end", () => {
-            try {
-              const json = JSON.parse(raw);
-              const content = String(json.message?.content || "").trim();
-              const doorsMatch = content.match(/\[DOORS:\s*([^\]]+)\]/i);
-              const doors = doorsMatch
-                ? doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean)
-                : [];
-              resolve({ content, doors });
-            } catch { resolve({ content: "", doors: [] }); }
-          });
-          upstream.on("error", reject);
-        });
-        req3.on("error", reject);
-        req3.setTimeout(30000, () => { req3.destroy(); reject(new Error("timeout")); });
-        req3.write(tdPayload);
-        req3.end();
-      });
-      if (tdResult.content) {
-        const cleanReply = tdResult.content.replace(/\[DOORS:[^\]]*\]/i, "").trim();
-        return {
-          reply: cleanReply,
-          agent: "Lantern",
-          suggestions: tdResult.doors.length > 0 ? tdResult.doors : undefined,
-          online: true,
-          source: "ollama",
-          threeDoors: true,
-        };
-      }
-    } catch (_e) { /* Ollama unavailable — fall through to Python engine */ }
-
-    // ── Fallback: Python ThreeDoorsEngine ──
     const { spawn } = require("child_process");
     const py = process.platform === "win32" ? "python" : "python3";
     const userId = threeDoors.userId || "web-anon";
@@ -189,10 +135,26 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       const result = await new Promise((resolve, reject) => {
         const proc = spawn(py, ["-c", script], { cwd: _repoRoot, env: { ...process.env, PYTHONPATH: _path.join(_repoRoot, "src") } });
         let out = "", err = "";
+        let timedOut = false;
+        
+        const timeout = setTimeout(() => {
+          timedOut = true;
+          proc.kill();
+          reject(new Error("Python subprocess timeout (30s)"));
+        }, 30000);
+        
         proc.stdout.on("data", (c) => (out += c));
         proc.stderr.on("data", (c) => (err += c));
-        proc.on("close", (code) => { if (code !== 0) reject(new Error(err || `exit ${code}`)); else resolve(out.trim()); });
-        proc.on("error", reject);
+        proc.on("close", (code) => {
+          clearTimeout(timeout);
+          if (timedOut) return;
+          if (code !== 0) reject(new Error(err || `exit ${code}`));
+          else resolve(out.trim());
+        });
+        proc.on("error", (e) => {
+          clearTimeout(timeout);
+          reject(e);
+        });
         proc.stdin.write(JSON.stringify({ userId, action, choice }));
         proc.stdin.end();
       });
@@ -206,14 +168,29 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       for (const d of data.doors) lines.push(`**${d.label}.** ${d.name} — ${d.description}`);
       if (data.image_prompt) lines.push("", `🎨 *Image prompt:* ${data.image_prompt}`);
       return { reply: lines.join("\n"), agent: "Lantern", suggestions: data.doors.map(d => d.name), online: true, source: "python_engine", threeDoors: true, scene_key: data.scene_key, image_prompt: data.image_prompt };
-    } catch (_e2) {
-      return { reply: "Three Doors: no engine available. Try starting Ollama with `ollama serve`.", agent: "Lantern", suggestions: [], online: false, threeDoors: true };
+    } catch (_e) {
+      return { reply: "Three Doors: no engine available. Ensure Python is installed and src/three_doors_engine.py exists.", agent: "Lantern", suggestions: [], online: false, threeDoors: true };
     }
   }
 
-  const agent = requestedAgent
-    ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
-    : selectAgent(message);
+  let agent;
+  if (requestedAgent) {
+    // If agent explicitly requested, validate it exists — don't silently fallback
+    agent = AGENT_PERSONAS.find((a) => a.id === requestedAgent);
+    if (!agent) {
+      // Invalid agent ID — return error instead of fallback
+      return {
+        reply: null,
+        error: `Agent "${requestedAgent}" not found. Available: ${AGENT_PERSONAS.map(a => a.id).join(", ")}`,
+        agent: "unknown",
+        online: false,
+        suggestions: [],
+      };
+    }
+  } else {
+    // No agent specified — use keyword-based selection
+    agent = selectAgent(message);
+  }
 
   const suggestions = Object.values(DREAM_DOORS)
     .slice(0, 4)

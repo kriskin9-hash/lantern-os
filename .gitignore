@@ -117,3 +117,27 @@ data/provenance/
 manifests/evidence/convergence-*.json
 convergence-output.json
 data/pcsf/convergance-receipts.jsonl
+
+# ─── Machine Learning Models & Training (2026-06-08) ───────────────────
+# Generated door images from LoRA training
+data/images/generated-doors/
+data/images/**/*.png
+data/images/**/*.jpg
+
+# LoRA model checkpoints (train locally, commit final only)
+data/models/lora/**/checkpoint-*.safetensors
+data/models/lora/**/optimizer.pt
+data/models/lora/**/*.bin
+data/models/lora/**/training_args.bin
+!data/models/lora/*/adapter_config.json
+!data/models/lora/**/*-final.safetensors
+!data/models/lora/**/README.md
+
+# Training logs and artifacts
+data/training_logs/
+*.pth
+*.ckpt
+
+# Discord event data (local only)
+data/discord/**/*.json
+!data/discord/README.md

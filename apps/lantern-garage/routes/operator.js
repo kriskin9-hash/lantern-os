@@ -120,7 +120,8 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
         const tag = execSync("git describe --tags --always", { cwd: repoRoot, encoding: "utf8" }).trim();
         newVersion = { commit, tag };
         try {
-          const vjPath = path.join(repoRoot, "apps/lantern-garage/version.json");
+          // Read from public/version.json to match status.js endpoint
+          const vjPath = path.join(repoRoot, "apps/lantern-garage/public/version.json");
           const vj = JSON.parse(require("fs").readFileSync(vjPath, "utf8"));
           if (vj.version) newVersion.semver = vj.version;
           if (vj.buildId) newVersion.buildId = vj.buildId;

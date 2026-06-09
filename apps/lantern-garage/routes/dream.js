@@ -276,65 +276,77 @@ print(json.dumps(result))`;
       try { body = JSON.parse(raw || "{}"); } catch { sendJson(res, { error: "invalid_json" }, 400); return true; }
       if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
       const userId = String(body.userId || "web-anon").slice(0, 256);
-      const rawDoorIdx = Number(body.doorIndex);
-      const doorIdx = Number.isFinite(rawDoorIdx) && rawDoorIdx >= 0 ? Math.floor(rawDoorIdx) : 0;
-
-      const sdUrl = process.env.STABLE_DIFFUSION_URL || process.env.SD_WEBUI_URL;
-      if (!sdUrl) {
+      const prompt = String(body.prompt || "").trim();
+      
+      if (!prompt) {
+        // Get prompt from game state if not provided
         const { spawn } = require("child_process");
         const py = process.platform === "win32" ? "python" : "python3";
         const script = `import sys,json
 from three_doors_engine import ThreeDoorsEngine
 req = json.loads(sys.stdin.read())
 e = ThreeDoorsEngine(req['userId'])
-suggestions = e.image_suggestions_for_ai()
-result = suggestions[req['doorIdx']] if req['doorIdx'] < len(suggestions) else {}
-print(json.dumps(result))`;
-        const result = await new Promise((resolve, reject) => {
+print(e.sd_prompt_for_state())`;
+        const promptResult = await new Promise((resolve, reject) => {
           const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
           let out = "";
           proc.stdout.on("data", (c) => (out += c));
           proc.on("close", (code) => resolve(out.trim()));
           proc.on("error", reject);
-          proc.stdin.write(JSON.stringify({ userId, doorIdx }));
+          proc.stdin.write(JSON.stringify({ userId }));
           proc.stdin.end();
         });
-        const suggestion = JSON.parse(result);
-        sendJson(res, {
-          available: false,
-          sdUrl: null,
-          suggestion,
-          message: "No local Stable Diffusion detected. Use the prompt with your preferred image generator (DALL-E, Midjourney, etc.)",
-          generatedAt: new Date().toISOString(),
-        });
-        return true;
+        body.prompt = promptResult;
       }
 
-      const { spawn } = require("child_process");
-      const py = process.platform === "win32" ? "python" : "python3";
-      const script = `import sys,json
-from three_doors_engine import ThreeDoorsEngine
-req = json.loads(sys.stdin.read())
-e = ThreeDoorsEngine(req['userId'])
-print(e.sd_prompt_for_state())`;
-      const promptResult = await new Promise((resolve, reject) => {
-        const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
-        let out = "";
-        proc.stdout.on("data", (c) => (out += c));
-        proc.on("close", (code) => resolve(out.trim()));
-        proc.on("error", reject);
-        proc.stdin.write(JSON.stringify({ userId }));
-        proc.stdin.end();
+      // Use in-house SD server for image generation
+      const sdHost = process.env.SD_HOST || "127.0.0.1";
+      const sdPort = process.env.SD_PORT || "7860";
+      const sdUrl = `http://${sdHost}:${sdPort}/generate`;
+      
+      const imageResult = await new Promise((resolve, reject) => {
+        const payload = JSON.stringify({
+          prompt: body.prompt,
+          negative_prompt: "cartoon, anime, blurry, distorted",
+          steps: 25,
+          guidance_scale: 7.5,
+          width: 768,
+          height: 512,
+        });
+        
+        const reqSD = http.request({
+          hostname: sdHost,
+          port: sdPort,
+          path: "/generate",
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          let raw = "";
+          upstream.on("data", (c) => (raw += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(raw);
+              resolve(json);
+            } catch { reject(new Error("invalid response from SD server")); }
+          });
+        });
+        reqSD.on("error", reject);
+        reqSD.setTimeout(120000, () => { reqSD.destroy(); reject(new Error("SD server timeout")); });
+        reqSD.write(payload);
+        reqSD.end();
       });
 
       sendJson(res, {
+        success: true,
+        image: imageResult.image,
+        prompt: imageResult.prompt,
         available: true,
-        sdUrl,
-        prompt: promptResult,
-        message: "Stable Diffusion endpoint detected. POST to /sdapi/v1/txt2img with this prompt to generate the door image.",
         generatedAt: new Date().toISOString(),
       });
-    } catch (error) { sendJson(res, { error: error.message }, 500); }
+      return true;
+    } catch (error) { 
+      sendJson(res, { error: error.message, available: false, generatedAt: new Date().toISOString() }, 500); 
+    }
     return true;
   }
 

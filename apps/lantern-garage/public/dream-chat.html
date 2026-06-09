@@ -529,11 +529,12 @@
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('lantern-theme', theme);
+    // Persist to server via API if available (global cross-device setting)
     fetch('/api/ui/theme', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ theme })
-    }).catch(() => {});
+    }).catch(() => {}); // silent fail if API not available
     updateThemeIcon();
   }
   function updateThemeIcon() {
