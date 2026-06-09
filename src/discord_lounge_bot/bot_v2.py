@@ -8,12 +8,18 @@ Also remembers v1 prefix commands (!dream, !note, !threedoors).
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
+import random
 import re
+import shutil
 import sys
+import urllib.parse
+import urllib.request
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -374,7 +380,291 @@ def require_tier(minimum: str):
     return app_commands.check(predicate)
 
 
-# -- Slash Commands --
+# ── Lounge: catalog config ─────────────────────────────────────────────────────
+
+# archive.org item identifiers by playback mode.
+# Resolved to direct MP3 URLs at bot startup via the metadata API.
+_LOUNGE_CATALOG_IDS: dict[str, list[str]] = {
+    "sinatra": [
+        "FrankSinatraRadioCollection",  # 217 episodes (1940s-50s radio: Your Hit Parade, etc.)
+        "Frank_Sinatra_Tape_1_1940",    # transcription disc, Side A/B ~60 min each
+        "YourHitParade19440506",
+        "file-002_20260213",            # Tommy Dorsey w/ Sinatra, Feb 1940
+    ],
+    "dreams": [
+        # delta (0.5-4 Hz) + theta (4-8 Hz) for sleep and dream entry
+        "BrainwaveFrequenciesBinauralBeats",
+        "RelaxingSleepMusic.DeltaWavesBinauralBeatsHealingForDeepSleepStressReliefMeditation",
+        "deepsleepmusicforstressreliefhealingdeltabinauralbeatsforbrainpower",
+    ],
+    "focus": [
+        # alpha (8-14 Hz) + beta (14-30 Hz) for focus and flow
+        "BrainwaveFrequenciesBinauralBeats",
+        "greenred-528-hz-music-with-healing-frequency",
+    ],
+}
+
+_LOUNGE_FILENAME_FILTER: dict[str, list[str] | None] = {
+    "sinatra": None,
+    "dreams":  ["delta", "theta", "sleep", "dream", "relax", "heal"],
+    "focus":   ["alpha", "beta", "focus", "528", "concent", "energy", "study"],
+}
+
+_LOUNGE_DEFAULT_VC = os.getenv("LOUNGE_VOICE_CHANNEL", "Sinatra Lounge")
+_LOUNGE_FFMPEG_OK: bool = shutil.which("ffmpeg") is not None
+
+
+# ── Lounge: data models ────────────────────────────────────────────────────────
+
+@dataclass
+class LoungeTrack:
+    title: str
+    url: str
+    identifier: str
+    mode: str
+    duration_secs: int = 0
+
+    def label(self) -> str:
+        return f"**{self.title}** · _{self.identifier}_"
+
+
+@dataclass
+class LoungeState:
+    voice_client: Optional[discord.VoiceClient] = None
+    queue: list[LoungeTrack] = field(default_factory=list)
+    current: Optional[LoungeTrack] = None
+    mode: str = "sinatra"
+    loop: bool = False
+    volume: float = 0.7
+    text_channel: Optional[discord.TextChannel] = None
+    _pool: dict[str, list[LoungeTrack]] = field(default_factory=dict)
+
+
+_LOUNGE_STATES: dict[int, LoungeState] = {}
+_LOUNGE_CATALOG: dict[str, list[LoungeTrack]] = {}
+
+
+def _lounge_state(guild_id: int) -> LoungeState:
+    if guild_id not in _LOUNGE_STATES:
+        _LOUNGE_STATES[guild_id] = LoungeState()
+    return _LOUNGE_STATES[guild_id]
+
+
+def _lounge_refill(state: LoungeState, mode: str) -> None:
+    pool = list(_LOUNGE_CATALOG.get(mode, []))
+    if not pool:
+        return
+    random.shuffle(pool)
+    state.queue.extend(pool)
+
+
+# ── Lounge: catalog resolution ─────────────────────────────────────────────────
+
+def _lounge_fetch(url: str) -> dict | list | None:
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "LanternLounge/1.0"})
+        with urllib.request.urlopen(req, timeout=12) as r:
+            return json.loads(r.read())
+    except Exception as exc:
+        print(f"  [lounge] fetch error {url[:70]}: {exc}")
+        return None
+
+
+def _lounge_resolve_item(identifier: str, mode: str) -> list[LoungeTrack]:
+    meta = _lounge_fetch(f"https://archive.org/metadata/{identifier}")
+    if not meta or "files" not in meta:
+        return []
+    name_filters = _LOUNGE_FILENAME_FILTER.get(mode)
+    tracks: list[LoungeTrack] = []
+    for f in meta["files"]:
+        name: str = f.get("name", "")
+        name_lower = name.lower()
+        if not name_lower.endswith(".mp3") and "mp3" not in f.get("format", "").lower():
+            continue
+        if any(name_lower.endswith(s) for s in ("_vbrmp3.m3u", ".m3u", "_64kb.mp3", "_128kb.mp3")):
+            continue
+        if name_filters and not any(kw in name_lower for kw in name_filters):
+            continue
+        try:
+            size_bytes = int(f.get("size", 0))
+        except (ValueError, TypeError):
+            size_bytes = 999_999
+        if size_bytes < 200_000:
+            continue
+        title = f.get("title") or name.rsplit(".", 1)[0].replace("_", " ")
+        url = f"https://archive.org/download/{identifier}/{urllib.parse.quote(name)}"
+        try:
+            secs = int(float(f.get("length", 0)))
+        except (ValueError, TypeError):
+            secs = 0
+        tracks.append(LoungeTrack(title=title, url=url, identifier=identifier, mode=mode, duration_secs=secs))
+    if tracks:
+        print(f"  [lounge] {identifier}: {len(tracks)} track(s)")
+    return tracks
+
+
+def _lounge_build_catalog() -> dict[str, list[LoungeTrack]]:
+    catalog: dict[str, list[LoungeTrack]] = {}
+    for mode, ids in _LOUNGE_CATALOG_IDS.items():
+        tracks: list[LoungeTrack] = []
+        for ident in ids:
+            tracks.extend(_lounge_resolve_item(ident, mode))
+        catalog[mode] = tracks
+        print(f"  [lounge] mode={mode}: {len(tracks)} tracks total")
+    return catalog
+
+
+async def _lounge_catalog_init() -> None:
+    """Run catalog build in thread executor (blocking HTTP, ~15s). Called from on_ready."""
+    global _LOUNGE_CATALOG
+    if not _LOUNGE_FFMPEG_OK:
+        print("[LOUNGE] ffmpeg not found — voice commands disabled. Install: winget install Gyan.FFmpeg")
+        return
+    print("[LOUNGE] Fetching catalog from archive.org (runs in background)...")
+    try:
+        loop = asyncio.get_event_loop()
+        _LOUNGE_CATALOG = await loop.run_in_executor(None, _lounge_build_catalog)
+        total = sum(len(v) for v in _LOUNGE_CATALOG.values())
+        print(f"[LOUNGE] Catalog ready — {total} tracks")
+    except Exception as exc:
+        print(f"[LOUNGE] Catalog build error: {exc}")
+    sys.stdout.flush()
+
+
+# ── Lounge: playback ───────────────────────────────────────────────────────────
+
+_FFMPEG_BEFORE = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+_FFMPEG_OPTS   = "-vn"
+
+
+def _lounge_make_source(url: str, volume: float) -> discord.AudioSource:
+    raw = discord.FFmpegPCMAudio(url, before_options=_FFMPEG_BEFORE, options=_FFMPEG_OPTS)
+    return discord.PCMVolumeTransformer(raw, volume=volume)
+
+
+def _lounge_after(guild_id: int, loop: asyncio.AbstractEventLoop):
+    def after(error: Exception | None):
+        if error:
+            print(f"[LOUNGE {guild_id}] audio error: {error}")
+        asyncio.run_coroutine_threadsafe(_lounge_advance(guild_id), loop)
+    return after
+
+
+async def _lounge_advance(guild_id: int) -> None:
+    state = _lounge_state(guild_id)
+    vc = state.voice_client
+    if vc is None or not vc.is_connected():
+        return
+    if state.loop and state.current:
+        track = state.current
+    else:
+        if len(state.queue) < 2:
+            _lounge_refill(state, state.mode)
+        if not state.queue:
+            state.current = None
+            return
+        track = state.queue.pop(0)
+    state.current = track
+    try:
+        source = _lounge_make_source(track.url, state.volume)
+        vc.play(source, after=_lounge_after(guild_id, asyncio.get_event_loop()))
+        if state.text_channel:
+            dur = (f" `{track.duration_secs // 60}:{track.duration_secs % 60:02d}`"
+                   if track.duration_secs else "")
+            await state.text_channel.send(f"▶️ {track.label()}{dur}")
+    except Exception as exc:
+        print(f"[LOUNGE {guild_id}] play error: {exc}")
+        await _lounge_advance(guild_id)
+
+
+async def _lounge_join(ctx) -> tuple[discord.VoiceClient | None, str | None]:
+    """Join author's voice channel, or the default Sinatra Lounge channel."""
+    if isinstance(ctx, discord.Interaction):
+        guild, author = ctx.guild, ctx.user
+    else:
+        guild, author = ctx.guild, ctx.author
+    if guild is None:
+        return None, "Must be used in a server."
+    target_vc: discord.VoiceChannel | None = None
+    if isinstance(author, discord.Member) and author.voice:
+        target_vc = author.voice.channel  # type: ignore
+    if target_vc is None:
+        target_vc = discord.utils.find(
+            lambda c: isinstance(c, discord.VoiceChannel)
+            and _LOUNGE_DEFAULT_VC.lower() in c.name.lower(),
+            guild.channels,
+        )
+    if target_vc is None:
+        target_vc = next((c for c in guild.channels if isinstance(c, discord.VoiceChannel)), None)
+    if target_vc is None:
+        return None, "No voice channel found. Join one first, or create a 'Sinatra Lounge' voice channel."
+    state = _lounge_state(guild.id)
+    vc = state.voice_client
+    if vc and vc.is_connected():
+        if vc.channel.id != target_vc.id:
+            await vc.move_to(target_vc)
+    else:
+        vc = await target_vc.connect()
+    state.voice_client = vc
+    return vc, None
+
+
+async def _lounge_start(ctx, mode: str) -> None:
+    """Switch lounge mode and start playing."""
+    if isinstance(ctx, discord.Interaction):
+        guild = ctx.guild
+        ch = ctx.channel
+    else:
+        guild = ctx.guild
+        ch = getattr(ctx, "channel", None)
+    if guild is None:
+        return
+    if not _LOUNGE_FFMPEG_OK:
+        msg = "⚠️ Voice requires ffmpeg. Install: `winget install Gyan.FFmpeg` then restart the bot."
+        if isinstance(ctx, discord.Interaction):
+            if not ctx.response.is_done():
+                await ctx.response.send_message(msg, ephemeral=True)
+        else:
+            try: await ctx.channel.send(msg)
+            except Exception: pass
+        return
+    if not _LOUNGE_CATALOG.get(mode):
+        msg = f"⚠️ Catalog for `{mode}` is still loading — try again in a few seconds."
+        if isinstance(ctx, discord.Interaction):
+            if not ctx.response.is_done():
+                await ctx.response.send_message(msg, ephemeral=True)
+        else:
+            try: await ctx.channel.send(msg)
+            except Exception: pass
+        return
+    vc, err = await _lounge_join(ctx)
+    if err:
+        if isinstance(ctx, discord.Interaction):
+            if not ctx.response.is_done():
+                await ctx.response.send_message(f"⚠️ {err}", ephemeral=True)
+        else:
+            try: await ctx.channel.send(f"⚠️ {err}")
+            except Exception: pass
+        return
+    state = _lounge_state(guild.id)
+    state.mode = mode
+    state.text_channel = ch  # type: ignore
+    if vc and vc.is_playing():
+        vc.stop()
+    state.queue.clear()
+    _lounge_refill(state, mode)
+    labels = {"sinatra": "🎙️ Sinatra", "dreams": "🌙 Dreams", "focus": "🧠 Focus"}
+    msg = f"{labels.get(mode, mode)} — starting ▶️"
+    if isinstance(ctx, discord.Interaction):
+        if not ctx.response.is_done():
+            await ctx.response.send_message(msg)
+    else:
+        try: await ctx.channel.send(msg)
+        except Exception: pass
+    await _lounge_advance(guild.id)
+
+
+# ── Slash Commands --
 
 @tree.command(name="status", description="Lantern OS health summary")
 async def cmd_status(interaction: discord.Interaction):
@@ -537,6 +827,87 @@ async def cmd_release_gate(interaction: discord.Interaction):
     await interaction.response.send_message("v1.0.0 gate: held. No release without operator approval and evidence.", ephemeral=True)
 
 
+# -- Lounge slash commands --
+
+@tree.command(name="lounge", description="Join voice and start Sinatra radio")
+async def cmd_lounge(interaction: discord.Interaction):
+    await interaction.response.defer()
+    await _lounge_start(interaction, "sinatra")
+
+
+@tree.command(name="dreams", description="Binaural beats for dreaming and sleep (delta/theta waves)")
+async def cmd_dreams(interaction: discord.Interaction):
+    await interaction.response.defer()
+    await _lounge_start(interaction, "dreams")
+
+
+@tree.command(name="focus", description="Binaural beats for focus and flow (alpha/beta waves)")
+async def cmd_focus(interaction: discord.Interaction):
+    await interaction.response.defer()
+    await _lounge_start(interaction, "focus")
+
+
+@tree.command(name="skip", description="Skip current lounge track")
+async def cmd_skip(interaction: discord.Interaction):
+    state = _lounge_state(interaction.guild_id)
+    vc = state.voice_client
+    if vc and vc.is_playing():
+        vc.stop()
+        await interaction.response.send_message("⏭️ Skipped.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Nothing playing in the lounge.", ephemeral=True)
+
+
+@tree.command(name="leave", description="Stop lounge playback and disconnect from voice")
+async def cmd_leave(interaction: discord.Interaction):
+    state = _lounge_state(interaction.guild_id)
+    vc = state.voice_client
+    if vc and vc.is_connected():
+        if vc.is_playing():
+            vc.stop()
+        await vc.disconnect()
+        state.voice_client = None
+        state.current = None
+        await interaction.response.send_message("👋 Disconnected.", ephemeral=True)
+    else:
+        await interaction.response.send_message("Not in a voice channel.", ephemeral=True)
+
+
+@tree.command(name="nowplaying", description="What's playing in the lounge")
+async def cmd_nowplaying(interaction: discord.Interaction):
+    state = _lounge_state(interaction.guild_id)
+    if not state.current:
+        await interaction.response.send_message(
+            "Nothing playing. Try `/lounge`, `/dreams`, or `/focus`.", ephemeral=True
+        )
+        return
+    vc = state.voice_client
+    icon = "▶️" if (vc and vc.is_playing()) else "⏸️"
+    labels = {"sinatra": "🎙️ Sinatra", "dreams": "🌙 Dreams", "focus": "🧠 Focus"}
+    embed = discord.Embed(title=f"{icon} Now Playing", color=0xC9A84C)
+    embed.add_field(name="Track", value=state.current.title, inline=False)
+    embed.add_field(name="Mode", value=labels.get(state.mode, state.mode), inline=True)
+    embed.add_field(name="Volume", value=f"{int(state.volume * 100)}%", inline=True)
+    if state.current.duration_secs:
+        d = state.current.duration_secs
+        embed.add_field(name="Length", value=f"{d // 60}:{d % 60:02d}", inline=True)
+    if state.loop:
+        embed.set_footer(text="🔁 Loop on")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@tree.command(name="volume", description="Set lounge volume (0–100)")
+@app_commands.describe(level="Volume 0–100")
+async def cmd_volume(interaction: discord.Interaction, level: int):
+    vol = max(0, min(100, level)) / 100.0
+    state = _lounge_state(interaction.guild_id)
+    state.volume = vol
+    vc = state.voice_client
+    if vc and vc.source and hasattr(vc.source, "volume"):
+        vc.source.volume = vol  # type: ignore
+    await interaction.response.send_message(f"🔊 Volume: {int(vol * 100)}%", ephemeral=True)
+
+
 # -- Three Doors slash commands --
 
 @tree.command(name="threedoors", description="Enter the Three Doors game")
@@ -587,6 +958,7 @@ async def on_ready():
     print(f"[READY] Logged in as {client.user} (id={client.user.id}) at {now_utc()}")
     guild_list = [f"{g.name} ({g.id})" for g in client.guilds]
     print(f"[GUILDS] In {len(guild_list)} guild(s): {guild_list}")
+    asyncio.create_task(_lounge_catalog_init())
     sys.stdout.flush()
     await client.change_presence(
         status=discord.Status.online,
@@ -772,8 +1144,9 @@ async def on_message(message: discord.Message):
             "!status            — Lantern OS health check",
             "!subscribe         — Subscription info",
             "!help              — This message",
+            "!lounge-help       — Voice/music commands",
             "```",
-            "**Slash commands:** `/status` `/help` `/dream` `/note` `/wish` `/recall` `/threedoors` `/threedoors-choose` `/subscribe` `/wallet` `/mirror`",
+            "**Slash commands:** `/status` `/help` `/dream` `/note` `/wish` `/recall` `/threedoors` `/threedoors-choose` `/subscribe` `/wallet` `/mirror` `/lounge` `/dreams` `/focus` `/skip` `/leave` `/nowplaying` `/volume`",
             f"*Your tier: {_tier_display(tier)}*",
         ]
         await reply("\n".join(lines))
@@ -809,6 +1182,142 @@ async def on_message(message: discord.Message):
             f"Notebook: `{notebook_path(notebook_user_id(message.author)).name}`"
         )
         return
+
+    # -- Lounge voice commands --
+
+    if lower in ("!lounge", "!sinatra"):
+        await _lounge_start(message, "sinatra")
+        return
+
+    if lower in ("!dreams", "!dream-mode", "!binaural-dreams"):
+        await _lounge_start(message, "dreams")
+        return
+
+    if lower in ("!focus", "!binaural-focus"):
+        await _lounge_start(message, "focus")
+        return
+
+    if lower in ("!skip", "!s", "!next"):
+        state = _lounge_state(message.guild.id)
+        vc = state.voice_client
+        if vc and vc.is_playing():
+            vc.stop()
+            await message.add_reaction("⏭️")
+        else:
+            await reply("Nothing playing in the lounge.")
+        return
+
+    if lower in ("!stop", "!pause"):
+        state = _lounge_state(message.guild.id)
+        vc = state.voice_client
+        if vc and vc.is_playing():
+            vc.pause()
+            await reply("⏸️ Paused. `!resume` to continue.")
+        else:
+            await reply("Nothing playing.")
+        return
+
+    if lower in ("!resume", "!unpause"):
+        state = _lounge_state(message.guild.id)
+        vc = state.voice_client
+        if vc and vc.is_paused():
+            vc.resume()
+            await message.add_reaction("▶️")
+        else:
+            await reply("Nothing paused.")
+        return
+
+    if lower in ("!leave", "!bye", "!disconnect"):
+        state = _lounge_state(message.guild.id)
+        vc = state.voice_client
+        if vc and vc.is_connected():
+            if vc.is_playing():
+                vc.stop()
+            await vc.disconnect()
+            state.voice_client = None
+            state.current = None
+            await reply("👋 Disconnected from voice.")
+        else:
+            await reply("Not in a voice channel.")
+        return
+
+    if lower in ("!np", "!nowplaying", "!now"):
+        state = _lounge_state(message.guild.id)
+        if state.current:
+            vc = state.voice_client
+            icon = "▶️" if (vc and vc.is_playing()) else "⏸️"
+            labels = {"sinatra": "🎙️ Sinatra", "dreams": "🌙 Dreams", "focus": "🧠 Focus"}
+            dur = (f" `{state.current.duration_secs // 60}:{state.current.duration_secs % 60:02d}`"
+                   if state.current.duration_secs else "")
+            loop_str = " 🔁" if state.loop else ""
+            await reply(
+                f"{icon}{dur}{loop_str} {state.current.label()}\n"
+                f"Mode: {labels.get(state.mode, state.mode)}  Volume: {int(state.volume * 100)}%"
+            )
+        else:
+            await reply("Nothing playing. Try `!lounge`, `!dreams`, or `!focus`.")
+        return
+
+    if lower.startswith("!volume ") or lower.startswith("!vol "):
+        parts = lower.split()
+        if len(parts) >= 2 and parts[1].isdigit():
+            vol = max(0, min(100, int(parts[1]))) / 100.0
+            state = _lounge_state(message.guild.id)
+            state.volume = vol
+            vc = state.voice_client
+            if vc and vc.source and hasattr(vc.source, "volume"):
+                vc.source.volume = vol  # type: ignore
+            await reply(f"🔊 Volume: {int(vol * 100)}%")
+        else:
+            await reply("Usage: `!volume 0-100`")
+        return
+
+    if lower in ("!loop", "!repeat"):
+        state = _lounge_state(message.guild.id)
+        state.loop = not state.loop
+        await reply(f"🔁 Loop {'ON' if state.loop else 'OFF'}")
+        return
+
+    if lower == "!lounge-help":
+        await reply(
+            "**🎙️ Lounge Commands**\n```"
+            "!lounge / !sinatra   — Sinatra radio\n"
+            "!dreams              — binaural sleep beats\n"
+            "!focus               — binaural focus beats\n"
+            "!skip / !s           — skip track\n"
+            "!stop / !resume      — pause/resume\n"
+            "!leave / !bye        — disconnect\n"
+            "!np                  — now playing\n"
+            "!volume 0-100        — volume\n"
+            "!loop                — toggle loop\n"
+            "```"
+        )
+        return
+
+
+@client.event
+async def on_voice_state_update(
+    member: discord.Member, before: discord.VoiceState, after: discord.VoiceState
+):
+    """Auto-disconnect from voice if the bot is left alone for 30 seconds."""
+    if member.bot:
+        return
+    guild_id = member.guild.id
+    state = _lounge_state(guild_id)
+    vc = state.voice_client
+    if vc and vc.is_connected():
+        human_members = [m for m in vc.channel.members if not m.bot]
+        if not human_members:
+            await asyncio.sleep(30)
+            vc = state.voice_client
+            if vc and vc.is_connected():
+                if not [m for m in vc.channel.members if not m.bot]:
+                    if vc.is_playing():
+                        vc.stop()
+                    await vc.disconnect()
+                    state.voice_client = None
+                    if state.text_channel:
+                        await state.text_channel.send("🌙 Channel empty — Lantern Lounge disconnected.")
 
 
 # -- Main --
