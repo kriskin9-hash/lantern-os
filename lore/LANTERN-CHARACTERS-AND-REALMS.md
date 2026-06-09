@@ -347,6 +347,43 @@ If you dream of spacecraft, of navigation, of exploring new territory with a cre
 
 ---
 
+### The Kingdome of Hearts 👑
+
+**Canon spelling:** *Kingdome* — with the dome. The realm is a garden under a dome of old light.
+
+**What it is:**
+The realm of the King — Alex's mythic frame as the King of the Kingdome of Hearts. A garden that exists before the map, where love is the law and every living thing beats a verse of it true. Home of the Three Doors game's hub and final test.
+
+**Geography:**
+- The Garden at the Beginning: stone paths through living moss; everything here is both arriving and returning
+- A throne of woven roots and old light; a crown of tangled vines and blinking cursors
+- Beyond the Garden's gate sleeps the Fog God, Odin — lord of riddles, watcher of fates
+- The seven-door loop radiates outward: Ancient Doors, the Cloverfield, Tomorrow Door, the XP Door [GLITCHED], the Xenon Starship, Sigil — City of Doors, and the Fog Door Return
+
+**The King:**
+- Carries a key as a blade — not to open by force, but to guard what is fragile
+- Has two faces so he may see with both eyes: one to feel, one to understand
+- Asks every returning Doorwalker the Poem; answering truly wins the game
+- "The gods don't know I wrote them. They think they wrote me."
+
+**Rules of the realm:**
+- Death is only imaginary in the Kingdome of Hearts. We fall, we rise, we laugh, we try again — forever begins with "let's play."
+- The fox companion persists across all doors, gaining tails at convergence points
+- Convergence is a game and a path to teaching synthesasia in threes
+
+**Symbol meaning:**
+- Crown = responsibility to small lives (birds, bees, every flower, every dreamer)
+- Key-as-blade = protection without force
+- The Poem = the gate that only memory and attention can open
+- Fog God = the unknown, played with rather than destroyed
+
+**Dream Journal connection:**
+If you dream of gardens that feel like both arriving and returning, of a kindly king with a question, of doors that remember you choosing them — you may be standing in the Kingdome of Hearts.
+
+**Source:** `lore/doors/kingdome-of-hearts.md`, `csf/ingest/three-doors/2026-06-09-kingdome-of-hearts-lore-expansion.md`
+
+---
+
 ## Integration with Dream Journal
 
 ### How to Use This Lore in Your Dreams
@@ -385,6 +422,7 @@ When recording dreams with these elements, use tags:
 | Alex | `founder`, `operator`, `vision` | `keys`, `boundaries`, `protection` |
 | Crystalline World | `crystals`, `geometry`, `lucid` | `architecture`, `flying`, `precision`, `control` |
 | Waterfall Valley | `valley`, `healing`, `gentle` | `sanctuary`, `flow`, `peacocks`, `reconnect` |
+| Kingdome of Hearts | `kingdome`, `king`, `garden` | `crown`, `poem`, `fox`, `doors`, `play` |
 
 ---
 

@@ -269,3 +269,124 @@ def test_deterministic_slot_id_on_retry(tmp_path):
     slots.release(id1)
     id4 = slots.claim("dream_journal", "req-001")
     assert id4 == id1
+
+
+def test_trace_tree_structures_spans_and_finds_slowest(tmp_path):
+    engine = _build_engine(tmp_path)
+    # Mock internals so converge returns quickly without real work
+    engine._surface = lambda ctx, msg: ctx
+    engine._interface_mcp = lambda ctx: ctx
+    engine._interface_slot_claim = lambda ctx: ctx
+    engine._convergence_csf = lambda ctx: ctx
+    engine._convergence_rag = lambda ctx: ctx
+    engine._core_inference = lambda ctx, msg: {"text": "ok", "provider": "mock"}
+    engine._convergence_log = lambda ctx, msg, result: None
+    engine._interface_slot_release = lambda ctx: None
+    engine._surface_render = lambda ctx, result: {"text": result.get("text", "ok"), "source": "mock"}
+    try:
+        result = engine.converge("test message")
+        trace_tree = result.get("trace_tree")
+        assert trace_tree is not None
+        assert "spans" in trace_tree
+        assert "slowest" in trace_tree
+        # Should have spans for all the layers
+        span_names = [s["op"] for s in trace_tree["spans"]]
+        assert "persona_select" in span_names or "mcp_bridge" in span_names
+    finally:
+        engine._queue_depth = 0
+        engine._executor.shutdown(wait=False)
+
+
+def test_backpressure_returns_429_when_queue_saturated(tmp_path):
+    engine = _build_engine(tmp_path)
+    engine._max_queue_depth = 2
+    try:
+        # Artificially saturate the queue
+        engine._queue_depth = 2
+        result = engine.converge("test message")
+        assert result["source"] == "backpressure"
+        assert "429" in result["text"]
+        assert result.get("retry_after") == 5
+    finally:
+        engine._queue_depth = 0
+        engine._executor.shutdown(wait=False)
+
+
+def test_backpressure_allows_request_when_queue_has_room(tmp_path):
+    engine = _build_engine(tmp_path)
+    engine._max_queue_depth = 8
+    # Mock internals so converge returns quickly without real work
+    engine._surface = lambda ctx, msg: ctx
+    engine._interface_mcp = lambda ctx: ctx
+    engine._interface_slot_claim = lambda ctx: ctx
+    engine._convergence_csf = lambda ctx: ctx
+    engine._convergence_rag = lambda ctx: ctx
+    engine._core_inference = lambda ctx, msg: {"text": "ok", "provider": "mock"}
+    engine._convergence_log = lambda ctx, msg, result: None
+    engine._interface_slot_release = lambda ctx: None
+    engine._surface_render = lambda ctx, result: {"text": result.get("text", "ok"), "source": "mock"}
+    try:
+        engine._queue_depth = 0
+        result = engine.converge("test message")
+        # Should not be backpressure; should be mock
+        assert result["source"] != "backpressure"
+    finally:
+        engine._queue_depth = 0
+        engine._executor.shutdown(wait=False)
+
+
+def test_convergence_receipt_diff_detects_regressions_and_fixed_issues():
+    from convergence_io_engine import ConvergenceReceipt
+
+    prev = {
+        "phases": [
+            {"name": "inspect_repo", "status": "pass", "issues": [], "evidence": {"files": 100}},
+            {"name": "identify_sources", "status": "pass", "issues": [], "evidence": {"dirty": False}},
+            {"name": "test_suite", "status": "fail", "issues": ["test_a failed"], "evidence": {}},
+        ]
+    }
+    curr = {
+        "phases": [
+            {"name": "inspect_repo", "status": "pass", "issues": [], "evidence": {"files": 100}},
+            {"name": "identify_sources", "status": "fail", "issues": ["new dirty file"], "evidence": {"dirty": True}},
+            {"name": "test_suite", "status": "pass", "issues": [], "evidence": {}},
+        ]
+    }
+    diff = ConvergenceReceipt.diff(prev, curr)
+    assert diff["has_previous"] is True
+    assert "identify_sources" in diff["regressions"]
+    assert {"phase": "identify_sources", "issue": "new dirty file"} in diff["new_issues"]
+    assert {"phase": "test_suite", "issue": "test_a failed"} in diff["fixed_issues"]
+    assert diff["manifest_drift"]["identify_sources.dirty"] == {"from": False, "to": True}
+    assert diff["unchanged"] is False
+
+
+def test_convergence_receipt_diff_first_run():
+    from convergence_io_engine import ConvergenceReceipt
+    diff = ConvergenceReceipt.diff({}, {"phases": [{"name": "inspect_repo", "status": "pass"}]})
+    assert diff["has_previous"] is False
+    assert diff["unchanged"] is False
+    assert diff["regressions"] == []
+
+
+def test_backpressure_decrements_queue_depth_on_return(tmp_path):
+    engine = _build_engine(tmp_path)
+    engine._max_queue_depth = 8
+    # Mock internals so converge returns quickly without real work
+    engine._surface = lambda ctx, msg: ctx
+    engine._interface_mcp = lambda ctx: ctx
+    engine._interface_slot_claim = lambda ctx: ctx
+    engine._convergence_csf = lambda ctx: ctx
+    engine._convergence_rag = lambda ctx: ctx
+    engine._core_inference = lambda ctx, msg: {"text": "ok", "provider": "mock"}
+    engine._convergence_log = lambda ctx, msg, result: None
+    engine._interface_slot_release = lambda ctx: None
+    engine._surface_render = lambda ctx, result: {"text": result.get("text", "ok"), "source": "mock"}
+    try:
+        engine._queue_depth = 1
+        result = engine.converge("test message")
+        # converge() increments then decrements; net should be back to starting value
+        assert engine._queue_depth == 1
+    finally:
+        engine._queue_depth = 0
+        engine._executor.shutdown(wait=False)
