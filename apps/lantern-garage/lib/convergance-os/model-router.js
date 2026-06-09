@@ -44,6 +44,14 @@ function classifyIntent(message) {
     return "convergance_action";
   }
 
+  if (
+    lower.startsWith("!three-doors") ||
+    lower.startsWith("!threedoors") ||
+    lower.startsWith("!three_doors")
+  ) {
+    return "three_doors";
+  }
+
   let bestIntent = "dream_chat";
   let bestScore = 0;
 
@@ -63,6 +71,7 @@ function classifyIntent(message) {
 
 const INTENT_TO_PROFILE = {
   dream_chat: "lantern-csf-dream",
+  three_doors: "lantern-csf-dream",
   convergance_action: "lantern-convergance",
   capacity_query: "lantern-pcsf",
   technical_debug: "keystone", // Route to Keystone MCP for real-time debugging

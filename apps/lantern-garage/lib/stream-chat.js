@@ -11,6 +11,8 @@ const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
+const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
+const { generateDoorSceneImage } = require("./image-generation");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -87,8 +89,23 @@ function doorsOrFallback(text, isKeystoneDebug = false) {
   return { cleanText, suggestions: finalDoors };
 }
 
+// Non-blocking image generation sidecar for Three Doors mode
+function triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh }) {
+  if (surfaceMode !== "three-doors") return null;
+  
+  const entryId = Date.now().toString();
+  generateDoorSceneImage({ cleanText, doors: suggestions, symbolMesh, entryId })
+    .then(result => {
+      // Image generation completes asynchronously; failure is non-blocking
+    })
+    .catch(err => {
+      // Image generation errors are non-blocking
+    });
+  
+  return entryId;
+}
+
 async function handleStreamChat(req, url, res) {
-  console.log("[Stream] handleStreamChat entered");
   const { collectRequestBody } = require("./http-utils");
   const parsed = await parseStreamChatRequest(req, url, {
     normalizeDreamerUser,
@@ -96,9 +113,18 @@ async function handleStreamChat(req, url, res) {
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
 
+  // Surface mode: dream-chat (default) or three-doors
+  let surfaceMode = "dream-chat";
+
   // Handle bang commands
   const cmd = parseBangCommand(message);
   if (cmd) {
+    // Three Doors mode
+    if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors") {
+      surfaceMode = "three-doors";
+      message = message.replace(/!(?:three-doors|threedoors|three_doors)\b/gi, "").trim() || "begin";
+    }
+
     if (cmd.name === "swarm") {
       // Parse: !swarm <mode> <job> <message...>
       // or:   !swarm <job> <message...>  (default mode = single)
@@ -444,9 +470,8 @@ Interpret this convergence result and provide:
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}`;
+    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
 
-  console.log(`[Stream] systemPrompt: ${systemPrompt.length} chars, csfBlock: ${csfBlock.length} chars, message: "${message.slice(0, 60)}"`);
 
   const sendToken = (token) => sse.sendToken(res, token);
   const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
@@ -543,8 +568,10 @@ Interpret this convergence result and provide:
   // ── Convergance OS: Route intent and select model profile ─────────────────
   let converganceDecision = null;
   try {
-    converganceDecision = await converganceRoute(message, { requestedProvider });
-    console.log(`[Convergance] intent=${converganceDecision.intent} profile=${converganceDecision.profileId} provider=${converganceDecision.provider} ollama=${converganceDecision.ollamaAvailable}`);
+    converganceDecision = await converganceRoute(message, {
+      requestedProvider,
+      forceProfile: surfaceMode === "three-doors" ? "lantern-csf-dream" : undefined,
+    });
     // Inject behavior preamble into system prompt context
     if (converganceDecision.behaviorRules && dreamContext) {
       dreamContext = buildBehaviorPreamble(converganceDecision) + "\n" + dreamContext;
@@ -595,14 +622,11 @@ Interpret this convergence result and provide:
   const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
   
   const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
-  console.log(`[Stream] Ollama gate: ollamaLocalFirst=${ollamaLocalFirst}, message=${!!message}, isKeystoneDebug=${isKeystoneDebug}, requestedProvider="${requestedProvider}", intent=${intent}`);
   
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
-    console.log(`[Stream] Trying Ollama models in sequence: ${modelChain.join(" → ")}`);
     
     for (const ollamaModel of modelChain) {
       try {
-        console.log(`[Stream] Trying Ollama model: ${ollamaModel}`);
         const payload = JSON.stringify({
           model: ollamaModel,
           stream: true,
@@ -641,8 +665,8 @@ Interpret this convergence result and provide:
         });
         
         if (fullReply) {
-          console.log(`[Stream] Ollama success with ${ollamaModel} (${fullReply.length} chars)`);
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          const imageEntryId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
@@ -650,17 +674,17 @@ Interpret this convergence result and provide:
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions, model: ollamaModel });
+          const meta = { agent: agent.name, online: true, cleanText, suggestions, model: ollamaModel };
+          if (imageEntryId) meta.image = { entryId: imageEntryId, status: "generating" };
+          sendDone("ollama", meta);
           return;
         }
       } catch (err) {
-        console.log(`[Stream] Ollama model ${ollamaModel} failed: ${err.message} — trying next model`);
         fullReply = "";
         continue; // Try next model in chain
       }
     }
     
-    console.log(`[Stream] All Ollama models failed — falling through to cloud providers`);
   }
 
   // Provider 1: Gemini (streaming) — cloud fallback
@@ -731,7 +755,6 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      console.log(`[Stream] Gemini fullReply (${fullReply.length} chars): ${fullReply.slice(-200)}`);
       const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
@@ -743,7 +766,6 @@ Interpret this convergence result and provide:
       sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors });
       return;
     } catch (err) {
-      console.log(`[Stream] Gemini ${geminiModel} failed: ${err.message}`);
       recordProviderFailure("gemini", err.message);
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
@@ -828,7 +850,6 @@ Interpret this convergence result and provide:
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
       return;
     } catch (err) {
-      console.log(`[Stream] Claude failed: ${err.message}`);
       recordProviderFailure("anthropic", err.message);
       if (requestedProvider) {
         sendError(humanError(err));
@@ -900,7 +921,6 @@ Interpret this convergence result and provide:
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
       return;
     } catch (err) {
-      console.log(`[Stream] OpenAI failed: ${err.message}`);
       recordProviderFailure("openai", err.message);
       if (requestedProvider) {
         sendError(humanError(err));

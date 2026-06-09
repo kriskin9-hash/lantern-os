@@ -112,9 +112,6 @@
 
   .agent-avatar { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
 
-  .return-chip { opacity: 0.65; border-style: dashed; }
-  .return-chip:hover:not(:disabled) { opacity: 1; border-style: solid; }
-
   /* Override agent bubble for doors content */
   .doors-message .message-content {
     max-width: 90%;
@@ -411,13 +408,9 @@ function removeTyping() {
 function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   removeTyping();
   const scene = SCENES[sceneKey] || {};
-  const allDoors = sceneData.doors || scene.doors || [];
+  const doors = sceneData.doors || scene.doors || [];
   const foxPresent = sceneData.fox_present ?? scene.fox ?? false;
   const history = sceneData.history || [];
-
-  // Show first 2 doors; add a Return chip for non-root scenes
-  const displayDoors = allDoors.slice(0, 2);
-  const showReturn = sceneKey !== "moss-entry";
 
   const chat = document.getElementById("chat");
   const el = document.createElement("div");
@@ -429,13 +422,15 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     ? `<span class="source-badge engine">Engine</span>`
     : `<span class="source-badge offline">Offline</span>`;
 
-  const imgContainerId = "img-" + sceneKey + "-" + Date.now();
+  // Scene art
   const canvasId = "cvs-" + sceneKey + "-" + Date.now();
 
+  // History breadcrumb
   const breadcrumb = history.length > 1
-    ? `<div style="margin-bottom:8px">${history.map(h => `<span class="history-pill">${h}</span>`).join("")}</div>`
+    ? `<div style="margin-bottom:8px">${history.map((h, i) => `<span class="history-pill">${h}</span>`).join("")}</div>`
     : "";
 
+  // Display text: Gemini narration if available, else scene engine text
   const displayText = geminiText || (sceneData.text || scene.text || "");
 
   el.innerHTML = `
@@ -445,15 +440,15 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
         Lantern ${sourceBadge}
       </div>
       ${breadcrumb}
-      <div class="scene-image" id="${imgContainerId}">
+      <div class="scene-image">
         <canvas id="${canvasId}" width="800" height="450"></canvas>
-        <div class="sd-badge" id="badge-${imgContainerId}">generating…</div>
+        <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
       <div style="font-size:14px;line-height:1.6;margin-bottom:10px">${md(displayText)}</div>
       ${foxPresent ? `<div class="fox-line">🦊 The fox is with you.</div>` : ""}
       <div style="margin-top:12px">
         <div class="doors-banner">
-          ${displayDoors.map(d => `
+          ${doors.map(d => `
             <button class="door-chip" onclick="chooseDoor('${d.label}', '${d.name.replace(/'/g, "\\'")}')">
               <div class="door-letter">${d.label}</div>
               <div class="door-info">
@@ -461,14 +456,6 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
                 <div class="door-desc">${d.description}</div>
               </div>
             </button>`).join("")}
-          ${showReturn ? `
-            <button class="door-chip return-chip" onclick="chooseDoor('R', 'Return to The Moss Door')">
-              <div class="door-letter" style="color:var(--muted)">←</div>
-              <div class="door-info">
-                <div class="door-name">Return to The Moss Door</div>
-                <div class="door-desc">Back to the beginning — the moss fox waits.</div>
-              </div>
-            </button>` : ""}
         </div>
       </div>
     </div>`;
@@ -476,7 +463,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 
-  // Draw canvas art immediately, then fire AI image generation in background
+  // Draw canvas art
   requestAnimationFrame(() => {
     const cvs = document.getElementById(canvasId);
     if (cvs) {
@@ -490,61 +477,26 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       };
       drawScene(cvs, sceneKey);
     }
-
-    if (serverAvailable) {
-      apiGenerateSceneImage(sceneKey).then(imgUrl => {
-        const badge = document.getElementById("badge-" + imgContainerId);
-        if (!imgUrl) {
-          if (badge) badge.textContent = "SD prompt — hover to copy";
-          return;
-        }
-        const container = document.getElementById(imgContainerId);
-        if (!container) return;
-        const img = document.createElement("img");
-        img.alt = sceneKey;
-        img.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 0.7s;border-radius:inherit";
-        img.onload = () => {
-          img.style.opacity = "1";
-          const cvs2 = document.getElementById(canvasId);
-          if (cvs2) { cvs2.style.transition = "opacity 0.7s"; cvs2.style.opacity = "0"; setTimeout(() => cvs2.remove(), 800); }
-          if (badge) badge.textContent = "AI ✦";
-        };
-        img.onerror = () => { if (badge) badge.textContent = "SD prompt — hover to copy"; };
-        img.src = imgUrl;
-        container.appendChild(img);
-      });
-    } else {
-      const badge = document.getElementById("badge-" + imgContainerId);
-      if (badge) badge.textContent = "SD prompt — hover to copy";
-    }
   });
 
   // Update quick chips
-  updateQuickChips(displayDoors, showReturn);
-  gameState = { scene_key: sceneKey, doors: allDoors, history };
+  updateQuickChips(doors);
+  gameState = { scene_key: sceneKey, doors, history };
 }
 
-function updateQuickChips(doors, showReturn) {
+function updateQuickChips(doors) {
   const bar = document.getElementById("choice-bar");
   const btns = document.getElementById("choice-buttons");
   if (!doors || !doors.length) { bar.style.display = "none"; return; }
   bar.style.display = "";
-  const chipStyle = "flex:1;padding:12px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:4px";
   btns.innerHTML = doors.map(d => `
     <button id="qbtn-${d.label}" onclick="chooseDoor('${d.label}', '${d.name.replace(/'/g, "\\'")}')"
-      style="${chipStyle}"
+      style="flex:1;padding:12px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:4px"
       onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
       onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'">
       <span style="font-size:18px;font-weight:700;color:var(--accent)">${d.label}</span>
       <span style="font-size:11px;color:var(--muted);text-align:center;line-height:1.3">${d.name}</span>
-    </button>`).join("") + (showReturn ? `
-    <button id="qbtn-R" onclick="chooseDoor('R', 'Return to The Moss Door')"
-      style="${chipStyle};opacity:0.6;border-style:dashed"
-      onmouseover="this.style.borderColor='var(--border)';this.style.background='var(--surface)';this.style.opacity='1'"
-      onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)';this.style.opacity='0.6'">
-      <span style="font-size:18px;font-weight:700;color:var(--muted)">←</span>
-      <span style="font-size:11px;color:var(--muted);text-align:center;line-height:1.3">Return</span>
-    </button>` : "");
+    </button>`).join("");
 }
 
 // ── API calls ─────────────────────────────────────────────────────
@@ -564,17 +516,14 @@ async function apiDoors(action, choice) {
 }
 
 async function apiGeminiNarrate(sceneKey, sceneText) {
-  const visual = SD_PROMPTS[sceneKey] ? `Visual: ${SD_PROMPTS[sceneKey].split(",").slice(0, 5).join(",")}. ` : "";
+  const persona = `You are Lantern — a lantern-headed being, steady and warm. The dreamer just stepped through a door in the Three Doors dream world. Add 2 sentences of presence and feeling. Don't restate what they see — add what it means, what lingers, or one quiet question.`;
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 15000);
   try {
     const r = await fetch("/api/dream/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: `Scene: ${sceneKey}. ${visual}${sceneText.replace(/\*\*/g,"").replace(/\*/g,"").slice(0, 280)}\n\nAdd 2 sentences of presence and feeling grounded in this visual. Don't restate what they see — add what it means, what lingers, or one quiet question.`,
-        agent: "lantern", provider: ""
-      }),
+      body: JSON.stringify({ message: `Scene: ${sceneKey}. ${sceneText.replace(/\*\*/g,"").replace(/\*/g,"").slice(0, 280)}`, agent: "lantern", provider: "" }),
       signal: ctrl.signal,
     });
     if (!r.ok) throw new Error("chat API " + r.status);
@@ -583,37 +532,12 @@ async function apiGeminiNarrate(sceneKey, sceneText) {
   } finally { clearTimeout(t); }
 }
 
-async function apiGenerateSceneImage(sceneKey) {
-  const prompt = SD_PROMPTS[sceneKey];
-  if (!prompt) return null;
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 90000);
-    const r = await fetch("/api/image/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, useApi: true }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    if (!r.ok) return null;
-    const data = await r.json();
-    if (!data.path) return null;
-    const basename = data.path.replace(/\\/g, "/").split("/").pop();
-    return `/repo/data/images/${basename}`;
-  } catch { return null; }
-}
-
 // ── Inline engine fallback ────────────────────────────────────────
 function engineStart() {
   return { scene_key: "moss-entry", text: SCENES["moss-entry"].text, doors: SCENES["moss-entry"].doors, fox_present: true, history: ["Entered The Moss Door"] };
 }
 
 function engineChoose(label) {
-  if (label.toUpperCase() === "R") {
-    const scene = SCENES["moss-entry"];
-    return { scene_key: "moss-entry", text: scene.text, doors: scene.doors, fox_present: scene.fox, history: [...(gameState?.history || []), "Returned to The Moss Door"] };
-  }
   if (!gameState) return null;
   const door = gameState.doors.find(d => d.label.toUpperCase() === label.toUpperCase());
   if (!door) return null;
