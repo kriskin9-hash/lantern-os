@@ -180,7 +180,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
           metadata: { source: result.source || "unknown", threeDoors: !!result.threeDoors },
         });
       } catch { /* provenance non-critical */ }
-      if (!result.reply) { sendJson(res, { error: result.error || "no_provider_configured", agent: result.agent, online: false }, 503); return true; }
+      if (!result.reply) { sendJson(res, { error: result.error || "no_provider_configured", agent: result.agent, online: false, help: result.help || "", suggestions: result.suggestions || [] }, 503); return true; }
       sendJson(res, { ...result, generatedAt: new Date().toISOString() });
     } catch (error) { sendJson(res, { error: error.message, online: false }); }
     return true;

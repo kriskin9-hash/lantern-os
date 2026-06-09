@@ -1,7 +1,7 @@
 const https = require("https");
 const http = require("http");
 const path = require("path");
-const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, generateLocalReply } = require("./dream-chat");
+const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand } = require("./dream-chat");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
@@ -514,24 +514,11 @@ Interpret this convergence result and provide:
     sendDone("offline", { agent: agent.name, online: false });
   };
 
-  // Stream a local persona fallback reply word-by-word so the UI shows real text, not just error notes
+  // No provider available — stream a clear error instead of static persona replies
   const streamLocalFallback = async (reason) => {
-    const fallbackReply = generateLocalReply(message, agent, "");
-    if (reason && reason !== "no_provider_configured") sendError(humanError(reason));
-    const words = fallbackReply.split(" ");
-    for (const word of words) {
-      fullReply += word + " ";
-      sendToken(word + " ");
-      await new Promise((r) => setTimeout(r, 30));
-    }
-    const { cleanText: localClean, suggestions: localDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
-    await appendConversationEntry({
-      recordedAt: new Date().toISOString(),
-      surface: "dream-chat-stream",
-      role: "lantern",
-      text: localClean.slice(0, maxConversationTextLength),
-    }).catch(() => {});
-    sendDone("local_fallback", { agent: agent.name, online: false, cleanText: localClean, suggestions: localDoors });
+    const errorText = humanError(reason || "no_provider_configured");
+    sendError(errorText);
+    sendDone("offline", { agent: agent.name, online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
   };
 
   await appendConversationEntry({
