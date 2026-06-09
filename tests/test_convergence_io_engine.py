@@ -309,6 +309,40 @@ def test_backpressure_allows_request_when_queue_has_room(tmp_path):
         engine._executor.shutdown(wait=False)
 
 
+def test_convergence_receipt_diff_detects_regressions_and_fixed_issues():
+    from convergence_io_engine import ConvergenceReceipt
+
+    prev = {
+        "phases": [
+            {"name": "inspect_repo", "status": "pass", "issues": [], "evidence": {"files": 100}},
+            {"name": "identify_sources", "status": "pass", "issues": [], "evidence": {"dirty": False}},
+            {"name": "test_suite", "status": "fail", "issues": ["test_a failed"], "evidence": {}},
+        ]
+    }
+    curr = {
+        "phases": [
+            {"name": "inspect_repo", "status": "pass", "issues": [], "evidence": {"files": 100}},
+            {"name": "identify_sources", "status": "fail", "issues": ["new dirty file"], "evidence": {"dirty": True}},
+            {"name": "test_suite", "status": "pass", "issues": [], "evidence": {}},
+        ]
+    }
+    diff = ConvergenceReceipt.diff(prev, curr)
+    assert diff["has_previous"] is True
+    assert "identify_sources" in diff["regressions"]
+    assert {"phase": "identify_sources", "issue": "new dirty file"} in diff["new_issues"]
+    assert {"phase": "test_suite", "issue": "test_a failed"} in diff["fixed_issues"]
+    assert diff["manifest_drift"]["identify_sources.dirty"] == {"from": False, "to": True}
+    assert diff["unchanged"] is False
+
+
+def test_convergence_receipt_diff_first_run():
+    from convergence_io_engine import ConvergenceReceipt
+    diff = ConvergenceReceipt.diff({}, {"phases": [{"name": "inspect_repo", "status": "pass"}]})
+    assert diff["has_previous"] is False
+    assert diff["unchanged"] is False
+    assert diff["regressions"] == []
+
+
 def test_backpressure_decrements_queue_depth_on_return(tmp_path):
     engine = _build_engine(tmp_path)
     engine._max_queue_depth = 8

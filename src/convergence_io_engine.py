@@ -855,11 +855,13 @@ class ConvergenceLoop:
         watch = ConvergenceWatch(self.repo_root).check()
         if watch["stale"]:
             status = "stale"
+        current_receipt = {"phases": [self._phase_to_dict(r) for r in audit]}
+        diff = ConvergenceReceipt.diff(previous_receipt or {}, current_receipt)
         return {
             "timestamp": _now(),
             "status": status,
             "total_ms": total_ms,
-            "phases": [self._phase_to_dict(r) for r in audit],
+            "phases": current_receipt["phases"],
             "artifacts": self.artifacts,
             "promotion_ready": promotion_ready,
             "safety": safety,
@@ -868,6 +870,7 @@ class ConvergenceLoop:
             "adaptive_terminated": tick + 1 < max_ticks,
             "drift": drift,
             "watch": watch,
+            "diff": diff,
         }
 
     def _phase_to_dict(self, r: PhaseResult) -> Dict[str, Any]:
@@ -1710,6 +1713,73 @@ class ConvergenceLoop:
             return {"status": "drift_detected" if drift else "stable", "drift": drift}
         except Exception:
             return {"status": "error", "drift": []}
+
+
+class ConvergenceReceipt:
+    """Static helpers for comparing convergence receipts between runs."""
+
+    @staticmethod
+    def diff(prev: Dict[str, Any], current: Dict[str, Any]) -> Dict[str, Any]:
+        """Compare two receipts and surface new issues, fixed issues, and regressions."""
+        result: Dict[str, Any] = {
+            "has_previous": bool(prev),
+            "regressions": [],
+            "new_issues": [],
+            "fixed_issues": [],
+            "phase_changes": [],
+            "manifest_drift": {},
+            "unchanged": True,
+        }
+
+        if not prev:
+            result["unchanged"] = False
+            return result
+
+        prev_phases = {p["name"]: p for p in prev.get("phases", [])}
+        curr_phases = {p["name"]: p for p in current.get("phases", [])}
+
+        all_names = set(prev_phases.keys()) | set(curr_phases.keys())
+        for name in sorted(all_names):
+            prev_p = prev_phases.get(name, {})
+            curr_p = curr_phases.get(name, {})
+            prev_status = prev_p.get("status", "unknown")
+            curr_status = curr_p.get("status", "unknown")
+
+            if prev_status != curr_status:
+                result["phase_changes"].append({
+                    "phase": name,
+                    "from": prev_status,
+                    "to": curr_status,
+                })
+                result["unchanged"] = False
+
+                # Regression: previously passing, now failing
+                if prev_status == "pass" and curr_status in ("fail", "hold"):
+                    result["regressions"].append(name)
+
+            # Issue diff
+            prev_issues = set(prev_p.get("issues", []))
+            curr_issues = set(curr_p.get("issues", []))
+            for issue in curr_issues - prev_issues:
+                result["new_issues"].append({"phase": name, "issue": issue})
+                result["unchanged"] = False
+            for issue in prev_issues - curr_issues:
+                result["fixed_issues"].append({"phase": name, "issue": issue})
+                result["unchanged"] = False
+
+        # Manifest / evidence drift from phase evidence
+        for name in curr_phases:
+            curr_ev = curr_phases[name].get("evidence", {})
+            prev_ev = prev_phases.get(name, {}).get("evidence", {})
+            for key in ("files", "dirs", "receipt_count", "dirty"):
+                if key in curr_ev and key in prev_ev and curr_ev[key] != prev_ev[key]:
+                    result["manifest_drift"][f"{name}.{key}"] = {
+                        "from": prev_ev[key],
+                        "to": curr_ev[key],
+                    }
+                    result["unchanged"] = False
+
+        return result
 
 
 class ConvergenceWatch:
