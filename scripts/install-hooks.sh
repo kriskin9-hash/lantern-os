@@ -41,6 +41,12 @@ cp "$REPO_ROOT/scripts/hooks/commit-msg-format" "$GIT_HOOKS_DIR/commit-msg"
 chmod +x "$GIT_HOOKS_DIR/commit-msg"
 echo "    [OK] commit-msg hook installed"
 
+# Install post-merge hook (stale-branch warning)
+echo "[*] Installing post-merge hook (staleness monitor)..."
+cp "$REPO_ROOT/scripts/hooks/post-merge" "$GIT_HOOKS_DIR/post-merge"
+chmod +x "$GIT_HOOKS_DIR/post-merge"
+echo "    [OK] post-merge hook installed (warns when branches drift > 10 commits behind master)"
+
 # Install prepare-commit-msg hook (optional template)
 echo "[*] Creating prepare-commit-msg hook template..."
 cat > "$GIT_HOOKS_DIR/prepare-commit-msg" << 'HOOK_SCRIPT'
