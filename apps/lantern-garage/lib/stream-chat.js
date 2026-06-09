@@ -354,9 +354,19 @@ Interpret this convergence result and provide:
       return;
     }
 
-    res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-    res.end(JSON.stringify({ error: "unsupported_command", command: cmd.name }));
-    return;
+    // Three Doors variants: start fresh game if no history, else strip command and continue
+    if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors") {
+      if (history && history.length > 0) {
+        // Game already in progress — strip the bang command, keep any surrounding text
+        const stripped = message.replace(/!(?:three-doors|threedoors|three_doors)\b/gi, "").trim();
+        message = stripped || "continue";
+      }
+      // fall through to normal SSE chat routing below
+    } else {
+      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ error: "unsupported_command", command: cmd.name }));
+      return;
+    }
   }
 
   sse.writeStreamHeaders(res);
