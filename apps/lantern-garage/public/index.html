@@ -528,22 +528,7 @@
     <span class="sep ml">Open source · runs locally · no account needed</span>
   </div>
 </footer>
-<script>
-  /* Theme toggle */
-  (function() {
-    const stored = localStorage.getItem('lantern-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = stored ? stored === 'dark' : prefersDark;
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-  })();
-  function toggleTheme() {
-    const html = document.documentElement;
-    const isDark = html.getAttribute('data-theme') === 'dark';
-    const next = isDark ? 'light' : 'dark';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('lantern-theme', next);
-  }
-</script>
+<script src="js/theme-toggle.js"></script>
 <script>
 /* Real-time honest state loader */
 (function() {

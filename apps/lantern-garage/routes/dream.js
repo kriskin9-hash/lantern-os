@@ -1,3 +1,4 @@
+const http = require("http");
 const https = require("https");
 const { refreshProviderCache } = require("../lib/provider-cache");
 const modelRegistry = require("../lib/model-registry");
@@ -313,8 +314,26 @@ print(e.sd_prompt_for_state())`;
       // Use in-house SD server for image generation
       const sdHost = process.env.SD_HOST || "127.0.0.1";
       const sdPort = process.env.SD_PORT || "7860";
-      const sdUrl = `http://${sdHost}:${sdPort}/generate`;
-      
+
+      // Fast probe: check if SD server is reachable before attempting generation
+      const sdReachable = await new Promise((resolve) => {
+        const probe = http.request({ hostname: sdHost, port: sdPort, path: "/", method: "GET" },
+          () => { probe.destroy(); resolve(true); });
+        probe.on("error", () => resolve(false));
+        probe.setTimeout(2000, () => { probe.destroy(); resolve(false); });
+        probe.end();
+      });
+
+      if (!sdReachable) {
+        sendJson(res, {
+          image_available: false,
+          image_prompt: body.prompt || "",
+          error: "sd_server_unavailable",
+          generatedAt: new Date().toISOString(),
+        });
+        return true;
+      }
+
       const imageResult = await new Promise((resolve, reject) => {
         const payload = JSON.stringify({
           prompt: body.prompt,
@@ -324,7 +343,7 @@ print(e.sd_prompt_for_state())`;
           width: 768,
           height: 512,
         });
-        
+
         const reqSD = http.request({
           hostname: sdHost,
           port: sdPort,
@@ -348,15 +367,14 @@ print(e.sd_prompt_for_state())`;
       });
 
       sendJson(res, {
-        success: true,
+        image_available: true,
         image: imageResult.image,
-        prompt: imageResult.prompt,
-        available: true,
+        image_prompt: imageResult.prompt || body.prompt,
         generatedAt: new Date().toISOString(),
       });
       return true;
-    } catch (error) { 
-      sendJson(res, { error: error.message, available: false, generatedAt: new Date().toISOString() }, 500); 
+    } catch (error) {
+      sendJson(res, { image_available: false, error: error.message, generatedAt: new Date().toISOString() }, 500);
     }
     return true;
   }
@@ -572,6 +590,24 @@ print(e.sd_prompt_for_state())`;
     return true;
   }
 
+  // ── Three Doors UI metrics collection ────────────────────────────────
+  if (url.pathname === "/api/metrics/three-doors" && req.method === "POST") {
+    try {
+      const body = JSON.parse(await collectRequestBody(req));
+      const record = {
+        timestamp: new Date().toISOString(),
+        event: body.event,
+        payload: body.payload || {},
+      };
+      const metricsDir = path.join(repoRoot, "data", "metrics");
+      if (!fs.existsSync(metricsDir)) fs.mkdirSync(metricsDir, { recursive: true });
+      const metricsPath = path.join(metricsDir, "three-doors-events.jsonl");
+      fs.appendFileSync(metricsPath, JSON.stringify(record) + "\n", "utf8");
+      sendJson(res, { ok: true });
+    } catch (err) { sendJson(res, { error: err.message }, 500); }
+    return true;
+  }
+
   // ── Convergence Models 3 — live status from Ollama ────────────────────
   if (url.pathname === "/api/dream/lantern-models" && req.method === "GET") {
     const LANTERN_MODELS = [
@@ -631,6 +667,7 @@ async function enrichDreamEntry(entry) {
   };
 
   // lantern-csf-dream: symbolic summary and door suggestions
+  let dreamLatency = Date.now();
   try {
     const { spawn } = require("child_process");
     const py = process.platform === "win32" ? "python" : "python3";
@@ -643,35 +680,46 @@ async function enrichDreamEntry(entry) {
       proc.stdin.write(JSON.stringify({ text: entry.text }));
       proc.stdin.end();
     });
+    dreamLatency = Date.now() - dreamLatency;
     if (result) {
       const parsed = JSON.parse(result);
       enrichment.doors = parsed.doors || [];
       enrichment.symbols = parsed.symbols || entry.symbols;
     }
+    logModelUsage({ modelId: modelRegistry.text.dream.profileId, provider: "ollama", action: "generate", metadata: { latencyMs: dreamLatency, entryId: entry.id } });
   } catch { /* non-critical */ }
 
   // lantern-pcsf: privacy/provider receipt
   try {
     enrichment.receipt.privacyBoundary = "local_private";
     enrichment.receipt.claimBoundary = "grounded";
+    logModelUsage({ modelId: modelRegistry.text.pcsf.profileId, provider: "static", action: "receipt", metadata: { entryId: entry.id, privacyBoundary: "local_private" } });
   } catch { /* non-critical */ }
 
   // lantern-convergance: promote/hold/archive decision
   try {
     enrichment.receipt.decision = "hold";
+    logModelUsage({ modelId: modelRegistry.text.convergance.profileId, provider: "static", action: "decide", metadata: { entryId: entry.id, decision: "hold" } });
   } catch { /* non-critical */ }
 
   // Optional image generation (non-blocking)
   if (process.env.LANTERN_IMAGE_LORA) {
+    const imgStart = Date.now();
     generateDoorSceneImage({ cleanText: entry.text, doors: enrichment.doors, symbolMesh: enrichment.symbols, entryId: entry.id })
       .then(result => {
+        const latencyMs = Date.now() - imgStart;
         if (result.ok) {
           enrichment.image = { status: "generated", path: `data/images/dream-journal/${entry.id}.png`, model: modelRegistry.image.dream.modelId, adapter: process.env.LANTERN_IMAGE_LORA };
+          logModelUsage({ modelId: modelRegistry.image.dream.modelId, provider: "local", action: "generate", metadata: { latencyMs, entryId: entry.id, status: "success" } });
         } else {
           enrichment.image = { status: "failed", error: result.error };
+          logModelUsage({ modelId: modelRegistry.image.dream.modelId, provider: "local", action: "generate", metadata: { latencyMs, entryId: entry.id, status: "failed", error: result.error } });
         }
       })
-      .catch(() => { enrichment.image = { status: "failed" }; });
+      .catch((err) => {
+        enrichment.image = { status: "failed" };
+        logModelUsage({ modelId: modelRegistry.image.dream.modelId, provider: "local", action: "generate", metadata: { entryId: entry.id, status: "failed", error: err?.message } });
+      });
   }
 
   return enrichment;
@@ -706,6 +754,23 @@ function recordChatProvenance({ actionId, agentId, providerId, inputSummary, out
   if (!require("fs").existsSync(provenanceDir)) require("fs").mkdirSync(provenanceDir, { recursive: true });
   const provenancePath = require("path").join(provenanceDir, "actions.jsonl");
   require("fs").appendFileSync(provenancePath, JSON.stringify(record) + "\n", "utf8");
+}
+
+// ── Model usage metrics (local JSONL) ───────────────────────────────
+function logModelUsage({ modelId, provider, action, metadata }) {
+  const fs = require("fs");
+  const path = require("path");
+  const record = {
+    timestamp: new Date().toISOString(),
+    modelId,
+    provider,
+    action,
+    metadata: metadata || {},
+  };
+  const metricsDir = path.join(path.resolve(__dirname, "..", "..", ".."), "data", "metrics");
+  if (!fs.existsSync(metricsDir)) fs.mkdirSync(metricsDir, { recursive: true });
+  const metricsPath = path.join(metricsDir, "model-usage.jsonl");
+  fs.appendFileSync(metricsPath, JSON.stringify(record) + "\n", "utf8");
 }
 
 // Shared helper — read all dream entries from monthly JSONL files
