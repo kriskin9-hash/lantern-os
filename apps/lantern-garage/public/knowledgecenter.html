@@ -133,10 +133,6 @@
     </div>
   </div>
 </div>
-<script>
-(function(){const t=localStorage.getItem('lantern-theme');if(t){document.documentElement.setAttribute('data-theme',t);}})();
-function toggleTheme(){const h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('lantern-theme',n);document.getElementById('theme-toggle').textContent=n==='dark'?'🌙':'☀';}
-(function(){const t=localStorage.getItem('lantern-theme');if(t==='light')document.getElementById('theme-toggle').textContent='☀';})();
-</script>
+<script src="js/theme-toggle.js"></script>
 </body>
 </html>

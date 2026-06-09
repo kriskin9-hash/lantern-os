@@ -65,7 +65,8 @@
     border: 1px solid var(--border);
     position: relative;
   }
-  .scene-image canvas { width: 100%; height: 100%; display: block; }
+  .scene-image canvas,
+  .scene-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
   .scene-image .sd-badge {
     position: absolute;
     bottom: 7px;
@@ -168,7 +169,7 @@
       <div id="status-line" style="font-size:11px;color:var(--muted)">Follow the fox through the dream world</div>
     </div>
     <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
-    <button onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit" title="Toggle theme">☀</button>
+    <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit" title="Toggle theme">🌙</button>
   </header>
 
   <!-- Chat area -->
@@ -286,17 +287,7 @@ let doorsLocked = false;
 let serverAvailable = null;
 
 // ── Theme ─────────────────────────────────────────────────────────
-(function() {
-  const s = localStorage.getItem("lantern-theme");
-  const d = s ? s === "dark" : window.matchMedia("(prefers-color-scheme:dark)").matches;
-  document.documentElement.setAttribute("data-theme", d ? "dark" : "light");
-})();
-function toggleTheme() {
-  const h = document.documentElement;
-  const next = h.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  h.setAttribute("data-theme", next);
-  localStorage.setItem("lantern-theme", next);
-}
+// Shared theme-toggle.js loaded below
 
 // ── Server check ─────────────────────────────────────────────────
 async function checkServer() {
@@ -308,6 +299,15 @@ async function checkServer() {
     ? "Lantern — Gemini narration active"
     : "Offline — inline engine active";
   return serverAvailable;
+}
+
+// ── Metrics collection (non-blocking) ────────────────────────────
+function logThreeDoorsEvent(event, payload) {
+  fetch("/api/metrics/three-doors", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event, payload, timestamp: Date.now() }),
+  }).catch(() => {});
 }
 
 // ── Canvas art ───────────────────────────────────────────────────
@@ -424,6 +424,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
 
   // Scene art
   const canvasId = "cvs-" + sceneKey + "-" + Date.now();
+  const imgId = "img-" + sceneKey + "-" + Date.now();
 
   // History breadcrumb
   const breadcrumb = history.length > 1
@@ -441,7 +442,10 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       </div>
       ${breadcrumb}
       <div class="scene-image">
-        <canvas id="${canvasId}" width="800" height="450"></canvas>
+        <img id="${imgId}" src="data/images/three-doors/${sceneKey}.png" alt="Scene art" loading="lazy"
+          onload="logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })"
+          onerror="this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' })">
+        <canvas id="${canvasId}" width="800" height="450" style="display:none"></canvas>
         <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
       <div style="font-size:14px;line-height:1.6;margin-bottom:10px">${md(displayText)}</div>
@@ -463,11 +467,23 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 
-  // Draw canvas art
+  // Wire SD prompt copy for both img and canvas
   requestAnimationFrame(() => {
+    const img = document.getElementById(imgId);
     const cvs = document.getElementById(canvasId);
+    const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
+
+    if (img) {
+      img.title = sdPrompt;
+      img.style.cursor = "pointer";
+      img.onclick = () => {
+        navigator.clipboard.writeText(sdPrompt).catch(() => {});
+        img.title = "Copied!";
+        setTimeout(() => { img.title = sdPrompt; }, 1500);
+      };
+    }
+
     if (cvs) {
-      const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
       cvs.title = sdPrompt;
       cvs.style.cursor = "pointer";
       cvs.onclick = () => {
@@ -475,7 +491,6 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
         cvs.title = "Copied!";
         setTimeout(() => { cvs.title = sdPrompt; }, 1500);
       };
-      drawScene(cvs, sceneKey);
     }
   });
 
@@ -586,6 +601,8 @@ async function chooseDoor(label, name) {
   if (doorsLocked) return;
   doorsLocked = true;
 
+  logThreeDoorsEvent("door_choice", { label, name, sceneKey: gameState?.scene_key });
+
   document.querySelectorAll(".door-chip, #choice-buttons button").forEach(b => b.disabled = true);
   document.getElementById("choice-bar").style.opacity = "0.4";
   appendUserMsg(`Door ${label} — ${name}`);
@@ -608,5 +625,6 @@ function resetGame() {
 }
 
 </script>
+<script src="js/theme-toggle.js"></script>
 </body>
 </html>
