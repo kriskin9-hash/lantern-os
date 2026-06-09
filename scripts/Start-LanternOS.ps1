@@ -1,4 +1,3 @@
-#Requires -Version 7
 <#
 .SYNOPSIS
     Lantern OS — Complete Service Quickstart
@@ -43,6 +42,28 @@ param(
     [switch]$NoBrowser,
     [switch]$Verbose
 )
+
+# Self-heal: this script needs PowerShell 7+. If launched under Windows PowerShell 5.1
+# (e.g. by an old autostart .bat), relaunch under pwsh with the same arguments.
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $pwshCmd = Get-Command pwsh -ErrorAction SilentlyContinue
+    if (-not $pwshCmd) {
+        Write-Host "[Lantern OS] PowerShell 7+ required but 'pwsh' was not found." -ForegroundColor Red
+        Write-Host "[Lantern OS] Install it with:  winget install Microsoft.PowerShell" -ForegroundColor Yellow
+        exit 1
+    }
+    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    foreach ($kv in $PSBoundParameters.GetEnumerator()) {
+        if ($kv.Value -is [System.Management.Automation.SwitchParameter]) {
+            if ($kv.Value) { $argList += "-$($kv.Key)" }
+        } else {
+            $argList += @("-$($kv.Key)", "$($kv.Value)")
+        }
+    }
+    Write-Host "[Lantern OS] Relaunching under PowerShell 7 ($($pwshCmd.Source))..." -ForegroundColor Cyan
+    & $pwshCmd.Source @argList
+    exit $LASTEXITCODE
+}
 
 $ErrorActionPreference = "Continue"
 $RepoRoot = (Resolve-Path $Root).Path

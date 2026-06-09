@@ -254,6 +254,19 @@ This repo enforces a **single workstream**: only one open feature PR at a time.
 
 ---
 
+## Task Intake: GitHub Issues ARE the Queue (Critical)
+
+Full doctrine: [docs/AGENT-SWARM-OPERATIONS.md](docs/AGENT-SWARM-OPERATIONS.md)
+
+- **No issue, no work.** Agents only work GitHub issues labeled `agent-task` plus a stream label (`convergence-io` or `dream-journal`). Unlabeled issues are invisible to agents.
+- **Pull top-of-queue by priority** (`p0` → `p1` → `p2`) **within your lane's assigned stream.** Never browse for work, never invent tasks, never reorder the queue.
+- **Lane → stream routing:** `claude/` → dream-journal; `gemini/` + `codex/` → convergence-io; other lanes are human-assigned flex.
+- **Definition of done is mechanical:** acceptance criteria met, the issue's test command passes, PR references the issue number, CSF session note ingested to `csf/ingest/`.
+- **Agents never:** add/remove issue labels, set priorities, edit `.claude/agent-slots.json`, or merge PRs. Humans do all routing and merging.
+- New tasks enter via the issue forms in `.github/ISSUE_TEMPLATE/` (blank issues are disabled).
+
+---
+
 ## Workspace Hygiene (Critical)
 
 A clean workspace prevents context fragmentation and merge rot.
