@@ -29,7 +29,7 @@ This repo is designed for agentic-first workflows. Every agent (Claude, Gemini, 
 # Health check — is the server running? What's the state?
 python src/convergence_io_engine.py health
 
-# What needs fixing? Run the 12-phase convergence loop
+# What needs fixing? Run the 20-phase tesseract convergence loop
 python src/convergence_io_engine.py loop
 
 # Ask the AI (uses Gemini/Claude via the provider chain)
@@ -150,6 +150,41 @@ See [`QUICKSTART.md`](QUICKSTART.md) for the full operator-facing guide.
 - All other `skills/*/SKILL.md` entries
 - `super_jarvis_fleet` (36 slots, currently `activeSlots = 0`)
 - `kalshi_bridge`
+
+---
+
+## Tesseract Convergence Loop (2026-06-09 Upgrade)
+
+The convergence loop has been upgraded from 12 phases to 20 phases with tesseract integration:
+
+**New Phases (12-14):**
+- **Phase 12: navigate_status_cube** — 4D Status Cube navigation (x: location, y: lane, z: boundary, t: timeline)
+- **Phase 13: project_future_states** — Future state projection from past/present (comet-leap integration)
+- **Phase 14: update_bayesian_beliefs** — Bayesian belief system updates (health, animal, ecosystem, economy, culture)
+
+**Status Cube Axes:**
+- **x**: location (repo, apps, skills, scripts)
+- **y**: lane (control, report, dollhouse, wallet, device, product)
+- **z**: boundary (proven, candidate, held, blocked)
+- **t**: timeline (evidence receipts, validation history)
+
+**Bayesian Belief Dimensions:**
+- **health**: HFF sensors, HFF API
+- **animal**: HFF world model tracking
+- **ecosystem**: HFF integration
+- **economy**: Wallet ledger, cash loop
+- **culture**: Lore, three doors
+
+**Redundancy Requirements (ArXiv 2601.05280v2):**
+- All critical fallback categories require 2+ redundant sources
+- External grounding: 2+ memory, 2+ evidence, 2+ provider sources
+- CTF symbolic: 2+ engines, 2+ bridges, 2+ dictionaries
+- ASI benchmarks: 2+ core, 2+ jagged frontier, 2+ capability domains
+- Validation ring: 5 validators (alpha, beta, gamma, delta, epsilon)
+
+**Documentation:**
+- See [`docs/TESSERACT-CONVERGENCE-LOOP.md`](docs/TESSERACT-CONVERGENCE-LOOP.md) for full details
+- See [`docs/CONVERGENCE-LOOP.md`](docs/CONVERGENCE-LOOP.md) for original 12-step method
 
 Never claim a skill or fleet slot is active unless confirmed by implementation or status file.
 

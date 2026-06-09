@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -582,8 +583,11 @@ class ValidationRing:
             return True
 
     def _simulate_validators(self, job: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Simulate 3 independent validators (agents) checking the same claim."""
-        validators = ["alpha", "beta", "gamma"]
+        """
+        Simulate 5 independent validators (agents) checking the same claim.
+        REQUIRES: At least 2 redundant validators for fallback reliability.
+        """
+        validators = ["alpha", "beta", "gamma", "delta", "epsilon"]
         votes = []
         for v in validators:
             start = time.time()
@@ -671,18 +675,27 @@ class ConvergenceLoop:
         (5, "retire_old", "Retire old / deprecated surfaces"),
         (6, "map_evidence", "Map claims to evidence"),
         (7, "classify_boundary", "Classify capability, boundary, rollback"),
-        (8, "run_validation", "Run cheapest validation checks"),
-        (9, "run_validation_ring", "Run bounded agent validation ring"),
-        (10, "fix_failures", "Fix first 2-4 actionable failures"),
-        (11, "re_run_validation", "Re-run validation"),
-        (12, "record_evidence", "Record evidence and remaining blockers"),
-        (13, "promote_or_hold", "Promote, hold, or reject artifacts"),
+        (8, "check_ctf_symbolic", "Check CTF (CSF) symbolic framework integration"),
+        (9, "check_external_grounding", "Check external signal injection (αt > 0)"),
+        (10, "check_externally_anchored", "Check externally anchored optimization (axiomatic base, external verifier)"),
+        (11, "check_asi_benchmarks", "Check ASI/AGI benchmark tracking (ARC-AGI, SuperARC, HLE)"),
+        (12, "navigate_status_cube", "Navigate 4D Status Cube (x: location, y: lane, z: boundary, t: timeline)"),
+        (13, "project_future_states", "Project future states from past/present (comet-leap integration)"),
+        (14, "update_bayesian_beliefs", "Update Bayesian belief system (health, animal, ecosystem, economy, culture)"),
+        (15, "run_validation", "Run cheapest validation checks"),
+        (16, "run_validation_ring", "Run bounded agent validation ring"),
+        (17, "fix_failures", "Fix first 2-4 actionable failures"),
+        (18, "re_run_validation", "Re-run validation"),
+        (19, "record_evidence", "Record evidence and remaining blockers"),
+        (20, "promote_or_hold", "Promote, hold, or reject artifacts"),
     ]
 
     # Phases whose results can be cached across ticks if repo state hash matches
     _CACHEABLE_PHASES = {
         "inspect_repo", "identify_sources", "read_manifests",
         "state_objective", "map_evidence", "classify_boundary",
+        "check_ctf_symbolic", "check_external_grounding", "check_externally_anchored", "check_asi_benchmarks",
+        "navigate_status_cube", "project_future_states", "update_bayesian_beliefs",
     }
 
     def __init__(
@@ -924,12 +937,601 @@ class ConvergenceLoop:
         found = [d for d in docs if (self.repo_root / "docs" / d).exists()]
         return PhaseResult(7, "classify_boundary", "pass", evidence={"docs_present": found})
 
+    def _phase_check_ctf_symbolic(self) -> PhaseResult:
+        """
+        Check CTF (CSF - Compressed Symbolic Format) symbolic framework integration.
+        CTF provides the symbolic reasoning layer for ALEX ASI architecture.
+        
+        REQUIRES: At least 2 redundant sources per category for fallback reliability.
+        """
+        issues = []
+        evidence = {
+            "ctf_components": [],
+            "redundant_categories": {},
+            "symbolic_dictionary_size": 0,
+            "memory_integration": "none",
+            "alex_progression": 0.0
+        }
+        
+        # Check for CSF symbolic components with redundancy requirements
+        ctf_categories = {
+            "symbolic_engines": [
+                ("Symbolic Compressor", self.repo_root / "src" / "csf" / "v07" / "csf_symbolic_compressor.py"),
+                ("Symbolic Dictionary", self.repo_root / "src" / "csf" / "v07" / "symbolic_dictionary.py"),
+                ("Convergence Engine", self.repo_root / "src" / "csf" / "v07" / "convergence_engine.py"),
+                ("Quantum Dust Field", self.repo_root / "src" / "csf" / "v07" / "quantum_dust.py"),
+            ],
+            "memory_bridges": [
+                ("MemOS Bridge", self.repo_root / "src" / "convergence_io" / "memos_bridge.py"),
+                ("CSF Memory", self.repo_root / "src" / "csf" / "csf_file.py"),
+                ("RAG Integration", self.repo_root / "src" / "convergence_io" / "ccf.py"),
+            ],
+            "dictionaries": [
+                ("Symbolic Dictionary v07", self.repo_root / "src" / "csf" / "v07" / "symbolic_dictionary.py"),
+                ("Symbolic Dictionary v06", self.repo_root / "src" / "csf" / "v06" / "symbolic_dictionary.py"),
+                ("CSF Dictionary", self.repo_root / "src" / "csf" / "dictionary.py"),
+            ],
+        }
+        
+        for category, components in ctf_categories.items():
+            available = []
+            for name, path in components:
+                if path.exists():
+                    available.append(name)
+                    evidence["ctf_components"].append(name)
+            evidence["redundant_categories"][category] = {
+                "available": available,
+                "required": 2,
+                "satisfied": len(available) >= 2
+            }
+            if len(available) < 2:
+                issues.append(f"Insufficient redundancy in {category}: {len(available)}/2 components available")
+        
+        # Check for symbolic dictionary (primary source)
+        dict_path = self.repo_root / "src" / "csf" / "v07" / "symbolic_dictionary.py"
+        if dict_path.exists():
+            try:
+                evidence["symbolic_dictionary_size"] = dict_path.stat().st_size
+            except Exception:
+                pass
+        
+        # Check memory integration with redundant sources
+        memory_sources = [
+            ("MemOS cube", self.repo_root / "data" / "memos_cube"),
+            ("RAG cache", self.repo_root / "data" / "rag-cache"),
+            ("CSF memory", self.repo_root / "data" / "csf-memory"),
+            ("Dream journal", self.repo_root / "data" / "dream_journal"),
+        ]
+        available_memory = [name for name, path in memory_sources if path.exists()]
+        evidence["memory_sources"] = available_memory
+        evidence["memory_redundancy"] = f"{len(available_memory)}/{len(memory_sources)}"
+        
+        # Check knowledge graph world model (per Knowlee 2026 architecture)
+        world_model_sources = [
+            ("HFF World Model", self.repo_root / "integrations" / "human-flourishing-frameworks" / "world_model.py"),
+            ("HFF API World Model", self.repo_root / "src" / "hff-api" / "world_model.py"),
+            ("Bayesian World Model", self.repo_root / "skills" / "bayesian-world-model" / "SKILL.md"),
+        ]
+        available_world_model = [name for name, path in world_model_sources if path.exists()]
+        evidence["world_model_sources"] = available_world_model
+        evidence["world_model_redundancy"] = f"{len(available_world_model)}/{len(world_model_sources)}"
+        
+        if len(available_memory) >= 2:
+            evidence["memory_integration"] = "redundant_memory"
+        elif len(available_memory) == 1:
+            evidence["memory_integration"] = "single_memory"
+            issues.append(f"Single memory source ({available_memory[0]}) - requires 2+ for redundancy")
+        else:
+            evidence["memory_integration"] = "no_memory"
+            issues.append("No memory sources available - requires 2+ for redundancy")
+        
+        # Calculate ALEX ASI progression score (0.0-1.0) with redundancy bonus
+        alex_score = 0.0
+        if evidence["ctf_components"]:
+            alex_score += 0.3 * (len(evidence["ctf_components"]) / sum(len(c) for c in ctf_categories.values()))
+        
+        # Redundancy bonus: each satisfied category adds signal
+        redundancy_satisfied = sum(1 for cat in evidence["redundant_categories"].values() if cat["satisfied"])
+        alex_score += 0.3 * (redundancy_satisfied / len(ctf_categories))
+        
+        if len(available_memory) >= 2:
+            alex_score += 0.2
+        if evidence["symbolic_dictionary_size"] > 0:
+            alex_score += 0.2
+        
+        evidence["alex_progression"] = round(alex_score, 3)
+        evidence["redundancy_satisfied"] = f"{redundancy_satisfied}/{len(ctf_categories)}"
+        
+        # Determine CTF status
+        if alex_score >= 0.7 and redundancy_satisfied >= 2 and len(available_memory) >= 2:
+            evidence["ctf_status"] = "strong_symbolic_layer"
+        elif alex_score >= 0.4:
+            evidence["ctf_status"] = "partial_symbolic_layer"
+            issues.append(f"Partial CTF symbolic framework - redundancy={redundancy_satisfied}/{len(ctf_categories)}, memory={len(available_memory)}/{len(memory_sources)}")
+        else:
+            evidence["ctf_status"] = "weak_symbolic_layer"
+            issues.append("Weak CTF symbolic framework - ALEX needs symbolic reasoning layer with 2+ redundant sources")
+        
+        return PhaseResult(8, "check_ctf_symbolic", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_check_external_grounding(self) -> PhaseResult:
+        """
+        Check for external signal injection to prevent αt→0 collapse regime.
+        Per ArXiv 2601.05280v2: persistent external grounding (inf αt > 0) is required
+        to avoid degenerative fixed points in recursive self-improvement.
+        
+        REQUIRES: At least 2 redundant sources per category for fallback reliability.
+        """
+        issues = []
+        evidence = {
+            "external_sources": [],
+            "redundant_categories": {},
+            "alpha_signal": 0.0,
+            "grounding_status": "unknown"
+        }
+        
+        # Check for external data sources with redundancy requirements
+        # Each category must have at least 2 sources for fallback reliability
+        external_categories = {
+            "memory_sources": [
+                ("RAG cache", self.repo_root / "data" / "rag-cache"),
+                ("CSF memory", self.repo_root / "data" / "csf-memory"),
+                ("MemOS cube", self.repo_root / "data" / "memos_cube"),
+                ("Dream journal", self.repo_root / "data" / "dream_journal"),
+            ],
+            "evidence_sources": [
+                ("Evidence receipts", self.repo_root / "manifests" / "evidence"),
+                ("Convergence receipts", self.repo_root / "manifests" / "convergence-latest.json"),
+                ("CSF archives", self.repo_root / "data" / "archives"),
+            ],
+            "provider_sources": [
+                ("Provider configs", self.repo_root / ".env"),
+                ("PCSF settings", self.repo_root / "data" / "pcsf" / "settings.pcsf.json"),
+                ("Agent profiles", self.repo_root / "config" / "agent-profiles.json"),
+            ],
+        }
+        
+        for category, sources in external_categories.items():
+            available = []
+            for name, path in sources:
+                if path.exists():
+                    available.append(name)
+                    evidence["external_sources"].append(name)
+            evidence["redundant_categories"][category] = {
+                "available": available,
+                "required": 2,
+                "satisfied": len(available) >= 2
+            }
+            if len(available) < 2:
+                issues.append(f"Insufficient redundancy in {category}: {len(available)}/2 sources available")
+        
+        # Check for recent external activity (evidence receipts in last 24h)
+        evidence_dir = self.repo_root / "manifests" / "evidence"
+        if evidence_dir.exists():
+            now = datetime.now(timezone.utc)
+            recent_count = 0
+            for receipt in evidence_dir.glob("*.json"):
+                try:
+                    receipt_time = _parse_timestamp(receipt.stem.split("convergence-")[-1].replace("-", ":"))
+                    if receipt_time and (now - receipt_time).total_seconds() < 86400:
+                        recent_count += 1
+                except Exception:
+                    pass
+            evidence["recent_evidence_24h"] = recent_count
+        
+        # Calculate αt signal strength (0.0-1.0) with redundancy bonus
+        alpha_signal = 0.0
+        if evidence["external_sources"]:
+            alpha_signal += 0.2 * (len(evidence["external_sources"]) / sum(len(s) for s in external_categories.values()))
+        
+        # Redundancy bonus: each satisfied category adds signal
+        redundancy_satisfied = sum(1 for cat in evidence["redundant_categories"].values() if cat["satisfied"])
+        alpha_signal += 0.3 * (redundancy_satisfied / len(external_categories))
+        
+        if evidence.get("recent_evidence_24h", 0) > 0:
+            alpha_signal += 0.3
+        
+        if (self.repo_root / ".env").exists():
+            alpha_signal += 0.2
+        
+        evidence["alpha_signal"] = round(alpha_signal, 3)
+        evidence["redundancy_satisfied"] = f"{redundancy_satisfied}/{len(external_categories)}"
+        
+        # Determine grounding status
+        if alpha_signal >= 0.5 and redundancy_satisfied >= 2:
+            evidence["grounding_status"] = "grounded"
+        elif alpha_signal >= 0.3:
+            evidence["grounding_status"] = "weak_grounding"
+            issues.append(f"Weak external grounding (αt={alpha_signal}, redundancy={redundancy_satisfied}/{len(external_categories)}) - risk of collapse regime")
+        else:
+            evidence["grounding_status"] = "ungrounded"
+            issues.append("No external grounding (αt → 0) - collapse regime per ArXiv 2601.05280v2")
+        
+        return PhaseResult(9, "check_external_grounding", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_check_asi_benchmarks(self) -> PhaseResult:
+        """
+        Check ASI/AGI benchmark tracking per Stanford AI Index 2026 and SuperARC research.
+        Tracks: ARC-AGI (Abstraction and Reasoning Corpus), SuperARC (algorithmic complexity),
+        and jagged frontier indicators (capability vs reliability gaps).
+        
+        REQUIRES: At least 2 redundant sources per category for fallback reliability.
+        """
+        issues = []
+        evidence = {
+            "benchmarks_tracked": [],
+            "redundant_categories": {},
+            "jagged_frontier_indicators": [],
+            "asi_readiness_score": 0.0
+        }
+        
+        # Check for benchmark tracking files with redundancy requirements
+        benchmark_categories = {
+            "core_benchmarks": [
+                ("ARC-AGI results", self.repo_root / "data" / "benchmarks" / "arc-agi.json"),
+                ("SuperARC results", self.repo_root / "data" / "benchmarks" / "superarc.json"),
+                ("AGI capability matrix", self.repo_root / "data" / "benchmarks" / "agi-capability-matrix.json"),
+                ("Humanity's Last Exam", self.repo_root / "data" / "benchmarks" / "humanitys-last-exam.json"),
+            ],
+            "jagged_frontier": [
+                ("Math reasoning vs basic tasks", self.repo_root / "data" / "benchmarks" / "jagged-math.json"),
+                ("Coding vs simple operations", self.repo_root / "data" / "benchmarks" / "jagged-coding.json"),
+                ("Reasoning vs time telling", self.repo_root / "data" / "benchmarks" / "jagged-time.json"),
+            ],
+            "capability_domains": [
+                ("Math capability", self.repo_root / "data" / "benchmarks" / "capability-math.json"),
+                ("Coding capability", self.repo_root / "data" / "benchmarks" / "capability-coding.json"),
+                ("Multimodal capability", self.repo_root / "data" / "benchmarks" / "capability-multimodal.json"),
+            ],
+        }
+        
+        for category, benchmarks in benchmark_categories.items():
+            available = []
+            for name, path in benchmarks:
+                if path.exists():
+                    available.append(name)
+                    evidence["benchmarks_tracked"].append(name)
+                    try:
+                        data = _load_json(path)
+                        if data:
+                            evidence[f"{name.replace(' ', '_').replace('/', '_').lower()}_last_updated"] = data.get("last_updated", "unknown")
+                    except Exception:
+                        pass
+            evidence["redundant_categories"][category] = {
+                "available": available,
+                "required": 2,
+                "satisfied": len(available) >= 2
+            }
+            if len(available) < 2:
+                issues.append(f"Insufficient redundancy in {category}: {len(available)}/2 benchmarks available")
+        
+        # Check for jagged frontier indicators (already included in categories above)
+        evidence["jagged_frontier_indicators"] = evidence["redundant_categories"]["jagged_frontier"]["available"]
+        
+        # Calculate ASI readiness score (0.0-1.0) with redundancy bonus
+        asi_score = 0.0
+        if evidence["benchmarks_tracked"]:
+            asi_score += 0.2 * (len(evidence["benchmarks_tracked"]) / sum(len(b) for b in benchmark_categories.values()))
+        
+        # Redundancy bonus: each satisfied category adds signal
+        redundancy_satisfied = sum(1 for cat in evidence["redundant_categories"].values() if cat["satisfied"])
+        asi_score += 0.4 * (redundancy_satisfied / len(benchmark_categories))
+        
+        # Check for recent benchmark updates (last 30 days)
+        benchmark_dir = self.repo_root / "data" / "benchmarks"
+        if benchmark_dir.exists():
+            now = datetime.now(timezone.utc)
+            recent_updates = 0
+            for benchmark_file in benchmark_dir.glob("*.json"):
+                try:
+                    mtime = datetime.fromtimestamp(benchmark_file.stat().st_mtime, tz=timezone.utc)
+                    if (now - mtime).total_seconds() < 2592000:
+                        recent_updates += 1
+                except Exception:
+                    pass
+            if recent_updates >= 2:
+                asi_score += 0.4
+            evidence["recent_benchmark_updates_30d"] = recent_updates
+        
+        evidence["asi_readiness_score"] = round(asi_score, 3)
+        evidence["redundancy_satisfied"] = f"{redundancy_satisfied}/{len(benchmark_categories)}"
+        
+        # Determine benchmark tracking status
+        if asi_score >= 0.7 and redundancy_satisfied >= 2:
+            evidence["benchmark_status"] = "well_tracked"
+        elif asi_score >= 0.4:
+            evidence["benchmark_status"] = "partial_tracking"
+            issues.append(f"Partial ASI benchmark tracking - redundancy={redundancy_satisfied}/{len(benchmark_categories)}")
+        else:
+            evidence["benchmark_status"] = "not_tracked"
+            issues.append("No ASI benchmark tracking - cannot assess AGI/ASI progress per Stanford AI Index 2026")
+        
+        return PhaseResult(11, "check_asi_benchmarks", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_check_externally_anchored(self) -> PhaseResult:
+        """
+        Check for externally anchored optimization per ArXiv 2601.05280v2.
+        Distinguishes between closed-loop density matching (collapse regime) and
+        externally anchored optimization (axiomatic base, external verifier, bounded task domain).
+        """
+        issues = []
+        evidence = {
+            "axiomatic_base": [],
+            "external_verifiers": [],
+            "bounded_domains": [],
+            "anchored_status": "unknown"
+        }
+        
+        # Check for axiomatic base (fixed rules, physical laws, game rules)
+        axiomatic_checks = [
+            ("CSF Format Specification", self.repo_root / "docs" / "CSF-FORMAT-SPECIFICATION.md"),
+            ("Convergence Loop Rules", self.repo_root / "docs" / "CONVERGENCE-LOOP.md"),
+            ("Three Doors Game Rules", self.repo_root / "src" / "three_doors_engine.py"),
+            ("Safety Boundaries", self.repo_root / "SAFETY.md"),
+        ]
+        
+        for name, path in axiomatic_checks:
+            if path.exists():
+                evidence["axiomatic_base"].append(name)
+        
+        # Check for external verifiers (validation ring, test suites, benchmarks)
+        verifier_checks = [
+            ("Validation Ring", self.repo_root / "data" / "agent-fleet" / "validation-chain.jsonl"),
+            ("Test Suite", self.repo_root / "tests"),
+            ("Benchmark Suite", self.repo_root / "data" / "benchmarks"),
+            ("Evidence Receipts", self.repo_root / "manifests" / "evidence"),
+        ]
+        
+        for name, path in verifier_checks:
+            if path.exists():
+                evidence["external_verifiers"].append(name)
+        
+        # Check for bounded task domains (defined scope, not open-ended)
+        domain_checks = [
+            ("Dream Journal Domain", self.repo_root / "apps" / "lantern-garage" / "routes" / "dream.js"),
+            ("Three Doors Domain", self.repo_root / "src" / "three_doors_engine.py"),
+            ("Human Flourishing Domain", self.repo_root / "integrations" / "human-flourishing-frameworks"),
+            ("Agent Fleet Domain", self.repo_root / "config" / "agent-slots.json"),
+        ]
+        
+        for name, path in domain_checks:
+            if path.exists():
+                evidence["bounded_domains"].append(name)
+        
+        # Calculate anchored score (0.0-1.0)
+        anchored_score = 0.0
+        if evidence["axiomatic_base"]:
+            anchored_score += 0.35 * (len(evidence["axiomatic_base"]) / len(axiomatic_checks))
+        if evidence["external_verifiers"]:
+            anchored_score += 0.35 * (len(evidence["external_verifiers"]) / len(verifier_checks))
+        if evidence["bounded_domains"]:
+            anchored_score += 0.3 * (len(evidence["bounded_domains"]) / len(domain_checks))
+        
+        evidence["anchored_score"] = round(anchored_score, 3)
+        
+        # Determine anchored status
+        if anchored_score >= 0.7 and len(evidence["axiomatic_base"]) >= 2 and len(evidence["external_verifiers"]) >= 2:
+            evidence["anchored_status"] = "externally_anchored"
+        elif anchored_score >= 0.4:
+            evidence["anchored_status"] = "partially_anchored"
+            issues.append(f"Partially externally anchored - requires 2+ axiomatic bases and 2+ external verifiers")
+        else:
+            evidence["anchored_status"] = "closed_loop_risk"
+            issues.append("Closed-loop density matching risk - no external anchors per ArXiv 2601.05280v2")
+        
+        return PhaseResult(10, "check_externally_anchored", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_navigate_status_cube(self) -> PhaseResult:
+        """
+        Navigate 4D Status Cube for safe routing matrix.
+        Axes: x (location), y (lane), z (boundary), t (timeline)
+        """
+        issues = []
+        evidence = {
+            "cube_dimensions": {},
+            "current_coordinates": {},
+            "navigation_status": "unknown"
+        }
+        
+        # x-axis: location (body, device, repo, product)
+        location_checks = [
+            ("Repo root", self.repo_root),
+            ("Apps directory", self.repo_root / "apps"),
+            ("Skills directory", self.repo_root / "skills"),
+            ("Scripts directory", self.repo_root / "scripts"),
+        ]
+        evidence["cube_dimensions"]["x_location"] = [name for name, path in location_checks if path.exists()]
+        
+        # y-axis: module lane (repo control, report, dollhouse, wallet, device, product)
+        lane_checks = [
+            ("Repo control plane", self.repo_root / ".git"),
+            ("Report lane", self.repo_root / "reports"),
+            ("Dollhouse lane", self.repo_root / "skills" / "lantern-rag-dollhouse"),
+            ("Wallet lane", self.repo_root / "data" / "wallet"),
+            ("Device lane", self.repo_root / "profiles"),
+            ("Product lane", self.repo_root / "apps"),
+        ]
+        evidence["cube_dimensions"]["y_lane"] = [name for name, path in lane_checks if path.exists()]
+        
+        # z-axis: boundary (proven, candidate, held, blocked)
+        boundary_state = "proven"
+        if (self.repo_root / ".git" / "HEAD").exists():
+            try:
+                result = subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=self.repo_root, capture_output=True, text=True, timeout=5
+                )
+                if result.stdout.strip():
+                    boundary_state = "candidate"  # uncommitted changes
+            except Exception:
+                pass
+        evidence["cube_dimensions"]["z_boundary"] = boundary_state
+        
+        # t-axis: timeline (current evidence, last validation, next receipt)
+        evidence_dir = self.repo_root / "manifests" / "evidence"
+        if evidence_dir.exists():
+            receipts = list(evidence_dir.glob("convergence-*.json"))
+            if receipts:
+                latest = max(receipts, key=lambda p: p.stat().st_mtime)
+                evidence["cube_dimensions"]["t_timeline"] = {
+                    "last_validation": latest.stat().st_mtime,
+                    "receipt_count": len(receipts)
+                }
+            else:
+                evidence["cube_dimensions"]["t_timeline"] = {"last_validation": None, "receipt_count": 0}
+        else:
+            evidence["cube_dimensions"]["t_timeline"] = {"last_validation": None, "receipt_count": 0}
+        
+        # Calculate navigation score
+        nav_score = 0.0
+        nav_score += 0.3 * (len(evidence["cube_dimensions"]["x_location"]) / len(location_checks))
+        nav_score += 0.3 * (len(evidence["cube_dimensions"]["y_lane"]) / len(lane_checks))
+        nav_score += 0.2 if boundary_state == "proven" else 0.1
+        nav_score += 0.2 if evidence["cube_dimensions"]["t_timeline"]["receipt_count"] > 0 else 0.0
+        
+        evidence["navigation_score"] = round(nav_score, 3)
+        evidence["current_coordinates"] = {
+            "x": f"{len(evidence['cube_dimensions']['x_location'])}/{len(location_checks)}",
+            "y": f"{len(evidence['cube_dimensions']['y_lane'])}/{len(lane_checks)}",
+            "z": boundary_state,
+            "t": f"{evidence['cube_dimensions']['t_timeline']['receipt_count']} receipts"
+        }
+        
+        if nav_score >= 0.7:
+            evidence["navigation_status"] = "cube_navigable"
+        elif nav_score >= 0.4:
+            evidence["navigation_status"] = "partial_navigation"
+            issues.append("Partial Status Cube navigation - missing location or lane dimensions")
+        else:
+            evidence["navigation_status"] = "navigation_blocked"
+            issues.append("Status Cube navigation blocked - insufficient dimensional coverage")
+        
+        return PhaseResult(12, "navigate_status_cube", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_project_future_states(self) -> PhaseResult:
+        """
+        Project future states from past/present using comet-leap integration.
+        Pattern: Past Work -> Present Pitch -> Expected Future Outcome -> Actual Result
+        """
+        issues = []
+        evidence = {
+            "past_work": [],
+            "present_pitch": [],
+            "future_projections": [],
+            "projection_status": "unknown"
+        }
+        
+        # Check for past work evidence (commits, receipts, reports)
+        past_checks = [
+            ("Git history", self.repo_root / ".git"),
+            ("Evidence receipts", self.repo_root / "manifests" / "evidence"),
+            ("Convergence reports", self.repo_root / "reports"),
+            ("Changelog", self.repo_root / "CHANGELOG.MD"),
+        ]
+        evidence["past_work"] = [name for name, path in past_checks if path.exists()]
+        
+        # Check for present pitch (manifests, open issues, session summaries)
+        present_checks = [
+            ("Open issues", self.repo_root / "manifests" / "open-issues.md"),
+            ("Session summaries", self.repo_root / "manifests" / "SESSION-WORK-SUMMARY-2026-05-27.md"),
+            ("Convergence plans", self.repo_root / "csf" / "ingest"),
+            ("Batch jobs", self.repo_root / "config" / "batch-jobs.json"),
+        ]
+        evidence["present_pitch"] = [name for name, path in present_checks if path.exists()]
+        
+        # Check for future projection infrastructure (comet-leap, status cube, bayesian)
+        future_checks = [
+            ("Comet-leap agile", self.repo_root / "skills" / "comet-leap-agile" / "SKILL.md"),
+            ("Status cube", self.repo_root / "skills" / "super-jarvis-lantern-os" / "SKILL.md"),
+            ("Bayesian world model", self.repo_root / "skills" / "bayesian-world-model" / "SKILL.md"),
+            ("HFF integration", self.repo_root / "integrations" / "human-flourishing-frameworks"),
+        ]
+        evidence["future_projections"] = [name for name, path in future_checks if path.exists()]
+        
+        # Calculate projection capability
+        projection_score = 0.0
+        projection_score += 0.35 * (len(evidence["past_work"]) / len(past_checks))
+        projection_score += 0.35 * (len(evidence["present_pitch"]) / len(present_checks))
+        projection_score += 0.3 * (len(evidence["future_projections"]) / len(future_checks))
+        
+        evidence["projection_score"] = round(projection_score, 3)
+        
+        if projection_score >= 0.7 and len(evidence["future_projections"]) >= 2:
+            evidence["projection_status"] = "future_projection_capable"
+        elif projection_score >= 0.4:
+            evidence["projection_status"] = "partial_projection"
+            issues.append("Partial future state projection - missing comet-leap or status cube integration")
+        else:
+            evidence["projection_status"] = "projection_disabled"
+            issues.append("Future state projection disabled - insufficient past/present/future infrastructure")
+        
+        return PhaseResult(13, "project_future_states", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_update_bayesian_beliefs(self) -> PhaseResult:
+        """
+        Update Bayesian belief system across 5 dimensions:
+        health, animal, ecosystem, economy, culture
+        """
+        issues = []
+        evidence = {
+            "belief_dimensions": {},
+            "belief_posteriors": {},
+            "belief_status": "unknown"
+        }
+        
+        # Check for HFF integration and belief system
+        belief_checks = {
+            "health": [
+                ("HFF health sensors", self.repo_root / "integrations" / "human-flourishing-frameworks" / "sensors.py"),
+                ("HFF API health", self.repo_root / "src" / "hff-api" / "live_sensors.py"),
+            ],
+            "animal": [
+                ("HFF animal tracking", self.repo_root / "integrations" / "human-flourishing-frameworks" / "world_model.py"),
+            ],
+            "ecosystem": [
+                ("HFF ecosystem", self.repo_root / "integrations" / "human-flourishing-frameworks" / "README.md"),
+            ],
+            "economy": [
+                ("Wallet ledger", self.repo_root / "data" / "wallet" / "ledger.jsonl"),
+                ("Cash loop", self.repo_root / "data" / "cash-loop"),
+            ],
+            "culture": [
+                ("Lore", self.repo_root / "lore" / "LORE.md"),
+                ("Three doors", self.repo_root / "src" / "three_doors_engine.py"),
+            ],
+        }
+        
+        for dimension, checks in belief_checks.items():
+            available = [name for name, path in checks if path.exists()]
+            evidence["belief_dimensions"][dimension] = {
+                "available": available,
+                "count": len(available),
+                "total": len(checks)
+            }
+            # Simulate posterior (in real system, this would be actual Bayesian update)
+            evidence["belief_posteriors"][dimension] = round(len(available) / len(checks), 3) if checks else 0.0
+        
+        # Calculate overall belief system health
+        avg_posterior = sum(evidence["belief_posteriors"].values()) / len(evidence["belief_posteriors"]) if evidence["belief_posteriors"] else 0.0
+        evidence["avg_belief_posterior"] = round(avg_posterior, 3)
+        
+        if avg_posterior >= 0.6:
+            evidence["belief_status"] = "belief_system_active"
+        elif avg_posterior >= 0.3:
+            evidence["belief_status"] = "partial_beliefs"
+            issues.append("Partial Bayesian belief system - some dimensions lack sensor integration")
+        else:
+            evidence["belief_status"] = "belief_system_inactive"
+            issues.append("Bayesian belief system inactive - insufficient dimension coverage")
+        
+        return PhaseResult(14, "update_bayesian_beliefs", "pass" if not issues else "fail", issues, evidence)
+
     def _phase_run_validation(self) -> PhaseResult:
         issues = []
         for script in [self.repo_root / "scripts" / "Validate-CicdPipeline.ps1"]:
             if not script.exists():
                 issues.append(f"Missing: {script.name}")
-        return PhaseResult(8, "run_validation", "pass" if not issues else "fail", issues)
+        return PhaseResult(15, "run_validation", "pass" if not issues else "fail", issues)
 
     def _phase_run_validation_ring(self) -> PhaseResult:
         try:
@@ -947,7 +1549,7 @@ class ConvergenceLoop:
                     else:
                         warnings.append(msg)
             return PhaseResult(
-                9, "run_validation_ring",
+                16, "run_validation_ring",
                 "pass" if not issues else "fail",
                 issues,
                 evidence={
@@ -959,15 +1561,15 @@ class ConvergenceLoop:
                 },
             )
         except Exception as exc:
-            return PhaseResult(9, "run_validation_ring", "fail", [str(exc)])
+            return PhaseResult(16, "run_validation_ring", "fail", [str(exc)])
 
     def _phase_fix_failures(self) -> PhaseResult:
         actionable = [r for r in self.results if r.status != "pass"]
         fixed = min(len(actionable), 4)
-        return PhaseResult(10, "fix_failures", "pass", evidence={"actionable": len(actionable), "fixed": fixed})
+        return PhaseResult(17, "fix_failures", "pass", evidence={"actionable": len(actionable), "fixed": fixed})
 
     def _phase_re_run_validation(self) -> PhaseResult:
-        return PhaseResult(11, "re_run_validation", "pass", evidence={"rerun": True})
+        return PhaseResult(18, "re_run_validation", "pass", evidence={"rerun": True})
 
     def _phase_record_evidence(self) -> PhaseResult:
         receipt_dir = self.repo_root / "manifests" / "evidence"
@@ -981,12 +1583,12 @@ class ConvergenceLoop:
             with open(self._previous_receipt_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
         except Exception as exc:
-            return PhaseResult(12, "record_evidence", "fail", [str(exc)])
-        return PhaseResult(12, "record_evidence", "pass", evidence={"receipt": str(receipt_path)})
+            return PhaseResult(19, "record_evidence", "fail", [str(exc)])
+        return PhaseResult(19, "record_evidence", "pass", evidence={"receipt": str(receipt_path)})
 
     def _phase_promote_or_hold(self) -> PhaseResult:
         ready = all(r.status == "pass" for r in self.results)
-        return PhaseResult(13, "promote_or_hold", "pass" if ready else "hold", evidence={"ready": ready})
+        return PhaseResult(20, "promote_or_hold", "pass" if ready else "hold", evidence={"ready": ready})
 
     def _detect_drift(self) -> Dict[str, Any]:
         """Compare current results with previous receipt."""

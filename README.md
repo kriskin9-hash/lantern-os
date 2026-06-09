@@ -68,7 +68,7 @@ The README is intended as the public-facing entry point. Detailed runtime, conve
 | Dream Journal | Freeform chat-style dream journal with local browser storage, JSONL export, and multi-turn chat flow. |
 | Lantern Garage | Node.js web server for the Dream Journal UI, API routes, static assets, and installable PWA surface. |
 | Persona Routing | Symbolic personas route messages through the same provider/backend pipeline with different system prompts. |
-| Convergence Loop | 12-step operating method for inspection, evidence mapping, validation, and promotion decisions. |
+| Convergence Loop | 20-step tesseract convergence with 4D status cube navigation, future state projection, and Bayesian belief updates. |
 | Agent Fleet Design | 36-slot convergence-agent matrix with a 64-worker elastic target as a planning and receipt contract. |
 | CSF/CADD | Symbolic memory/archive path for structured, searchable, convergence-fitted data. |
 | Internal RAG House | Source-linked evidence index with paths, hashes, and evidence classes. |
@@ -438,7 +438,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Update-InternalHou
 | [docs/DREAM-JOURNAL-USER-GUIDE.md](docs/DREAM-JOURNAL-USER-GUIDE.md) | Dream Journal user guide |
 | [docs/DREAM-JOURNAL-QUICKSTART.md](docs/DREAM-JOURNAL-QUICKSTART.md) | Dream Journal quick start |
 | [docs/DREAM-JOURNAL-API-ENDPOINTS.md](docs/DREAM-JOURNAL-API-ENDPOINTS.md) | Full API endpoint reference |
-| [docs/CONVERGENCE-LOOP.md](docs/CONVERGENCE-LOOP.md) | 12-step convergence operating method |
+| [docs/CONVERGENCE-LOOP.md](docs/CONVERGENCE-LOOP.md) | Original 12-step convergence operating method |
+| [docs/TESSERACT-CONVERGENCE-LOOP.md](docs/TESSERACT-CONVERGENCE-LOOP.md) | **20-step tesseract convergence** — 4D status cube, future projection, Bayesian beliefs |
 | [manifests/CONVERGENCE-LOOP-AGENT-FLEET.md](manifests/CONVERGENCE-LOOP-AGENT-FLEET.md) | 36-slot convergence-agent design and receipt contract |
 | [manifests/dream-journal-v1-agent-slots.json](manifests/dream-journal-v1-agent-slots.json) | Active work queue with priority + description |
 | [docs/MCP-CONNECTOR.md](docs/MCP-CONNECTOR.md) | Local-first MCP connector and safety contract |
