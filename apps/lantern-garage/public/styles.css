@@ -9,6 +9,7 @@
   --amber: #9f5a07;
   --blue: #1e5f89;
   --rose: #9a3d55;
+  --mandala: url('/mandala-network.svg');
 }
 
 /* Plain dashboard skin: no theme-park skin, minimal gradients */
@@ -1115,4 +1116,56 @@ select:focus-visible {
 
 @media (max-width: 920px) {
   .control-truth { grid-template-columns: 1fr; }
+}
+
+/* Mandala Convergence Icon */
+.mandala-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  background: var(--mandala);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  vertical-align: -0.125em;
+  font-size: inherit;
+  color: inherit;
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+/* Health colors */
+.mandala-icon.healthy { color: var(--green); }
+.mandala-icon.warning { color: var(--gold); }
+.mandala-icon.critical { color: var(--accent); }
+
+/* Speed indicates lag: slow=lag, fast=healthy */
+.mandala-icon.spin-slow {
+  animation: mandala-spin 5s linear infinite;
+}
+
+.mandala-icon.spin-normal {
+  animation: mandala-spin 2.5s linear infinite;
+}
+
+.mandala-icon.spin-fast {
+  animation: mandala-spin 1s linear infinite;
+}
+
+.mandala-icon.wobble {
+  animation: mandala-wobble 2s ease-in-out infinite;
+}
+
+@keyframes mandala-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes mandala-wobble {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Dark mode: higher contrast */
+[data-theme="dark"] .mandala-icon {
+  filter: drop-shadow(0 0 4px currentColor) brightness(1.3);
 }

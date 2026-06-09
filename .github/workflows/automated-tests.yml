@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Test PowerShell Scripts Syntax
         shell: pwsh

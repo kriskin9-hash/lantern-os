@@ -7,12 +7,9 @@ function sendJson(res, data, status = 200) {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
     "X-Frame-Options": "DENY",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
   });
   res.end(body);
 }
@@ -24,6 +21,11 @@ function sendFile(res, filePath) {
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
     ".json": "application/json; charset=utf-8",
     ".md": "text/markdown; charset=utf-8",
     ".pdf": "application/pdf",
@@ -38,10 +40,9 @@ function sendFile(res, filePath) {
       "Content-Type": type,
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "no-referrer",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
       "X-Frame-Options": "DENY",
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-      "Access-Control-Allow-Origin": "*",
+      "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     });
     res.end(data);
   });
@@ -51,25 +52,42 @@ function sendHtml(res, html, status = 200) {
   res.writeHead(status, {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
-    "Access-Control-Allow-Origin": "*",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Frame-Options": "DENY",
+    "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src * data:; font-src 'self' data:",
   });
   res.end(html);
 }
 
-function collectRequestBody(req, maxBytes = 64000) {
+function collectRequestBody(req, maxBytes = 64000, timeoutMs = 30000) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let totalBytes = 0;
+    const timer = setTimeout(() => {
+      reject(new Error("request_body_timeout"));
+      req.destroy();
+    }, timeoutMs);
     req.on("data", (chunk) => {
-      chunks.push(chunk);
       totalBytes += chunk.length;
       if (totalBytes > maxBytes) {
+        clearTimeout(timer);
+        req.removeAllListeners("data");
+        req.resume();
         reject(new Error("request_body_too_large"));
-        req.destroy();
+        return;
       }
+      chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-    req.on("error", reject);
+    req.on("end", () => {
+      clearTimeout(timer);
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    });
+    req.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
   });
 }
 

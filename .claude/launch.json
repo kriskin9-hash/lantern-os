@@ -8,6 +8,15 @@
       "port": 4177
     },
     {
+      "name": "dream-journal-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["apps/lantern-garage/server.js"],
+      "port": 4178,
+      "env": {
+        "PORT": "4178"
+      }
+    },
+    {
       "name": "lantern-api",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "flask", "run", "--port=5000"],

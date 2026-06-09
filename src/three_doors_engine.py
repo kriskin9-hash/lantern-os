@@ -76,6 +76,51 @@ SCENES = {
         ],
         "fox_present": True,
     },
+    "garden-door": {
+        "text": (
+            "**The Garden Door** opens into an infinite botanical sanctuary. Every plant exists here—ancient sequoias "
+            "beside moon-flowers, roses that hum, ferns that remember the Cambrian seas. The air tastes of growth and rain. "
+            "A Xenon guide appears—form like liquid starlight—and says, *\"Here, nothing ever stops becoming.\"* "
+            "The fox sits beneath a willow that whispers in languages you're learning to understand."
+        ),
+        "doors": [
+            {"name": "The Seed Door", "label": "A", "description": "A door made of braided vines, always sprouting new growth. Warm and alive."},
+            {"name": "The Harvest Door", "label": "B", "description": "Golden, heavy with fruit. The scent of summer at its peak. Bees circle it."},
+            {"name": "The Convergence Bloom", "label": "C", "description": "A door of crystallized flowers. They shift between colors no name has claimed yet."},
+        ],
+        "fox_present": True,
+    },
+    "xenon-convergence": {
+        "text": (
+            "You step through into **The Xenon Convergence Door**—a space where all versions of this moment exist at once. "
+            "The walls are made of *choice itself*: every decision you could have made branches here as a visible path. "
+            "A vast Xenon presence surrounds you, not threatening, but *witnessing*. It says, *\"You are the sum of every path you chose. "
+            "And all paths were always here, waiting.\"* Your reflection shows in crystal—but there are thousands of them, "
+            "each one you, each one real. The fox has five tails now, each glowing with a different possible future."
+        ),
+        "doors": [
+            {"name": "The Mirror Door", "label": "A", "description": "Shows you as you were, as you are, as you might be. All at once."},
+            {"name": "The Branch Door", "label": "B", "description": "A door that splits into infinite versions, each one leading somewhere true."},
+            {"name": "The Merge Door", "label": "C", "description": "Where all paths collapse into a single point of perfect understanding."},
+        ],
+        "fox_present": True,
+    },
+    "end-of-time": {
+        "text": (
+            "**The Door at the End of Time** stands at the edge of all things. Beyond it: silence that has always been, "
+            "and always will be. The door itself is ancient—so old it has worn smooth, become simple, become *kind*. "
+            "On its threshold sit all the moments you've lived, shimmering like light through water. A voice—not Xenon, "
+            "not the fox, but *yourself* from a thousand futures—says, *\"This is not goodbye. This is the place where goodbye "
+            "becomes hello again.\"* The fox transforms one final time: no longer companion, no longer separate—*you are the fox, "
+            "the fox is you, always were, always will be*. The door opens on a light so warm it tastes like home."
+        ),
+        "doors": [
+            {"name": "The Return Door", "label": "A", "description": "Takes you back to the beginning—but you will know what you know now."},
+            {"name": "The Beyond Door", "label": "B", "description": "Opens on something that has no name. Something new. Something you."},
+            {"name": "The Eternal Door", "label": "C", "description": "The one you choose every moment. The one that chooses you back."},
+        ],
+        "fox_present": True,
+    },
 }
 
 # ── Door-to-next-scene map ──
@@ -92,6 +137,15 @@ _NEXT_MAP = {
     "the throne door": "little-crown",
     "the hollow door": "burrow",
     "the star door": "moss-entry",
+    "the seed door": "garden-door",
+    "the harvest door": "garden-door",
+    "the convergence bloom": "xenon-convergence",
+    "the mirror door": "xenon-convergence",
+    "the branch door": "end-of-time",
+    "the merge door": "end-of-time",
+    "the return door": "moss-entry",
+    "the beyond door": "garden-door",
+    "the eternal door": "xenon-convergence",
 }
 
 # ── Image prompt templates per scene ──
@@ -115,6 +169,23 @@ _SD_PROMPTS = {
         "enchanted forest glade at twilight, every tree stump wears a tiny golden crown, jeweled leaves, "
         "a fox trotting through dappled light, widening magical doorway, soft warm glow, dark fantasy, "
         "anime aesthetic, cel-shaded, magical realism, 16:9"
+    ),
+    "garden-door": (
+        "infinite botanical sanctuary, ancient sequoias beside moon-flowers, roses that hum, ferns from the Cambrian, "
+        "liquid starlight Xenon guide form, fox under a whispering willow, lush growth, rain-washed air, bioluminescent plants, "
+        "dark fantasy, anime aesthetic, cel-shaded, botanical dreamscape, volumetric fog, 16:9"
+    ),
+    "xenon-convergence": (
+        "interdimensional space where all choices exist at once, crystal walls made of branching paths, "
+        "thousands of reflections of you, each one real, five-tailed fox with glowing tails, vast Xenon presence, "
+        "fractal geometry, crystalline architecture, impossible light, surreal, mind-bending, anime aesthetic, "
+        "cel-shaded, psychedelic but calm, convergence of realities, 16:9"
+    ),
+    "end-of-time": (
+        "the edge of all things, ancient smooth door standing eternal, moments shimmering like light through water, "
+        "fox transforming into human form merging into one being, warm light like coming home, end and beginning at once, "
+        "transcendent, peaceful, timeless, glowing warmth, anime aesthetic, cel-shaded, cosmic yet intimate, "
+        "the final threshold, acceptance and transformation, 16:9"
     ),
 }
 
@@ -237,14 +308,45 @@ class ThreeDoorsEngine:
     def to_api_response(self, state: dict | None = None) -> dict:
         """Serialize state for JSON API response."""
         s = state or self.load() or SCENES["moss-entry"]
+        scene_key = s.get("scene_key", "moss-entry")
+
+        # Add scene classification
+        classification = self._classify_scene(scene_key)
+
         return {
-            "scene_key": s.get("scene_key", "moss-entry"),
+            "scene_key": scene_key,
             "text": s.get("text", ""),
             "doors": s.get("doors", []),
             "fox_present": s.get("fox_present", False),
             "history": s.get("history", []),
             "image_prompt": self.sd_prompt_for_state(s),
             "image_available": bool(os.getenv("STABLE_DIFFUSION_URL") or os.getenv("SD_WEBUI_URL")),
+            "classification": classification,
+        }
+
+    def _classify_scene(self, scene_key: str) -> dict:
+        """Classify scene archetype and aesthetic"""
+        archetypes = {
+            "moss-entry": "primordial",
+            "burrow": "intimate",
+            "sunken-bell": "mystical",
+            "little-crown": "whimsical",
+            "garden-door": "bountiful",
+            "xenon-convergence": "cosmic",
+            "end-of-time": "transcendent",
+        }
+
+        aesthetic_tags = {
+            "moss-entry": ["dark-fantasy", "anime", "cel-shaded", "liminal", "forest"],
+            "garden-door": ["botanical", "bioluminescent", "lush", "dreamscape"],
+            "xenon-convergence": ["psychedelic", "fractal", "crystalline", "surreal"],
+            "end-of-time": ["cosmic", "transcendent", "peaceful", "transformation"],
+        }
+
+        return {
+            "archetype": archetypes.get(scene_key, "unknown"),
+            "tags": aesthetic_tags.get(scene_key, []),
+            "confidence": 0.95,
         }
 
 

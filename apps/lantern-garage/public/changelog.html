@@ -67,7 +67,10 @@
 
     <div class="changelog-header">
       <h1>Changelog</h1>
-      <a href="/index.html">← Back to Lantern OS</a>
+      <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+        <button onclick="(function(){const h=document.documentElement,n=h.getAttribute('data-theme')==='dark'?'light':'dark';h.setAttribute('data-theme',n);localStorage.setItem('lantern-theme',n);})()" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:13px;font-family:inherit" title="Toggle theme">☀</button>
+        <a href="/" style="color:var(--muted);text-decoration:none;font-size:0.88rem" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">← Home</a>
+      </div>
     </div>
 
     <div id="changelog-content">

@@ -2,9 +2,48 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ Required Reading (All Agents)
+
+**READ FIRST (every session and before each commit):**
+
+1. **[QUICKSTART.md](QUICKSTART.md)** — Dual-boot system (port 4177 stable + 4178 dev), autostart setup
+2. **[AGENTS.md](AGENTS.md)** — Monoworkstream rules, git workflow, agent capabilities
+3. **[PROVIDERS.md](PROVIDERS.md)** — All 10 AI providers, configuration, fallback chain, environment variables
+4. **[SECURITY.md](SECURITY.md)** — Critical vulnerabilities, input validation, security best practices
+5. **[SKILLS.md](SKILLS.md)** — Available capabilities, persona routing, provider chain
+
+**Automatic Enforcement:**
+- Git `post-checkout` hook: reminds you to read docs after branch changes
+- Git `prepare-commit-msg` hook: injects checklist before commits
+- `make quickstart`: prints required reading before starting servers
+
+These documents are non-negotiable for safe, compliant contributions.
+
 ## Project Overview
 
 Lantern OS is a local-first OS cockpit built by a solo developer (Alex Place). The primary deliverable is a **Dream Journal** — a freeform RP chat interface backed by a Node.js server, with a Python MCP server and optional Discord bot.
+
+## Quickstart (Read QUICKSTART.md First)
+
+**Dual-Boot System** (recommended for development):
+```bash
+make quickstart
+# Starts TWO servers simultaneously:
+# - Port 4177: Stable release (master branch)
+# - Port 4178: Development (current branch, hot-reload)
+# Opens http://127.0.0.1:4177 in Chrome
+```
+
+**Single Server** (development only):
+```bash
+npm run dev --prefix apps/lantern-garage
+# Starts only port 4177 with hot-reload (your current branch)
+```
+
+**Autostart** (Windows PC reboot auto-start):
+```bash
+# See QUICKSTART.md section 1 for complete setup
+```
 
 ## Commands
 
@@ -114,15 +153,38 @@ Copy `.env.example` to `.env` at repo root. Key variables: `ANTHROPIC_API_KEY`, 
 
 `pytest.ini` sets `pythonpath = apps src` so tests can import from both trees without install.
 
-## Monoworkstream Rule (Critical)
+## Per-Agent Workstream Rule (Critical)
 
-This repo enforces **one open feature PR at a time**:
-- No new branches while a PR is open
-- Commits and pushes to a branch that already has an open PR are always allowed
-- `gh-pages` (static site deploy) is exempt — it never counts as a workstream
-- Install hooks: `powershell -ExecutionPolicy Bypass -File scripts/Install-MonoworkstreamHooks.ps1`
-- Emergency bypass: `SKIP_MONOWORKSTREAM=1 git commit ...`
+Each agent gets **one open PR lane at a time**. All agent lanes run concurrently.
 
-Always check for open PRs before creating branches or commits.
+| Branch prefix | Lane |
+|---|---|
+| `claude/` | Claude lane |
+| `gemini/` | Gemini lane |
+| `codex/` | Codex lane |
+| `devin/` | Devin lane |
+| `grok/` | Grok lane |
+| `openai/` | OpenAI lane |
+| anything else | Human lane |
 
-**Note:** Multiple agents running concurrently via `.claude/agent-slots.json` is a core design feature, not a monoworkstream violation. The rule applies to Git branches / PRs, not to active agent slots.
+Rules:
+- A second branch from the same agent prefix is blocked until its first PR is merged/closed
+- Commits/pushes to a branch **that already has an open PR** are always allowed
+- `gh-pages`, `master`, `dev` are exempt
+- Direct push to master is blocked — open a PR, or: `OVERRIDE_MERGE=1 git push origin master`
+- Slop commit messages (empty, < 8 chars, "wip", "placeholder", "temp", etc.) are blocked
+
+Install hooks:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Install-MonoworkstreamHooks.ps1
+```
+
+Bypasses:
+```bash
+SKIP_MONOWORKSTREAM=1 git commit/push   # skip workstream + slop checks
+OVERRIDE_MERGE=1 git push origin master  # allow direct master push
+```
+
+Always check open PRs per-agent before creating a new branch.
+
+**Note:** Multiple agents running concurrently via `.claude/agent-slots.json` is a core design feature. The rule applies to Git branches / PRs, not to active agent slots.

@@ -3,7 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "agent",
   "description": "Agent coordination layer. Declares available dream agents, their surface bindings, and current operational states.",
-  "generated_at": "2026-06-05T00:00:00Z",
+  "generated_at": "2026-06-08T06:55:00Z",
   "state": "available",
   "agents": [
     {
@@ -15,10 +15,43 @@
       "alt_route": "/api/dream/chat",
       "narrator_id": "auto",
       "provider_id": "auto",
-      "capabilities": ["stream_chat", "persona_select", "dream_context", "conversation_log"],
+      "capabilities": ["stream_chat", "persona_select", "dream_context", "conversation_log", "three_doors_game", "door_chip_render"],
       "requires_provider": true,
-      "offline_capable": false,
-      "description": "Primary dream chat interface. Streams responses from the active provider through the selected narrator persona."
+      "offline_capable": true,
+      "description": "Primary dream chat interface. Streams responses from the active provider through the selected narrator persona. Includes Three Doors game with merged LLM+engine routing.",
+      "bang_commands": {
+        "!three-doors": "Start or continue Three Doors game. Routes to lantern-csf-dream (Ollama) → Python ThreeDoorsEngine fallback.",
+        "!threedoors": "Alias for !three-doors.",
+        "!doors": "Alias for !three-doors.",
+        "!convergence": "Run convergence loop + auto-update.",
+        "!autoupdate": "Pull latest code, install deps, restart server.",
+        "!comet-leap": "Show COMET LEAP plan status.",
+        "!debug": "Toggle session analytics panel.",
+        "!swarm": "Swarm multi-provider query (streaming).",
+        "!converge": "Convergence synthesis (streaming)."
+      }
+    },
+    {
+      "agent_id": "three_doors_game",
+      "name": "Three Doors Game Agent",
+      "state": "available",
+      "surface": "dream-chat.html",
+      "entry_route": "/api/dream/doors",
+      "narrator_id": "lantern",
+      "provider_id": "ollama",
+      "capabilities": ["three_doors_llm", "three_doors_engine_fallback", "door_choice_parse", "door_chip_render", "csf_export"],
+      "requires_provider": false,
+      "offline_capable": true,
+      "description": "Three Doors Game with merged routing. Primary: lantern-csf-dream Ollama model (mistral base, game system prompt + active Elephant Oasis state). Fallback: Python ThreeDoorsEngine scripted state machine.",
+      "routing": {
+        "primary": "lantern-csf-dream via Ollama /api/chat (30s timeout)",
+        "fallback": "Python ThreeDoorsEngine via subprocess (src/three_doors_engine.py)",
+        "final_fallback": "local_fallback reply with last known door state from door_state.json",
+        "trigger_keywords": ["!three-doors", "!threedoors", "!doors", "play three doors", "three doors game", "door game"],
+        "door_format": "[DOORS: A <name> | B <name> | C <name>] — parsed client + server side into clickable chips",
+        "active_state": "Elephant Oasis (2026-06-08) — dad elephant scene, next: Ancient Memory / Peace's Whisper / Serenity's Embrace",
+        "baseline_set": "2026-06-08"
+      }
     },
     {
       "agent_id": "dream_journal",

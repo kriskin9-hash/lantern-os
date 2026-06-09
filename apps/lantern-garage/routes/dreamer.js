@@ -32,6 +32,10 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
       const record = await appendDreamerEntry(user, { kind, text, name: body.name, mood: body.mood, tags: body.tags });
       const recentDreams = readRecentDreams(5);
       const chatResult = await dreamChatReply(`[${kind}] ${text}`, recentDreams, body.agent || "", body.provider || "");
+      if (!chatResult.reply) {
+        sendJson(res, { saved: true, record, error: chatResult.error || "no_provider_configured", agent: chatResult.agent, online: false, help: chatResult.help || "", suggestions: chatResult.suggestions || [] }, 503);
+        return true;
+      }
       sendJson(res, {
         saved: true, record,
         reply: chatResult.reply, agent: chatResult.agent,

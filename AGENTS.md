@@ -14,13 +14,12 @@ This repo is designed for agentic-first workflows. Every agent (Claude, Gemini, 
 
 | File | What it tells you | Saves |
 |------|------------------|-------|
-| `data/pcsf/health.pcsf.json` | Every API endpoint, its expected response, pass/fail state | Don't curl to discover routes |
-| `data/pcsf/provider.pcsf.json` | Which AI providers are configured, fallback chain order | Don't grep .env or stream-chat.js |
-| `data/pcsf/model.pcsf.json` | Default model per provider, available overrides | Don't search for model strings |
-| `data/pcsf/agent.pcsf.json` | All agents, their capabilities, route bindings | Don't explore routes/ to understand what exists |
-| `data/pcsf/settings.pcsf.json` | Every env var, purpose, current presence state | Don't grep for process.env |
-| `data/pcsf/narrator.pcsf.json` | All 6 persona narrators, keyword routing rules | Don't read dream-chat.js to understand agents |
-| `manifests/dream-journal-v1-agent-slots.json` | Queued work items with priority + description | Don't ask "what's left to do" |
+| [`data/pcsf/model.pcsf.json`](data/pcsf/model.pcsf.json) | Default model per provider, available overrides | Don't search for model strings |
+| [`data/pcsf/agent.pcsf.json`](data/pcsf/agent.pcsf.json) | All agents, their capabilities, route bindings | Don't explore routes/ to understand what exists |
+| [`data/pcsf/settings.pcsf.json`](data/pcsf/settings.pcsf.json) | Every env var, purpose, current presence state | Don't grep for process.env |
+| [`data/pcsf/narrator.pcsf.json`](data/pcsf/narrator.pcsf.json) | All 6 persona narrators, keyword routing rules | Don't read dream-chat.js to understand agents |
+| [`manifests/dream-journal-v1-agent-slots.json`](manifests/dream-journal-v1-agent-slots.json) | Queued work items with priority + description | Don't ask "what's left to do" |
+| [`manifests/CONVERGENCE-LOOP-AGENT-FLEET.md`](manifests/CONVERGENCE-LOOP-AGENT-FLEET.md) | 36-slot agent fleet design and receipt contract | Don't re-derive fleet structure |
 
 **Rule: Read the PCSF file first. Only touch source code if the manifest doesn't answer your question.**
 
@@ -30,7 +29,7 @@ This repo is designed for agentic-first workflows. Every agent (Claude, Gemini, 
 # Health check — is the server running? What's the state?
 python src/convergence_io_engine.py health
 
-# What needs fixing? Run the 12-phase convergence loop
+# What needs fixing? Run the 20-phase tesseract convergence loop
 python src/convergence_io_engine.py loop
 
 # Ask the AI (uses Gemini/Claude via the provider chain)
@@ -61,23 +60,21 @@ Claude is expensive. Use it for design decisions and complex debugging. Delegate
 
 The route architecture is modular. Each file handles one domain:
 
-```
-apps/lantern-garage/
-  server.js              — 90 lines, just loads routes + deps
-  routes/
-    status.js            — /api/health, /api/status, wallet, readiness
-    rag.js               — /api/rag-cache, flat-rag-house
-    operator.js          — /api/operator-notes, conversations, actions
-    files.js             — /repo/*, /view (markdown)
-    dreamer.js           — /api/dreamer, /api/agents
-    dream.js             — ALL /api/dream/* + /api/settings/providers
-    surfaces.js          — /hub, /surfaces/*, static catch-all
-  lib/
-    stream-chat.js       — SSE streaming (Gemini→Claude→OpenAI→Grok→Ollama)
-    dream-chat.js        — Non-streaming chat + persona selection
-    dreamer-store.js     — readRecentDreams(), notebook storage
-    conversation-store.js — append/read conversation JSONL
-```
+| File | Routes / Responsibility |
+|------|------------------------|
+| [`apps/lantern-garage/server.js`](apps/lantern-garage/server.js) | 90 lines — loads routes + deps, nothing else |
+| [`apps/lantern-garage/routes/status.js`](apps/lantern-garage/routes/status.js) | `/api/health`, `/api/status`, wallet, readiness |
+| [`apps/lantern-garage/routes/rag.js`](apps/lantern-garage/routes/rag.js) | `/api/rag-cache`, flat-rag-house |
+| [`apps/lantern-garage/routes/operator.js`](apps/lantern-garage/routes/operator.js) | `/api/operator-notes`, conversations, actions |
+| [`apps/lantern-garage/routes/files.js`](apps/lantern-garage/routes/files.js) | `/repo/*`, `/view` (markdown) |
+| [`apps/lantern-garage/routes/dreamer.js`](apps/lantern-garage/routes/dreamer.js) | `/api/dreamer`, `/api/agents` |
+| [`apps/lantern-garage/routes/dream.js`](apps/lantern-garage/routes/dream.js) | ALL `/api/dream/*` + `/api/settings/providers` |
+| [`apps/lantern-garage/routes/surfaces.js`](apps/lantern-garage/routes/surfaces.js) | `/hub`, `/surfaces/*`, static catch-all |
+| [`apps/lantern-garage/lib/stream-chat.js`](apps/lantern-garage/lib/stream-chat.js) | SSE streaming (Gemini→Claude→OpenAI→Grok→Ollama) |
+| [`apps/lantern-garage/lib/dream-chat.js`](apps/lantern-garage/lib/dream-chat.js) | Non-streaming chat + persona selection |
+| [`apps/lantern-garage/lib/dreamer-store.js`](apps/lantern-garage/lib/dreamer-store.js) | `readRecentDreams()`, notebook storage |
+| [`apps/lantern-garage/lib/conversation-store.js`](apps/lantern-garage/lib/conversation-store.js) | append/read conversation JSONL |
+| [`apps/lantern-garage/lib/csf-memory.js`](apps/lantern-garage/lib/csf-memory.js) | CSF long-term memory reader, door state persistence |
 
 **Rule: If you need a route, read `routes/dream.js`. If you need streaming, read `lib/stream-chat.js`. Don't read `server.js` — it's just glue.**
 
@@ -93,15 +90,19 @@ python -m pytest tests/test_dashboard_ux.py tests/test_dreamer_integration.py -q
 
 ### 6. CSF ingestion docs ARE the task queue
 
-```
-csf/ingest/
-  convergence-kvcache-compression.md    — FlowKV tiered history compression
-  convergence-stable-diffusion-doors.md — Local SD image gen per door
-  convergence-asmr-tts-chain.md         — ElevenLabs/OpenAI TTS provider chain
-  convergence-conversation-tree.md      — Branch-per-door session tree
-  convergence-model-training.md         — QLoRA fine-tune roadmap
-  ROOT-DOCS-CONSOLIDATION.md            — Docs pending CSF ingest then delete
-```
+| File | What it defines |
+|------|----------------|
+| [`csf/ingest/2026-06-07-hff-mcp-integration-fixes.md`](csf/ingest/2026-06-07-hff-mcp-integration-fixes.md) | Human Flourishing Frameworks + MCP integration |
+| [`csf/ingest/2026-06-06-elephant-door-memories.md`](csf/ingest/2026-06-06-elephant-door-memories.md) | Elephant Door anchor memories + Three Doors state |
+| [`csf/ingest/convergence-kvcache-compression.md`](csf/ingest/convergence-kvcache-compression.md) | FlowKV tiered history compression |
+| [`csf/ingest/convergence-stable-diffusion-doors.md`](csf/ingest/convergence-stable-diffusion-doors.md) | Local SD image gen per door |
+| [`csf/ingest/convergence-asmr-tts-chain.md`](csf/ingest/convergence-asmr-tts-chain.md) | ElevenLabs/OpenAI TTS provider chain |
+| [`csf/ingest/convergence-conversation-tree.md`](csf/ingest/convergence-conversation-tree.md) | Branch-per-door session tree |
+| [`csf/ingest/convergence-model-training.md`](csf/ingest/convergence-model-training.md) | QLoRA fine-tune roadmap |
+| [`csf/ingest/convergence-web-refinement.md`](csf/ingest/convergence-web-refinement.md) | UI/web surface convergence |
+| [`csf/ingest/convergence-webrtc-voice.md`](csf/ingest/convergence-webrtc-voice.md) | WebRTC voice integration |
+| [`csf/ingest/convergence-patreon-tiers.md`](csf/ingest/convergence-patreon-tiers.md) | Patreon tier design |
+| [`csf/ingest/ROOT-DOCS-CONSOLIDATION.md`](csf/ingest/ROOT-DOCS-CONSOLIDATION.md) | Docs pending CSF ingest then delete |
 
 Each file has: problem, proposed implementation with code sketch, files to change, effort estimate. **Pick one and implement it — don't re-research what's already documented.**
 
@@ -109,25 +110,31 @@ Each file has: problem, proposed implementation with code sketch, files to chang
 
 ## Quick Start
 
-**Build & Test**
+**Dev server (default — auto-restarts on file save):**
 ```bash
-python -m pip install -r requirements.txt
-node apps/lantern-garage/server.js &       # start server (background)
-node tests/test_dream_journal_api.js       # 18/18 should pass
-node tests/test_dream_chat_multiturns.js   # 11/11 should pass
+npm run dev --prefix apps/lantern-garage    # port 4177, watch mode
 ```
 
-**Run Locally**
+**One-shot / production:**
 ```bash
-node apps/lantern-garage/server.js          # port 4177
-python src/mcp_server/server.py             # port 8771 (optional)
+npm start --prefix apps/lantern-garage      # port 4177
 ```
 
-**Orchestrator**
+**Full stack:**
 ```bash
-python src/convergence_io_engine.py health  # server health
-python src/convergence_io_engine.py loop    # 12-phase convergence check
+npm run dev --prefix apps/lantern-garage &  # web server
+python src/mcp_server/server.py &           # MCP server (optional, port 8771)
+python src/convergence_io_engine.py health  # confirm everything healthy
 ```
+
+**Tests (server must be running):**
+```bash
+node tests/test_dream_journal_api.js        # 18 API tests
+node tests/test_dream_chat_multiturns.js    # 11 multi-turn tests
+python -m pytest tests/ -q --tb=short       # Python unit tests
+```
+
+See [`QUICKSTART.md`](QUICKSTART.md) for the full operator-facing guide.
 
 ---
 
@@ -144,7 +151,93 @@ python src/convergence_io_engine.py loop    # 12-phase convergence check
 - `super_jarvis_fleet` (36 slots, currently `activeSlots = 0`)
 - `kalshi_bridge`
 
+---
+
+## Tesseract Convergence Loop (2026-06-09 Upgrade)
+
+The convergence loop has been upgraded from 12 phases to 20 phases with tesseract integration:
+
+**New Phases (12-14):**
+- **Phase 12: navigate_status_cube** — 4D Status Cube navigation (x: location, y: lane, z: boundary, t: timeline)
+- **Phase 13: project_future_states** — Future state projection from past/present (comet-leap integration)
+- **Phase 14: update_bayesian_beliefs** — Bayesian belief system updates (health, animal, ecosystem, economy, culture)
+
+**Status Cube Axes:**
+- **x**: location (repo, apps, skills, scripts)
+- **y**: lane (control, report, dollhouse, wallet, device, product)
+- **z**: boundary (proven, candidate, held, blocked)
+- **t**: timeline (evidence receipts, validation history)
+
+**Bayesian Belief Dimensions:**
+- **health**: HFF sensors, HFF API
+- **animal**: HFF world model tracking
+- **ecosystem**: HFF integration
+- **economy**: Wallet ledger, cash loop
+- **culture**: Lore, three doors
+
+**Redundancy Requirements (ArXiv 2601.05280v2):**
+- All critical fallback categories require 2+ redundant sources
+- External grounding: 2+ memory, 2+ evidence, 2+ provider sources
+- CTF symbolic: 2+ engines, 2+ bridges, 2+ dictionaries
+- ASI benchmarks: 2+ core, 2+ jagged frontier, 2+ capability domains
+- Validation ring: 5 validators (alpha, beta, gamma, delta, epsilon)
+
+**Documentation:**
+- See [`docs/TESSERACT-CONVERGENCE-LOOP.md`](docs/TESSERACT-CONVERGENCE-LOOP.md) for full details
+- See [`docs/CONVERGENCE-LOOP.md`](docs/CONVERGENCE-LOOP.md) for original 12-step method
+
 Never claim a skill or fleet slot is active unless confirmed by implementation or status file.
+
+---
+
+## Quality Gates & Automated Hooks (Critical)
+
+All agent commits are subject to **four automated quality checks** via git pre-commit hooks. See [`docs/HOOKS.md`](docs/HOOKS.md) for full reference.
+
+### Four-Layer Validation (Automatic on Every Commit)
+
+| Validator | Enforces | Skip with |
+|-----------|----------|-----------|
+| **Version/Changelog** | Code changed → version bump → changelog entry | `SKIP_VERSION_CHECK=1` |
+| **Deployment Readiness** | Server change → deployment.json with rollback plan | `SKIP_DEPLOY_CHECK=1` |
+| **Auto-Update Safety** | Version bump → migration scripts, backwards compatibility | `SKIP_UPDATE_CHECK=1` |
+| **AGENTS.md** | Agent commit → update this file with metadata, runbook, capabilities | `SKIP_AGENT_CHECK=1` |
+
+### Agent Documentation (for `claude/*`, `gemini/*`, etc. branches)
+
+When committing to an agent branch, update AGENTS.md with:
+
+```markdown
+## [Agent Name]
+
+**Status:** active  
+**Model:** claude-opus  
+**Lane:** claude/  
+**Owner:** [Your name]  
+
+### Capabilities
+- Feature engineering
+- Documentation writing
+- Code review
+
+### Runbook / Behavior
+How this agent operates...
+
+### Constraints
+- Max 1 open PR per lane
+- Focus area: [describe]
+```
+
+**Exception:** If your change is docs-only or doesn't touch code, skip with `SKIP_AGENT_CHECK=1`.
+
+### Emergency Bypass (Rare)
+
+For true emergencies only:
+```bash
+SKIP_ALL_CHECKS=1 git commit -m "EMERGENCY: critical hotfix"
+```
+
+**See [`docs/HOOKS.md`](docs/HOOKS.md) for complete reference, examples, and troubleshooting.**
 
 ---
 
@@ -233,7 +326,9 @@ python -m pip install -r requirements.txt
 ### 2. Start the web server (required)
 
 ```bash
-node apps/lantern-garage/server.js
+npm run dev --prefix apps/lantern-garage    # dev mode — auto-restarts on file changes
+# or for one-shot:
+npm start --prefix apps/lantern-garage
 ```
 
 Opens on `http://127.0.0.1:4177`.
@@ -277,18 +372,20 @@ python src/convergence_io_engine.py inspect
 
 | What | Where |
 |------|-------|
-| Server entry | `apps/lantern-garage/server.js` (90 lines, loads routes/) |
-| All dream routes | `apps/lantern-garage/routes/dream.js` |
-| SSE streaming | `apps/lantern-garage/lib/stream-chat.js` |
-| Dream chat UI | `apps/lantern-garage/public/dream-chat.html` |
-| Landing page | `apps/lantern-garage/public/index.html` |
-| Provider settings | `POST /api/settings/providers` in `routes/dream.js` |
-| Orchestrator | `src/convergence_io_engine.py` |
-| MemOS bridge | `src/convergence_io/memos_bridge.py` |
-| PCSF state files | `data/pcsf/*.pcsf.json` |
-| Work queue | `manifests/dream-journal-v1-agent-slots.json` |
-| CSF task docs | `csf/ingest/*.md` |
-| CI pipeline | `.github/workflows/ci.yml` |
-| Cloud deploy | `apps/lantern-garage/cloud-server.js` (thin wrapper over server.js) |
+| Server entry | [`apps/lantern-garage/server.js`](apps/lantern-garage/server.js) (90 lines, loads routes/) |
+| All dream routes | [`apps/lantern-garage/routes/dream.js`](apps/lantern-garage/routes/dream.js) |
+| SSE streaming | [`apps/lantern-garage/lib/stream-chat.js`](apps/lantern-garage/lib/stream-chat.js) |
+| Dream chat UI | [`apps/lantern-garage/public/dream-chat.html`](apps/lantern-garage/public/dream-chat.html) |
+| Landing page | [`apps/lantern-garage/public/index.html`](apps/lantern-garage/public/index.html) |
+| Provider settings | `POST /api/settings/providers` in [`routes/dream.js`](apps/lantern-garage/routes/dream.js) |
+| Orchestrator | [`src/convergence_io_engine.py`](src/convergence_io_engine.py) |
+| Unified agent connector | [`src/unified_agent_connector.py`](src/unified_agent_connector.py) |
+| MemOS bridge | [`src/convergence_io/memos_bridge.py`](src/convergence_io/memos_bridge.py) |
+| PCSF state files | [`data/pcsf/`](data/pcsf/) |
+| Work queue | [`manifests/dream-journal-v1-agent-slots.json`](manifests/dream-journal-v1-agent-slots.json) |
+| CSF task docs | [`csf/ingest/`](csf/ingest/) |
+| CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+| Startup guide | [`QUICKSTART.md`](QUICKSTART.md) |
+| Contributing | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 **Last Updated:** 2026-06-05 — v1.0.0 Dream Journal Orion Edition

@@ -1,6 +1,52 @@
 // Health, status, system metrics — read-only telemetry endpoints
 const { getRoutingSnapshot } = require("../lib/provider-cache");
 const { execSync } = require("child_process");
+const path = require("path");
+const fs = require("fs");
+
+// In-memory model metrics cache
+let _modelMetricsCache = { data: null, ts: 0 };
+const METRICS_CACHE_TTL_MS = 5000;
+
+function getModelMetrics(repoRoot) {
+  const now = Date.now();
+  if (_modelMetricsCache.data && (now - _modelMetricsCache.ts) < METRICS_CACHE_TTL_MS) {
+    return _modelMetricsCache.data;
+  }
+
+  const metricsPath = path.join(repoRoot, "data", "metrics", "model-usage.jsonl");
+  const metrics = {
+    "lantern-csf-dream": { calls: 0, errors: 0, totalLatency: 0 },
+    "lantern-pcsf": { calls: 0, errors: 0, totalLatency: 0 },
+    "lantern-convergance": { calls: 0, errors: 0, totalLatency: 0 },
+    "lantern-csf-dream-image": { calls: 0, errors: 0, totalLatency: 0 },
+  };
+
+  if (!fs.existsSync(metricsPath)) {
+    _modelMetricsCache = { data: metrics, ts: now };
+    return metrics;
+  }
+
+  const lines = fs.readFileSync(metricsPath, "utf8").trim().split("\n").filter(Boolean);
+  for (const line of lines) {
+    try {
+      const record = JSON.parse(line);
+      const modelId = record.modelId;
+      if (!modelId || !metrics[modelId]) continue;
+
+      metrics[modelId].calls += 1;
+      if (record.metadata?.status === "failed") {
+        metrics[modelId].errors += 1;
+      }
+      if (typeof record.metadata?.latencyMs === "number") {
+        metrics[modelId].totalLatency += record.metadata.latencyMs;
+      }
+    } catch { /* skip bad lines */ }
+  }
+
+  _modelMetricsCache = { data: metrics, ts: now };
+  return metrics;
+}
 
 function getGitVersion(repoRoot) {
   try {
@@ -8,9 +54,14 @@ function getGitVersion(repoRoot) {
     const tag = execSync("git describe --tags --always", { cwd: repoRoot, encoding: "utf8" }).trim();
     const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repoRoot, encoding: "utf8" }).trim();
     const date = execSync("git log -1 --format=%cI", { cwd: repoRoot, encoding: "utf8" }).trim();
-    return { commit, tag, branch, date };
+    let semver = tag;
+    try {
+      const vj = JSON.parse(fs.readFileSync(path.join(repoRoot, "apps/lantern-garage/public/version.json"), "utf8"));
+      if (vj.version) semver = vj.version;
+    } catch {}
+    return { commit, tag, branch, date, semver };
   } catch {
-    return { commit: "unknown", tag: "unknown", branch: "unknown", date: new Date().toISOString() };
+    return { commit: "unknown", tag: "unknown", branch: "unknown", date: new Date().toISOString(), semver: "unknown" };
   }
 }
 
@@ -72,6 +123,19 @@ module.exports = async function statusRoutes(req, res, url, deps) {
   }
   if (url.pathname === "/api/version") {
     sendJson(res, { ok: true, version: getGitVersion(deps.repoRoot), generatedAt: new Date().toISOString() });
+    return true;
+  }
+  if (url.pathname === "/api/metrics") {
+    const metrics = getModelMetrics(deps.repoRoot);
+    const enriched = {};
+    for (const [modelId, data] of Object.entries(metrics)) {
+      enriched[modelId] = {
+        ...data,
+        avgLatency: data.calls > 0 ? Math.round(data.totalLatency / data.calls) : 0,
+        errorRate: data.calls > 0 ? Math.round((data.errors / data.calls) * 1000) / 10 : 0,
+      };
+    }
+    sendJson(res, { ok: true, metrics: enriched, generatedAt: new Date().toISOString() });
     return true;
   }
 };

@@ -188,7 +188,8 @@
 
     <footer>
       HFF Scientific Dashboard — local static surface inside Lantern OS.
-      Data sourced from <code>/api/flourishing/*</code> proxy to the HFF world-model.
+      Data sourced from <code>/api/flourishing/*</code> — direct Node.js integration, no separate service required.
+      Seed with <code>python integrations/human-flourishing-frameworks/seed_data.py</code> to populate.
       <span style="color:var(--muted);">Violation data is synthetic unless labeled with a real citation.</span>
     </footer>
   </main>
@@ -304,10 +305,10 @@
         log('Dashboard loaded successfully');
       } else {
         setStatus(`
-          <span class="status-pill error">HFF Unreachable</span>
-          <span class="status-pill">Flask app may not be running</span>
+          <span class="status-pill warning">HFF Not Seeded</span>
+          <span class="status-pill">Run seed_data.py to populate</span>
         `);
-        log('Dashboard degraded — no HFF data sources responded');
+        log('No HFF snapshot found — run seed_data.py to populate the world model');
       }
     }
 

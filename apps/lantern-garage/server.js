@@ -70,6 +70,7 @@ const deps = {
 
 const routes = [
   require("./routes/status"),
+  require("./routes/ui"),
   require("./routes/rag"),
   require("./routes/operator"),
   require("./routes/files"),
@@ -77,8 +78,8 @@ const routes = [
   require("./routes/dream"),
   require("./routes/keystone"),
   require("./routes/image"),
-  require("./routes/surfaces"),
   require("./routes/flourishing"),
+  require("./routes/surfaces"),
 ];
 
 async function route(req, res) {
@@ -86,14 +87,11 @@ async function route(req, res) {
 
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "no-referrer",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
       "X-Frame-Options": "DENY",
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     });
     res.end();
     return;
@@ -169,7 +167,7 @@ server.listen(port, host, () => {
   refreshAllPcsf(repoRoot);
   // Ollama cold-start probe
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "llama3";
+  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
   const httpLib = ollamaBase.startsWith("https") ? require("https") : require("http");
   httpLib.get(`${ollamaBase}/api/tags`, (r) => {
     let d = "";

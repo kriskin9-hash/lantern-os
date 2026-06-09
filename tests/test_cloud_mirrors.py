@@ -1,4 +1,5 @@
 import json
+import pytest
 from pathlib import Path
 
 
@@ -29,8 +30,7 @@ def test_package_splits_local_and_cloud_runtime_scripts() -> None:
     scripts = package["scripts"]
     assert scripts["start"] == "node server.js"
     assert scripts["start:local"] == "node server.js"
-    assert scripts["start:cloud"] == "node cloud-server.js"
-    assert "node --check cloud-server.js" in scripts["check"]
+    # cloud-server.js removed in cleanup PR #230 — start:cloud and check for it no longer exist
 
 
 def test_runtime_cicd_docs_cover_local_cloud_and_render_validation() -> None:
@@ -51,20 +51,18 @@ def test_runtime_cicd_docs_cover_local_cloud_and_render_validation() -> None:
 
 
 def test_local_and_cloud_runtimes_share_browser_hardening_headers() -> None:
-    for runtime in ["server.js", "cloud-server.js"]:
-        text = (ROOT / "apps" / "lantern-garage" / runtime).read_text(encoding="utf-8")
-        assert "X-Content-Type-Options" in text
-        assert "Referrer-Policy" in text
-        assert "X-Frame-Options" in text
-        assert "Permissions-Policy" in text
+    # cloud-server.js removed in PR #230 — only verify server.js
+    text = (ROOT / "apps" / "lantern-garage" / "server.js").read_text(encoding="utf-8")
+    assert "X-Content-Type-Options" in text
+    assert "Referrer-Policy" in text
+    assert "X-Frame-Options" in text
+    assert "Permissions-Policy" in text
 
 
+@pytest.mark.skip(reason="cloud-server.js removed in cleanup PR #230")
 def test_cloud_runtime_keeps_write_methods_explicitly_bounded() -> None:
     text = (ROOT / "apps" / "lantern-garage" / "cloud-server.js").read_text(encoding="utf-8")
     assert "cloud_read_only_method_not_allowed" in text
-    assert 'url.pathname === "/api/chat" && req.method === "POST"' in text
-    assert 'url.pathname === "/api/command" && req.method === "POST"' in text
-    assert 'url.pathname.startsWith("/api/actions/") && req.method === "POST"' in text
 
 
 def test_server_supports_cloud_port_and_mirror_api() -> None:

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dream Journal · Orion · v1.0.0</title>
+  <title>Dream Journal · Orion — Lantern OS</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -145,15 +145,32 @@
     .input-meta .hint { font-size: 0.7rem; color: var(--muted); }
     .input-meta .kind-select { font-size: 0.78rem; padding: 3px 22px 3px 7px; }
     .input-meta .agent-select { font-size: 0.78rem; padding: 3px 22px 3px 7px; }
+
+    @keyframes moon-drift {
+      0%   { transform: rotate(-3deg) translateY(0px); }
+      25%  { transform: rotate(0deg)  translateY(-3px); }
+      50%  { transform: rotate(3deg)  translateY(0px); }
+      75%  { transform: rotate(0deg)  translateY(-2px); }
+      100% { transform: rotate(-3deg) translateY(0px); }
+    }
+    .moon-heartbeat {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      animation: moon-drift 9s ease-in-out infinite;
+      will-change: transform;
+    }
+    .moon-heartbeat.lag      { animation-duration: 3.5s; filter: drop-shadow(0 0 10px rgba(244,199,107,0.5)); }
+    .moon-heartbeat.critical { animation-duration: 1.4s; filter: drop-shadow(0 0 14px rgba(255,100,50,0.55)); }
   </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <div class="logo">🌙</div>
+    <div class="logo moon-heartbeat">🌙</div>
     <div class="title-block">
       <h1>Dream Journal</h1>
-      <p>Orion · <span data-version-badge="Orion · ">v1.0.0</span> · local</p>
+      <p>Orion · <span data-version-badge="Orion · ">v1.2.0</span> · local</p>
     </div>
     <div class="header-right">
       <span class="kind-label">Model</span>
@@ -179,7 +196,9 @@
         <div class="dot" id="dot"></div>
         <span id="status-label">connecting…</span>
       </div>
+      <button id="converge-btn" class="chip" style="background:var(--accent-dim);border-color:var(--accent);color:var(--accent);font-size:0.72rem;padding:4px 10px;" title="Run 12-step convergence">◈ Converge</button>
       <a href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener" title="Support on Patreon" style="font-size:0.72rem;color:var(--muted);text-decoration:none;padding:4px 8px;border:1px solid var(--border);border-radius:6px;white-space:nowrap;transition:color 0.2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">&#9829; Patreon</a>
+      <a href="/" title="Back to Lantern OS" style="font-size:0.72rem;color:var(--muted);text-decoration:none;padding:4px 8px;border:1px solid var(--border);border-radius:6px;white-space:nowrap;transition:color 0.2s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">← Home</a>
     </div>
   </header>
 
@@ -257,6 +276,85 @@
   kindInline.addEventListener('change', () => { kindHeader.value = kindInline.value; });
   modelHeader.addEventListener('change', () => { modelInline.value = modelHeader.value; });
   modelInline.addEventListener('change', () => { modelHeader.value = modelInline.value; });
+
+  // ── Convergence button handler ─────────────────────────────────────
+  document.getElementById('converge-btn').addEventListener('click', async () => {
+    if (isStreaming) return;
+    
+    if (emptyState) emptyState.style.display = 'none';
+    
+    const { row, bubble, cursor, label } = createAgentBubble('Convergence');
+    setStatus('thinking');
+    isStreaming = true;
+    
+    let fullReply = '';
+    
+    try {
+      const resp = await fetch('/api/dream/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: '!converge',
+          user: 'orion',
+          agent: '',
+          provider: getSelectedProvider(),
+        }),
+        signal: AbortSignal.timeout(60000),
+      });
+
+      if (!resp.ok || !resp.body) throw new Error('Convergence stream unavailable');
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'token' && event.text) {
+              fullReply += event.text;
+              cursor.remove();
+              bubble.textContent = fullReply;
+              bubble.appendChild(cursor);
+              scrollToBottom();
+            } else if (event.type === 'done') {
+              break;
+            } else if (event.type === 'error') {
+              if (!fullReply) throw new Error(event.text || 'Convergence error');
+            }
+          } catch (parseErr) {
+            if (parseErr.message === 'Convergence error' || parseErr.message.startsWith('Convergence')) throw parseErr;
+          }
+        }
+      }
+
+      cursor.remove();
+      if (!fullReply) throw new Error('Empty convergence response');
+      bubble.textContent = fullReply;
+    } catch (err) {
+      cursor.remove();
+      bubble.textContent = `Convergence failed: ${err.message}\n\nEnsure Python convergence engine is available and models are configured.`;
+      bubble.style.color = 'var(--amber)';
+    }
+
+    const srcBadge = document.createElement('div');
+    srcBadge.className = 'source-badge';
+    srcBadge.textContent = '12-step convergence';
+    row.appendChild(srcBadge);
+
+    setStatus(serverOnline ? 'online' : 'offline');
+    isStreaming = false;
+    scrollToBottom();
+  });
 
   // ── Offline fallback replies (only used when server is unreachable) ───
   const OFFLINE_REPLIES = {
@@ -622,6 +720,32 @@
       });
     })
     .catch(() => {});
+})();
+</script>
+<script>
+(function() {
+  var LAG = 600, CRITICAL = 1500, INTERVAL = 4000;
+  function beat() {
+    var moons = document.querySelectorAll('.moon-heartbeat');
+    if (!moons.length) return;
+    var t = Date.now();
+    fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
+      .then(function(r) {
+        var ms = Date.now() - t;
+        moons.forEach(function(m) {
+          m.classList.remove('lag', 'critical');
+          if (ms > CRITICAL) m.classList.add('critical');
+          else if (ms > LAG)  m.classList.add('lag');
+        });
+      })
+      .catch(function() {
+        document.querySelectorAll('.moon-heartbeat').forEach(function(m) {
+          m.classList.remove('lag'); m.classList.add('critical');
+        });
+      });
+  }
+  setInterval(beat, INTERVAL);
+  beat();
 })();
 </script>
 </body>

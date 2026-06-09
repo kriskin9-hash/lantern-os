@@ -1,6 +1,7 @@
 // PCSF Live Refresh — update data/pcsf/*.pcsf.json from live provider + journal state on server start
 const fs = require("fs");
 const path = require("path");
+const { readMcpResourceSync, readFileViaMcp } = require("./mcp-resource-client");
 
 const PROVIDER_KEYS = [
   "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "XAI_API_KEY",
@@ -10,7 +11,24 @@ function _now() {
   return new Date().toISOString();
 }
 
+// Load JSON via MCP resource URI, falling back to fs.readFileSync for backwards compat
 function loadJson(p) {
+  // Map known paths to MCP URIs
+  const basename = path.basename(p);
+  const uriMap = {
+    "settings.pcsf.json": "pcsf://settings",
+    "provider.pcsf.json": "pcsf://provider",
+    "health.pcsf.json": "pcsf://health",
+    "model.pcsf.json": "pcsf://model",
+    "agent.pcsf.json": "pcsf://agent",
+    "narrator.pcsf.json": "pcsf://narrator",
+  };
+  const uri = uriMap[basename];
+  if (uri) {
+    const remote = readMcpResourceSync(uri, null);
+    if (remote) return remote;
+  }
+  // Direct fs fallback
   try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; }
 }
 
@@ -80,7 +98,10 @@ function loadDreamEntries(repoRoot) {
   const files = fs.readdirSync(dreamDir).filter(f => f.endsWith(".jsonl"));
   const entries = [];
   for (const file of files) {
-    const text = fs.readFileSync(path.join(dreamDir, file), "utf8");
+    // Try MCP resource first, fall back to fs.readFileSync
+    const filePath = path.join(dreamDir, file);
+    const remote = readFileViaMcp(filePath);
+    const text = remote && remote.text ? remote.text : (() => { try { return fs.readFileSync(filePath, "utf8"); } catch { return ""; } })();
     for (const line of text.split("\n")) {
       if (!line.trim()) continue;
       try { entries.push(JSON.parse(line)); } catch {}

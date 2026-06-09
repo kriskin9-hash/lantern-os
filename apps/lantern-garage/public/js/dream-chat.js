@@ -4,11 +4,21 @@
   const statusDot = document.getElementById("status-dot");
   const statusLabel = document.getElementById("status-label");
   const emptyState = document.getElementById("empty-state");
-  const agentSelect = document.getElementById("agent-select");
   const providerSelect = document.getElementById("provider-select");
   const mcpToggle = document.getElementById("mcp-toggle");
-  let keystoneMcpEnabled = false;
+  let directModeEnabled = false;
+  let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
+  // Agent is contextual — Lantern is default, others triggered by name in message
+  function detectAgent(msg) {
+    const lower = (msg || "").toLowerCase();
+    if (lower.includes("keystone") || lower.includes("debug")) return "keystone";
+    if (lower.includes("blinkbug") || lower.includes("glitch")) return "blinkbug";
+    if (lower.includes("waterfall") || lower.includes("gentle")) return "waterfall";
+    if (lower.includes("xenon") || lower.includes("navigate")) return "xenon";
+    if (lower.includes("founder") || lower.includes("wish")) return "founder";
+    return "lantern";
+  }
 
   // Telemetry shim (logs to console; replace with real telemetry if needed)
   const TELEMETRY = {
@@ -73,29 +83,11 @@
   }
 
   function toggleKeystoneMcp() {
-    keystoneMcpEnabled = !keystoneMcpEnabled;
-    mcpToggle.classList.toggle("active", keystoneMcpEnabled);
-    document.querySelector(".app").classList.toggle("mcp-mode", keystoneMcpEnabled);
-    document.querySelector(".input-area").classList.toggle("mcp-mode", keystoneMcpEnabled);
-    if (keystoneMcpEnabled) {
-      lockAgentToKeystone();
-    } else {
-      restoreAgentSelector();
-    }
-  }
-
-  function lockAgentToKeystone() {
-    if (!originalAgents.length) return;
-    const keystone = originalAgents.find(a => a.id === "keystone");
-    if (keystone) {
-      agentSelect.innerHTML = `<option value="${keystone.id}">${keystone.name}</option>`;
-      agentSelect.value = keystone.id;
-    }
-  }
-
-  function restoreAgentSelector() {
-    if (!originalAgents.length) return;
-    agentSelect.innerHTML = originalAgents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+    directModeEnabled = !directModeEnabled;
+    keystoneMcpEnabled = directModeEnabled; // legacy compat
+    mcpToggle.classList.toggle("active", directModeEnabled);
+    document.querySelector(".app").classList.toggle("mcp-mode", directModeEnabled);
+    document.querySelector(".input-area").classList.toggle("mcp-mode", directModeEnabled);
   }
   document.addEventListener("keydown", (e) => {
     if (e.key === "d" && !e.ctrlKey && !e.metaKey && !e.altKey && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") {
@@ -138,9 +130,7 @@
         const data = await r.json();
         agents = data.agents || [];
         originalAgents = agents;
-        agentSelect.innerHTML = agents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
-        if (data.default) agentSelect.value = data.default;
-        if (keystoneMcpEnabled) lockAgentToKeystone();
+        originalAgents = agents;
         statusDot.className = "dot online";
         statusLabel.textContent = "online";
         TELEMETRY.log("agents", `Loaded ${agents.length} agents`);
@@ -172,9 +162,12 @@
     fetch(`${serverBase}/api/actions/update`, { method: "POST" })
       .then(r => r.json())
       .then(d => {
-        const steps = d.steps?.map(s => `${s.ok ? "✓" : "✗"} ${s.step}`).join(" · ") || "";
+        const ver = d.version?.semver || d.version?.tag || "?";
+        const pullOutput = d.steps?.find(s => s.step === "git_pull")?.output || "";
+        const alreadyUpToDate = pullOutput.includes("Already up to date");
+        const status = alreadyUpToDate ? "Already up to date" : (d.ok ? "Updated" : "Failed");
         row.querySelector(".bubble").innerHTML =
-          `<b>${label}</b> ${d.ok ? "✓" : "✗"} <code>${d.version?.tag || "?"}</code><br><small style="opacity:0.85">${steps}</small>`;
+          `<b>${status}</b> · v${ver}`;
         scrollToBottom();
       })
       .catch(e => {
@@ -205,9 +198,13 @@
       fetch(`${serverBase}/api/actions/update`, { method: "POST" })
         .then(async (r) => {
           const d = await r.json();
+          const ver = d.version?.semver || d.version?.tag || "?";
+          const pullOutput = (d.steps || []).find(s => s.step === "git_pull")?.output || "";
+          const alreadyUpToDate = pullOutput.includes("Already up to date");
+          const status = alreadyUpToDate ? "Already up to date" : (d.ok ? "Updated" : "Failed");
           const steps = (d.steps || []).map(s => `${s.ok ? "✓" : "✗"} ${s.step}`).join("\n");
           sysRow.querySelector(".bubble").innerHTML =
-            `<b>Auto-update</b> ${d.ok ? "✓" : "✗"}<br><pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(steps)}${d.restart_scheduled ? "\n✓ restart_scheduled" : ""}</pre>`;
+            `<b>${status}</b> · v${ver}<br><pre style="margin-top:6px;white-space:pre-wrap;font-size:12px;opacity:0.85;">${escapeHtml(steps)}${d.restart_scheduled ? "\n✓ restart_scheduled" : ""}</pre>`;
           scrollToBottom();
           if (d.ok && d.restart_scheduled) {
             const msg = document.createElement("div");
@@ -246,7 +243,7 @@
           const d = await loopR.json();
           const rawOut = d.stdout || "";
           const rawErr = d.stderr || "";
-          const tag = versionD?.version?.tag || "unknown";
+          const tag = versionD?.version?.semver || versionD?.version?.tag || "unknown";
           const commit = versionD?.version?.commit ? versionD.version.commit.slice(0, 7) : "?";
 
           // Extract JSON from stdout (convergence loop prints it at the end)
@@ -283,8 +280,19 @@
       scrollToBottom();
       return;
     }
+    // Special handling for Three Doors game
+    const threeDoorsMatch = text.match(/^!(?:three-doors|threedoors|doors)\b/i);
+    if (threeDoorsMatch) {
+      if (emptyState) emptyState.style.display = "none";
+      inputEl.value = "";
+      analytics.messagesSent++;
+      analytics.record("send", "Three Doors game started");
+      startThreeDoors();
+      return;
+    }
+
     // Allow backend-streaming bang commands through; reject truly unknown ones
-    const STREAMING_BANGS = ["swarm", "converge"];
+    const STREAMING_BANGS = ["swarm", "converge", "convergance"];
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
       const cmdName = bangMatch[1].toLowerCase();
@@ -302,7 +310,7 @@
     appendUserBubble(text);
     inputEl.value = "";
     analytics.messagesSent++;
-    analytics.lastAgent = agents.find((a) => a.id === agentSelect.value)?.name || agentSelect.value;
+    analytics.lastAgent = directModeEnabled ? "Direct" : detectAgent(text);
     analytics.record("send", text.slice(0, 40));
     analytics._msgStart = Date.now();
     streamAgentResponse(text);
@@ -312,24 +320,26 @@
     conversationHistory.push({ role: "user", text });
     const row = document.createElement("div");
     row.className = "msg-row user";
-    row.innerHTML = `<div class="msg-label">You</div><div class="bubble">${escapeHtml(text)}</div>`;
+    row.innerHTML = `<div class="msg-label">You · ${fmtTime(new Date())}</div><div class="bubble">${escapeHtml(text)}</div>`;
     messagesEl.appendChild(row);
     scrollToBottom();
   }
 
   // ── Stream agent response ───────────────────────────────────────────────────
   function streamAgentResponse(message) {
+    stopSpeaking();
     isStreaming = true;
     sendBtn.disabled = true;
     setThinking(true);
 
-    const agentName = agents.find((a) => a.id === agentSelect.value)?.name || "Agent";
+    const agentName = directModeEnabled ? "Model" : (agents.find((a) => a.id === detectAgent(message))?.name || "Lantern");
+    const msgTime = new Date();
     const row = document.createElement("div");
     row.className = "msg-row agent";
 
     const label = document.createElement("div");
     label.className = "msg-label";
-    label.textContent = agentName;
+    label.textContent = `${agentName} · ${fmtTime(msgTime)}`;
 
     const bubble = document.createElement("div");
     bubble.className = "bubble";
@@ -346,14 +356,14 @@
     let fullText = "";
     let hasTokens = false;
     const provider = providerSelect.value;
-    const agent = agentSelect.value;
+    const agent = directModeEnabled ? "" : detectAgent(message);
     // POST with history for multi-turn context; history excludes current message (already appended)
     const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
 
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: keystoneMcpEnabled }),
+      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: directModeEnabled }),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -375,9 +385,13 @@
               if (evt.type === "token" && evt.text) {
                 if (!hasTokens) { hasTokens = true; setThinking(false); }
                 fullText += evt.text;
+                streamTtsBuf += evt.text;
+                streamTtsFlush(false);
                 analytics.tokensReceived++;
                 cursor.remove();
-                bubble.textContent = fullText;
+                // Strip [DOORS:...] tag during streaming; chips rendered on done
+                const visibleText = fullText.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trimEnd();
+                bubble.textContent = visibleText;
                 bubble.appendChild(cursor);
                 scrollToBottom();
               }
@@ -392,7 +406,15 @@
                 if (evt.cleanText && evt.cleanText !== fullText) {
                   bubble.textContent = evt.cleanText;
                 }
-                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, evt.suggestions, evt.image_prompt);
+                // Parse [DOORS: A name | B name | C name] from full text if backend didn't extract
+                let suggestions = evt.suggestions;
+                if (!suggestions || suggestions.length === 0) {
+                  const doorsMatch = fullText.match(/\[DOORS:\s*([^\]]+)\]/i);
+                  if (doorsMatch) {
+                    suggestions = doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean);
+                  }
+                }
+                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt);
               }
             } catch { /* skip malformed */ }
           }
@@ -440,17 +462,20 @@
     if (isFallback) analytics.fallbacks++;
     analytics.record(isFallback ? "fallback" : "done", `${source}${latency ? " @ " + latency + "ms" : ""}`);
 
-    if (source === "failed" || source === "unavailable" || source === "error" || error) {
-      const badge = document.createElement("div");
-      badge.className = "source-badge offline";
-      badge.textContent = error ? error : source;
-      row.appendChild(badge);
-    } else if (source) {
-      const badge = document.createElement("div");
-      badge.className = `source-badge ${source}`;
-      const names = { anthropic: "Claude", openai: "ChatGPT", gemini: "Gemini", grok: "Grok", ollama: "Ollama" };
-      badge.textContent = `❆ ${names[source] || source}`;
-      row.appendChild(badge);
+    {
+      const provNames = { anthropic: "Claude", openai: "ChatGPT", gemini: "Gemini", grok: "Grok", ollama: "Ollama" };
+      const turn = conversationHistory.filter(m => m.role === "assistant").length;
+      const latStr = latency ? `${(latency / 1000).toFixed(1)}s` : null;
+      const isErr = source === "failed" || source === "unavailable" || source === "error" || !!error;
+      const footer = document.createElement("div");
+      footer.className = `msg-footer${isErr ? " offline" : source ? ` ${source}` : ""}`;
+      const parts = [];
+      if (isErr) parts.push(error || source || "error");
+      else if (source) parts.push(`❆ ${provNames[source] || source}`);
+      if (latStr) parts.push(latStr);
+      if (turn) parts.push(`turn ${turn}`);
+      footer.textContent = parts.join(" · ");
+      row.appendChild(footer);
     }
 
     // Render contextual suggestion chips from dream memory
@@ -463,6 +488,11 @@
         btn.textContent = s;
         btn.onclick = () => {
           if (isStreaming) return;
+          fetch(`${serverBase}/api/dream/door-choice`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ choice: s, doors: suggestions }),
+          }).catch(() => {});
           inputEl.value = s;
           inputEl.dispatchEvent(new Event("input"));
           sendMessage();
@@ -472,10 +502,7 @@
       row.appendChild(chips);
     }
 
-    // ── Three Doors banner ──────────────────────────────────────────────────────
-    if (Array.isArray(suggestions) && suggestions.length === 3) {
-      appendDoorsBanner(row, suggestions);
-    }
+    // ── Three Doors banner (disabled — appendDoorsBanner not yet implemented) ──
     // Show image prompt when AI suggests SD generation for doors
     if (imagePrompt) {
       const imgNote = document.createElement("div");
@@ -509,7 +536,7 @@
     }
 
     // Keystone MCP: extract code blocks as executable commands
-    if (keystoneMcpEnabled && agentSelect.value === "keystone" && text) {
+    if (directModeEnabled && text) {
       const codeBlocks = text.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/g) || [];
       codeBlocks.forEach(block => {
         const cmd = block.replace(/```(?:bash|powershell|sh)?\n?/, "").replace(/```$/, "").trim();
@@ -551,8 +578,8 @@
     sendBtn.disabled = false;
     setThinking(false);
     scrollToBottom();
-    // TTS — speak the clean reply after stream completes
-    if (text && source !== "failed" && source !== "error") speakText(text);
+    // TTS — flush remainder and wrap bubble for word highlighting
+    if (text && source !== "failed" && source !== "error") streamTtsFinish(text, bubble);
   }
 
   function appendErrorNotice(row, msg) {
@@ -578,6 +605,10 @@
 
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function fmtTime(d) {
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
 
   // ── Settings drawer ─────────────────────────────────────────────────────
@@ -942,9 +973,120 @@
 
   let ttsAudio = null;
 
+  // --- Streaming TTS state ---
+  let streamTtsBuf = "";
+  let streamTtsQueue = [];
+  let streamTtsBusy = false;
+  let ttsWordBubble = null;
+  let streamTtsSentenceOffset = 0; // cumulative char offset into bubble text as sentences complete
+  const SENT_RE = /[^.!?…\n]+(?:[.!?…]+\s*|\n{2,})/g;
+
+  function streamTtsReset() {
+    streamTtsBuf = "";
+    streamTtsQueue = [];
+    streamTtsBusy = false;
+    ttsWordBubble = null;
+    streamTtsSentenceOffset = 0;
+    clearTtsHighlight();
+  }
+
+  function streamTtsFlush(force) {
+    if (!window.speechSynthesis) return;
+    const matches = streamTtsBuf.match(SENT_RE);
+    if (!matches) return;
+    const last = matches[matches.length - 1];
+    const consumed = streamTtsBuf.lastIndexOf(last) + last.length;
+    const sentences = force
+      ? matches.concat(streamTtsBuf.slice(consumed).trim() ? [streamTtsBuf.slice(consumed).trim()] : [])
+      : matches;
+    streamTtsBuf = force ? "" : streamTtsBuf.slice(consumed);
+    for (const s of sentences) {
+      const t = s.trim().replace(/\[DOORS:[^\]]*\]?/gi, "").trim();
+      if (t) streamTtsQueue.push(t);
+    }
+    streamTtsDrain();
+  }
+
+  function streamTtsDrain() {
+    if (streamTtsBusy || streamTtsQueue.length === 0) return;
+    const prefs = JSON.parse(localStorage.getItem("lantern_tts_prefs") || "{}");
+    const text = streamTtsQueue.shift();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = prefs.rate ?? 0.88;
+    utt.pitch = prefs.pitch ?? 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    if (prefs.voiceURI) {
+      const pick = voices.find(v => v.voiceURI === prefs.voiceURI);
+      if (pick) utt.voice = pick;
+    } else {
+      const fallback = voices.find(v => /samantha|karen|moira|fiona|victoria|female/i.test(v.name))
+                  || voices.find(v => v.lang === "en-GB" || v.lang === "en-AU");
+      if (fallback) utt.voice = fallback;
+    }
+    utt.onboundary = (e) => {
+      if (e.name === "word" && ttsWordBubble) highlightTtsWord(streamTtsSentenceOffset + e.charIndex);
+    };
+    utt.onend = () => {
+      streamTtsBusy = false;
+      streamTtsSentenceOffset += text.length + 1;
+      clearTtsHighlight();
+      streamTtsDrain();
+    };
+    utt.onerror = () => { streamTtsBusy = false; streamTtsDrain(); };
+    streamTtsBusy = true;
+    window.speechSynthesis.speak(utt);
+  }
+
+  function wrapBubbleWords(bubble) {
+    const text = bubble.textContent;
+    bubble.textContent = "";
+    for (const part of text.split(/(\s+)/)) {
+      if (!part) continue;
+      if (/\S/.test(part)) {
+        const span = document.createElement("span");
+        span.className = "tts-word";
+        span.textContent = part;
+        bubble.appendChild(span);
+      } else {
+        bubble.appendChild(document.createTextNode(part));
+      }
+    }
+    ttsWordBubble = bubble;
+  }
+
+  function highlightTtsWord(charIndex) {
+    if (!ttsWordBubble) return;
+    const spans = ttsWordBubble.querySelectorAll(".tts-word");
+    let pos = 0;
+    for (const span of spans) {
+      const len = span.textContent.length + 1; // +1 for space
+      if (charIndex >= pos && charIndex < pos + len) {
+        span.classList.add("tts-active");
+      } else {
+        span.classList.remove("tts-active");
+      }
+      pos += len;
+    }
+  }
+
+  function clearTtsHighlight() {
+    if (!ttsWordBubble) return;
+    ttsWordBubble.querySelectorAll(".tts-active").forEach(s => s.classList.remove("tts-active"));
+  }
+
+  function streamTtsFinish(text, bubble) {
+    if (!text || !window.speechSynthesis) return;
+    // Flush any leftover buffer
+    streamTtsFlush(true);
+    // Wrap bubble words for highlighting of queued/remaining utterances
+    if (bubble && !ttsWordBubble) wrapBubbleWords(bubble);
+    streamTtsDrain();
+  }
+
   function stopSpeaking() {
     if (ttsAudio) { ttsAudio.pause(); ttsAudio = null; }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    streamTtsReset();
   }
 
   async function speakText(text) {
@@ -1060,4 +1202,101 @@
   initVoice();
   loadVoiceSettings();
 
+  // ── Three Doors Game Integration ────────────────────────────────────────
+  let doorsGameState = null;
+  let doorsUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+  async function startThreeDoors() {
+    console.log("[Doors] Starting game...");
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">🚪 Three Doors</div><div class="bubble"><b>Opening the first door...</b></div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: doorsUserId, action: "start" }),
+      });
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (data.error) {
+        row.querySelector(".bubble").textContent = `⚠️ Error: ${data.error}`;
+        return;
+      }
+
+      doorsGameState = data;
+      renderDoorsScene(row, data);
+    } catch (error) {
+      console.error("[Doors] Error:", error);
+      row.querySelector(".bubble").textContent = `❌ Failed to start game: ${error.message}`;
+    }
+  }
+
+  function renderDoorsScene(row, scene) {
+    const bubble = row.querySelector(".bubble");
+    const html = `
+      <div style="margin: 8px 0;">
+        <div style="margin-bottom: 12px; line-height: 1.6; color: #e2e8f0;">${scene.text}</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+          ${(scene.doors || [])
+            .map((door) => `
+            <button onclick="window.chooseDoorsPath('${door.label}')"
+              style="padding: 8px 12px; background: #4c1d95; border: 1px solid #7c3aed; color: #c4b5fd; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; font-weight: 500;"
+              onmouseover="this.style.background='#6d28d9'; this.style.borderColor='#a78bfa';"
+              onmouseout="this.style.background='#4c1d95'; this.style.borderColor='#7c3aed';">
+              ${door.label}. ${door.name}
+            </button>
+          `)
+            .join("")}
+        </div>
+        ${scene.image_prompt ? `
+          <div style="background: #1e1b4b; border-left: 3px solid #7c3aed; padding: 8px; border-radius: 4px; margin-top: 12px; font-size: 11px; color: #a78bfa; max-height: 80px; overflow-y: auto;">
+            <div style="font-weight: 600; margin-bottom: 4px;">📸 Stable Diffusion Prompt:</div>
+            <div style="font-family: monospace; line-height: 1.4; color: #c4b5fd;">${scene.image_prompt}</div>
+          </div>
+        ` : ""}
+        ${scene.fox_present ? `<div style="color: #fbbf24; font-size: 12px; margin-top: 8px; font-style: italic;">🦊 The fox is here.</div>` : ""}
+      </div>
+    `;
+    bubble.innerHTML = html;
+  }
+
+  window.chooseDoorsPath = async (doorLabel) => {
+    if (!doorsGameState) return;
+
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">🚪 Choosing door ${doorLabel}...</div><div class="bubble"><em>traversing...</em></div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: doorsUserId, action: "choose", choice: doorLabel }),
+      });
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (data.error) {
+        row.querySelector(".bubble").textContent = `⚠️ ${data.error}`;
+        return;
+      }
+
+      doorsGameState = data;
+      renderDoorsScene(row, data);
+    } catch (error) {
+      console.error("[Doors] Choice error:", error);
+      row.querySelector(".bubble").textContent = `❌ Failed: ${error.message}`;
+    }
+  };
+
+  window.startThreeDoors = startThreeDoors;
 

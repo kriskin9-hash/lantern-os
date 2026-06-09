@@ -3,400 +3,744 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ff424d">
+  <meta name="theme-color" content="#06b6d4">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
-  <title>Dream Journal v1.0.1 — Lantern OS</title>
-  <link rel="stylesheet" href="css/dream-chat.css">
+  <link rel="stylesheet" href="/css/dream-chat.css">
+  <title>Dream Journal</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+    }
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --surface2: #1a2332;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --accent: #06b6d4;
+      --accent-hover: #0891b2;
+    }
+    [data-theme="light"] {
+      --bg: #ffffff;
+      --surface: #f8f9fa;
+      --surface2: #f1f3f5;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --accent: #0ea5e9;
+      --accent-hover: #06b6d4;
+    }
+
+    /* ── Site nav (matches index.html) ── */
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 20px;
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 1px 0 var(--border);
+      flex-shrink: 0;
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.3px;
+      margin-right: 8px;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      flex: 1;
+    }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 7px;
+      transition: color 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+    .nav-links a.active { color: var(--accent); font-weight: 600; }
+    @media (max-width: 580px) { .nav-links { display: none; } }
+    .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .nav-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--muted); cursor: pointer; font-size: 15px;
+      transition: all 0.15s;
+    }
+    .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+    #header-status { font-size: 11px; color: var(--muted); margin-left: 6px; }
+
+    /* Main container */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+    }
+
+    /* Messages area - clean and spacious */
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 20px;
+      padding: 40px;
+    }
+    .empty-icon { font-size: 48px; opacity: 0.5; }
+    .empty-state h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .empty-state p {
+      color: var(--muted);
+      max-width: 300px;
+      line-height: 1.5;
+    }
+
+    /* Message bubbles */
+    .message {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .message.user { justify-content: flex-end; }
+    .message-content {
+      max-width: 70%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+    .message.user .message-content {
+      background: var(--accent);
+      color: white;
+    }
+    .message.agent .message-content {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
+    /* Input area - modern and prominent */
+    .input-container {
+      padding: 16px 20px 20px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .input-wrapper {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+    .input-field {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.2s;
+      resize: none;
+      max-height: 100px;
+    }
+    .input-field:focus {
+      border-color: var(--accent);
+      background: var(--surface2);
+    }
+    .input-field::placeholder { color: var(--muted); }
+    .send-button {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      font-size: 18px;
+    }
+    .send-button:hover { background: var(--accent-hover); }
+    .send-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Modal overlays */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: flex-end;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-content {
+      width: 100%;
+      max-width: 600px;
+      background: var(--surface);
+      border-radius: 16px 16px 0 0;
+      max-height: 80vh;
+      overflow-y: auto;
+      margin-left: auto;
+      margin-right: auto;
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+    }
+    .modal-overlay.open .modal-content {
+      transform: translateY(0);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--surface);
+    }
+    .modal-header h2 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .modal-close:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .modal-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Form elements */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .form-input {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-input:focus {
+      border-color: var(--accent);
+    }
+    .form-input::placeholder { color: var(--muted); }
+
+    /* Settings card */
+    .setting-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .setting-card-icon { font-size: 20px; }
+    .setting-card-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .setting-card-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .setting-card-status {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .setting-card-status.ok { color: #34d399; }
+    .setting-card-status.err { color: var(--accent); }
+
+    /* Button styles */
+    .button-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .button-primary:hover { background: var(--accent-hover); }
+    .button-secondary {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .button-secondary:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* Streaming cursor */
+    .stream-cursor {
+      display: inline-block; width: 2px; height: 1em;
+      background: var(--accent); margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.7s step-end infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+    /* Quick-start chips */
+    .starter-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
+    .starter-chip {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); font-size: 0.82rem; font-family: inherit;
+      padding: 6px 14px; border-radius: 20px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .starter-chip:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Error / muted agent text */
+    .message.agent.error .message-content { color: var(--muted); font-style: italic; }
+
+    /* TTS word highlighting */
+    .tts-word { border-radius: 2px; transition: background 0.08s; }
+    .tts-active { background: rgba(255, 220, 50, 0.22); }
+
+    /* Message footer: source · latency · turn */
+    .msg-footer {
+      font-size: 0.67rem;
+      color: var(--muted);
+      padding: 0 4px;
+      align-self: flex-start;
+      opacity: 0.65;
+      letter-spacing: 0.02em;
+    }
+    .msg-footer.offline { opacity: 0.45; }
+    .msg-footer.anthropic { color: var(--accent); opacity: 0.8; }
+    .msg-footer.ollama { color: #4ade80; opacity: 0.8; }
+    .msg-footer.grok { color: #e2c97e; opacity: 0.8; }
+    .msg-footer.gemini { color: #4fc3f7; opacity: 0.8; }
+  </style>
 </head>
 <body>
 <div class="app">
-  <header>
-    <a href="/" class="back-link" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1.1rem;margin-right:4px;">←</a>
-    <div class="logo">🔮</div>
-    <div class="title-block">
-      <h1>Dream Journal</h1>
-      <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
+  <!-- Header -->
+  <nav class="site-nav">
+    <a class="nav-brand" href="/">
+      <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+      Lantern OS
+    </a>
+    <div class="nav-links">
+      <a href="/dream-chat.html" class="active">Dream Journal</a>
+      <a href="/three-doors-game.html">Three Doors</a>
+      <a href="/flourishing">World Status</a>
+      <a href="/knowledgecenter.html">Help</a>
     </div>
-    <div class="selector-row">
-      <select id="agent-select" title="Agent" aria-label="Select agent">
-        <option value="lantern" selected>Lantern</option>
-      </select>
-      <select id="provider-select" title="Provider" aria-label="Select AI provider">
-        <option value="">Auto</option>
-        <option value="claude">Claude</option>
-        <option value="openai">OpenAI</option>
-        <option value="gemini">Gemini</option>
-        <option value="grok">Grok</option>
-        <option value="ollama">Ollama</option>
-      </select>
-      <button class="mcp-toggle" id="mcp-toggle" title="Toggle Keystone MCP mode" onclick="toggleKeystoneMcp()">🔧 MCP</button>
+    <div class="nav-actions">
+      <span id="header-status" style="display:none">· connecting…</span>
+      <button class="nav-btn" id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
+      <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     </div>
-    <button class="settings-btn" id="logdream-btn" title="Log a dream" onclick="openLogDream()" style="margin-left:4px;">✦</button>
-    <button class="settings-btn" id="settings-btn" title="Provider settings" onclick="openSettings()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()" style="margin-left:4px;">🌙</button>
-    <div class="status-dot">
-      <div class="dot" id="status-dot"></div>
-      <span id="status-label">connecting…</span>
-    </div>
-  </header>
+  </nav>
 
-  <!-- Settings drawer -->
-  <div class="settings-overlay" id="settings-overlay" onclick="closeSettings()"></div>
-  <div class="settings-drawer" id="settings-drawer">
-    <div class="drawer-header">
-      <h2>AI Providers &amp; Discord</h2>
-      <button class="drawer-close" onclick="closeSettings()">×</button>
-    </div>
-    <div class="drawer-body">
-      <p class="drawer-hint">Add an API key to enable live AI responses. Keys are saved locally to your <code>.env</code> file and never leave your machine.</p>
-
-      <!-- Claude -->
-      <div class="provider-card" id="card-claude">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#1a1535">✦</div>
-          <span class="provider-name">Claude <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by Anthropic</span></span>
-          <span class="provider-status missing" id="status-claude">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-claude" type="password" placeholder="Anthropic API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('claude','ANTHROPIC_API_KEY','key-claude')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('claude','ANTHROPIC_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-claude"></span>
-        </div>
-      </div>
-
-      <!-- Gemini -->
-      <div class="provider-card" id="card-gemini">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#0d1f2d">🌐</div>
-          <span class="provider-name">Gemini <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by Google</span></span>
-          <span class="provider-status missing" id="status-gemini">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-gemini" type="password" placeholder="Gemini API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('gemini','GEMINI_API_KEY','key-gemini')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('gemini','GEMINI_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-gemini"></span>
-        </div>
-      </div>
-
-      <!-- ChatGPT / OpenAI -->
-      <div class="provider-card" id="card-openai">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#0d1f1a">◈</div>
-          <span class="provider-name">ChatGPT <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by OpenAI</span></span>
-          <span class="provider-status missing" id="status-openai">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-openai" type="password" placeholder="OpenAI API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('openai','OPENAI_API_KEY','key-openai')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('openai','OPENAI_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-openai"></span>
-        </div>
-      </div>
-
-      <!-- Grok -->
-      <div class="provider-card" id="card-grok">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#1a1410">𝕏</div>
-          <span class="provider-name">Grok <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by xAI</span></span>
-          <span class="provider-status missing" id="status-grok">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-grok" type="password" placeholder="xAI API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('grok','XAI_API_KEY','key-grok')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://console.x.ai/" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('grok','XAI_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-grok"></span>
-        </div>
-      </div>
-
-      <!-- Discord Bot -->
-      <div class="provider-card" id="card-discord">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#2c2f33">🎮</div>
-          <span class="provider-name">Discord Bot <span style="font-weight:400;color:var(--muted);font-size:0.78rem">Lantern Lounge</span></span>
-          <span class="provider-status missing" id="status-discord-token">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-discord-token" type="password" placeholder="Discord bot token" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('discord-token','DISCORD_BOT_TOKEN','key-discord-token')">Save</button>
-        </div>
-        <div class="provider-key-row" style="margin-top:8px;">
-          <input class="provider-key-input" id="key-discord-guild" type="text" placeholder="Guild ID (numeric)" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('discord-guild','LANTERN_DISCORD_GUILD_ID','key-discord-guild')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <button class="provider-clear" onclick="clearKey('discord-token','DISCORD_BOT_TOKEN')">Remove Token</button>
-          <button class="provider-clear" onclick="clearKey('discord-guild','LANTERN_DISCORD_GUILD_ID')">Remove Guild</button>
-          <span class="save-feedback" id="fb-discord-token"></span>
-          <span class="save-feedback" id="fb-discord-guild"></span>
-        </div>
-      </div>
-
-      <!-- Voice & Speech -->
-      <div class="voice-card" id="card-voice">
-        <h3>🎙 Voice &amp; Speech</h3>
-        <div class="voice-row">
-          <label>Voice</label>
-          <select class="voice-select" id="voice-select" onchange="saveVoiceSettings()" aria-label="Voice selection">
-            <option value="">Default system voice</option>
-          </select>
-        </div>
-        <div class="voice-row">
-          <label>Rate</label>
-          <input class="voice-slider" id="voice-rate" type="range" min="0.5" max="2.0" step="0.05" value="0.88" aria-label="Speech rate" oninput="document.getElementById('voice-rate-val').textContent = this.value; saveVoiceSettings();">
-          <span class="voice-value" id="voice-rate-val">0.88</span>
-        </div>
-        <div class="voice-row">
-          <label>Pitch</label>
-          <input class="voice-slider" id="voice-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.05" aria-label="Speech pitch" oninput="document.getElementById('voice-pitch-val').textContent = this.value; saveVoiceSettings();">
-          <span class="voice-value" id="voice-pitch-val">1.05</span>
-        </div>
-        <div class="voice-row">
-          <label>TTS ID</label>
-          <input class="voice-select" id="voice-tts-id" type="text" placeholder="ElevenLabs voice ID" onchange="saveVoiceSettings()" style="font-size:0.78rem;">
-        </div>
-        <p class="drawer-hint" style="font-size:0.7rem;margin:0;">Used for server TTS (ElevenLabs → OpenAI). Leave empty for browser-only fallback.</p>
-        <div class="voice-row">
-          <button class="voice-test-btn" onclick="testVoice()">Test voice</button>
-          <span class="save-feedback" id="fb-voice"></span>
-        </div>
-      </div>
-
-      <!-- ElevenLabs TTS -->
-      <div class="provider-card" id="card-elevenlabs">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#1a1020">🎙</div>
-          <span class="provider-name">ElevenLabs <span style="font-weight:400;color:var(--muted);font-size:0.78rem">TTS provider</span></span>
-          <span class="provider-status missing" id="status-elevenlabs">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-elevenlabs" type="password" placeholder="ElevenLabs API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('elevenlabs','ELEVENLABS_API_KEY','key-elevenlabs')">Save</button>
-        </div>
-        <div class="provider-key-row" style="margin-top:8px;">
-          <input class="provider-key-input" id="key-elevenlabs-voice" type="text" placeholder="Voice ID" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('elevenlabs-voice','ELEVENLABS_VOICE_ID','key-elevenlabs-voice')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('elevenlabs','ELEVENLABS_API_KEY')">Remove Key</button>
-          <button class="provider-clear" onclick="clearKey('elevenlabs-voice','ELEVENLABS_VOICE_ID')">Remove Voice</button>
-          <span class="save-feedback" id="fb-elevenlabs"></span>
-          <span class="save-feedback" id="fb-elevenlabs-voice"></span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Log Dream drawer -->
-  <div class="logdream-overlay" id="logdream-overlay" onclick="closeLogDream()"></div>
-  <div class="logdream-drawer" id="logdream-drawer">
-    <div class="drawer-header">
-      <h2>Log Dream</h2>
-      <button class="drawer-close" onclick="closeLogDream()">×</button>
-    </div>
-    <div class="logdream-body" id="logdream-body">
-      <p class="drawer-hint">Capture a structured dream entry. All fields are optional except the story.</p>
-
-      <div class="form-group">
-        <label for="ld-title">Title</label>
-        <input type="text" id="ld-title" placeholder="e.g. The flying library">
-      </div>
-
-      <div class="form-group">
-        <label for="ld-text">Dream / Story <span style="color:var(--danger)">*</span></label>
-        <textarea id="ld-text" placeholder="What happened…" rows="4"></textarea>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ld-kind">Kind</label>
-          <select id="ld-kind">
-            <option value="dream">Dream</option>
-            <option value="note">Note</option>
-            <option value="place">Place</option>
-            <option value="character">Character</option>
-            <option value="event">Event</option>
-            <option value="lore">Lore</option>
-            <option value="symbol">Symbol</option>
-            <option value="mirror">Mirror</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="ld-mood">Mood</label>
-          <input type="text" id="ld-mood" placeholder="e.g. curious, anxious">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ld-lucidity">Lucidity <span class="range-val" id="ld-lucidity-val">0%</span></label>
-          <input type="range" id="ld-lucidity" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent);" oninput="document.getElementById('ld-lucidity-val').textContent=this.value+'%'">
-        </div>
-        <div class="form-group">
-          <label for="ld-clarity">Clarity <span class="range-val" id="ld-clarity-val">50%</span></label>
-          <input type="range" id="ld-clarity" min="0" max="100" value="50" style="width:100%;accent-color:var(--accent);" oninput="document.getElementById('ld-clarity-val').textContent=this.value+'%'">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ld-technique">Technique</label>
-          <input type="text" id="ld-technique" placeholder="e.g. MILD, WILD, WBTB">
-        </div>
-        <div class="form-group">
-          <label>Sleep Window</label>
-          <input type="text" id="ld-window" placeholder="e.g. 23:00–06:30">
-        </div>
-      </div>
-
-      <div class="checkbox-row">
-        <input type="checkbox" id="ld-dreamsign">
-        <label for="ld-dreamsign" style="margin:0;font-size:0.85rem;color:var(--text);">Mark as dreamsign (recurring pattern)</label>
-      </div>
-
-      <div class="checkbox-row">
-        <input type="checkbox" id="ld-recurring">
-        <label for="ld-recurring" style="margin:0;font-size:0.85rem;color:var(--text);">Recurring dream</label>
-      </div>
-
-      <div class="form-group">
-        <label>Emotions</label>
-        <input type="text" id="ld-emotions" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('emotions',this.value);this.value='';}">
-        <div class="tag-chips" id="chips-emotions"></div>
-      </div>
-
-      <div class="form-group">
-        <label>Tags</label>
-        <input type="text" id="ld-tags" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('tags',this.value);this.value='';}">
-        <div class="tag-chips" id="chips-tags"></div>
-      </div>
-
-      <div class="form-group">
-        <label>Symbols / CTF Glyphs</label>
-        <input type="text" id="ld-symbols" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('symbols',this.value);this.value='';}">
-        <div class="tag-chips" id="chips-symbols"></div>
-      </div>
-
-      <div class="logdream-actions">
-        <button class="secondary" onclick="closeLogDream()">Cancel</button>
-        <button onclick="saveLogDream()">Save Entry</button>
-      </div>
-      <p class="drawer-hint" id="ld-feedback" style="text-align:center;min-height:1.2em;"></p>
-    </div>
-  </div>
-
-  <div class="messages" id="messages">
+  <!-- Chat area -->
+  <div class="chat-container" id="messages">
     <div class="empty-state" id="empty-state">
-      <div class="moon-door" aria-hidden="true">🌙</div>
-      <h2>The <span>dream</span> door is open.</h2>
-      <p>Step through with a dream, a memory, a thought, or a question.</p>
+      <div class="empty-icon" style="opacity:0.9"><img src="/mandala.svg" alt="" aria-hidden="true" style="width:64px;height:64px;display:block"></div>
+      <h2>What's on your mind?</h2>
+      <p>Write a dream, a reflection, or anything you want to explore. Your journal stays private on your device.</p>
+      <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px;margin-top:8px">
+        <button onclick="fillPrompt('Last night I dreamed that ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">💭 Record a dream…</button>
+        <button onclick="fillPrompt('I keep having a recurring dream about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">🔄 Explore a recurring dream…</button>
+        <button onclick="fillPrompt('What does it mean when you dream about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">✨ Ask about a dream symbol…</button>
+        <button onclick="fillAndSend('!three-doors')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='var(--border)'" title="Play Three Doors">🚪 Play Three Doors game…</button>
+      </div>
     </div>
   </div>
 
-  <div class="input-area">
-    <div class="input-row">
-      <input
-        type="text"
-        id="input"
-        placeholder="Tell me a dream…"
-        autocomplete="off"
-        spellcheck="true"
-      />
-      <button class="voice-btn" id="voice-btn" title="Hold to speak (or click to toggle)" onclick="toggleVoice()">🎙</button>
-      <button class="voice-btn" id="ctf-btn" title="CTF symbol palette" onclick="toggleCtfPalette()" style="font-size:14px;">✦</button>
-      <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"/>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-        </svg>
-      </button>
+  <!-- Input area -->
+  <div class="input-container">
+    <div class="input-wrapper">
+      <textarea id="input" class="input-field" placeholder="Write your dream, ask a question…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+      <button class="send-button" id="send-btn" onclick="sendMessage()" title="Send">↑</button>
     </div>
-    <div class="ctf-popup hidden" id="ctf-popup"></div>
-    <p class="input-hint" id="input-hint">Enter to send · ⌘ voice · ⌘ K</p>
   </div>
 </div>
 
-<!-- Debug / Analytics Panel -->
-<button class="debug-toggle" id="debug-toggle" title="Toggle analytics (D)" onclick="toggleDebug()">📊</button>
-<div class="debug-panel" id="debug-panel">
-  <h3>Analytics</h3>
-  <div class="debug-row"><span class="debug-label">Session</span><span class="debug-val" id="dbg-session">—</span></div>
-  <div class="debug-row"><span class="debug-label">Messages</span><span class="debug-val" id="dbg-messages">0</span></div>
-  <div class="debug-row"><span class="debug-label">Tokens</span><span class="debug-val" id="dbg-tokens">0</span></div>
-  <div class="debug-row"><span class="debug-label">Errors</span><span class="debug-val" id="dbg-errors">0</span></div>
-  <div class="debug-row"><span class="debug-label">Fallbacks</span><span class="debug-val" id="dbg-fallbacks">0</span></div>
-  <div class="debug-row"><span class="debug-label">Avg latency</span><span class="debug-val" id="dbg-latency">—</span></div>
-  <div class="debug-row"><span class="debug-label">Last provider</span><span class="debug-val" id="dbg-provider">—</span></div>
-  <div class="debug-row"><span class="debug-label">Agent</span><span class="debug-val" id="dbg-agent">—</span></div>
-  <div class="debug-log" id="debug-log"></div>
+<!-- Settings modal -->
+<div class="modal-overlay" id="settings-modal" onclick="if(event.target===event.currentTarget) closeSettings()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Settings</h2>
+      <button class="modal-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">AI Provider</label>
+        <select id="provider-select" class="form-input">
+          <option value="">Auto (pick best)</option>
+          <option value="claude">Claude</option>
+          <option value="openai">ChatGPT</option>
+          <option value="gemini">Gemini</option>
+          <option value="grok">Grok</option>
+          <option value="ollama">Local (Ollama)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">API Keys</label>
+        <div class="setting-card">
+          <span class="setting-card-icon">✦</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">Claude</div>
+            <div class="setting-card-status" id="status-claude">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-claude" class="form-input" placeholder="ANTHROPIC_API_KEY" onchange="saveKey('claude','ANTHROPIC_API_KEY','key-claude')">
+      </div>
+
+      <div class="form-group">
+        <div class="setting-card">
+          <span class="setting-card-icon">🌐</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">Gemini</div>
+            <div class="setting-card-status" id="status-gemini">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-gemini" class="form-input" placeholder="GEMINI_API_KEY" onchange="saveKey('gemini','GEMINI_API_KEY','key-gemini')">
+      </div>
+
+      <div class="form-group">
+        <div class="setting-card">
+          <span class="setting-card-icon">◈</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">ChatGPT</div>
+            <div class="setting-card-status" id="status-openai">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-openai" class="form-input" placeholder="OPENAI_API_KEY" onchange="saveKey('openai','OPENAI_API_KEY','key-openai')">
+      </div>
+
+      <div class="form-group">
+        <div class="setting-card">
+          <span class="setting-card-icon">𝕏</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">Grok</div>
+            <div class="setting-card-status" id="status-grok">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-grok" class="form-input" placeholder="XAI_API_KEY" onchange="saveKey('grok','XAI_API_KEY','key-grok')">
+      </div>
+
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
+
+      <div class="form-group">
+        <label class="form-label">Dream Actions</label>
+        <button class="button-primary" onclick="openLogDream()" style="width: 100%;">+ Record a Dream</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="js/dream-chat.js"></script>
-<script src="js/convergance-sync.js"></script>
-<script src="js/update-checker.js"></script>
-<p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS ">Lantern OS</span> · private · local</p>
-<!-- Version badge auto-loader -->
 <script>
-(function() {
-  const base = window.location.origin;
-  fetch(base + '/version.json?t=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
-    .then(v => {
-      if (!v || !v.version) return;
-      const version = String(v.version).replace(/^v/i, '');
-      document.querySelectorAll('[data-version-badge]').forEach(el => {
-        const prefix = el.dataset.versionBadge || '';
-        el.textContent = prefix + 'v' + version;
-        el.style.cursor = 'pointer';
-        el.title = 'View changelog';
-        el.onclick = function() { window.open('/repo/CHANGELOG.MD', '_blank'); };
-      });
-      const appVer = document.getElementById('app-version');
-      if (appVer) appVer.textContent = 'Lantern OS v' + version + ' · private · local';
-    })
-    .catch(() => {});
-})();
-</script>
-<script>
-  /* ── Theme toggle ── */
-  (function() {
-    const html = document.documentElement;
-    const btn = document.getElementById('theme-toggle');
-    const stored = localStorage.getItem('lantern-theme');
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initial = stored || (prefersDark ? 'dark' : 'light');
-    html.setAttribute('data-theme', initial);
-    if (btn) btn.textContent = initial === 'dark' ? '🌙' : '☀️';
-  })();
+  // Modern theme toggle with global persistence
   function toggleTheme() {
     const html = document.documentElement;
-    const btn = document.getElementById('theme-toggle');
     const current = html.getAttribute('data-theme') || 'dark';
     const next = current === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('lantern-theme', next);
-    if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
+    setTheme(next);
   }
+  function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('lantern-theme', theme);
+    // Persist to server via API if available (global cross-device setting)
+    fetch('/api/ui/theme', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme })
+    }).catch(() => {}); // silent fail if API not available
+    updateThemeIcon();
+  }
+  function updateThemeIcon() {
+    const btn = document.getElementById('theme-toggle');
+    btn.textContent = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? '☀️' : '🌙';
+  }
+  // Initialize theme from localStorage or system preference
+  function initTheme() {
+    const saved = localStorage.getItem('lantern-theme');
+    if (saved) {
+      document.documentElement.setAttribute('data-theme', saved);
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.documentElement.setAttribute('data-theme', 'light');
+      localStorage.setItem('lantern-theme', 'light');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('lantern-theme', 'dark');
+    }
+    updateThemeIcon();
+  }
+  initTheme();
+
+  // ── Modal controls ─────────────────────────────────────────────────
+  function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
+  function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+  function openLogDream() { alert('Dream logging coming soon'); closeSettings(); }
+  function saveKey() {}
+
+  // ── Conversation state ─────────────────────────────────────────────
+  let isSending = false;
+  const history = [];
+
+  // Fallback messages — shown ONLY when all providers fail (never as a normal reply)
+  const FALLBACKS = [
+    "The lantern flickers. No model responded — is Ollama running? (ollama serve)",
+    "Dream interpreter offline. Add an API key in Settings, or start your local models.",
+    "All paths are quiet right now. Try again in a moment, or check Settings.",
+    "The thread went dark. Ollama may be starting up — give it a moment and retry.",
+    "No provider answered. Check Settings for API keys, or run: ollama pull lantern-csf-dream",
+  ];
+
+  // ── Quick-start chip fill ──────────────────────────────────────────
+  function fillPrompt(text) {
+    const input = document.getElementById('input');
+    input.value = text;
+    input.focus();
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+  }
+
+  function fillAndSend(text) {
+    const input = document.getElementById('input');
+    input.value = text;
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+    sendMessage();
+  }
+
+  // ── DOM helpers ────────────────────────────────────────────────────
+  function hideEmptyState() {
+    const el = document.getElementById('empty-state');
+    if (el) el.style.display = 'none';
+  }
+
+
+  function addUserBubble(text) {
+    hideEmptyState();
+    const container = document.getElementById('messages');
+    const msg = document.createElement('div');
+    msg.className = 'message user';
+    msg.innerHTML = `<div class="message-content">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function createAgentBubble(isError) {
+    const container = document.getElementById('messages');
+    const msg = document.createElement('div');
+    msg.className = 'message agent' + (isError ? ' error' : '');
+    const bubble = document.createElement('div');
+    bubble.className = 'message-content';
+    const cursor = document.createElement('span');
+    cursor.className = 'stream-cursor';
+    bubble.appendChild(cursor);
+    msg.appendChild(bubble);
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+    return { msg, bubble, cursor };
+  }
+
+  // ── Main send ──────────────────────────────────────────────────────
+  async function sendMessage() {
+    const input = document.getElementById('input');
+    const text = input.value.trim();
+    if (!text || isSending) return;
+
+    isSending = true;
+    document.getElementById('send-btn').disabled = true;
+
+    addUserBubble(text);
+    input.value = '';
+    input.style.height = 'auto';
+    history.push({ role: 'user', text });
+
+    const { msg, bubble, cursor } = createAgentBubble(false);
+    const container = document.getElementById('messages');
+
+    let fullText = '';
+    let didError = false;
+
+    try {
+      const provider = document.getElementById('provider-select')?.value || '';
+      const resp = await fetch('/api/dream/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          user: 'dream-chat',
+          agent: '',
+          provider,
+          history: history.slice(-10),
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === 'token' && evt.text) {
+              fullText += evt.text;
+              cursor.remove();
+              // Strip [DOORS:...] during streaming
+              bubble.textContent = fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd();
+              bubble.appendChild(cursor);
+              container.scrollTop = container.scrollHeight;
+            } else if (evt.type === 'error') {
+              // Server reported an error — may be followed by local fallback tokens, so don't stop
+              didError = true;
+              if (!fullText) {
+                bubble.style.color = 'var(--muted)';
+              }
+            } else if (evt.type === 'done' && evt.cleanText) {
+              fullText = evt.cleanText;
+            }
+          } catch { /* skip malformed line */ }
+        }
+      }
+    } catch (e) {
+      didError = true;
+    }
+
+    // Remove streaming cursor
+    cursor.remove();
+
+    if (!fullText) {
+      // All providers failed — show random fallback as an error note
+      fullText = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+      msg.classList.add('error');
+      bubble.style.color = 'var(--muted)';
+      bubble.style.fontStyle = 'italic';
+    }
+
+    bubble.textContent = fullText;
+
+    if (!didError) {
+      history.push({ role: 'assistant', text: fullText });
+    }
+
+    isSending = false;
+    document.getElementById('send-btn').disabled = false;
+  }
+
+  // ── Auto-expand textarea ───────────────────────────────────────────
+  document.getElementById('input').addEventListener('input', e => {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+  });
 </script>
+<script src="js/convergance-sync.js"></script>
 </body>
 </html>

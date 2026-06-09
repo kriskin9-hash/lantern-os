@@ -15,15 +15,21 @@ if (-not (Test-Path (Join-Path $sourceDir "pre-commit"))) {
     throw "Source hooks not found at scripts/hooks/"
 }
 
-Copy-Item (Join-Path $sourceDir "pre-commit") (Join-Path $hooksDir "pre-commit") -Force
-Copy-Item (Join-Path $sourceDir "pre-push")  (Join-Path $hooksDir "pre-push")  -Force
+Copy-Item (Join-Path $sourceDir "pre-commit")  (Join-Path $hooksDir "pre-commit")  -Force
+Copy-Item (Join-Path $sourceDir "commit-msg")  (Join-Path $hooksDir "commit-msg")  -Force
+Copy-Item (Join-Path $sourceDir "pre-push")    (Join-Path $hooksDir "pre-push")    -Force
+Copy-Item (Join-Path $sourceDir "post-merge")  (Join-Path $hooksDir "post-merge")  -Force
 
-# On Windows, Git hooks need to be executable. Git for Windows respects the shebang.
-# We don't need chmod here because Git for Windows handles .sh files with bash.
-Write-Host "Monoworkstream hooks installed to .git/hooks/"
+Write-Host "Per-agent workstream hooks installed to .git/hooks/"
 Write-Host ""
 Write-Host "Rules enforced:"
-Write-Host "  - pre-commit: blocks new commits while any PR is open"
-Write-Host "  - pre-push:   blocks new pushes while any PR is open + protects master"
+Write-Host "  - pre-commit:  blocks new branch if agent has an open PR (master/dev exempt)"
+Write-Host "  - commit-msg:  blocks slop messages (empty, too short, WIP, placeholder, etc.)"
+Write-Host "  - pre-push:    per-agent check + master protection + STALENESS BLOCK (>50 behind master)"
+Write-Host "  - post-merge:  after merging to master, lists all branches > 10 commits stale"
 Write-Host ""
-Write-Host "Bypass (emergency only): SKIP_MONOWORKSTREAM=1 git commit ..."
+Write-Host "Each agent prefix gets one concurrent PR lane."
+Write-Host "Human branches (no agent prefix) share one lane."
+Write-Host ""
+Write-Host "Bypass workstream gate:  SKIP_MONOWORKSTREAM=1 git commit/push ..."
+Write-Host "Override master push:    OVERRIDE_MERGE=1 git push origin master"
