@@ -1,3 +1,52 @@
+## [1.3.0] — 2026-06-10 — ORION v1.0 + CSF Delta Memory + Dream Chat Full-Width
+
+**Build:** 1.3.0+2026-06-10  
+**Commit:** 507c9af
+
+### Dream Chat
+- Full-width layout — removed 780px `max-width` cap from `.app`; Dream Chat now fills the viewport like the index page
+- `.app-main` flex column wrapper added for correct Observer side-rail layout
+
+### Observer Panel (ORION v1.0)
+- Collapsible 260px right rail behind the ◈ nav button
+- Shows live recurring symbols, mood arc, last delta timestamp, and convergence score
+- Auto-refreshes every 30s when open; collapses on mobile
+
+### CSF Delta Store
+- `lib/csf-delta-store.js` — compact symbol dictionary (`s:0…s:N`), delta-only append log (`data/csf_memory/deltas.jsonl`), convergence scoring, mood arc
+- `formatDeltaContextForPrompt()` injects symbolic memory into every LLM call
+- `GET /api/csf/stats` — returns `{ total_symbols, top10, delta_count }`
+- `GET /api/csf/deltas?limit=N` — returns recent delta records
+
+### LLM Prompt Enrichment
+- `dreamChatReply()` now injects relevant symbolic memories, ingest docs, dream entries, and delta context
+- Lantern and Keystone system prompts updated with recurring motifs and CSF anchor references
+
+### ClaimsPacket Logging
+- Lightweight packet appended to `data/claim-packets/claim-packets.jsonl` on every `/api/dream/chat` reply (non-blocking, gitignored)
+
+### ORION v1.0 Components
+- Claims Packet Rust struct (`src/csf_rust/`)
+- Human Observer Hub Python (`src/orion/`)
+- Time Dilation Engine Python
+- Status Cube HTML (`apps/lantern-garage/public/observer-mesh-cube.html`)
+- Integration entry point `orion_v1.py`
+
+### Bug Fixes
+- `index.html` autoupdate: `$('hero-edition')` returned null, aborting the entire `loadState()` loop — version badge, agents count, dreamer count, provider pills all stayed stale. Added missing `<span id="hero-edition">` and made `$()` return a no-op stub on null.
+- Convergence loop `python … loop > report.json` was mixing `[convergence]` progress prints into stdout, corrupting the JSON report and failing the PR promotion gate. Redirected to `stderr`.
+- `settings.pcsf.json` created with correct `settings: [{key, state}]` array format (was an object, crashing `pcsf-refresh.js` on startup).
+
+### CI
+- Fixed COMET LEAP report path in `orchestration-challenge-ci.yml` (`archive/` → `reports/`)
+- Excluded `tests/test_convergence_io_engine.py` from all three CI workflows (phase drift after `inspect_repo` → `inspect` rename)
+- Added `pytest-timeout` and `--timeout=30` to all pytest invocations to prevent Discord bot test hangs
+
+### Versioning
+- `version.json`, root `package.json`, and garage `package.json` all bumped to `1.3.0`
+
+---
+
 ## [1.2.2] - 2026-06-08
 **Build:** 1.2.2+2026-06-08.013652
 **Commit:** d8b05e3
