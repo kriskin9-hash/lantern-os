@@ -1932,9 +1932,9 @@ if __name__ == "__main__":
             tasks = json.loads(Path(args.tasks).read_text(encoding="utf-8"))
         else:
             tasks = [
-                {"id": "a", "message": "Summarize Three Doors Kingdome integration", "persona": "lantern", "provider": "gemini"},
-                {"id": "b", "message": "List open issues for convergence engine", "persona": "keystone", "provider": "openai"},
-                {"id": "c", "message": "Check repository health metrics", "persona": "lantern", "provider": "anthropic"},
+                {"id": "a", "message": "Summarize Three Doors Kingdome integration", "persona": "lantern", "provider": "offline"},
+                {"id": "b", "message": "List open issues for convergence engine", "persona": "keystone", "provider": "offline"},
+                {"id": "c", "message": "Check repository health metrics", "persona": "lantern", "provider": "offline"},
             ]
         results = engine.batch_converge(tasks)
         print(json.dumps(results, indent=2))

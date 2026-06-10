@@ -307,6 +307,18 @@ class UnifiedAgentConnector:
         """Stream a single response. If fallback=False, only tries the requested provider once."""
         persona = self._personas.get(persona_id or random.choice(list(self._personas.keys())), PERSONAS[0])
         system = self._build_system(persona, context)
+        # Singular stream: only try the explicitly requested provider
+        if not fallback and provider and provider in self._providers:
+            cfg = self._providers[provider]
+            try:
+                result = self._stream_provider(provider, cfg, system, message, temperature, max_tokens)
+                if result is not None:
+                    yield from result
+                return
+            except Exception as exc:
+                self._health[provider] = {"status": f"unhealthy: {exc}", "at": datetime.now(timezone.utc).isoformat()}
+                raise
+        # Fallback chain: try ranked providers
         providers = self._rank_providers(provider)
         last_error = ""
         for prov_name in providers:
@@ -324,8 +336,6 @@ class UnifiedAgentConnector:
             except Exception as exc:
                 last_error = f"{prov_name}: {exc}"
                 self._health[prov_name] = {"status": f"unhealthy: {exc}", "at": datetime.now(timezone.utc).isoformat()}
-                if not fallback:
-                    raise  # singular stream — no retry chain
                 continue
         offline_reply = self._offline_reply(persona, message)
         for word in offline_reply.split():
@@ -445,6 +455,16 @@ class UnifiedAgentConnector:
         if cfg.api_key:
             headers["Authorization"] = f"Bearer {cfg.api_key}"
         return self._parse_sse(f"{cfg.base_url.rstrip('/')}/chat/completions", payload, cfg.timeout, lambda d: d.get("choices", [{}])[0].get("delta", {}).get("content", ""), headers)
+
+    def _stream_offline(self, cfg, system, message, temperature, max_tokens):
+        """Offline provider: yields the offline reply text directly without any HTTP call."""
+        reply = f"The flame holds steady. '{message[:90]}...' You can always come home safe. What light did you bring back?"
+        words = reply.split()
+        def gen():
+            for w in words:
+                yield w + " "
+            yield {"source": "offline", "provider": "offline", "persona": "lantern"}
+        return gen()
 
     def _parse_sse(self, url: str, payload: bytes, timeout: float, extract_fn, headers: Dict[str, str]):
         req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
