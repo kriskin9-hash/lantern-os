@@ -14,8 +14,12 @@ import os
 import random
 import sys
 import time
+import socket
 import urllib.error
 import urllib.request
+
+# Prevent urllib from hanging indefinitely on unreachable providers
+socket.setdefaulttimeout(10)
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,7 +55,7 @@ class ProviderConfig:
     base_url: Optional[str] = None
     max_tokens: int = 1024
     temperature: float = 0.7
-    timeout: float = 20.0
+    timeout: float = 8.0
     enabled: bool = True
     priority: int = 0
     fallback_to: Optional[str] = None
