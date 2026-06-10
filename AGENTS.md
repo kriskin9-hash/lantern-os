@@ -175,12 +175,8 @@ The convergence loop has been upgraded from 12 phases to 20 phases with tesserac
 - **economy**: Wallet ledger, cash loop
 - **culture**: Lore, three doors
 
-**Redundancy Requirements (ArXiv 2601.05280v2):**
-- All critical fallback categories require 2+ redundant sources
-- External grounding: 2+ memory, 2+ evidence, 2+ provider sources
-- CTF symbolic: 2+ engines, 2+ bridges, 2+ dictionaries
-- ASI benchmarks: 2+ core, 2+ jagged frontier, 2+ capability domains
-- Validation ring: 5 validators (alpha, beta, gamma, delta, epsilon)
+**External Grounding (inspired by ArXiv 2601.05280v2):**
+Zenil et al. prove that recursive self-training without persistent external signal (αt → 0) leads to entropy decay and variance drift. The convergence loop uses this as a design principle — not a quantitative recipe. The repo does not instrument αt, so collapse risk cannot be quantified.
 
 **Documentation:**
 - See [`docs/TESSERACT-CONVERGENCE-LOOP.md`](docs/TESSERACT-CONVERGENCE-LOOP.md) for full details

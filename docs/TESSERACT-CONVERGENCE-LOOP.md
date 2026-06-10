@@ -82,39 +82,15 @@ Five belief dimensions track system state through Bayesian posterior updates:
 | Phase | Name | Purpose |
 |-------|------|---------|
 | 15 | run_validation | Run cheapest validation checks |
-| 16 | run_validation_ring | Run bounded agent validation ring (5 validators) |
+| 16 | run_validation_ring | Run bounded agent validation ring |
 | 17 | fix_failures | Fix first 2-4 actionable failures |
 | 18 | re_run_validation | Re-run validation |
 | 19 | record_evidence | Record evidence and remaining blockers |
 | 20 | promote_or_hold | Promote, hold, or reject artifacts |
 
-## Redundancy Requirements
-
-All critical fallback categories require **at least 2 redundant sources** per ArXiv 2601.05280v2 collapse prevention:
-
-### External Grounding (Phase 9)
-- **Memory sources**: 2+ (RAG cache, CSF memory, MemOS cube, Dream journal)
-- **Evidence sources**: 2+ (Evidence receipts, CSF archives)
-- **Provider sources**: 2+ (Provider configs, PCSF settings, Agent profiles)
-
-### CTF Symbolic (Phase 8)
-- **Symbolic engines**: 2+ (Compressor, Dictionary, Convergence Engine, Quantum Dust)
-- **Memory bridges**: 2+ (MemOS Bridge, CSF Memory, RAG Integration)
-- **Dictionaries**: 2+ (v07, CSF Dictionary)
-- **Memory sources**: 2+ (MemOS cube, RAG cache, CSF memory, Dream journal)
-
-### ASI Benchmarks (Phase 11)
-- **Core benchmarks**: 2+ (ARC-AGI, SuperARC, AGI capability matrix, HLE)
-- **Jagged frontier**: 2+ (Math, Coding, Time)
-- **Capability domains**: 2+ (Math, Coding, Multimodal)
-
-### Validation Ring (Phase 16)
-- **Validators**: 5 (alpha, beta, gamma, delta, epsilon)
-- **Consensus threshold**: 67% (2/3)
-
 ## Externally Anchored Optimization
 
-Per ArXiv 2601.05280v2, the convergence loop distinguishes between:
+ArXiv 2601.05280v2 (Zenil et al.) formalizes recursive self-training and shows that without persistent external signal (αt → 0), systems undergo entropy decay and variance drift. The convergence loop is inspired by this finding and distinguishes between:
 
 ### Closed-Loop Density Matching (Collapse Regime)
 - Model trained on its own samples
@@ -187,19 +163,20 @@ Receipts are used for:
 
 ## Performance Metrics
 
-Current convergence loop performance (2026-06-09):
+Current convergence loop status (2026-06-09):
 
 - **Phases**: 20 (expanded from 12)
-- **Convergence score**: 0.9
-- **Status cube navigation**: 0.9 (navigable)
-- **Future projection**: 1.0 (capable)
-- **Bayesian beliefs**: 1.0 (active)
-- **ASI readiness**: 1.0 (well tracked)
-- **ALEX progression**: 0.97 (strong symbolic layer)
+- **Status cube navigation**: Design-only; not instrumented
+- **Future projection**: Design-only; not instrumented
+- **Bayesian beliefs**: Design-only; not instrumented
+- **ASI readiness**: Not benchmarked against ARC-AGI or SuperARC
+- **ALEX progression**: Not independently validated
+
+No self-assessed numeric scores are reported because no reproducible benchmark methodology exists for these claims.
 
 ## References
 
-- **ArXiv 2601.05280v2**: On the Limits of Self-Improving in Large Language Models — collapse prevention via externally anchored optimization
+- **ArXiv 2601.05280v2**: On the Limits of Self-Improving in Large Language Models — proves collapse occurs under vanishing exogenous signal (αt → 0); proposes neurosymbolic integration (CTM/BDM) as a path beyond collapse
 - **Stanford AI Index 2026**: Jagged frontier benchmarks, Humanity's Last Exam
 - **Knowlee 2026 Architecture**: Seven-layer reference architecture, knowledge graph world model
 - **CONVERGENCE-LOOP.md**: Original 12-step convergence operating method
@@ -208,5 +185,5 @@ Current convergence loop performance (2026-06-09):
 ## Version History
 
 - **2026-06-09**: Tesseract integration — Status Cube, future projection, Bayesian beliefs (20 phases)
-- **2026-06-08**: Redundant fallbacks — 2+ sources per category, externally anchored optimization
+- **2026-06-08**: Externally anchored optimization — inspired by ArXiv 2601.05280v2 collapse prevention findings
 - **2026-06-07**: ASI architecture integration — CTF symbolic, external grounding, ASI benchmarks

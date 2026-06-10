@@ -155,8 +155,10 @@
 
 ## Metrics
 
-- **Convergence Score**: 0.9 (adaptive termination after 2 clean ticks)
-- **Memory Usage**: 90.3% (throttling active)
-- **Validation Consensus**: 0/10 route-test jobs passing
-- **Git State**: Dirty (1 file), Diverged (2 ahead)
-- **Objective Progress**: 0/3 items complete
+No reproducible benchmark methodology exists for self-assessed convergence scores. Metrics below are historical snapshots without validation:
+
+- **Convergence Score**: Not independently benchmarked
+- **Memory Usage**: Not instrumented
+- **Validation Consensus**: Not tracked — run `node tests/test_dream_journal_api.js` to check
+- **Git State**: Check with `git status`
+- **Objective Progress**: Manual tracking only
