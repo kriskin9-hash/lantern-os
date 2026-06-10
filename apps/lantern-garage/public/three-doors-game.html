@@ -376,10 +376,17 @@ if (!playerProgress.prizes) {
 
 // ── Server check ─────────────────────────────────────────────────
 async function checkServer() {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 2000);
   try {
-    const r = await fetch("/api/health", { signal: AbortSignal.timeout(1500) });
+    const r = await fetch("/api/health", { signal: ctrl.signal });
     serverAvailable = r.ok;
-  } catch { serverAvailable = false; }
+  } catch (e) {
+    serverAvailable = false;
+    console.warn("[Three Doors] Health check failed, using inline fallback:", e.message);
+  } finally {
+    clearTimeout(t);
+  }
   document.getElementById("status-line").textContent = serverAvailable
     ? "Lantern — Gemini narration active"
     : "Offline — inline engine active";
@@ -741,18 +748,26 @@ function engineChoose(label) {
 async function getSceneData(action, label) {
   // Step 1: game state — server Python engine or inline JS fallback
   let data;
+  let usedServer = false;
   try {
     if (serverAvailable) {
       data = await apiDoors(action, label);
+      // Validate server response: must have scene_key and doors array
+      if (!data || data.error || !data.scene_key || !Array.isArray(data.doors)) {
+        console.warn("[Three Doors] Server returned invalid data, falling back to inline:", data);
+        throw new Error("invalid server response");
+      }
+      usedServer = true;
     } else throw new Error("offline");
-  } catch {
+  } catch (e) {
+    console.warn("[Three Doors] Using inline fallback:", e.message);
     data = action === "start" ? engineStart() : engineChoose(label);
   }
   if (!data) return null;
 
-  // Step 2: Gemini narration — independent of game state source
-  let geminiText = "", source = serverAvailable ? "engine" : "offline";
-  if (serverAvailable) {
+  // Step 2: Gemini narration — only if we successfully used the server
+  let geminiText = "", source = usedServer ? "engine" : "offline";
+  if (usedServer) {
     try {
       const narration = await apiGeminiNarrate(data.scene_key, data.text || SCENES[data.scene_key]?.text || "");
       if (narration) { geminiText = narration; source = "gemini"; }
