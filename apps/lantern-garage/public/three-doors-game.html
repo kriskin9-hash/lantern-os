@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#06b6d4">
 <title>Explore</title>
+<link rel="stylesheet" href="/css/site.css">
 <link rel="stylesheet" href="css/dream-chat.css">
 <style>
   /* ── Override dream-chat.css scroll lock for this page ── */
@@ -14,7 +15,7 @@
   .app { height: auto !important; min-height: 100dvh; }
   .chat-container { overflow: visible !important; flex: none !important; max-height: none !important; }
 
-  /* ── Three Doors additions on top of dream-chat.css ── */
+  /* ── Explore additions on top of dream-chat.css ── */
   .doors-banner {
     display: flex;
     flex-direction: column;
@@ -160,17 +161,23 @@
 <body>
 <div class="app">
 
-  <!-- Header — matches dream-chat.html -->
-  <header>
-    <a class="back-link" href="/" title="Home">←</a>
-    <div class="agent-avatar">🧭</div>
-    <div style="flex:1">
-      <div style="font-size:15px;font-weight:600;line-height:1.2">Explore</div>
-      <div id="status-line" style="font-size:11px;color:var(--muted)">An interactive story — make choices and see where they lead</div>
+  <!-- Site nav -->
+  <nav class="site-nav">
+    <a class="nav-brand" href="/">
+      <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+      Lantern OS
+    </a>
+    <div class="nav-links">
+      <a href="/dream-chat.html">Journal</a>
+      <a href="/three-doors-game.html" class="active">Explore</a>
+      <a href="/flourishing">Dashboard</a>
+      <a href="/knowledgecenter.html">Help</a>
     </div>
-    <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
-    <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit" title="Toggle theme">🌙</button>
-  </header>
+    <div class="nav-actions">
+      <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
+      <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    </div>
+  </nav>
 
   <!-- Chat area -->
   <div class="chat-container" id="chat">
@@ -941,6 +948,15 @@ function resetGame() {
 }
 
 </script>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
+  </div>
+</footer>
+
 <script src="js/theme-toggle.js"></script>
 </body>
 </html>

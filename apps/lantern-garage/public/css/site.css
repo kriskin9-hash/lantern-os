@@ -1,0 +1,175 @@
+/* ── Lantern OS Shared Site Styles ──────────────────────────────── */
+/*  Loads on every surface. Keeps nav, footer, theme, and base     */
+/*  layout consistent across the entire app.                         */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #ffffff;
+  --surface: #f8f9fa;
+  --surface2: #f1f3f5;
+  --border: #e5e7eb;
+  --text: #111827;
+  --muted: #6b7280;
+  --accent: #0ea5e9;
+  --accent-dim: #cffafe;
+  --accent-hover: #06b6d4;
+  --green: #10b981;
+  --gold: #f59e0b;
+  --danger: #ef4444;
+  --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-hover: 0 4px 16px rgba(0,0,0,0.1);
+  --radius: 14px;
+}
+
+[data-theme="dark"] {
+  --bg: #0a0e17;
+  --surface: #111827;
+  --surface2: #1a2332;
+  --border: #1f2937;
+  --text: #f3f4f6;
+  --muted: #9ca3af;
+  --accent: #06b6d4;
+  --accent-dim: #164e63;
+  --accent-hover: #0891b2;
+  --green: #34d399;
+  --gold: #fbbf24;
+  --danger: #ef4444;
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-hover: 0 4px 20px rgba(0,0,0,0.45);
+}
+
+html, body {
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* ── Top nav ── */
+.site-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
+  flex-shrink: 0;
+}
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.3px;
+  margin-right: 8px;
+}
+.nav-brand img { width: 18px; height: 18px; vertical-align: middle; }
+.nav-brand .brand-icon { font-size: 18px; }
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+.nav-links a {
+  font-size: 13px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 7px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.nav-links a:hover { color: var(--text); background: var(--surface2); }
+.nav-links a.active { color: var(--accent); font-weight: 600; }
+@media (max-width: 580px) { .nav-links { display: none; } }
+.nav-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--muted); cursor: pointer; font-size: 15px;
+  transition: all 0.15s;
+}
+.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nav-cta {
+  font-size: 13px; font-weight: 600; padding: 7px 16px;
+  background: var(--accent); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; text-decoration: none;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.nav-cta:hover { background: var(--accent-hover); }
+
+/* ── Footer ── */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 24px 20px;
+  margin-top: 48px;
+}
+.footer-inner {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.footer-inner a {
+  color: var(--muted);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.footer-inner a:hover { color: var(--text); text-decoration: underline; }
+.footer-inner .sep { color: var(--border); }
+.footer-inner .ml { margin-left: auto; }
+@media (max-width: 640px) { .footer-inner .ml { margin-left: 0; width: 100%; } }
+
+/* ── Page container ── */
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 0 20px 80px;
+}
+
+/* ── Common utilities ── */
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--muted); display: inline-block;
+}
+.dot.online { background: var(--green); }
+.dot.warn { background: var(--gold); }
+.dot.offline { background: var(--danger); }
+
+.pill {
+  display: inline-block; padding: 2px 10px; border-radius: 20px;
+  font-size: 0.72rem; font-weight: 600;
+}
+.pill.live { background: rgba(16,185,129,0.12); color: var(--green); }
+.pill.held { background: var(--surface2); color: var(--muted); }
+.pill.active { background: rgba(245,158,11,0.12); color: var(--gold); }
+.pill.completed { background: rgba(16,185,129,0.12); color: var(--green); }
+.pill.queued { background: var(--accent-dim); color: var(--accent); }
+.pill.ready { background: rgba(16,185,129,0.12); color: var(--green); }
+.pill.optional { background: var(--accent-dim); color: var(--accent); }
+
+.section { margin-bottom: 40px; }
+.section h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; color: var(--text); }

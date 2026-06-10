@@ -5,143 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
   <title>AI Settings</title>
+  <link rel="stylesheet" href="/css/site.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    :root {
-      --bg: #ffffff;
-      --surface: #f8f9fa;
-      --surface2: #f1f3f5;
-      --border: #e5e7eb;
-      --text: #111827;
-      --muted: #6b7280;
-      --accent: #0ea5e9;
-      --accent-hover: #06b6d4;
-      --accent-dim: #cffafe;
-      --green: #10b981;
-      --danger: #ef4444;
-    }
-
-    [data-theme="dark"] {
-      --bg: #0a0e17;
-      --surface: #111827;
-      --surface2: #1a2332;
-      --border: #1f2937;
-      --text: #f3f4f6;
-      --muted: #9ca3af;
-      --accent: #06b6d4;
-      --accent-hover: #0891b2;
-      --accent-dim: #164e63;
-      --green: #34d399;
-    }
-
-    html, body {
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-      font-size: 15px;
-      line-height: 1.6;
-      scroll-behavior: smooth;
-    }
-
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--surface); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-
-    /* ═══ HEADER ═══ */
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: var(--bg);
-      border-bottom: 1px solid var(--border);
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
-
-    .back-link {
-      text-decoration: none;
-      color: var(--muted);
-      font-size: 1.2rem;
-      transition: color 0.2s;
-      cursor: pointer;
-    }
-
-    .back-link:hover { color: var(--text); }
-
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex: 1;
-    }
-
-    .header-icon {
-      font-size: 24px;
-    }
-
-    .header-title {
-      font-size: 1rem;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: auto;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    .status-dot.offline {
-      background: var(--muted);
-      animation: none;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .status-text {
-      font-size: 0.78rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-weight: 600;
-    }
-
-    .theme-btn {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px 10px;
-      cursor: pointer;
-      color: var(--muted);
-      font-size: 0.9rem;
-      transition: all 0.2s;
-    }
-
-    .theme-btn:hover {
-      border-color: var(--accent);
-      color: var(--accent);
-    }
 
     /* ═══ MAIN CONTENT ═══ */
     main {
@@ -665,21 +533,23 @@
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <header>
-    <a href="/" class="back-link" title="Back to home">←</a>
-    <div class="header-brand">
-      <div class="header-icon">⚡</div>
-      <div class="header-title">AI Settings</div>
+  <!-- Site nav -->
+  <nav class="site-nav">
+    <a class="nav-brand" href="/">
+      <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+      Lantern OS
+    </a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/dream-chat.html">Journal</a>
+      <a href="/three-doors-game.html">Explore</a>
+      <a href="/flourishing">Dashboard</a>
+      <a href="/knowledgecenter.html">Help</a>
     </div>
-    <div class="header-actions">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <div class="status-dot" id="status-dot"></div>
-        <span class="status-text" id="status-text">connecting</span>
-      </div>
-      <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme">☀</button>
+    <div class="nav-actions">
+      <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
     </div>
-  </header>
+  </nav>
 
   <!-- Main Content -->
   <main>
@@ -1047,14 +917,6 @@
       document.getElementById('footer-time').textContent = new Date().toLocaleTimeString();
     }
 
-    // ═══ THEME ═══
-    function toggleTheme() {
-      const h = document.documentElement;
-      const next = h.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      h.setAttribute('data-theme', next);
-      localStorage.setItem('lantern-theme', next);
-    }
-
     // ═══ INIT ═══
     (function() {
       const theme = localStorage.getItem('lantern-theme');
@@ -1082,5 +944,6 @@
       if (e.target.id === 'modal-overlay') closeModal();
     });
   </script>
+  <script src="/js/theme-toggle.js"></script>
 </body>
 </html>

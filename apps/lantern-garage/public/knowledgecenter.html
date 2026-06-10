@@ -5,18 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
   <title>Knowledge Center — Lantern OS</title>
+  <link rel="stylesheet" href="/css/site.css">
   <link rel="stylesheet" href="css/dream-chat.css">
   <style>
-    .site-nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; gap: 8px; padding: 0 20px; height: 52px; background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 var(--border); flex-shrink: 0; }
-    .nav-brand { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--text); text-decoration: none; letter-spacing: -0.3px; margin-right: 8px; }
-    .nav-links { display: flex; align-items: center; gap: 2px; flex: 1; }
-    .nav-links a { font-size: 13px; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 7px; transition: color 0.15s, background 0.15s; white-space: nowrap; }
-    .nav-links a:hover { color: var(--text); background: var(--surface2); }
-    .nav-links a.active { color: var(--accent); font-weight: 600; }
-    @media (max-width: 580px) { .nav-links { display: none; } }
-    .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    .nav-btn { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--muted); cursor: pointer; font-size: 15px; transition: all 0.15s; }
-    .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
     .kc-page { max-width: 780px; margin: 0 auto; padding: 32px 24px 80px; }
     .section { margin-bottom: 40px; }
     .section h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; color: var(--text); }
@@ -133,6 +124,15 @@
     </div>
   </div>
 </div>
-<script src="js/theme-toggle.js"></script>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
+  </div>
+</footer>
+
+<script src="/js/theme-toggle.js"></script>
 </body>
 </html>
