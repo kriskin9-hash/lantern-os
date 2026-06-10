@@ -3,7 +3,7 @@
   "pcsf_version": "1.0.0",
   "component": "settings",
   "description": "Runtime configuration layer. Declares all env vars the system reads, their purpose, defaults, and current resolved states (key present = true, absent = false — values never stored here).",
-  "generated_at": "2026-06-08T10:58:27.184Z",
+  "generated_at": "2026-06-10T11:43:29.668Z",
   "state": "available",
   "env_file": ".env",
   "env_file_loader": "apps/lantern-garage/server.js (startup, regex ^[A-Z0-9_]+)",
@@ -38,7 +38,7 @@
       "group": "model",
       "required": false,
       "default": "gpt-4o-mini",
-      "state": "absent",
+      "state": "present",
       "purpose": "Override the default OpenAI model"
     },
     {
@@ -54,14 +54,14 @@
       "group": "model",
       "required": false,
       "default": "gemini-2.5-flash",
-      "state": "absent",
+      "state": "present",
       "purpose": "Override the default Gemini model. Note: gemini-1.5-flash deprecated on free tier."
     },
     {
       "key": "GOOGLE_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "absent",
+      "state": "present",
       "purpose": "Alias for GEMINI_API_KEY. Checked as fallback if GEMINI_API_KEY is absent."
     },
     {
@@ -77,7 +77,7 @@
       "group": "model",
       "required": false,
       "default": "grok-3-mini",
-      "state": "absent",
+      "state": "present",
       "purpose": "Override the default Grok model"
     },
     {
@@ -85,7 +85,7 @@
       "group": "provider",
       "required": false,
       "default": "http://127.0.0.1:11434",
-      "state": "absent",
+      "state": "present",
       "purpose": "Base URL for local Ollama instance. Defaults to localhost."
     },
     {
@@ -93,14 +93,14 @@
       "group": "model",
       "required": false,
       "default": "llama3",
-      "state": "absent",
+      "state": "present",
       "purpose": "Ollama model to use. Must be pulled via 'ollama pull <model>'."
     },
     {
       "key": "ELEVENLABS_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "absent",
+      "state": "present",
       "purpose": "Enables ElevenLabs TTS proxy for calm, high-quality voice output",
       "get_key_url": "https://elevenlabs.io/app/sign-up"
     },
@@ -117,7 +117,7 @@
       "group": "server",
       "required": false,
       "default": "4177",
-      "state": "absent",
+      "state": "present",
       "purpose": "Port the lantern-garage server binds to."
     },
     {
@@ -125,7 +125,7 @@
       "group": "server",
       "required": false,
       "default": "127.0.0.1",
-      "state": "absent",
+      "state": "present",
       "purpose": "Host the server binds to. Defaults to 0.0.0.0 when PORT env is set (cloud deploy)."
     },
     {
@@ -187,7 +187,7 @@
       "key": "DEEPSEEK_API_KEY",
       "group": "provider",
       "required": false,
-      "state": "absent",
+      "state": "present",
       "purpose": "Enables DeepSeek streaming via api.deepseek.com. DeepSeek-Reasoner for math and logic.",
       "get_key_url": "https://platform.deepseek.com/api_keys"
     },

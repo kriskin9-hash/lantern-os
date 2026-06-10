@@ -1,3 +1,44 @@
+## [1.2.4] - 2026-06-10
+**Build:** 1.2.4+2026-06-10.121437
+**Commit:** 04595fb
+
+feat(convergence): add SlotWorker pool, health server, daemon CLI
+
+# 📚 Before pushing: Did you read these?
+#    □ QUICKSTART.md (dual-boot system)
+#    □ AGENTS.md (monoworkstream rules)
+#    □ CLAUDE.md (project architecture)
+
+---
+
+## [1.2.3] - 2026-06-10
+**Build:** 1.2.3+2026-06-10.114546
+**Commit:** 6082d54
+
+ui: Create RAG House page with modern architecture breakdown
+
+- New rag-house.html: comprehensive technical architecture map
+  - Status Cube (4D: x/y/z/t axes)
+  - Tesseract Convergence Loop (20 phases)
+  - Convergence IO Engine (health/loop/converge/inspect/daemon)
+  - CSF Memory (cognitive symbiotic framework)
+  - Cube Network (private/shared/ally cubes)
+  - Consent Gate (Ed25519 claim packets)
+  - Agent Fleet (36-slot design)
+  - Provider Chain (Gemini→Claude→OpenAI→Grok→Ollama)
+  - Persona Narrators (6 personas)
+  - Hub & Spokes diagram with status pills
+  - Data & Files section (PCSF, manifests, docs)
+- Updated knowledgecenter.html: RAG House link now points to /rag-house.html
+  with updated description
+
+# 📚 Before pushing: Did you read these?
+#    □ QUICKSTART.md (dual-boot system)
+#    □ AGENTS.md (monoworkstream rules)
+#    □ CLAUDE.md (project architecture)
+
+---
+
 ## [1.2.2] - 2026-06-08
 **Build:** 1.2.2+2026-06-08.013652
 **Commit:** d8b05e3

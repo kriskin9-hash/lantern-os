@@ -37,14 +37,16 @@
     {
       "id": "dream_journal/gemini_grounding_test",
       "priority": 7,
-      "status": "queued",
-      "description": "Verify GEMINI_GROUNDING=true with paid key; update .env.example + health.pcsf.json"
+      "status": "completed",
+      "description": "Verify GEMINI_GROUNDING=true with paid key; update .env.example + health.pcsf.json",
+      "updated_at": "2026-06-10T11:43:58.818067+00:00"
     },
     {
       "id": "dream_journal/voice_server_stt",
       "priority": 8,
-      "status": "queued",
-      "description": "Backend Vosk STT fallback for non-Chrome; route POST /api/dream/transcribe"
+      "status": "completed",
+      "description": "Backend Vosk STT fallback for non-Chrome; route POST /api/dream/transcribe",
+      "updated_at": "2026-06-10T11:43:59.080820+00:00"
     },
     {
       "id": "dream_journal/convergence_web_refinement",

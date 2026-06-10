@@ -1,7 +1,7 @@
 {
-  "version": "1.2.2",
-  "buildId": "1.2.2+2026-06-08.013652",
-  "timestamp": "2026-06-08T01:36:52.703Z",
-  "branch": "claude/loving-bhaskara-8e0bfc",
-  "commit": "d8b05e3"
+  "version": "1.2.4",
+  "buildId": "1.2.4+2026-06-10.121437",
+  "timestamp": "2026-06-10T12:14:37.271Z",
+  "branch": "feat/slot-worker-pool",
+  "commit": "04595fb"
 }
