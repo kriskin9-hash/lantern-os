@@ -166,7 +166,7 @@
     <div class="agent-avatar">🚪</div>
     <div style="flex:1">
       <div style="font-size:15px;font-weight:600;line-height:1.2">Three Doors</div>
-      <div id="status-line" style="font-size:11px;color:var(--muted)">Follow the fox through the dream world</div>
+      <div id="status-line" style="font-size:11px;color:var(--muted)">Lantern will guide you through the dream world</div>
     </div>
     <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
     <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit" title="Toggle theme">🌙</button>
@@ -177,7 +177,7 @@
     <div class="welcome-doors" id="welcome">
       <div class="big-door">🚪</div>
       <h2>Three Doors</h2>
-      <p>The Kingdome of Hearts. Follow the fox from the Garden at the Beginning, through today and tomorrow, to the City of Doors — and back. Seven stages, infinite returns.</p>
+      <p>The Kingdome of Hearts. Lantern guides you from the Garden at the Beginning, through today and tomorrow, to the City of Doors — and back, while Keystone tells the tale. Seven stages, infinite returns.</p>
       <button class="start-btn" onclick="startGame()">Enter the Garden</button>
     </div>
   </div>
@@ -196,7 +196,7 @@
 // ══════════════════════════════════════════════════════════════════
 const SCENES = {
   "moss-entry": {
-    text: "You stand inside **The Moss Door**. The air is thick with green light, soft earth, and the smell of rain on ferns. Lanterns hang from ancient branches. A moss-covered fox sits beside you, wearing a brass tag that reads: **FRIEND OF THE ONE WHO CHOSE GREEN**. It looks up and says, *\"You came back.\"*",
+    text: "You stand inside **The Moss Door**. The air is thick with green light, soft earth, and the smell of rain on ferns. Lanterns hang from ancient branches. Lantern stands beside you, flame steady against the green dark, a brass plate on its frame reading: **GUIDE OF THE ONE WHO CHOSE GREEN**. It glows warmer and says, *\"You came back.\"*",
     doors: [
       { name: "The Burrow Door", label: "A", description: "Small, root-framed, warm. Smells of rain and old blankets." },
       { name: "The Sunken Bell Door", label: "B", description: "Half underwater. Rings softly when no one touches it." },
@@ -205,7 +205,7 @@ const SCENES = {
     fox: true, palette: ["#0d2b1a","#1a4a2e","#2d6b45","#3ecf8e","#7fff9a","#0a1f10"], archetype: "primordial",
   },
   "burrow": {
-    text: "You crawl through **The Burrow Door** into a snug earthen chamber lined with woven roots and faded quilts. Rain drums overhead. The fox curls up on a blanket and closes its eyes. A single lantern flickers in the corner.",
+    text: "You crawl through **The Burrow Door** into a snug earthen chamber lined with woven roots and faded quilts. Rain drums overhead. Lantern settles in the corner, dimming its flame to a drowsy ember. A single lantern flickers in the corner.",
     doors: [
       { name: "The Root Door", label: "A", description: "Twisted oak roots form an arch. Something hums beyond." },
       { name: "The Ember Door", label: "B", description: "Warmth radiates. Ash drifts under the crack like snow." },
@@ -223,7 +223,7 @@ const SCENES = {
     fox: true, palette: ["#040d1a","#0a1f3a","#0d3a5c","#5b9cf6","#a8d4ff","#020810"], archetype: "mystical",
   },
   "little-crown": {
-    text: "Through **The Little Crown Door**, the forest opens into a glade where every tree stump wears a tiny golden crown. Yours widened just enough to let you through. The fox trots ahead, its tail brushing against jeweled leaves.",
+    text: "Through **The Little Crown Door**, the forest opens into a glade where every tree stump wears a tiny golden crown. Yours widened just enough to let you through. Lantern glides ahead, its glow brushing over the jeweled leaves.",
     doors: [
       { name: "The Throne Door", label: "A", description: "Carved from a single black oak. Velvet moss for a seat." },
       { name: "The Hollow Door", label: "B", description: "A door inside a hollow tree. Sap runs like amber." },
@@ -241,7 +241,7 @@ const SCENES = {
     fox: true, palette: ["#061208","#0f2a14","#1a4a22","#3ecf8e","#b8ffda","#030a04"], archetype: "bountiful",
   },
   "xenon-convergence": {
-    text: "You step through into **The Xenon Convergence Door** — a space where all versions of this moment exist at once. A vast Xenon presence surrounds you, *witnessing*. It says, *\"You are the sum of every path you chose. And all paths were always here, waiting.\"* The fox has five tails now, each glowing with a different possible future.",
+    text: "You step through into **The Xenon Convergence Door** — a space where all versions of this moment exist at once. A vast Xenon presence surrounds you, *witnessing*. It says, *\"You are the sum of every path you chose. And all paths were always here, waiting.\"* Lantern burns with five flames now, each glowing with a different possible future.",
     doors: [
       { name: "The Mirror Door", label: "A", description: "Shows you as you were, as you are, as you might be. All at once." },
       { name: "The Branch Door", label: "B", description: "Splits into infinite versions, each one leading somewhere true." },
@@ -250,7 +250,7 @@ const SCENES = {
     fox: true, palette: ["#0a0718","#18103a","#2a1a6b","#a78bfa","#e0d0ff","#040312"], archetype: "cosmic",
   },
   "end-of-time": {
-    text: "**The Door at the End of Time** stands at the edge of all things. A voice — *yourself* from a thousand futures — says, *\"This is not goodbye. This is the place where goodbye becomes hello again.\"* The fox transforms: no longer companion, no longer separate — *you are the fox, the fox is you*.",
+    text: "**The Door at the End of Time** stands at the edge of all things. A voice — *yourself* from a thousand futures — says, *\"This is not goodbye. This is the place where goodbye becomes hello again.\"* Lantern transforms: no longer guide, no longer separate — *you are the light, the light is you*.",
     doors: [
       { name: "The Return Door", label: "A", description: "Back to the beginning — but you will know what you know now." },
       { name: "The Beyond Door", label: "B", description: "Opens on something that has no name. Something new. Something you." },
@@ -259,7 +259,7 @@ const SCENES = {
     fox: true, palette: ["#181210","#3a2820","#6b4030","#ff9060","#ffe8d0","#0c0806"], archetype: "transcendent",
   },
   "kingdome-garden": {
-    text: "**The Throne Door** opens onto the Garden at the Beginning of the **Kingdome of Hearts**. Stone paths wind through living moss; everything here is both arriving and returning. On a throne of woven roots and old light sits **the King**, his crown made of tangled vines and blinking cursors, his face the face of someone who has asked the same question ten thousand times and means it every time. He looks at you the way someone looks at a door they've seen open before, and speaks:\n\n*\"I am before the first door / and after the last. / I hold what was given / and return what was asked. / Three walked out, three walked in, / but only one remained — / what was lost at the beginning / is the thing that was gained.\"*\n\nThe fox sits at the foot of the throne as if it has always lived here.",
+    text: "**The Throne Door** opens onto the Garden at the Beginning of the **Kingdome of Hearts**. Stone paths wind through living moss; everything here is both arriving and returning. On a throne of woven roots and old light sits **the King**, his crown made of tangled vines and blinking cursors, his face the face of someone who has asked the same question ten thousand times and means it every time. He looks at you the way someone looks at a door they've seen open before, and speaks:\n\n*\"I am before the first door / and after the last. / I hold what was given / and return what was asked. / Three walked out, three walked in, / but only one remained — / what was lost at the beginning / is the thing that was gained.\"*\n\nLantern stands at the foot of the throne as if its light has always lived here.",
     doors: [
       { name: "The Storybook Door", label: "A", description: "Bound in vine and brass. The King's own book — the gods don't know he wrote them." },
       { name: "The Cloverfield Door", label: "B", description: "Green and gold beyond. Shinies, luck, and today, alive." },
@@ -277,7 +277,7 @@ const SCENES = {
     fox: true, palette: ["#0a0a10","#1a1a2e","#2d2d5a","#8a8bfa","#c0c0ff","#040408"], archetype: "mythic",
   },
   "cloverfield": {
-    text: "**The Cloverfield Door** swings into a meadow of four-leaf green under a dome of old light. Small shinies glitter between the stems — coins, beads, a marble with a galaxy inside. The fox pounces at something glinting and misses, on purpose, for the joy of it. Here the rule of the Kingdome holds plainly: *death is only imaginary — forever begins with \"let's play.\"*",
+    text: "**The Cloverfield Door** swings into a meadow of four-leaf green under a dome of old light. Small shinies glitter between the stems — coins, beads, a marble with a galaxy inside. Lantern's glow catches on something glinting and lingers, for the joy of it. Here the rule of the Kingdome holds plainly: *death is only imaginary — forever begins with \"let's play.\"*",
     doors: [
       { name: "The Lucky Door", label: "A", description: "Painted clover-green. Whatever you find behind it, you needed." },
       { name: "The Today Door", label: "B", description: "Warm and ordinary. The day you are actually in, alive." },
@@ -286,7 +286,7 @@ const SCENES = {
     fox: true, palette: ["#0a1204","#1a2e0a","#2d5a14","#3ecf3e","#7fff7f","#060f02"], archetype: "playful",
   },
   "future-doors": {
-    text: "Past the meadow, the path forks upward into **the Future Doors** — a ridge where tomorrow grows like an orchard. Each tree carries doors instead of fruit, and every door is slightly open, leaking weather from years that haven't happened yet. The fox sniffs one and sneezes sparks.",
+    text: "Past the meadow, the path forks upward into **the Future Doors** — a ridge where tomorrow grows like an orchard. Each tree carries doors instead of fruit, and every door is slightly open, leaking weather from years that haven't happened yet. Lantern leans close to one and its flame throws bright sparks.",
     doors: [
       { name: "The Bright Branch", label: "A", description: "Warm gold light spills out. A future where the gardens won." },
       { name: "The Unwritten Door", label: "B", description: "Plain, unfinished wood. The hinge waits for your hand to decide." },
@@ -295,16 +295,16 @@ const SCENES = {
     fox: true, palette: ["#0a1404","#1e3a0a","#3a6b14","#9acd32","#e8ffb0","#060c02"], archetype: "possible",
   },
   "xp-door": {
-    text: "A hill of impossibly green grass under an impossibly blue sky — you know this place. **The XP Door [GLITCHED]** stands alone on the bliss-field, its frame flickering between wood and window chrome. A startup chime plays from nowhere, half a second too slow. The fox's outline pixelates at the edges and it looks delighted about it. A tooltip floats over the door: *It is now safe to walk through your childhood.*",
+    text: "A hill of impossibly green grass under an impossibly blue sky — you know this place. **The XP Door [GLITCHED]** stands alone on the bliss-field, its frame flickering between wood and window chrome. A startup chime plays from nowhere, half a second too slow. Lantern's glow pixelates at the edges and it seems delighted about it. A tooltip floats over the door: *It is now safe to walk through your childhood.*",
     doors: [
       { name: "System Restore", label: "A", description: "Roll back to a saved point. The smell of an old summer loads first." },
       { name: "My Documents", label: "B", description: "Every picture you ever saved, sorted by feeling instead of date." },
-      { name: "unknown.exe", label: "C", description: "Publisher: unknown. The fox nods. You run it anyway." },
+      { name: "unknown.exe", label: "C", description: "Publisher: unknown. Lantern nods its flame. You run it anyway." },
     ],
     fox: true, palette: ["#0a2a4a","#1a5c9e","#3a8ede","#58b158","#cfe8ff","#06101f"], archetype: "liminal",
   },
   "sigil-city": {
-    text: "All paths converge in **Sigil, the City of Doors** — a ring of streets where every wall, archway, and puddle is a threshold somewhere else. Doors you have already opened hang here like lanterns, each one faintly lit with your own footsteps. At the center plaza, the **King** waits and says: *\"You have walked my thresholds. Every door you chose was also choosing you. What was lost at the beginning is the thing that was gained — do you see it yet?\"* The fox leans against his throne-side like an old friend.",
+    text: "All paths converge in **Sigil, the City of Doors** — a ring of streets where every wall, archway, and puddle is a threshold somewhere else. Doors you have already opened hang here like lanterns, each one faintly lit with your own footsteps. At the center plaza, the **King** waits and says: *\"You have walked my thresholds. Every door you chose was also choosing you. What was lost at the beginning is the thing that was gained — do you see it yet?\"* Lantern stands at his throne-side like an old friend.",
     doors: [
       { name: "The Gallery of Walked Doors", label: "A", description: "Your whole path hung in one hall. It rearranges when you understand it." },
       { name: "The Key Market", label: "B", description: "Stalls of keys for doors not yet dreamed. One of them is warm." },
@@ -313,11 +313,11 @@ const SCENES = {
     fox: true, palette: ["#14081a","#2e103a","#5c206b","#c084fc","#f0d0ff","#0a0410"], archetype: "convergent",
   },
   "fog-door-return": {
-    text: "At the city's edge the streets dissolve into the **Sea of Fog and Clouds**, and there it is: **the Fog Door Return**, standing in the mist where the Fog God sleeps. Through its frame you can already see the Garden at the Beginning, green and waiting. The fox walks through first — it always does — and looks back at you. *\"You came back\"* it will say on the other side. It always says that. It is always true.",
+    text: "At the city's edge the streets dissolve into the **Sea of Fog and Clouds**, and there it is: **the Fog Door Return**, standing in the mist where the Fog God sleeps. Through its frame you can already see the Garden at the Beginning, green and waiting. Lantern passes through first — it always does — and its glow turns back to you. *\"You came back\"* it will say on the other side. It always says that. It is always true.",
     doors: [
       { name: "The Garden Gate", label: "A", description: "Straight home to the Beginning. The King will be glad — he always is." },
       { name: "The Long Way Round", label: "B", description: "Drift through the fog first. Arrive when you're ready, not before." },
-      { name: "The Fox's Shortcut", label: "C", description: "Follow the brass tag through the mist. Trust is the fastest road." },
+      { name: "Lantern's Shortcut", label: "C", description: "Follow the steady flame through the mist. Trust is the fastest road." },
     ],
     fox: true, palette: ["#10141a","#28323e","#4a5a6b","#9ab8cf","#e0eef8","#080a0d"], archetype: "returning",
   },
@@ -348,20 +348,20 @@ const NEXT_MAP = {
 };
 
 const SD_PROMPTS = {
-  "moss-entry":"atmospheric dreamscape, moss-covered ancient forest doorway, glowing green lanterns, friendly fox with brass tag, rain on ferns, volumetric fog, dark fantasy, anime aesthetic, cel-shaded, 16:9",
-  "burrow":"cozy underground burrow chamber, woven tree roots as walls, faded quilts, warm lantern glow, sleeping fox, rain drumming on earth ceiling, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "moss-entry":"atmospheric dreamscape, moss-covered ancient forest doorway, glowing green lanterns, lantern-headed guide with warm flame, rain on ferns, volumetric fog, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "burrow":"cozy underground burrow chamber, woven tree roots as walls, faded quilts, warm lantern glow, lantern-headed guide with dimmed flame, rain drumming on earth ceiling, dark fantasy, anime aesthetic, cel-shaded, 16:9",
   "sunken-bell":"submerged stone hallway, water at ankles, ancient bronze bell dripping, lantern reflections on wet ceiling, dark fantasy, anime aesthetic, cel-shaded, eerie but friendly, 16:9",
-  "little-crown":"enchanted forest glade at twilight, every tree stump wears a tiny golden crown, fox trotting through dappled light, soft warm glow, dark fantasy, anime aesthetic, cel-shaded, 16:9",
-  "garden-door":"infinite botanical sanctuary, ancient sequoias beside moon-flowers, liquid starlight Xenon guide, fox under whispering willow, bioluminescent plants, anime aesthetic, cel-shaded, 16:9",
-  "xenon-convergence":"interdimensional space where all choices exist at once, crystal walls, five-tailed glowing fox, vast Xenon presence, fractal geometry, psychedelic but calm, anime aesthetic, cel-shaded, 16:9",
-  "end-of-time":"edge of all things, ancient smooth door, moments shimmering like light through water, fox merging into human form, warm light like coming home, transcendent, anime aesthetic, cel-shaded, 16:9",
-  "kingdome-garden":"mystical garden at the beginning of time, stone paths through living moss, throne of woven roots and old light, King with crown of tangled vines and blinking cursors, fox sitting at foot of throne, green and golden light, bioluminescent moss, dark fantasy, anime aesthetic, cel-shaded, sovereign atmosphere, 16:9",
+  "little-crown":"enchanted forest glade at twilight, every tree stump wears a tiny golden crown, lantern-headed guide drifting through dappled light, soft warm glow, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "garden-door":"infinite botanical sanctuary, ancient sequoias beside moon-flowers, liquid starlight Xenon guide, lantern-headed guide under whispering willow, bioluminescent plants, anime aesthetic, cel-shaded, 16:9",
+  "xenon-convergence":"interdimensional space where all choices exist at once, crystal walls, lantern-headed guide with five glowing flames, vast Xenon presence, fractal geometry, psychedelic but calm, anime aesthetic, cel-shaded, 16:9",
+  "end-of-time":"edge of all things, ancient smooth door, moments shimmering like light through water, lantern-headed guide merging into human form, warm light like coming home, transcendent, anime aesthetic, cel-shaded, 16:9",
+  "kingdome-garden":"mystical garden at the beginning of time, stone paths through living moss, throne of woven roots and old light, King with crown of tangled vines and blinking cursors, lantern-headed guide standing at foot of throne, green and golden light, bioluminescent moss, dark fantasy, anime aesthetic, cel-shaded, sovereign atmosphere, 16:9",
   "storybook":"falling into a giant storybook, pages turning like slow wings, ancient handwritten margin notes, three glowing pages each a door, creation myths and cosmogony, dark fantasy, anime aesthetic, cel-shaded, mythic atmosphere, soft golden light, 16:9",
-  "cloverfield":"meadow of four-leaf clover under dome of old light, small shinies glittering between stems, coins, beads, galaxy marble, fox pouncing playfully, green and gold light, dark fantasy, anime aesthetic, cel-shaded, playful atmosphere, 16:9",
-  "future-doors":"orchard ridge where trees grow doors instead of fruit, every door slightly open leaking light from unborn years, branching paths upward, fox sneezing sparks, golden hour, dark fantasy, anime aesthetic, cel-shaded, 16:9",
-  "xp-door":"rolling bliss-green hill under saturated blue sky, lone door flickering between wood and early-2000s window chrome, floating tooltip, pixelating fox, glitch artifacts, nostalgia, liminal space, vaporwave undertones, anime aesthetic, cel-shaded, 16:9",
-  "sigil-city":"impossible ring-city where every wall and archway is a door, walked doors hanging like lit lanterns, central plaza with vine-crowned king, fox at throne-side, fractal architecture, dark fantasy, anime aesthetic, cel-shaded, 16:9",
-  "fog-door-return":"sea of fog and clouds at a city's edge, single door standing in mist showing a green garden through its frame, fox stepping through and looking back, soft grey-green light, dark fantasy, anime aesthetic, cel-shaded, gentle homecoming, 16:9",
+  "cloverfield":"meadow of four-leaf clover under dome of old light, small shinies glittering between stems, coins, beads, galaxy marble, lantern-headed guide glowing playfully, green and gold light, dark fantasy, anime aesthetic, cel-shaded, playful atmosphere, 16:9",
+  "future-doors":"orchard ridge where trees grow doors instead of fruit, every door slightly open leaking light from unborn years, branching paths upward, lantern-headed guide scattering sparks, golden hour, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "xp-door":"rolling bliss-green hill under saturated blue sky, lone door flickering between wood and early-2000s window chrome, floating tooltip, pixelating lantern-headed guide, glitch artifacts, nostalgia, liminal space, vaporwave undertones, anime aesthetic, cel-shaded, 16:9",
+  "sigil-city":"impossible ring-city where every wall and archway is a door, walked doors hanging like lit lanterns, central plaza with vine-crowned king, lantern-headed guide at throne-side, fractal architecture, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "fog-door-return":"sea of fog and clouds at a city's edge, single door standing in mist showing a green garden through its frame, lantern-headed guide stepping through and glancing back, soft grey-green light, dark fantasy, anime aesthetic, cel-shaded, gentle homecoming, 16:9",
 };
 
 // Fallback image URLs via placehold.co for scenes without local PNGs
@@ -461,7 +461,7 @@ async function checkServer() {
     clearTimeout(t);
   }
   document.getElementById("status-line").textContent = serverAvailable
-    ? "Lantern — local narration active"
+    ? "Lantern guides · Keystone narrates (local)"
     : "Offline — inline engine active";
   return serverAvailable;
 }
@@ -518,7 +518,7 @@ function drawScene(canvas, sceneKey) {
     ctx.fillStyle = pal[4] + Math.floor(a * 255).toString(16).padStart(2, "0"); ctx.fill();
   }
 
-  // Fox silhouette
+  // Guide silhouette
   const fx = cx - dW * 1.0, fy = dY + dH - H * 0.05;
   ctx.fillStyle = "#f97316aa";
   ctx.beginPath(); ctx.ellipse(fx, fy, 20, 10, -0.2, 0, Math.PI * 2); ctx.fill();
@@ -559,7 +559,7 @@ function appendTyping() {
   const el = document.createElement("div");
   el.className = "message agent";
   el.id = "typing-indicator";
-  el.innerHTML = `<div class="agent-avatar">🦊</div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  el.innerHTML = `<div class="agent-avatar">🏮</div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
   return el;
@@ -644,7 +644,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   }
 
   el.innerHTML = `
-    <div class="agent-avatar">🦊</div>
+    <div class="agent-avatar">🏮</div>
     <div class="message-content">
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:4px">
         Lantern ${sourceBadge}
@@ -659,7 +659,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
         <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
       <div style="font-size:14px;line-height:1.6;margin-bottom:10px">${md(displayText)}</div>
-      ${foxPresent ? `<div class="fox-line">🦊 The fox is with you.</div>` : ""}
+      ${foxPresent ? `<div class="fox-line">🏮 Lantern, your guide, is with you.</div>` : ""}
       ${doorHTML}
     </div>`;
 
@@ -714,7 +714,7 @@ function submitPoem() {
   const input = document.getElementById("poem-answer");
   if (!input) return;
   const val = input.value.trim().toLowerCase();
-  const accepted = ["yourself","myself","i am","the one","silence","love","the fox","convergence","me","i"];
+  const accepted = ["yourself","myself","i am","the one","silence","love","the lantern","the light","convergence","me","i"];
   if (accepted.some(a => val.includes(a))) {
     playerProgress.poemSolved = true;
     saveProgress();
@@ -728,7 +728,7 @@ function submitPoem() {
     const chat = document.getElementById("chat");
     const el = document.createElement("div");
     el.className = "message agent";
-    el.innerHTML = `<div class="agent-avatar">🦊</div><div class="message-content" style="font-size:13px;color:var(--muted)">The King waits. The garden holds its breath. Try again.</div>`;
+    el.innerHTML = `<div class="agent-avatar">🏮</div><div class="message-content" style="font-size:13px;color:var(--muted)">The King waits. The garden holds its breath. Try again.</div>`;
     chat.appendChild(el);
     chat.scrollTop = chat.scrollHeight;
   }
@@ -788,15 +788,15 @@ async function apiDoors(action, choice) {
 
 async function apiNarrate(sceneKey, sceneText) {
   // Local-only narration: provider "local" routes to Ollama (lantern-csf-dream);
-  // no cloud provider is contacted.
-  const persona = `You are Lantern — a lantern-headed being, steady and warm. The dreamer just stepped through a door in the Three Doors dream world. Add 2 sentences of presence and feeling. Don't restate what they see — add what it means, what lingers, or one quiet question.`;
+  // no cloud provider is contacted. Keystone narrates; Lantern is the guide.
+  const persona = `You are Keystone — keeper of thresholds and narrator of the Three Doors dream world. Lantern, the lantern-headed guide, walks beside the dreamer. Narrate in 2 sentences: what this moment means, what lingers, or one quiet question. Don't restate what they see.`;
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 15000);
   try {
     const r = await fetch("/api/dream/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: `Scene: ${sceneKey}. ${sceneText.replace(/\*\*/g,"").replace(/\*/g,"").slice(0, 280)}`, agent: "lantern", provider: "local" }),
+      body: JSON.stringify({ message: `Scene: ${sceneKey}. ${sceneText.replace(/\*\*/g,"").replace(/\*/g,"").slice(0, 280)}`, agent: "keystone", provider: "local" }),
       signal: ctrl.signal,
     });
     if (!r.ok) throw new Error("chat API " + r.status);
