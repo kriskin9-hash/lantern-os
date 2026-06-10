@@ -18,7 +18,7 @@ memmap2 = "0.9"          # For zero-copy streaming on files > RAM
 rayon = "1.8"            # Parallel compression segments
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-xxhash-rust = { version = "0.8", features = ["xxh64", "xxh3"] }
+xxhash-rust = { version = "0.8", features = ["xxh32", "xxh64", "xxh3"] }
 # Optional: AES-256-GCM encryption (spec §9)
 aes-gcm = { version = "0.10", optional = true }
 rand = { version = "0.8", optional = true }

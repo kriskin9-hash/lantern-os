@@ -125,9 +125,18 @@ jobs:
           )
           new_files = [line.split("\t")[1] for line in result.stdout.strip().splitlines() if line.startswith("A")]
 
+          # Standard filenames that are legitimately repeated everywhere
+          UBIQUITOUS = {
+            "__init__.py", "README.md", "README.rst", "setup.py",
+            "conftest.py", "pytest.ini", "pyproject.toml", "setup.cfg",
+            ".gitignore", ".gitkeep", "index.html", "index.js",
+          }
+
           slop = []
           for f in new_files:
             name = pathlib.Path(f).name
+            if name in UBIQUITOUS:
+              continue  # standard boilerplate — not a duplicate signal
             # Find files with the same name anywhere in the repo
             existing = subprocess.run(
               ["git", "ls-files", "--", f"**/{name}", name],

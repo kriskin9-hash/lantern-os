@@ -777,7 +777,7 @@ class ConvergenceLoop:
         adaptive_ticks = max_ticks
 
         for tick in range(max_ticks):
-            print(f"[convergence] tick {tick + 1}/{max_ticks} starting...", flush=True)
+            print(f"[convergence] tick {tick + 1}/{max_ticks} starting...", flush=True, file=sys.stderr)
             tick_results: List[PhaseResult] = []
             any_fail = False
             for num, key, desc in self.PHASES:
@@ -807,13 +807,13 @@ class ConvergenceLoop:
             audit.extend(tick_results)
             self.results = tick_results
             passed = sum(1 for r in tick_results if r.status == "pass")
-            print(f"[convergence] tick {tick + 1} done — {passed}/{len(tick_results)} phases passed", flush=True)
+            print(f"[convergence] tick {tick + 1} done — {passed}/{len(tick_results)} phases passed", flush=True, file=sys.stderr)
 
             # Early termination: all phases passed → no need for more ticks
             if not any_fail:
                 consecutive_clean_ticks += 1
                 if consecutive_clean_ticks >= 2 or tick >= adaptive_ticks - 1:
-                    print("[convergence] early termination: all clean", flush=True)
+                    print("[convergence] early termination: all clean", flush=True, file=sys.stderr)
                     break
             else:
                 consecutive_clean_ticks = 0

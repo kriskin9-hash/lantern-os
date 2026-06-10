@@ -183,6 +183,13 @@ function formatCSFContextForPrompt(message) {
     parts.push(`Doors: ${last3 || "none yet"}`);
   }
 
+  // CSF delta layer — recurring symbols, mood arc, convergence trend
+  try {
+    const { formatDeltaContextForPrompt } = require("./csf-delta-store");
+    const deltaCtx = formatDeltaContextForPrompt(message);
+    if (deltaCtx) parts.push(deltaCtx);
+  } catch { /* non-fatal */ }
+
   return parts.join("\n\n");
 }
 

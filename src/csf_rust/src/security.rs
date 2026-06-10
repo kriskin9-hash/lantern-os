@@ -90,7 +90,9 @@ impl SecurityPolicy {
     /// Validate segment count does not exceed policy cap.
     pub fn check_segment_count(&self, count: usize) -> crate::Result<()> {
         if count > self.max_segments {
-            Err(crate::CsfError::Security("segment count exceeds policy limit"))
+            Err(crate::CsfError::Security(
+                "segment count exceeds policy limit",
+            ))
         } else {
             Ok(())
         }
@@ -99,7 +101,9 @@ impl SecurityPolicy {
     /// Validate total uncompressed size does not exceed policy cap.
     pub fn check_uncompressed_size(&self, size: u64) -> crate::Result<()> {
         if size > self.max_archive_bytes {
-            Err(crate::CsfError::Security("uncompressed size exceeds policy limit"))
+            Err(crate::CsfError::Security(
+                "uncompressed size exceeds policy limit",
+            ))
         } else {
             Ok(())
         }

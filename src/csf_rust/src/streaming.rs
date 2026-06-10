@@ -146,7 +146,7 @@ impl StreamingCompressor {
         // Write sparse metadata placeholder (spec §4.1)
         // placeholder: row_count=0, col_count=0, nonzero_count=0, no defaults
         writer.write_all(&0u64.to_be_bytes())?; // row_count
-        writer.write_all(&0u32.to_be_bytes())?;  // col_count
+        writer.write_all(&0u32.to_be_bytes())?; // col_count
         writer.write_all(&0u64.to_be_bytes())?; // nonzero_count
 
         // Compress and write each segment (raw zstd for bit-perfect roundtrip)
@@ -256,7 +256,9 @@ impl SegmentReader {
             zstd::decode_all(&compressed[..]).map_err(|e| CsfError::Compression(e.to_string()))
         } else if info.flags & segment_flags::SYMBOLIC != 0 {
             // Symbolic path: dictionary + sparse decode (not yet wired in streaming container)
-            Err(CsfError::Compression("symbolic segment decode not yet implemented in streaming reader".to_string()))
+            Err(CsfError::Compression(
+                "symbolic segment decode not yet implemented in streaming reader".to_string(),
+            ))
         } else {
             // Unknown flags — try raw zstd as safest fallback
             zstd::decode_all(&compressed[..]).map_err(|e| CsfError::Compression(e.to_string()))
@@ -342,10 +344,7 @@ pub struct ArchiveReader;
 
 impl ArchiveReader {
     /// Decompress an entire archive to a single output writer.
-    pub fn decompress_to_writer<P: AsRef<Path>, W: Write>(
-        path: P,
-        writer: &mut W,
-    ) -> Result<u64> {
+    pub fn decompress_to_writer<P: AsRef<Path>, W: Write>(path: P, writer: &mut W) -> Result<u64> {
         let mut reader = SegmentReader::open(path)?;
         let count = reader.header().segment_count;
         let mut total = 0u64;
