@@ -22,6 +22,12 @@ data/dream_journal/*.jsonl
 # Discord subscriber data
 data/discord/subscribers.json
 
+# Legacy three-doors JSON state (replaced by CSF v07 — see data/csf/)
+data/discord/three-doors/*.json
+
+# Player CSF files — private ImagniVerse state (local only)
+data/csf/*.csf
+
 # ─── Training outputs (review locally before promotion) ───────────────────────
 data/training/**/*.jsonl
 data/training/**/*.json
