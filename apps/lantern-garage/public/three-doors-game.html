@@ -313,6 +313,28 @@ const SD_PROMPTS = {
   "cloverfield":"meadow of four-leaf clover under dome of old light, small shinies glittering between stems, coins, beads, galaxy marble, fox pouncing playfully, green and gold light, dark fantasy, anime aesthetic, cel-shaded, playful atmosphere, 16:9",
 };
 
+// Fallback image URLs via placehold.co for scenes without local PNGs
+const PLACEHOLDER_IMAGES = {
+  "moss-entry": "https://placehold.co/800x450/1b3a2f/a8e6cf?text=The+Moss+Door&font=playfair",
+  "burrow": "https://placehold.co/800x450/4a3b2a/d7ccc8?text=The+Burrow&font=playfair",
+  "sunken-bell": "https://placehold.co/800x450/1a237e/90caf9?text=The+Sunken+Bell&font=playfair",
+  "little-crown": "https://placehold.co/800x450/4a148c/e1bee7?text=The+Little+Crown&font=playfair",
+  "storybook": "https://placehold.co/800x450/5d4037/ffecb3?text=The+Storybook&font=playfair",
+  "cloverfield": "https://placehold.co/800x450/1b5e20/c8e6c9?text=The+Cloverfield&font=playfair",
+  "kingdome-garden": "https://placehold.co/800x450/1a1a2e/e8d5b7?text=Kingdome+Garden&font=playfair",
+  "ancient-doors": "https://placehold.co/800x450/3e2723/d7ccc8?text=Ancient+Doors&font=playfair",
+  "tomorrow-door": "https://placehold.co/800x450/0d47a1/bbdefb?text=Tomorrow+Door&font=playfair",
+  "xp-door": "https://placehold.co/800x450/212121/76ff03?text=XP+Door+%5bGLITCHED%5d&font=playfair",
+  "xenon-starship": "https://placehold.co/800x450/311b92/b39ddb?text=Xenon+Starship&font=playfair",
+  "sigil-city": "https://placehold.co/800x450/263238/cfd8dc?text=Sigil+City+of+Doors&font=playfair",
+  "fog-door-return": "https://placehold.co/800x450/37474f/b0bec5?text=Fog+Door+Return&font=playfair",
+};
+
+function getSceneImageUrl(sceneKey) {
+  const local = `data/images/three-doors/${sceneKey}.png`;
+  return PLACEHOLDER_IMAGES[sceneKey] || local;
+}
+
 // ── State ─────────────────────────────────────────────────────────
 let gameState = null;
 let userId = "web-" + Math.random().toString(36).slice(2, 9);
@@ -580,7 +602,8 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       <div class="scene-image">
         <img id="${imgId}" src="data/images/three-doors/${sceneKey}.png" alt="Scene art" loading="lazy"
           onload="logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })"
-          onerror="this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' })">
+          onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.removeAttribute('data-fallback');}else{this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' })}"
+          data-fallback="${PLACEHOLDER_IMAGES[sceneKey] || ''}">
         <canvas id="${canvasId}" width="800" height="450" style="display:none"></canvas>
         <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
