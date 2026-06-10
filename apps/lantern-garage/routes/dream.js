@@ -245,6 +245,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const userId = String(body.userId || "web-anon").slice(0, 256);
       const action = String(body.action || "start");
       const choice = String(body.choice || "");
+      const agent = String(body.agent || "").slice(0, 32);
 
       const { spawn } = require("child_process");
       const py = process.platform === "win32" ? "python" : "python3";
@@ -253,6 +254,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
 from three_doors_engine import ThreeDoorsEngine
 req = json.loads(sys.stdin.read())
 e = ThreeDoorsEngine(req['userId'])
+e.agent = req.get('agent', '')
 result = e.to_api_response()
 if req['action'] in ['start','reset']:
     result = e.to_api_response(e.reset() if req['action']=='reset' else e.start_game())
@@ -271,7 +273,7 @@ print(json.dumps(result))`;
           else resolve(out.trim());
         });
         proc.on("error", reject);
-        proc.stdin.write(JSON.stringify({ userId, action, choice }));
+        proc.stdin.write(JSON.stringify({ userId, action, choice, agent }));
         proc.stdin.end();
       });
 

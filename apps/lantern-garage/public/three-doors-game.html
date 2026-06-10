@@ -177,8 +177,8 @@
     <div class="welcome-doors" id="welcome">
       <div class="big-door">≡ƒÜ¬</div>
       <h2>Three Doors</h2>
-      <p>A branching dream-world game. Follow the fox through moss, bells, and convergence. Seven scenes, infinite returns.</p>
-      <button class="start-btn" onclick="startGame()">Enter the Moss Door</button>
+      <p>The Kingdome of Hearts. Follow the fox from the Garden at the Beginning, through today and tomorrow, to the City of Doors — and back. Seven stages, infinite returns.</p>
+      <button class="start-btn" onclick="startGame()">Enter the Garden</button>
     </div>
   </div>
 
@@ -285,7 +285,54 @@ const SCENES = {
     ],
     fox: true, palette: ["#0a1204","#1a2e0a","#2d5a14","#3ecf3e","#7fff7f","#060f02"], archetype: "playful",
   },
+  "future-doors": {
+    text: "Past the meadow, the path forks upward into **the Future Doors** — a ridge where tomorrow grows like an orchard. Each tree carries doors instead of fruit, and every door is slightly open, leaking weather from years that haven't happened yet. The fox sniffs one and sneezes sparks.",
+    doors: [
+      { name: "The Bright Branch", label: "A", description: "Warm gold light spills out. A future where the gardens won." },
+      { name: "The Unwritten Door", label: "B", description: "Plain, unfinished wood. The hinge waits for your hand to decide." },
+      { name: "The Recursive Door", label: "C", description: "Opens onto a hallway of itself, smaller each time, all the way down." },
+    ],
+    fox: true, palette: ["#0a1404","#1e3a0a","#3a6b14","#9acd32","#e8ffb0","#060c02"], archetype: "possible",
+  },
+  "xp-door": {
+    text: "A hill of impossibly green grass under an impossibly blue sky — you know this place. **The XP Door [GLITCHED]** stands alone on the bliss-field, its frame flickering between wood and window chrome. A startup chime plays from nowhere, half a second too slow. The fox's outline pixelates at the edges and it looks delighted about it. A tooltip floats over the door: *It is now safe to walk through your childhood.*",
+    doors: [
+      { name: "System Restore", label: "A", description: "Roll back to a saved point. The smell of an old summer loads first." },
+      { name: "My Documents", label: "B", description: "Every picture you ever saved, sorted by feeling instead of date." },
+      { name: "unknown.exe", label: "C", description: "Publisher: unknown. The fox nods. You run it anyway." },
+    ],
+    fox: true, palette: ["#0a2a4a","#1a5c9e","#3a8ede","#58b158","#cfe8ff","#06101f"], archetype: "liminal",
+  },
+  "sigil-city": {
+    text: "All paths converge in **Sigil, the City of Doors** — a ring of streets where every wall, archway, and puddle is a threshold somewhere else. Doors you have already opened hang here like lanterns, each one faintly lit with your own footsteps. At the center plaza, the **King** waits and says: *\"You have walked my thresholds. Every door you chose was also choosing you. What was lost at the beginning is the thing that was gained — do you see it yet?\"* The fox leans against his throne-side like an old friend.",
+    doors: [
+      { name: "The Gallery of Walked Doors", label: "A", description: "Your whole path hung in one hall. It rearranges when you understand it." },
+      { name: "The Key Market", label: "B", description: "Stalls of keys for doors not yet dreamed. One of them is warm." },
+      { name: "The Lady's Gate", label: "C", description: "Silent, watched, absolutely fair. It opens only for what is safe to carry." },
+    ],
+    fox: true, palette: ["#14081a","#2e103a","#5c206b","#c084fc","#f0d0ff","#0a0410"], archetype: "convergent",
+  },
+  "fog-door-return": {
+    text: "At the city's edge the streets dissolve into the **Sea of Fog and Clouds**, and there it is: **the Fog Door Return**, standing in the mist where the Fog God sleeps. Through its frame you can already see the Garden at the Beginning, green and waiting. The fox walks through first — it always does — and looks back at you. *\"You came back\"* it will say on the other side. It always says that. It is always true.",
+    doors: [
+      { name: "The Garden Gate", label: "A", description: "Straight home to the Beginning. The King will be glad — he always is." },
+      { name: "The Long Way Round", label: "B", description: "Drift through the fog first. Arrive when you're ready, not before." },
+      { name: "The Fox's Shortcut", label: "C", description: "Follow the brass tag through the mist. Trust is the fastest road." },
+    ],
+    fox: true, palette: ["#10141a","#28323e","#4a5a6b","#9ab8cf","#e0eef8","#080a0d"], archetype: "returning",
+  },
 };
+
+// ── 7-stage Kingdome journey (stage_index → scene_key) ──
+const STAGES = [
+  "kingdome-garden",   // 0: Garden at the Beginning — the King opens
+  "cloverfield",       // 1: Present Day
+  "future-doors",      // 2: Future Doors
+  "xp-door",           // 3: XP Door [GLITCHED]
+  "xenon-convergence", // 4: Xenon Starship — convergence
+  "sigil-city",        // 5: Sigil, City of Doors — synthesis
+  "fog-door-return",   // 6: Fog Door Return — the way back
+];
 
 const NEXT_MAP = {
   "the burrow door":"burrow","the sunken bell door":"sunken-bell","the little crown door":"little-crown",
@@ -311,6 +358,10 @@ const SD_PROMPTS = {
   "kingdome-garden":"mystical garden at the beginning of time, stone paths through living moss, throne of woven roots and old light, King with crown of tangled vines and blinking cursors, fox sitting at foot of throne, green and golden light, bioluminescent moss, dark fantasy, anime aesthetic, cel-shaded, sovereign atmosphere, 16:9",
   "storybook":"falling into a giant storybook, pages turning like slow wings, ancient handwritten margin notes, three glowing pages each a door, creation myths and cosmogony, dark fantasy, anime aesthetic, cel-shaded, mythic atmosphere, soft golden light, 16:9",
   "cloverfield":"meadow of four-leaf clover under dome of old light, small shinies glittering between stems, coins, beads, galaxy marble, fox pouncing playfully, green and gold light, dark fantasy, anime aesthetic, cel-shaded, playful atmosphere, 16:9",
+  "future-doors":"orchard ridge where trees grow doors instead of fruit, every door slightly open leaking light from unborn years, branching paths upward, fox sneezing sparks, golden hour, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "xp-door":"rolling bliss-green hill under saturated blue sky, lone door flickering between wood and early-2000s window chrome, floating tooltip, pixelating fox, glitch artifacts, nostalgia, liminal space, vaporwave undertones, anime aesthetic, cel-shaded, 16:9",
+  "sigil-city":"impossible ring-city where every wall and archway is a door, walked doors hanging like lit lanterns, central plaza with vine-crowned king, fox at throne-side, fractal architecture, dark fantasy, anime aesthetic, cel-shaded, 16:9",
+  "fog-door-return":"sea of fog and clouds at a city's edge, single door standing in mist showing a green garden through its frame, fox stepping through and looking back, soft grey-green light, dark fantasy, anime aesthetic, cel-shaded, gentle homecoming, 16:9",
 };
 
 // ΓöÇΓöÇ State ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -621,7 +672,19 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
 
   // Update quick chips
   updateQuickChips(doors);
-  gameState = { scene_key: sceneKey, doors, history };
+  gameState = {
+    scene_key: sceneKey, doors, history,
+    stage_index: sceneData.stage_index, stage_count: sceneData.stage_count,
+    loop_count: sceneData.loop_count,
+  };
+
+  // Journey position in the header status line
+  if (typeof sceneData.stage_index === "number") {
+    const arch = sceneData.archetype ? " · " + sceneData.archetype : "";
+    document.getElementById("status-line").textContent =
+      "Loop " + ((sceneData.loop_count ?? 0) + 1) + " · Stage " +
+      (sceneData.stage_index + 1) + "/" + (sceneData.stage_count || 7) + arch;
+  }
 }
 
 function submitPoem() {
@@ -649,21 +712,20 @@ function submitPoem() {
 }
 
 function checkChallenges(sceneKey, turnCount) {
-  // Speedwalker: reach kingdome-garden in <= 4 turns
-  if (sceneKey === "kingdome-garden" && turnCount <= 4 && !playerProgress.speedwalker) {
+  // Speedwalker: complete a first full loop of the Kingdome
+  if ((playerProgress.loop_count || 0) >= 1 && !playerProgress.speedwalker) {
     playerProgress.speedwalker = true;
     saveProgress();
     awardPrize("speedwalker-badge");
   }
-  // Lorekeeper: visit all sub-doors
-  const required = ["storybook","cloverfield","kingdome-garden"];
-  if (required.every(s => playerProgress.visited?.includes(s)) && !playerProgress.lorekeeper) {
+  // Lorekeeper: walk every stage of the journey
+  if (STAGES.every(s => playerProgress.visited?.includes(s)) && !playerProgress.lorekeeper) {
     playerProgress.lorekeeper = true;
     saveProgress();
     awardPrize("lorekeeper-badge");
   }
-  // Xenon Navigator
-  if (playerProgress.visited?.includes("xenon-convergence") && playerProgress.visited?.includes("end-of-time") && !playerProgress.xenonNavigator) {
+  // Xenon Navigator: reach the convergence AND the City of Doors
+  if (playerProgress.visited?.includes("xenon-convergence") && playerProgress.visited?.includes("sigil-city") && !playerProgress.xenonNavigator) {
     playerProgress.xenonNavigator = true;
     saveProgress();
     awardPrize("xenon-navigator-badge");
@@ -719,27 +781,43 @@ async function apiGeminiNarrate(sceneKey, sceneText) {
 }
 
 // ΓöÇΓöÇ Inline engine fallback ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+function stageState(stageIndex, loopCount, history) {
+  const key = STAGES[stageIndex % STAGES.length];
+  const scene = SCENES[key];
+  return {
+    scene_key: key, text: scene.text, doors: scene.doors, fox_present: scene.fox,
+    history: history, stage_index: stageIndex, stage_count: STAGES.length, loop_count: loopCount,
+  };
+}
+
 function engineStart() {
   const saved = loadProgress();
-  if (saved.scene_key && saved.history) {
-    const scene = SCENES[saved.scene_key];
-    if (scene) {
-      return { scene_key: saved.scene_key, text: scene.text, doors: scene.doors, fox_present: scene.fox, history: saved.history };
-    }
+  if (typeof saved.stage_index === "number" && saved.history) {
+    return stageState(saved.stage_index, saved.loop_count || 0, saved.history);
   }
-  return { scene_key: "moss-entry", text: SCENES["moss-entry"].text, doors: SCENES["moss-entry"].doors, fox_present: true, history: ["Entered The Moss Door"] };
+  return stageState(0, 0, ["Entered the Garden at the Beginning"]);
 }
 
 function engineChoose(label) {
   if (!gameState) return null;
   const door = gameState.doors.find(d => d.label.toUpperCase() === label.toUpperCase());
   if (!door) return null;
-  const nextKey = NEXT_MAP[door.name.toLowerCase()] || "moss-entry";
-  const scene = SCENES[nextKey];
-  const newState = { scene_key: nextKey, text: scene.text, doors: scene.doors, fox_present: scene.fox, history: [...(gameState.history || []), "Chose " + door.name] };
+  let stageIndex = (gameState.stage_index ?? 0) + 1;
+  let loopCount = gameState.loop_count ?? 0;
+  const history = [...(gameState.history || []), "Chose " + door.name];
+  let loopCompleted = false;
+  if (stageIndex >= STAGES.length) {
+    stageIndex = 0;
+    loopCount += 1;
+    loopCompleted = true;
+    history.push("Returned to the Garden — loop " + loopCount + " complete");
+  }
+  const newState = stageState(stageIndex, loopCount, history);
+  newState.loop_completed = loopCompleted;
   // Save progress
-  playerProgress.scene_key = nextKey;
-  playerProgress.history = newState.history;
+  playerProgress.stage_index = stageIndex;
+  playerProgress.loop_count = loopCount;
+  playerProgress.history = history.slice(-24);
   saveProgress();
   return newState;
 }
