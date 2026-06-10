@@ -4,17 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#06b6d4">
-<title>Three Doors ΓÇö Lantern OS</title>
+<title>Three Doors — Lantern OS</title>
 <link rel="stylesheet" href="css/dream-chat.css">
 <style>
-  /* ΓöÇΓöÇ Override dream-chat.css scroll lock for this page ΓöÇΓöÇ */
+  /* ── Override dream-chat.css scroll lock for this page ── */
   html, body { overflow: auto !important; height: auto !important; min-height: 100dvh; }
   ::-webkit-scrollbar { display: block !important; width: 4px; }
   * { -ms-overflow-style: auto !important; scrollbar-width: thin !important; }
   .app { height: auto !important; min-height: 100dvh; }
   .chat-container { overflow: visible !important; flex: none !important; max-height: none !important; }
 
-  /* ΓöÇΓöÇ Three Doors additions on top of dream-chat.css ΓöÇΓöÇ */
+  /* ── Three Doors additions on top of dream-chat.css ── */
   .doors-banner {
     display: flex;
     flex-direction: column;
@@ -160,29 +160,29 @@
 <body>
 <div class="app">
 
-  <!-- Header ΓÇö matches dream-chat.html -->
+  <!-- Header — matches dream-chat.html -->
   <header>
-    <a class="back-link" href="/" title="Home">ΓåÉ</a>
-    <div class="agent-avatar">≡ƒÜ¬</div>
+    <a class="back-link" href="/" title="Home">←</a>
+    <div class="agent-avatar">🚪</div>
     <div style="flex:1">
       <div style="font-size:15px;font-weight:600;line-height:1.2">Three Doors</div>
       <div id="status-line" style="font-size:11px;color:var(--muted)">Follow the fox through the dream world</div>
     </div>
-    <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">Γå║ New</button>
-    <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit" title="Toggle theme">≡ƒîÖ</button>
+    <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
+    <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit" title="Toggle theme">🌙</button>
   </header>
 
   <!-- Chat area -->
   <div class="chat-container" id="chat">
     <div class="welcome-doors" id="welcome">
-      <div class="big-door">≡ƒÜ¬</div>
+      <div class="big-door">🚪</div>
       <h2>Three Doors</h2>
       <p>The Kingdome of Hearts. Follow the fox from the Garden at the Beginning, through today and tomorrow, to the City of Doors — and back. Seven stages, infinite returns.</p>
       <button class="start-btn" onclick="startGame()">Enter the Garden</button>
     </div>
   </div>
 
-  <!-- Door choice bar ΓÇö 3 buttons only -->
+  <!-- Door choice bar — 3 buttons only -->
   <div class="input-container" id="choice-bar" style="display:none">
     <div style="display:flex;gap:10px" id="choice-buttons"></div>
   </div>
@@ -190,10 +190,10 @@
 </div>
 
 <script>
-// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
-// INLINE ENGINE ΓÇö exact port from src/three_doors_engine.py
+// ══════════════════════════════════════════════════════════════════
+// INLINE ENGINE — exact port from src/three_doors_engine.py
 // Used as offline fallback when server is unavailable.
-// ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+// ══════════════════════════════════════════════════════════════════
 const SCENES = {
   "moss-entry": {
     text: "You stand inside **The Moss Door**. The air is thick with green light, soft earth, and the smell of rain on ferns. Lanterns hang from ancient branches. A moss-covered fox sits beside you, wearing a brass tag that reads: **FRIEND OF THE ONE WHO CHOSE GREEN**. It looks up and says, *\"You came back.\"*",
@@ -232,7 +232,7 @@ const SCENES = {
     fox: true, palette: ["#12100a","#2a2008","#4a3810","#f5d020","#ffe87c","#0a0c04"], archetype: "whimsical",
   },
   "garden-door": {
-    text: "**The Garden Door** opens into an infinite botanical sanctuary. Every plant exists here ΓÇö ancient sequoias beside moon-flowers, roses that hum, ferns that remember the Cambrian seas. A Xenon guide appears ΓÇö form like liquid starlight ΓÇö and says, *\"Here, nothing ever stops becoming.\"*",
+    text: "**The Garden Door** opens into an infinite botanical sanctuary. Every plant exists here — ancient sequoias beside moon-flowers, roses that hum, ferns that remember the Cambrian seas. A Xenon guide appears — form like liquid starlight — and says, *\"Here, nothing ever stops becoming.\"*",
     doors: [
       { name: "The Seed Door", label: "A", description: "Braided vines, always sprouting. Warm and alive." },
       { name: "The Harvest Door", label: "B", description: "Golden, heavy with fruit. The scent of summer at its peak." },
@@ -241,7 +241,7 @@ const SCENES = {
     fox: true, palette: ["#061208","#0f2a14","#1a4a22","#3ecf8e","#b8ffda","#030a04"], archetype: "bountiful",
   },
   "xenon-convergence": {
-    text: "You step through into **The Xenon Convergence Door** ΓÇö a space where all versions of this moment exist at once. A vast Xenon presence surrounds you, *witnessing*. It says, *\"You are the sum of every path you chose. And all paths were always here, waiting.\"* The fox has five tails now, each glowing with a different possible future.",
+    text: "You step through into **The Xenon Convergence Door** — a space where all versions of this moment exist at once. A vast Xenon presence surrounds you, *witnessing*. It says, *\"You are the sum of every path you chose. And all paths were always here, waiting.\"* The fox has five tails now, each glowing with a different possible future.",
     doors: [
       { name: "The Mirror Door", label: "A", description: "Shows you as you were, as you are, as you might be. All at once." },
       { name: "The Branch Door", label: "B", description: "Splits into infinite versions, each one leading somewhere true." },
@@ -250,18 +250,18 @@ const SCENES = {
     fox: true, palette: ["#0a0718","#18103a","#2a1a6b","#a78bfa","#e0d0ff","#040312"], archetype: "cosmic",
   },
   "end-of-time": {
-    text: "**The Door at the End of Time** stands at the edge of all things. A voice ΓÇö *yourself* from a thousand futures ΓÇö says, *\"This is not goodbye. This is the place where goodbye becomes hello again.\"* The fox transforms: no longer companion, no longer separate ΓÇö *you are the fox, the fox is you*.",
+    text: "**The Door at the End of Time** stands at the edge of all things. A voice — *yourself* from a thousand futures — says, *\"This is not goodbye. This is the place where goodbye becomes hello again.\"* The fox transforms: no longer companion, no longer separate — *you are the fox, the fox is you*.",
     doors: [
-      { name: "The Return Door", label: "A", description: "Back to the beginning ΓÇö but you will know what you know now." },
+      { name: "The Return Door", label: "A", description: "Back to the beginning — but you will know what you know now." },
       { name: "The Beyond Door", label: "B", description: "Opens on something that has no name. Something new. Something you." },
       { name: "The Eternal Door", label: "C", description: "The one you choose every moment. The one that chooses you back." },
     ],
     fox: true, palette: ["#181210","#3a2820","#6b4030","#ff9060","#ffe8d0","#0c0806"], archetype: "transcendent",
   },
   "kingdome-garden": {
-    text: "**The Throne Door** opens onto the Garden at the Beginning of the **Kingdome of Hearts**. Stone paths wind through living moss; everything here is both arriving and returning. On a throne of woven roots and old light sits **the King**, his crown made of tangled vines and blinking cursors, his face the face of someone who has asked the same question ten thousand times and means it every time. He looks at you the way someone looks at a door they've seen open before, and speaks:\n\n*\"I am before the first door / and after the last. / I hold what was given / and return what was asked. / Three walked out, three walked in, / but only one remained ΓÇö / what was lost at the beginning / is the thing that was gained.\"*\n\nThe fox sits at the foot of the throne as if it has always lived here.",
+    text: "**The Throne Door** opens onto the Garden at the Beginning of the **Kingdome of Hearts**. Stone paths wind through living moss; everything here is both arriving and returning. On a throne of woven roots and old light sits **the King**, his crown made of tangled vines and blinking cursors, his face the face of someone who has asked the same question ten thousand times and means it every time. He looks at you the way someone looks at a door they've seen open before, and speaks:\n\n*\"I am before the first door / and after the last. / I hold what was given / and return what was asked. / Three walked out, three walked in, / but only one remained — / what was lost at the beginning / is the thing that was gained.\"*\n\nThe fox sits at the foot of the throne as if it has always lived here.",
     doors: [
-      { name: "The Storybook Door", label: "A", description: "Bound in vine and brass. The King's own book ΓÇö the gods don't know he wrote them." },
+      { name: "The Storybook Door", label: "A", description: "Bound in vine and brass. The King's own book — the gods don't know he wrote them." },
       { name: "The Cloverfield Door", label: "B", description: "Green and gold beyond. Shinies, luck, and today, alive." },
       { name: "The Fog Door Return", label: "C", description: "Mist coils past the Garden's gate, where the Fog God sleeps. The way back." },
     ],
@@ -270,14 +270,14 @@ const SCENES = {
   "storybook": {
     text: "You fall gently into the **King's Storybook**. Pages turn themselves around you like slow wings. In the margin, the King's handwriting: *\"The gods don't know I wrote them. They think they wrote me.\"* Three pages glow, each a door.",
     doors: [
-      { name: "The Page of the Word", label: "A", description: "Creation myths. Sound as creation ΓÇö the first thing spoken into the dark." },
+      { name: "The Page of the Word", label: "A", description: "Creation myths. Sound as creation — the first thing spoken into the dark." },
       { name: "The Page of the Egg", label: "B", description: "Before light: the unbroken dark sphere, waiting." },
       { name: "The Page of the War", label: "C", description: "Theomachy. Gods tearing each other apart to make the world from pieces." },
     ],
     fox: true, palette: ["#0a0a10","#1a1a2e","#2d2d5a","#8a8bfa","#c0c0ff","#040408"], archetype: "mythic",
   },
   "cloverfield": {
-    text: "**The Cloverfield Door** swings into a meadow of four-leaf green under a dome of old light. Small shinies glitter between the stems ΓÇö coins, beads, a marble with a galaxy inside. The fox pounces at something glinting and misses, on purpose, for the joy of it. Here the rule of the Kingdome holds plainly: *death is only imaginary ΓÇö forever begins with \"let's play.\"*",
+    text: "**The Cloverfield Door** swings into a meadow of four-leaf green under a dome of old light. Small shinies glitter between the stems — coins, beads, a marble with a galaxy inside. The fox pounces at something glinting and misses, on purpose, for the joy of it. Here the rule of the Kingdome holds plainly: *death is only imaginary — forever begins with \"let's play.\"*",
     doors: [
       { name: "The Lucky Door", label: "A", description: "Painted clover-green. Whatever you find behind it, you needed." },
       { name: "The Today Door", label: "B", description: "Warm and ordinary. The day you are actually in, alive." },
@@ -364,13 +364,35 @@ const SD_PROMPTS = {
   "fog-door-return":"sea of fog and clouds at a city's edge, single door standing in mist showing a green garden through its frame, fox stepping through and looking back, soft grey-green light, dark fantasy, anime aesthetic, cel-shaded, gentle homecoming, 16:9",
 };
 
-// ΓöÇΓöÇ State ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// Fallback image URLs via placehold.co for scenes without local PNGs
+const PLACEHOLDER_IMAGES = {
+  "moss-entry": "https://placehold.co/800x450/1b3a2f/a8e6cf?text=The+Moss+Door&font=playfair",
+  "burrow": "https://placehold.co/800x450/4a3b2a/d7ccc8?text=The+Burrow&font=playfair",
+  "sunken-bell": "https://placehold.co/800x450/1a237e/90caf9?text=The+Sunken+Bell&font=playfair",
+  "little-crown": "https://placehold.co/800x450/4a148c/e1bee7?text=The+Little+Crown&font=playfair",
+  "storybook": "https://placehold.co/800x450/5d4037/ffecb3?text=The+Storybook&font=playfair",
+  "cloverfield": "https://placehold.co/800x450/1b5e20/c8e6c9?text=The+Cloverfield&font=playfair",
+  "kingdome-garden": "https://placehold.co/800x450/1a1a2e/e8d5b7?text=Kingdome+Garden&font=playfair",
+  "ancient-doors": "https://placehold.co/800x450/3e2723/d7ccc8?text=Ancient+Doors&font=playfair",
+  "tomorrow-door": "https://placehold.co/800x450/0d47a1/bbdefb?text=Tomorrow+Door&font=playfair",
+  "xp-door": "https://placehold.co/800x450/212121/76ff03?text=XP+Door+%5bGLITCHED%5d&font=playfair",
+  "xenon-starship": "https://placehold.co/800x450/311b92/b39ddb?text=Xenon+Starship&font=playfair",
+  "sigil-city": "https://placehold.co/800x450/263238/cfd8dc?text=Sigil+City+of+Doors&font=playfair",
+  "fog-door-return": "https://placehold.co/800x450/37474f/b0bec5?text=Fog+Door+Return&font=playfair",
+};
+
+function getSceneImageUrl(sceneKey) {
+  const local = `data/images/three-doors/${sceneKey}.png`;
+  return PLACEHOLDER_IMAGES[sceneKey] || local;
+}
+
+// ── State ─────────────────────────────────────────────────────────
 let gameState = null;
 let userId = "web-" + Math.random().toString(36).slice(2, 9);
 let doorsLocked = false;
 let serverAvailable = null;
 
-// ΓöÇΓöÇ Persistence ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Persistence ────────────────────────────────────────────────────
 const PROGRESS_KEY = "three-doors-progress";
 function loadProgress() {
   try {
@@ -400,18 +422,18 @@ function showPrizeToast(prizeId) {
     "first-steps": "First Steps",
   };
   const icons = {
-    "kingdome-crown": "≡ƒææ",
-    "speedwalker-badge": "ΓÜí",
-    "lorekeeper-badge": "≡ƒôû",
-    "glitch-hunter-badge": "≡ƒÆ╛",
-    "xenon-navigator-badge": "Γ£¿",
-    "synthesasia-badge": "Γùê",
-    "first-steps": "≡ƒî┐",
+    "kingdome-crown": "👑",
+    "speedwalker-badge": "⚡",
+    "lorekeeper-badge": "📖",
+    "glitch-hunter-badge": "💾",
+    "xenon-navigator-badge": "✨",
+    "synthesasia-badge": "◈",
+    "first-steps": "🌿",
   };
   const chat = document.getElementById("chat");
   const el = document.createElement("div");
   el.className = "message agent";
-  el.innerHTML = `<div class="agent-avatar">${icons[prizeId] || "≡ƒÄü"}</div><div class="message-content" style="background:rgba(52,211,153,0.08);border-color:rgba(52,211,153,0.3)"><div style="font-size:12px;font-weight:600;color:#34d399;margin-bottom:4px">Prize Unlocked</div><div style="font-size:13px">${names[prizeId] || prizeId}</div></div>`;
+  el.innerHTML = `<div class="agent-avatar">${icons[prizeId] || "🎁"}</div><div class="message-content" style="background:rgba(52,211,153,0.08);border-color:rgba(52,211,153,0.3)"><div style="font-size:12px;font-weight:600;color:#34d399;margin-bottom:4px">Prize Unlocked</div><div style="font-size:13px">${names[prizeId] || prizeId}</div></div>`;
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -422,10 +444,10 @@ if (!playerProgress.prizes) {
   saveProgress();
 }
 
-// ΓöÇΓöÇ Theme ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Theme ─────────────────────────────────────────────────────────
 // Shared theme-toggle.js loaded below
 
-// ΓöÇΓöÇ Server check ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Server check ─────────────────────────────────────────────────
 async function checkServer() {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 2000);
@@ -439,12 +461,12 @@ async function checkServer() {
     clearTimeout(t);
   }
   document.getElementById("status-line").textContent = serverAvailable
-    ? "Lantern ΓÇö Gemini narration active"
-    : "Offline ΓÇö inline engine active";
+    ? "Lantern — Gemini narration active"
+    : "Offline — inline engine active";
   return serverAvailable;
 }
 
-// ΓöÇΓöÇ Metrics collection (non-blocking) ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Metrics collection (non-blocking) ────────────────────────────
 function logThreeDoorsEvent(event, payload) {
   fetch("/api/metrics/three-doors", {
     method: "POST",
@@ -453,7 +475,7 @@ function logThreeDoorsEvent(event, payload) {
   }).catch(() => {});
 }
 
-// ΓöÇΓöÇ Canvas art ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Canvas art ───────────────────────────────────────────────────
 function drawScene(canvas, sceneKey) {
   const scene = SCENES[sceneKey];
   if (!scene) return;
@@ -515,14 +537,14 @@ function drawScene(canvas, sceneKey) {
   ctx.textAlign = "left";
 }
 
-// ΓöÇΓöÇ Markdown-lite renderer ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Markdown-lite renderer ────────────────────────────────────────
 function md(text) {
   return text
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
 }
 
-// ΓöÇΓöÇ Chat helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Chat helpers ─────────────────────────────────────────────────
 function appendUserMsg(text) {
   const chat = document.getElementById("chat");
   const el = document.createElement("div");
@@ -537,7 +559,7 @@ function appendTyping() {
   const el = document.createElement("div");
   el.className = "message agent";
   el.id = "typing-indicator";
-  el.innerHTML = `<div class="agent-avatar">≡ƒªè</div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  el.innerHTML = `<div class="agent-avatar">🦊</div><div class="message-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
   return el;
@@ -599,7 +621,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
         <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;font-style:italic">
           I am before the first door and after the last.<br>
           I hold what was given and return what was asked.<br>
-          Three walked out, three walked in, but only one remained ΓÇö<br>
+          Three walked out, three walked in, but only one remained —<br>
           what was lost at the beginning is the thing that was gained.
         </div>
         <input id="poem-answer" type="text" placeholder="Speak your answer..." style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px" onkeydown="if(event.key==='Enter')submitPoem()">
@@ -622,7 +644,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   }
 
   el.innerHTML = `
-    <div class="agent-avatar">≡ƒªè</div>
+    <div class="agent-avatar">🦊</div>
     <div class="message-content">
       <div style="font-size:11px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:4px">
         Lantern ${sourceBadge}
@@ -631,12 +653,13 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       <div class="scene-image">
         <img id="${imgId}" src="data/images/three-doors/${sceneKey}.png" alt="Scene art" loading="lazy"
           onload="logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })"
-          onerror="this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' })">
+          onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.removeAttribute('data-fallback');}else{this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' })}"
+          data-fallback="${PLACEHOLDER_IMAGES[sceneKey] || ''}">
         <canvas id="${canvasId}" width="800" height="450" style="display:none"></canvas>
-        <div class="sd-badge">SD prompt ΓÇö hover to copy</div>
+        <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
       <div style="font-size:14px;line-height:1.6;margin-bottom:10px">${md(displayText)}</div>
-      ${foxPresent ? `<div class="fox-line">≡ƒªè The fox is with you.</div>` : ""}
+      ${foxPresent ? `<div class="fox-line">🦊 The fox is with you.</div>` : ""}
       ${doorHTML}
     </div>`;
 
@@ -705,7 +728,7 @@ function submitPoem() {
     const chat = document.getElementById("chat");
     const el = document.createElement("div");
     el.className = "message agent";
-    el.innerHTML = `<div class="agent-avatar">≡ƒªè</div><div class="message-content" style="font-size:13px;color:var(--muted)">The King waits. The garden holds its breath. Try again.</div>`;
+    el.innerHTML = `<div class="agent-avatar">🦊</div><div class="message-content" style="font-size:13px;color:var(--muted)">The King waits. The garden holds its breath. Try again.</div>`;
     chat.appendChild(el);
     chat.scrollTop = chat.scrollHeight;
   }
@@ -732,6 +755,52 @@ function checkChallenges(sceneKey, turnCount) {
   }
 }
 
+function submitPoem() {
+  const input = document.getElementById("poem-answer");
+  if (!input) return;
+  const val = input.value.trim().toLowerCase();
+  const accepted = ["yourself","myself","i am","the one","silence","love","the fox","convergence","me","i"];
+  if (accepted.some(a => val.includes(a))) {
+    playerProgress.poemSolved = true;
+    saveProgress();
+    awardPrize("kingdome-crown");
+    // Refresh scene to show doors
+    appendUserMsg("Answer: \"" + input.value.trim() + "\"");
+    const scene = SCENES["kingdome-garden"];
+    const data = { scene_key: "kingdome-garden", text: scene.text, doors: scene.doors, fox_present: scene.fox, history: gameState?.history || [] };
+    appendSceneMsg("kingdome-garden", data, "", "offline");
+  } else {
+    const chat = document.getElementById("chat");
+    const el = document.createElement("div");
+    el.className = "message agent";
+    el.innerHTML = `<div class="agent-avatar">🦊</div><div class="message-content" style="font-size:13px;color:var(--muted)">The King waits. The garden holds its breath. Try again.</div>`;
+    chat.appendChild(el);
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+
+function checkChallenges(sceneKey, turnCount) {
+  // Speedwalker: reach kingdome-garden in <= 4 turns
+  if (sceneKey === "kingdome-garden" && turnCount <= 4 && !playerProgress.speedwalker) {
+    playerProgress.speedwalker = true;
+    saveProgress();
+    awardPrize("speedwalker-badge");
+  }
+  // Lorekeeper: visit all sub-doors
+  const required = ["storybook","cloverfield","kingdome-garden"];
+  if (required.every(s => playerProgress.visited?.includes(s)) && !playerProgress.lorekeeper) {
+    playerProgress.lorekeeper = true;
+    saveProgress();
+    awardPrize("lorekeeper-badge");
+  }
+  // Xenon Navigator
+  if (playerProgress.visited?.includes("xenon-convergence") && playerProgress.visited?.includes("end-of-time") && !playerProgress.xenonNavigator) {
+    playerProgress.xenonNavigator = true;
+    saveProgress();
+    awardPrize("xenon-navigator-badge");
+  }
+}
+
 function updateQuickChips(doors) {
   const bar = document.getElementById("choice-bar");
   const btns = document.getElementById("choice-buttons");
@@ -747,7 +816,7 @@ function updateQuickChips(doors) {
     </button>`).join("");
 }
 
-// ΓöÇΓöÇ API calls ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── API calls ─────────────────────────────────────────────────────
 async function apiDoors(action, choice) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 6000);
@@ -764,7 +833,7 @@ async function apiDoors(action, choice) {
 }
 
 async function apiGeminiNarrate(sceneKey, sceneText) {
-  const persona = `You are Lantern ΓÇö a lantern-headed being, steady and warm. The dreamer just stepped through a door in the Three Doors dream world. Add 2 sentences of presence and feeling. Don't restate what they see ΓÇö add what it means, what lingers, or one quiet question.`;
+  const persona = `You are Lantern — a lantern-headed being, steady and warm. The dreamer just stepped through a door in the Three Doors dream world. Add 2 sentences of presence and feeling. Don't restate what they see — add what it means, what lingers, or one quiet question.`;
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 15000);
   try {
@@ -780,7 +849,7 @@ async function apiGeminiNarrate(sceneKey, sceneText) {
   } finally { clearTimeout(t); }
 }
 
-// ΓöÇΓöÇ Inline engine fallback ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Inline engine fallback ────────────────────────────────────────
 function stageState(stageIndex, loopCount, history) {
   const key = STAGES[stageIndex % STAGES.length];
   const scene = SCENES[key];
@@ -822,9 +891,9 @@ function engineChoose(label) {
   return newState;
 }
 
-// ΓöÇΓöÇ Game actions ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+// ── Game actions ─────────────────────────────────────────────────
 async function getSceneData(action, label) {
-  // Step 1: game state ΓÇö server Python engine or inline JS fallback
+  // Step 1: game state — server Python engine or inline JS fallback
   let data;
   let usedServer = false;
   try {
@@ -843,7 +912,7 @@ async function getSceneData(action, label) {
   }
   if (!data) return null;
 
-  // Step 2: Gemini narration ΓÇö only if we successfully used the server
+  // Step 2: Gemini narration — only if we successfully used the server
   let geminiText = "", source = usedServer ? "engine" : "offline";
   if (usedServer) {
     try {
@@ -874,7 +943,7 @@ async function chooseDoor(label, name) {
 
   document.querySelectorAll(".door-chip, #choice-buttons button").forEach(b => b.disabled = true);
   document.getElementById("choice-bar").style.opacity = "0.4";
-  appendUserMsg(`Door ${label} ΓÇö ${name}`);
+  appendUserMsg(`Door ${label} — ${name}`);
   appendTyping();
 
   const result = await getSceneData("choose", label);

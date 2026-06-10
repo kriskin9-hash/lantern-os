@@ -6,3 +6,5 @@
 {"timestamp":"2026-06-10T06:29:54.333Z","event":"image_load","payload":{"sceneKey":"xenon-convergence","source":"image"}}
 {"timestamp":"2026-06-10T06:29:56.444Z","event":"door_choice","payload":{"label":"A","name":"The Gallery of Walked Doors","sceneKey":"sigil-city"}}
 {"timestamp":"2026-06-10T06:29:58.819Z","event":"door_choice","payload":{"label":"A","name":"The Garden Gate","sceneKey":"fog-door-return"}}
+{"timestamp":"2026-06-10T07:25:24.754Z","event":"door_choice","payload":{"label":"A","name":"The Throne Door","sceneKey":"little-crown"}}
+{"timestamp":"2026-06-10T07:25:25.401Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"image"}}
