@@ -96,38 +96,58 @@ function renderMarkdownDocument(markdown, sourcePath) {
   if (inCode) body.push("</code></pre>");
 
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(title)} - Lantern OS</title>
+  <title>${escapeHtml(title)} — Lantern OS</title>
+  <link rel="stylesheet" href="/css/site.css">
   <style>
-    :root { color-scheme: light; --ink:#11191f; --muted:#596874; --paper:#eef4ef; --line:#bdc9c9; --arc:#08756f; --blue:#1e5f89; }
-    * { box-sizing: border-box; }
-    body { margin:0; color:var(--ink); background:var(--paper); font-family:"Segoe UI", Arial, sans-serif; }
-    main { width:min(980px, calc(100% - 28px)); margin:0 auto; padding:24px 0 48px; }
-    header { display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:22px; }
-    .source { color:var(--muted); font-size:0.86rem; overflow-wrap:anywhere; }
-    a { color:var(--blue); font-weight:800; }
-    .back { border:1px solid var(--line); padding:10px 12px; background:white; text-decoration:none; white-space:nowrap; }
-    h1 { font-size:2.1rem; line-height:1.05; margin:0 0 10px; letter-spacing:0; }
-    h2 { margin-top:28px; border-top:1px solid var(--line); padding-top:18px; }
-    p, li { line-height:1.58; }
-    code { background:white; border:1px solid var(--line); padding:1px 5px; }
-    pre { background:#11191f; color:white; overflow:auto; padding:14px; }
-    table { width:100%; border-collapse:collapse; background:white; margin:18px 0; }
-    th, td { border:1px solid var(--line); padding:9px; vertical-align:top; }
-    th { text-align:left; background:#f7faf8; color:var(--muted); text-transform:uppercase; font-size:0.78rem; }
+    .md-page { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+    .md-page h1 { font-size: 2rem; font-weight: 800; margin: 0 0 12px; line-height: 1.15; }
+    .md-page h2 { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 18px; }
+    .md-page p, .md-page li { line-height: 1.6; }
+    .md-page code { background: var(--surface2); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+    .md-page pre { background: var(--surface2); overflow: auto; padding: 14px; border-radius: 8px; border: 1px solid var(--border); }
+    .md-page pre code { background: none; border: none; padding: 0; }
+    .md-page table { width: 100%; border-collapse: collapse; background: var(--surface); margin: 18px 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .md-page th, .md-page td { border: 1px solid var(--border); padding: 9px; vertical-align: top; }
+    .md-page th { text-align: left; background: var(--surface2); color: var(--muted); text-transform: uppercase; font-size: 0.78rem; }
+    .md-page a { color: var(--accent); font-weight: 600; }
+    .md-source { color: var(--muted); font-size: 0.86rem; margin-bottom: 24px; }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <div><strong>Lantern Reader</strong><div class="source">${escapeHtml(sourcePath)}</div></div>
-      <a class="back" href="/">Dashboard</a>
-    </header>
-    ${body.join("\n")}
-  </main>
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/dream-chat.html">Journal</a>
+    <a href="/three-doors-game.html">Explore</a>
+    <a href="/flourishing">Dashboard</a>
+    <a href="/knowledgecenter.html">Help</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
+  </div>
+</nav>
+
+<div class="md-page">
+  <div class="md-source">${escapeHtml(sourcePath)}</div>
+  ${body.join("\n")}
+</div>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
+  </div>
+</footer>
+
+<script src="/js/theme-toggle.js"></script>
 </body>
 </html>`;
 }
