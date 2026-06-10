@@ -141,6 +141,9 @@ capture context
 | Feature | Status | Notes |
 |---|---|---|
 | StatusCube 4D navigation matrix | Implemented | `src/convergence_io/status_cube.py` — location/lane/boundary/timeline axes, Bayesian beliefs, future projection; convergence phases 6-8 |
+| Desktop Cube Network 1.0 | **Active** | Private cube (`cube:alex.private`) + Shared World Cube (`cube:shared.world`) + ally nodes; `lib/cube-store.js`, `routes/cubes.js` |
+| Consent Gate & Claim Packets | **Active** | `lib/consent-gate.js`, `routes/claims.js` — Ed25519 signing, validation, audit trail |
+| Cube event deltas | **Active** | Every dream-chat message and door choice writes `lantern.cube_delta.v1` to private cube |
 | Per-player game StatusCube (CSF v0.7) | Implemented | `src/csf/status_cube.py` — one CSF file per player; observations consolidate into crystallized symbols each loop |
 | Personal cubes (ImagniVerse + real-world) | Implemented | `alex-imagniverse.csf` + `alex-realworld.csf`; local-only, gitignored (split-data-model) |
 | `lantern-csf-dream` text model | Implemented | QLoRA fine-tuned, deployed in Ollama; serves Dream Journal + Three Doors narration locally |
