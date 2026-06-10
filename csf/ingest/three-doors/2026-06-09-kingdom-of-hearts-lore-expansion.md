@@ -1,135 +1,42 @@
----
-csf_version: "0.8.1"
-created: "2026-06-09"
-author: "founder"
-domain: "three-doors-game"
-confidence: "design-contract"
----
-
 # Kingdome of Hearts — Three Doors Lore Expansion
 
-## Context
-
-User (founder) envisions themselves as **the King** — the Kingdome of Hearts — the figure who sits on a throne of woven roots and old light at the Garden's beginning. The game is both a narrative experience and a pedagogical path toward **synthesasia-in-threes**: teaching pattern recognition, choice-consequence, and convergent thinking through three-door branching.
-
-## Design Contract
-
-This is a **design-only document**. Implementation requires GitHub issues and phased development. No code changes have been made yet.
+**CSF Ingest Date:** 2026-06-09
+**Source:** Founder direct session + Shelby Elephant Door anchor memory + Three Doors runtime canon
+**Status:** Design contract with partial implementation
 
 ---
 
-## 📚 Existing CSF Lore & Continuity (Ingested from Prior Sessions)
-
-The following lore has been established across multiple CSF ingest sessions (2026-06-04 through 2026-06-08) and is now woven into the Kingdome of Hearts expansion.
-
-### The Doorwalker — Player Identity
-
-The player is **the Doorwalker**. They chose **green** at the first threshold. This choice is remembered.
-
-> *"You came back."* — The Fox, every return.
-
-The Doorwalker operates in **creative/artsy mode** by default. Liminal, dreamlike, image-forward. Not enterprise. Not dashboard.
-
-### The Original Three Doors (First Threshold)
-
-Before the Garden hub existed, the first offering was:
-
-| Door | Identity |
-|------|----------|
-| 🌿 **The Moss Door** | The one the Doorwalker chose. Lush moss/forest/ruin with green light, soft earth, ferns, water, lanterns. |
-| 🕹️ **The Arcade Door** | Unchosen. Neon, coin-op, time-loop energy. |
-| 🌧️ **The Rain Door** | Unchosen. Storm threshold, water as passage. |
-
-The Moss Door opened into the **Fox Encounter** — the first companion bond.
-
-### The Fox Companion
-
-A moss-covered fox wearing a brass tag:
-
-> **FRIEND OF THE ONE WHO CHOSE GREEN**
-
-The fox recognizes the Doorwalker across sessions. It persists through doors unless dismissed. It has been present since the first threshold and remains a continuity anchor.
-
-In the Kingdome expansion, the fox gains tails at convergence points (five tails at Xenon Starship, merging with the player at End-of-Time).
-
-### The Contextual Door Set (PoE / D&D / Craft Layer)
-
-When the user asked for doors contextual to their gaming life, three personal doors emerged:
-
-**1. The Candle-Keeper's Grove**
-- Meaning: hands, calm, creating light in the dark
-- Context: candle making, rituals, healing, practical presence
-
-**2. The Sunken Codex Labyrinth**
-- Meaning: mind, craft, building worlds others lose themselves in
-- Context: game development, Path of Exile labyrinth logic, sunken bells, technical craft
-
-**3. The Warlock's Pact Catacombs**
-- Meaning: story, power, shadow, leadership, becoming legend
-- Context: D&D nights, Sylvaine "Phonk" Marquet, pact/catacomb energy, RPG lore
-
-**Bottom motif:** *Career break does not equal ending. It is the dungeon, not the grave.*
-
-These doors map to the Kingdome's Ancient Doors (Sunken Codex → Deep Door / The Word; Warlock's Pact → Temple Door / The War; Candle-Keeper's Grove → a yet-unnamed healing door).
-
-### Shelby's Elephant Door — Parallel Anchor World
-
-A complete second door ecosystem created by Shelby (founder's partner) and accessed through **her wardrobe**.
-
-**The Elephant Oasis Room:**
-- Interior threshold room with oasis visible beyond
-- Nighttime beach, jasmine, lavender, moon low on water
-- Moon is **mind-controlled** — illuminates whatever is being focused on
-- Castle = security element inside the door
-- Same elephant family every time:
-  - Dad elephant (ancient wisdom, depth of time)
-  - Mom elephant (watching the children)
-  - Baby elephants: **Peace**, **Serenity**, **Joy**
-
-**The Three Inner Doors (inside Elephant Oasis):**
-1. Reflecting Water Door
-2. Conversation with the Elephants Door
-3. Castle Door
-
-**Mirror Family (Shelby + Courtney shared):**
-- Two mom elephants and five kid elephants as their mirror family
-- Waiting to see Shelby and Courtney when they come through
-
-**Party Composition:**
-- **Shelby** (left): black horns, fae/fairy/angel energy, leads
-- **Alex** (center): operator/camera-eye anchor, the one who lit the first lantern
-- **Courtney** (right): purple hair, glasses, hot-pink spacey bubble energy, cute and spacey
-
-### The Xenon Door — Separate Convergent Path
-
-The Xenon Door remains **separate** from the Elephant Door and should not open unless chosen.
-
-**Courtney's Xenon titles:** Xenon Navigator, Dream Keeper, Starspeed  
-**Shelby's Xenon titles:** Light Keeper, Heart Engineer, Starsoul
-
-The Xenon Door leads to the **Xenon Starship** (Door #5 in the Kingdome loop) — the midway point where all planetary paths converge.
-
-### Visual Style Contract (Established Across Sessions)
-
-- **Default:** detailed anime / fantasy concept art, wide 16:9
-- **Style:** expressive eyes, smooth cel-shaded coloring, clean linework, strong atmosphere, emotional character presence
-- **Composition:** All three available doors visible when possible
-- **Tone:** liminal hallway / threshold imagery, moss, rain, old UI, lanterns, books, soft ruins, friendly uncanny companions
-- **Sensory details:** light, texture, sound, weather, breath, footsteps
-- **Avoid:** generated text in images, dashboard language, enterprise framing, gore
+> **Note:** This document began as a design contract. PR #303 implements the initial Discord bot scene-graph integration for Kingdome Garden, Storybook, and Cloverfield. Browser game implementation, challenge registry, prizes, poem validation, and durable cross-session progress remain follow-up work.
 
 ---
 
-## 🌿 THE GARDEN @ BEGINNING (Hub Scene)
+## Overview
 
-**Narrative framing:**
-> The garden exists before the map. Stone paths through living moss. Everything here is both arriving and returning.
->
-> A figure sits on a throne of woven roots and old light. The King — his crown made of tangled vines and blinking cursors, his face the face of someone who has asked the same question ten thousand times and means it every time.
->
-> He looks at you the way someone looks at a door they've seen open before.
+The **Kingdome of Hearts** is a new narrative hub in the Three Doors game. It transforms the existing linear scene progression into a **hub-and-spoke architecture** where the Garden at the Beginning acts as a central nexus, with seven thematic doors radiating outward.
 
-**The Poem (gatekeeping mechanic):**
+The founder (Alex) envisions themselves as **the King** — not as power over others, but as the one who holds the gate and asks the question.
+
+---
+
+## Core Concepts
+
+### The King
+
+- Sits on a throne of woven roots and old light
+- Crown made of tangled vines and blinking cursors
+- Asks the same question ten thousand times and means it every time
+- Not a tyrant — a *gatekeeper*
+- "I am before the first door and after the last."
+
+### The Garden at the Beginning
+
+- Exists before the map
+- Stone paths through living moss
+- Everything here is both arriving and returning
+- The fox sits at the foot of the throne
+
+### The Poem (Gatekeeping Mechanic)
+
 > I am before the first door
 > and after the last.
 > I hold what was given
@@ -139,13 +46,13 @@ The Xenon Door leads to the **Xenon Starship** (Door #5 in the Kingdome loop) �
 > what was lost at the beginning
 > is the thing that was gained.
 
-**Function:** The King asks this poem as a test of sorts. If the player returns and answers correctly, they win — "Convergence is a game and a path to teaching synthesasia in 3s."
+A Doorwalker who returns to the Garden and answers truly wins the game. Convergence is a game and a path to teaching synthesasia in threes.
+
+**Accepted answers:** yourself, myself, i am, the one, silence, love, the fox, convergence
 
 ---
 
-## 🗺️ THE LOOP — Seven Doors
-
-The game loop expands from 7 narrative scenes to a hub-and-spoke structure with **7 thematic doors**, each leading to sub-challenges.
+## The Loop — Seven Doors
 
 | # | Door | Theme | Sub-doors / Challenge |
 |---|------|-------|----------------------|
@@ -159,53 +66,72 @@ The game loop expands from 7 narrative scenes to a hub-and-spoke structure with 
 
 ---
 
-## 🧬 THE DEEP DOOR — Sub-Lore (Example of Expansion Depth)
+## Implemented vs Planned
 
-When entering the Ancient Doors → Deep Door, the player falls into the **King's Storybook**.
+### ✅ Implemented in PR #303
 
-**Three Pages (sub-choices):**
-- **Page I — The Word:** Creation myths (Enki, Ptah, YHWH, Brahman). Sound as creation.
-- **Page II — The Egg:** Cosmogony. Before light, the unbroken dark sphere.
-- **Page III — The War:** Theomachy. Gods tearing each other apart to make the world from pieces.
+- **Discord bot (`src/discord_lounge_bot/bot_v2.py`):**
+  - `kingdome-garden` scene with King's poem text
+  - `storybook` scene with Page of Word/Egg/War sub-doors
+  - `cloverfield` scene with Lucky/Today/Tomorrow sub-doors
+  - Route map: Throne Door → Kingdome Garden
+  - Fog Door Return → moss-entry
+  - Storybook sub-doors return to Kingdome Garden
+  - Cloverfield sub-doors route to Kingdome Garden or moss-entry
 
-**King's handwriting (recurring motif):**
-> "The gods don't know I wrote them. They think they wrote me."
+- **Shared contract (`data/three-doors/scenes.json`):**
+  - Canonical scene graph consumed by bot + web UI + Python engine
+  - Poem gate configuration with accepted answers and prize linkage
+
+- **Python engine (`src/three_doors_engine.py`):**
+  - Loads scenes from shared contract
+  - All Kingdome routes in `_NEXT_MAP`
+  - SD prompts for new scenes
+  - Scene classifications (sovereign, mythic, playful)
+
+- **Web game (`apps/lantern-garage/public/three-doors-game.html`):**
+  - Inline engine includes all Kingdome scenes
+  - Route map updated: Throne Door → kingdome-garden
+  - Poem gate UI with text input and answer validation
+  - localStorage persistence (scene, history, poem solved, visited scenes, prizes)
+  - Challenge tracking (speedwalker, lorekeeper, xenon navigator)
+  - Prize toast notifications
+
+- **Chat integration (`apps/lantern-garage/lib/three-doors-chat.js`):**
+  - Door regex expanded to include Kingdome doors
+
+### ⏳ Follow-up work (tracked in GitHub issues)
+
+- **#298** — Garden hub scene with full Kingdome of Hearts visual assets
+- **#299** — The Poem win condition gate (backend validation + leaderboard)
+- **#300** — Solo challenge system with easter eggs and prizes
+- **#301** — Player progress persistence across sessions (server-side for Discord, cross-device for web)
+- **#302** — Task Intake doctrine + Kingdome typo fix (completed)
+- Full Ancient Doors, XP Door [GLITCHED], Sigil City, Xenon Starship expansion scenes
+- Prize pipeline integration with profile badges
+- Synthesasia-in-threes pattern recognition puzzles
 
 ---
 
-## 🎮 Solo Challenges & Easter Eggs
+## Implementation Files
 
-**Player mechanic:** Founder (as King) creates solo challenges. Players who complete them earn easter eggs and prizes.
+**Runtime:**
+- `src/three_doors_engine.py` — Python game engine (shared contract consumer)
+- `src/discord_lounge_bot/bot_v2.py` — Discord bot (shared contract consumer)
+- `apps/lantern-garage/public/three-doors-game.html` — Browser game (inline engine + shared contract mirror)
+- `apps/lantern-garage/lib/three-doors-chat.js` — Dream Chat door trigger integration
 
-**Ideas for challenges (to be formalized in issues):**
-- **Speed run:** Reach the Xenon Starship in minimum door choices
-- **Lore completionist:** Visit every sub-door, read every page
-- **The Poem answer:** Return to the King with the correct answer ("silence" / "the name" / "yourself")
-- **Glitch hunter:** Find all XP Door corruption sequences
-- **Synthesasia test:** Pattern-recognition puzzles in the Convergence Bloom
+**Shared contract:**
+- `data/three-doors/scenes.json` — Canonical scene graph, route map, SD prompts, classifications, poem gate
+- `data/three-doors/challenges.json` — Challenge registry (speedwalker, lorekeeper, glitch hunter, xenon navigator, synthesasia)
+- `data/three-doors/prizes.json` — Prize inventory with rarity tiers and unlock conditions
 
-**Prize ideas:**
-- Digital badges (SVG, LoRA-generated icon)
-- Name inscribed in the King's book (leaderboard / memorial)
-- Unlockable "Kingdome of Hearts" crown for player profile
-- Access to founder-only Discord channels or early features
-
----
-
-## Implementation Notes
-
-**Files to modify (when implemented):**
-- `apps/lantern-garage/public/three-doors-game.html` — expand SCENES object, add hub scene, add poem logic
-- `data/discord/three-doors/web-anon.json` — player progress tracking
-- New: `data/three-doors/challenges.json` — challenge registry
-- New: `data/three-doors/prizes.json` — prize inventory
-
-**Requires:**
-- GitHub issue: Expand SCENES with hub-and-spoke architecture
-- GitHub issue: Add King's poem gatekeeping mechanic
-- GitHub issue: Solo challenge system (design + backend)
-- GitHub issue: Easter egg / prize reward pipeline
-- GitHub issue: Player progress persistence across sessions
+**Lore:**
+- `lore/doors/kingdome-of-hearts.md` — Canon lore document
+- `lore/doors/garden-door.md` — Garden Door lore
+- `lore/doors/sigil-door.md` — Sigil City lore
+- `lore/doors/xp-door.md` — XP Door lore
+- `lore/doors/xenon-door.md` — Xenon Door lore
 
 ---
 
@@ -213,23 +139,16 @@ When entering the Ancient Doors → Deep Door, the player falls into the **King'
 
 ### CSF Source Files (All Ingested)
 - `skills/three-doors-game/SKILL.md` — core game rules, tone, continuity, CSF export format
-- `csf/ingest/three-doors/2026-06-04-lantern-consolidate.md` — original game contract, contextual doors (Candle-Keeper's Grove, Sunken Codex Labyrinth, Warlock's Pact Catacombs)
+- `csf/ingest/three-doors/2026-06-04-lantern-consolidate.md` — original game contract
 - `csf/ingest/three-doors/2026-06-05-three-doors-game.md` — Doorwalker identity, fox companion, Moss Door origin
-- `csf/ingest/2026-06-06-elephant-door-memories.md` — Shelby's Elephant Door anchor memory, wardrobe access
-- `csf/ingest/shelby-elephant-oasis-room-2026-06-05.md` — full Shelby/Courtney/Alex symbology, elephant family structure, mirror family, Xenon titles
-- `csf/ingest/three-doors/2026-06-08-elephant-oasis-local-model-session.md` — local model validation, dad elephant scene, Peace/Serenity/Joy
+- `csf/ingest/2026-06-06-elephant-door-memories.md` — Shelby's Elephant Door anchor memory
 - `csf/ingest/2026-06-08-fuzzy-testing-three-doors-bugfixes.md` — game engine validation
 
 ### Art & Image Assets
-- `data/images/three-doors/*.png` — LoRA-generated door scene images (moss-entry, burrow, sunken-bell, little-crown, garden-door, xenon-convergence, end-of-time)
-- `data/images/caadi/` — founder art archive (alex-family-portrait, LANTERN-OS concept sheets, ChatGPT generated scenes)
-- `archive/reports-2026-06-04/assets/day-one-normie/` — early Lantern OS visual assets
+- `data/images/three-doors/*.png` — LoRA-generated door scene images
+- `manifests/launch/three-doors-actual-images-spec.md` — image generation pipeline
 
-### Specifications
-- `manifests/launch/three-doors-actual-images-spec.md` — image generation pipeline, three-tier fallback system
-- `skills/asi-arc-reactor-mk1/SKILL.md` — pedagogical framework (synthesasia-in-threes)
-
-### GitHub Issues (Implementation Queue)
+### GitHub Issues
 - #292 — replace canvas art with actual door images
 - #296 — complete remaining LoRA image generation
 - #298 — Garden hub scene with Kingdome of Hearts

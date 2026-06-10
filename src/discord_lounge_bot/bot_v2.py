@@ -345,6 +345,23 @@ _THREE_DOORS_NEXT_MAP = {
 }
 
 
+# ── Mirror canonical contract (prevents drift with web UI / engine) ──
+def _load_three_doors_contract() -> None:
+    global _THREE_DOORS_SCENES, _THREE_DOORS_NEXT_MAP
+    path = REPO_ROOT / "data" / "three-doors" / "scenes.json"
+    try:
+        data = json.loads(path.read_text("utf-8"))
+        if "scenes" in data:
+            _THREE_DOORS_SCENES = data["scenes"]
+        if "next_map" in data:
+            _THREE_DOORS_NEXT_MAP = data["next_map"]
+    except Exception:
+        pass
+
+
+_load_three_doors_contract()
+
+
 def _advance_three_doors(state: dict, door_name: str) -> dict | None:
     """Return a new state after choosing a door, or None if choice is invalid."""
     door_name_lower = door_name.lower().strip()

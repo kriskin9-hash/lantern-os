@@ -19,7 +19,7 @@ function isDoorChoice(text) {
   if (/^[abc]$/.test(lower)) return lower;
   const m = lower.match(/(?:door|choose|pick)\s+([abc])/);
   if (m) return m[1];
-  const nameMatch = lower.match(/(?:the\s+)?(burrow|sunken bell|little crown|root|ember|stream|deep|echo|surface|throne|hollow|star)\s+door/);
+  const nameMatch = lower.match(/(?:the\s+)?(burrow|sunken bell|little crown|root|ember|stream|deep|echo|surface|throne|hollow|star|storybook|cloverfield|fog|lucky|today|tomorrow)\s+door/);
   if (nameMatch) return nameMatch[1];
   return null;
 }

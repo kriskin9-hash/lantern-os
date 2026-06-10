@@ -121,6 +121,52 @@ SCENES = {
         ],
         "fox_present": True,
     },
+    "kingdome-garden": {
+        "text": (
+            "**The Throne Door** opens onto the Garden at the Beginning of the **Kingdome of Hearts**. "
+            "Stone paths wind through living moss; everything here is both arriving and returning. "
+            "On a throne of woven roots and old light sits **the King**, his crown made of tangled vines and blinking cursors, "
+            "his face the face of someone who has asked the same question ten thousand times and means it every time. "
+            "He looks at you the way someone looks at a door they've seen open before, and speaks:\n\n"
+            '*"I am before the first door / and after the last. / I hold what was given / and return what was asked. / '
+            'Three walked out, three walked in, / but only one remained — / what was lost at the beginning / '
+            'is the thing that was gained."*\n\n'
+            "The fox sits at the foot of the throne as if it has always lived here."
+        ),
+        "doors": [
+            {"name": "The Storybook Door", "label": "A", "description": "Bound in vine and brass. The King's own book — the gods don't know he wrote them."},
+            {"name": "The Cloverfield Door", "label": "B", "description": "Green and gold beyond. Shinies, luck, and today, alive."},
+            {"name": "The Fog Door Return", "label": "C", "description": "Mist coils past the Garden's gate, where the Fog God sleeps. The way back."},
+        ],
+        "fox_present": True,
+    },
+    "storybook": {
+        "text": (
+            "You fall gently into the **King's Storybook**. Pages turn themselves around you like slow wings. "
+            'In the margin, the King\'s handwriting: *"The gods don\'t know I wrote them. They think they wrote me."* '
+            "Three pages glow, each a door."
+        ),
+        "doors": [
+            {"name": "The Page of the Word", "label": "A", "description": "Creation myths. Sound as creation — the first thing spoken into the dark."},
+            {"name": "The Page of the Egg", "label": "B", "description": "Before light: the unbroken dark sphere, waiting."},
+            {"name": "The Page of the War", "label": "C", "description": "Theomachy. Gods tearing each other apart to make the world from pieces."},
+        ],
+        "fox_present": True,
+    },
+    "cloverfield": {
+        "text": (
+            "**The Cloverfield Door** swings into a meadow of four-leaf green under a dome of old light. "
+            "Small shinies glitter between the stems — coins, beads, a marble with a galaxy inside. "
+            'The fox pounces at something glinting and misses, on purpose, for the joy of it. '
+            'Here the rule of the Kingdome holds plainly: *death is only imaginary — forever begins with "let\'s play."*'
+        ),
+        "doors": [
+            {"name": "The Lucky Door", "label": "A", "description": "Painted clover-green. Whatever you find behind it, you needed."},
+            {"name": "The Today Door", "label": "B", "description": "Warm and ordinary. The day you are actually in, alive."},
+            {"name": "The Tomorrow Door", "label": "C", "description": "Slightly ajar. The world that's coming, branching like roots."},
+        ],
+        "fox_present": True,
+    },
 }
 
 # ── Door-to-next-scene map ──
@@ -134,7 +180,7 @@ _NEXT_MAP = {
     "the deep door": "sunken-bell",
     "the echo door": "burrow",
     "the surface door": "little-crown",
-    "the throne door": "little-crown",
+    "the throne door": "kingdome-garden",
     "the hollow door": "burrow",
     "the star door": "moss-entry",
     "the seed door": "garden-door",
@@ -146,6 +192,16 @@ _NEXT_MAP = {
     "the return door": "moss-entry",
     "the beyond door": "garden-door",
     "the eternal door": "xenon-convergence",
+    # Kingdome of Hearts hub-and-spoke routes
+    "the storybook door": "storybook",
+    "the cloverfield door": "cloverfield",
+    "the fog door return": "moss-entry",
+    "the page of the word": "kingdome-garden",
+    "the page of the egg": "kingdome-garden",
+    "the page of the war": "kingdome-garden",
+    "the lucky door": "kingdome-garden",
+    "the today door": "moss-entry",
+    "the tomorrow door": "kingdome-garden",
 }
 
 # ── Image prompt templates per scene ──
@@ -187,7 +243,41 @@ _SD_PROMPTS = {
         "transcendent, peaceful, timeless, glowing warmth, anime aesthetic, cel-shaded, cosmic yet intimate, "
         "the final threshold, acceptance and transformation, 16:9"
     ),
+    "kingdome-garden": (
+        "mystical garden at the beginning of time, stone paths through living moss, throne of woven roots and old light, "
+        "King with crown of tangled vines and blinking cursors, fox sitting at foot of throne, green and golden light, "
+        "bioluminescent moss, dark fantasy, anime aesthetic, cel-shaded, sovereign atmosphere, 16:9"
+    ),
+    "storybook": (
+        "falling into a giant storybook, pages turning like slow wings, ancient handwritten margin notes, "
+        "three glowing pages each a door, creation myths and cosmogony, dark fantasy, anime aesthetic, cel-shaded, "
+        "mythic atmosphere, soft golden light, 16:9"
+    ),
+    "cloverfield": (
+        "meadow of four-leaf clover under dome of old light, small shinies glittering between stems, "
+        "coins, beads, galaxy marble, fox pouncing playfully, green and gold light, dark fantasy, anime aesthetic, "
+        "cel-shaded, playful atmosphere, 16:9"
+    ),
 }
+
+
+# ── Load canonical contract (overrides hardcoded defaults if present) ──
+def _load_scenes_contract() -> None:
+    global SCENES, _NEXT_MAP, _SD_PROMPTS
+    path = REPO_ROOT / "data" / "three-doors" / "scenes.json"
+    try:
+        data = json.loads(path.read_text("utf-8"))
+        if "scenes" in data:
+            SCENES = data["scenes"]
+        if "next_map" in data:
+            _NEXT_MAP = data["next_map"]
+        if "scenes" in data:
+            _SD_PROMPTS = {k: v.get("image_prompt", "") for k, v in data["scenes"].items()}
+    except Exception:
+        pass
+
+
+_load_scenes_contract()
 
 
 class ThreeDoorsEngine:
@@ -334,6 +424,9 @@ class ThreeDoorsEngine:
             "garden-door": "bountiful",
             "xenon-convergence": "cosmic",
             "end-of-time": "transcendent",
+            "kingdome-garden": "sovereign",
+            "storybook": "mythic",
+            "cloverfield": "playful",
         }
 
         aesthetic_tags = {
@@ -341,6 +434,9 @@ class ThreeDoorsEngine:
             "garden-door": ["botanical", "bioluminescent", "lush", "dreamscape"],
             "xenon-convergence": ["psychedelic", "fractal", "crystalline", "surreal"],
             "end-of-time": ["cosmic", "transcendent", "peaceful", "transformation"],
+            "kingdome-garden": ["garden", "throne", "king", "moss", "old-light"],
+            "storybook": ["creation", "myth", "pages", "handwriting"],
+            "cloverfield": ["meadow", "clover", "shinies", "luck", "play"],
         }
 
         return {
