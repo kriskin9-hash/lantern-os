@@ -19,6 +19,7 @@ from .aapf import ActionRecord, ProvenanceLedger
 from .nap import NegativeAuthorityProfile, AuthorityGate
 from .dcf import DataClassification, ClassificationLabel, DREAM_LABELS
 from .engine import ConvergenceIO, RouteResult
+from .status_cube import StatusCube, StatusArtifact, StatusCoordinate, BayesianBelief
 
 __all__ = [
     "ConvergenceIO", "RouteResult",
@@ -27,6 +28,7 @@ __all__ = [
     "ActionRecord", "ProvenanceLedger",
     "NegativeAuthorityProfile", "AuthorityGate",
     "DataClassification", "ClassificationLabel", "DREAM_LABELS",
+    "StatusCube", "StatusArtifact", "StatusCoordinate", "BayesianBelief",
 ]
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"

@@ -118,6 +118,12 @@ manifests/evidence/convergence-*.json
 convergence-output.json
 data/pcsf/convergance-receipts.jsonl
 
+# ─── Large model weights (never commit binary model files to git) ───────
+models/csf-image/merged/
+models/**/*.safetensors
+models/**/*.bin
+models/**/*.pt
+
 # ─── Machine Learning Models & Training (2026-06-08) ───────────────────
 # Generated door images from LoRA training
 data/images/generated-doors/
