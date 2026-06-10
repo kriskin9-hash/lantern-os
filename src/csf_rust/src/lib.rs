@@ -13,6 +13,7 @@
 //! let bytes = archive.write()?;
 //! ```
 
+pub mod claims_packet;
 pub mod compress;
 pub mod convergence;
 pub mod dictionary;
@@ -60,7 +61,7 @@ pub use header::{ArchiveHeader, CsfFlags};
 pub use search::{SearchHit, SearchIndex, SearchQuery};
 pub use security::SecurityPolicy;
 pub use sparse::{CsrMatrix, CsrMetadata};
-pub use streaming::{ArchiveReader, Footer, SegmentReader, StreamingCompressor, segment_flags};
+pub use streaming::{segment_flags, ArchiveReader, Footer, SegmentReader, StreamingCompressor};
 pub use wavefront::Wavefront;
 
 /// Convenience archive builder.
@@ -107,8 +108,13 @@ mod tests {
     fn write_archive_to_tmp(archive: &Archive) -> tempfile::NamedTempFile {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         let mut file = std::fs::OpenOptions::new()
-            .read(true).write(true).open(tmp.path()).unwrap();
-        archive.write(&mut file, &SecurityPolicy::default()).unwrap();
+            .read(true)
+            .write(true)
+            .open(tmp.path())
+            .unwrap();
+        archive
+            .write(&mut file, &SecurityPolicy::default())
+            .unwrap();
         drop(file);
         tmp
     }
@@ -196,7 +202,10 @@ mod tests {
         SegmentReader::validate(tmp.path()).unwrap();
 
         let restored = ArchiveReader::decompress_to_vec(tmp.path()).unwrap();
-        assert_eq!(restored, expected, "multi-segment must concatenate in order");
+        assert_eq!(
+            restored, expected,
+            "multi-segment must concatenate in order"
+        );
     }
 
     // ── footer: validate passes on well-formed archive ───────────────────────
@@ -259,7 +268,11 @@ mod tests {
 
     // ── Security hardening tests (#262) ──────────────────────────────────────
 
-    fn strict_policy(max_segments: usize, max_seg_bytes: usize, max_archive: u64) -> SecurityPolicy {
+    fn strict_policy(
+        max_segments: usize,
+        max_seg_bytes: usize,
+        max_archive: u64,
+    ) -> SecurityPolicy {
         SecurityPolicy {
             max_segments,
             max_segment_bytes: max_seg_bytes,
@@ -280,7 +293,10 @@ mod tests {
         let result = SegmentReader::validate_with_policy(tmp.path(), &policy);
         assert!(result.is_err(), "3 segments must be rejected when max=2");
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("segment count"), "error should mention segment count, got: {msg}");
+        assert!(
+            msg.contains("segment count"),
+            "error should mention segment count, got: {msg}"
+        );
     }
 
     #[test]
@@ -291,7 +307,10 @@ mod tests {
 
         let policy = strict_policy(usize::MAX, usize::MAX, 1); // max 1 byte total
         let result = SegmentReader::validate_with_policy(tmp.path(), &policy);
-        assert!(result.is_err(), "archive exceeding max_archive_bytes must be rejected");
+        assert!(
+            result.is_err(),
+            "archive exceeding max_archive_bytes must be rejected"
+        );
     }
 
     #[test]
@@ -308,20 +327,21 @@ mod tests {
 
         // compressed_len is at header(64) + offset_field(8) = byte 72
         const COMP_LEN_OFFSET: usize = 64 + 8;
-        bytes[COMP_LEN_OFFSET..COMP_LEN_OFFSET + 8]
-            .copy_from_slice(&u64::MAX.to_be_bytes());
+        bytes[COMP_LEN_OFFSET..COMP_LEN_OFFSET + 8].copy_from_slice(&u64::MAX.to_be_bytes());
 
         // Re-sign the footer so checksum passes and we reach the segment size check
         let body_checksum = streaming::footer_checksum(&bytes[64..footer_start]);
         // ENDCSF magic is bytes footer_start..footer_start+6
-        bytes[footer_start + 6..footer_start + 10]
-            .copy_from_slice(&body_checksum.to_be_bytes());
+        bytes[footer_start + 6..footer_start + 10].copy_from_slice(&body_checksum.to_be_bytes());
 
         std::fs::write(tmp.path(), &bytes).unwrap();
 
         let policy = strict_policy(usize::MAX, 1024, u64::MAX); // max 1024 bytes per segment
         let result = SegmentReader::validate_with_policy(tmp.path(), &policy);
-        assert!(result.is_err(), "segment with compressed_len=u64::MAX must be rejected");
+        assert!(
+            result.is_err(),
+            "segment with compressed_len=u64::MAX must be rejected"
+        );
     }
 
     #[test]
@@ -342,15 +362,17 @@ mod tests {
 
         // Re-sign footer
         let body_checksum = streaming::footer_checksum(&bytes[64..footer_start]);
-        bytes[footer_start + 6..footer_start + 10]
-            .copy_from_slice(&body_checksum.to_be_bytes());
+        bytes[footer_start + 6..footer_start + 10].copy_from_slice(&body_checksum.to_be_bytes());
 
         std::fs::write(tmp.path(), &bytes).unwrap();
 
         let result = SegmentReader::validate(tmp.path());
         assert!(result.is_err(), "segment offset past EOF must be rejected");
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("past footer") || msg.contains("segment"), "got: {msg}");
+        assert!(
+            msg.contains("past footer") || msg.contains("segment"),
+            "got: {msg}"
+        );
     }
 
     #[test]

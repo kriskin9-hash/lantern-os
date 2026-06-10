@@ -14,13 +14,25 @@ fn compress_decompress(payload: &[u8]) -> Vec<u8> {
     fs::write(&input, payload).unwrap();
 
     let c = Command::new(csf_bin())
-        .args(["compress", input.to_str().unwrap(), "-o", archive.to_str().unwrap()])
-        .status().unwrap();
+        .args([
+            "compress",
+            input.to_str().unwrap(),
+            "-o",
+            archive.to_str().unwrap(),
+        ])
+        .status()
+        .unwrap();
     assert!(c.success(), "compress failed");
 
     let d = Command::new(csf_bin())
-        .args(["decompress", archive.to_str().unwrap(), "-o", output.to_str().unwrap()])
-        .status().unwrap();
+        .args([
+            "decompress",
+            archive.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
+        .status()
+        .unwrap();
     assert!(d.success(), "decompress failed");
 
     fs::read(&output).unwrap()

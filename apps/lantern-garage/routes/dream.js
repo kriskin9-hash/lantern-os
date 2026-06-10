@@ -113,7 +113,13 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
       const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
       await appendJsonlQueued(monthFile, entry);
-      
+
+      // CSF delta ingest — non-blocking, non-fatal
+      try {
+        const { ingestEntry: csfIngest } = require("../lib/csf-delta-store");
+        setImmediate(() => { try { csfIngest(entry); } catch {} });
+      } catch {}
+
       // Dream Journal enrichment using Convergance OS models
       const enrichment = await enrichDreamEntry(entry);
       entry.models = enrichment.models;
@@ -193,6 +199,25 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
         });
       } catch { /* provenance non-critical */ }
       if (!result.reply) { sendJson(res, { error: result.error || "no_provider_configured", agent: result.agent, online: false, help: result.help || "", suggestions: result.suggestions || [] }, 503); return true; }
+      // ClaimsPacket — non-blocking, non-fatal
+      try {
+        const claimPacket = {
+          packet_id: `cp-${Date.now().toString(36)}-${Math.random().toString(36).substr(2,5)}`,
+          timestamp_ms: Date.now(),
+          node_id: "local-node",
+          action: "dream-chat",
+          agent: result.agent || "unknown",
+          provider: result.source || body.provider || "auto",
+          input_hash: Buffer.from(message.slice(0,64)).toString("base64"),
+          output_length: String(result.reply || "").length,
+          latency_ms: provLatency,
+          online: !!result.online,
+        };
+        const claimDir = path.join(repoRoot, "data", "claim-packets");
+        if (!fs.existsSync(claimDir)) fs.mkdirSync(claimDir, { recursive: true });
+        const claimFile = path.join(claimDir, `claim-packets.jsonl`);
+        setImmediate(() => { try { fs.appendFileSync(claimFile, JSON.stringify(claimPacket) + "\n"); } catch {} });
+      } catch { /* non-fatal */ }
       sendJson(res, { ...result, generatedAt: new Date().toISOString() });
     } catch (error) { sendJson(res, { error: error.message, online: false }); }
     return true;
