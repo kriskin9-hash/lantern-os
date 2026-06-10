@@ -784,11 +784,11 @@
 
   // Fallback messages — shown ONLY when all providers fail (never as a normal reply)
   const FALLBACKS = [
-    "No AI model responded. Is Ollama running? Run: ollama serve",
-    "All providers offline. Add an API key in Settings, or start your local models.",
-    "Connection quiet. Try again in a moment, or check Settings.",
-    "Local model may be starting up — give it a moment and retry.",
-    "No provider answered. Check Settings for API keys, or run: ollama pull lantern-csf-dream",
+    "No AI providers are set up. Add an API key in Settings (⚙) to get started.",
+    "All providers offline. Check Settings to add an API key or start a local model.",
+    "Connection quiet. Try again in a moment, or check Settings for API keys.",
+    "No provider answered. Open Settings (⚙) to configure Gemini, Claude, or OpenAI.",
+    "AI unavailable. Add a provider key in Settings, or run: ollama serve for local mode.",
   ];
 
   // ── Quick-start chip fill ──────────────────────────────────────────
@@ -859,6 +859,7 @@
     const container = document.getElementById('messages');
 
     let fullText = '';
+    let serverErrorText = '';
     let didError = false;
 
     try {
@@ -900,8 +901,9 @@
               bubble.appendChild(cursor);
               container.scrollTop = container.scrollHeight;
             } else if (evt.type === 'error') {
-              // Server reported an error — may be followed by local fallback tokens, so don't stop
+              // Server reported an error — capture its text; may be followed by tokens so don't stop
               didError = true;
+              if (evt.text) serverErrorText = evt.text;
               if (!fullText) {
                 bubble.style.color = 'var(--muted)';
               }
@@ -919,8 +921,8 @@
     cursor.remove();
 
     if (!fullText) {
-      // All providers failed — show random fallback as an error note
-      fullText = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+      // Use server error text if available, otherwise random fallback
+      fullText = serverErrorText || FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
       msg.classList.add('error');
       bubble.style.color = 'var(--muted)';
       bubble.style.fontStyle = 'italic';
