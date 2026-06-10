@@ -28,6 +28,9 @@ data/discord/three-doors/*.json
 # Player CSF files — private ImagniVerse state (local only)
 data/csf/*.csf
 
+# Large local media (archived in D:\tmp / Google Drive)
+apps/lantern-garage/public/data/video/*.mp4
+
 # ─── Training outputs (review locally before promotion) ───────────────────────
 data/training/**/*.jsonl
 data/training/**/*.json
