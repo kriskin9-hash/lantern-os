@@ -80,6 +80,7 @@ const routes = [
   require("./routes/image"),
   require("./routes/flourishing"),
   require("./routes/claims"),
+  require("./routes/cubes"),
   require("./routes/surfaces"),
 ];
 
