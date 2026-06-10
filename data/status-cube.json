@@ -1,6 +1,6 @@
 {
   "schema": "lantern.status_cube.v1",
-  "generated_at": "2026-06-09T22:08:36.512502+00:00",
+  "generated_at": "2026-06-10T08:10:29.453493+00:00",
   "artifacts": {
     "test-artifact": {
       "artifact_id": "test-artifact",
@@ -164,6 +164,23 @@
       },
       "created_at": "2026-06-09T21:23:15.838984+00:00",
       "updated_at": "2026-06-09T22:08:36.502695+00:00",
+      "owner": "",
+      "description": "",
+      "timeline": [],
+      "tags": [],
+      "metadata": {}
+    },
+    "three-doors-game": {
+      "artifact_id": "three-doors-game",
+      "path": "three-doors-game",
+      "coordinate": {
+        "x": "apps",
+        "y": "product",
+        "z": "proven",
+        "t": ""
+      },
+      "created_at": "2026-06-10T08:10:29.453493+00:00",
+      "updated_at": "2026-06-10T08:10:29.453493+00:00",
       "owner": "",
       "description": "",
       "timeline": [],

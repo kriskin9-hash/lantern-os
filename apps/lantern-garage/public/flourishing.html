@@ -330,44 +330,17 @@
     <p class="tagline">Real data on human wellbeing, animal welfare, and ecosystem health. Updated with peer-reviewed research. Some trends are improving. Others need action.</p>
   </div>
 
-  <!-- ── Quick Actions ── -->
-  <p class="section-label">What would you like to do?</p>
-  <div class="panels">
-    <a class="panel" href="#measurements">
-      <span class="panel-icon">📊</span>
-      <span class="panel-label">Explore</span>
-      <h2>Live Measurements</h2>
-      <p>Real-time data on air quality, mental health, wildlife, and more—updated every few seconds.</p>
-      <span class="panel-arrow">View now →</span>
-    </a>
-
-    <a class="panel" href="#findings">
-      <span class="panel-icon">🔬</span>
-      <span class="panel-label">Learn</span>
-      <h2>Research Insights</h2>
-      <p>Peer-reviewed studies with links to the actual research. Click to read the sources.</p>
-      <span class="panel-arrow">Read findings →</span>
-    </a>
-
-    <a class="panel" href="#categories">
-      <span class="panel-icon">🔍</span>
-      <span class="panel-label">Understand</span>
-      <h2>By Category</h2>
-      <p>How humans, animals, and nature are doing. Broken down clearly with confidence levels.</p>
-      <span class="panel-arrow">See breakdown →</span>
-    </a>
-
-    <a class="panel" href="/dream-chat.html">
-      <span class="panel-icon">💭</span>
-      <span class="panel-label">Reflect</span>
-      <h2>Your Dream Journal</h2>
-      <p>Think through what flourishing means to you. Talk with an AI about global trends and personal meaning.</p>
-      <span class="panel-arrow">Start journaling →</span>
-    </a>
+  <!-- ── World News (live) ── -->
+  <p class="section-label" id="news">World News — Live</p>
+  <div class="info-section">
+    <h3>Latest from primary sources <span id="newsUpdated" style="font-weight:400;font-size:0.75rem;color:var(--muted)"></span></h3>
+    <div class="feature-list" id="newsList">
+      <div class="feature-item" style="color:var(--muted)">Loading live headlines from UN News, WHO, Mongabay, and Our World in Data…</div>
+    </div>
   </div>
 
-  <!-- ── Live Measurements ── -->
-  <p class="section-label" id="measurements">Right Now</p>
+  <!-- ── Live trackers ── -->
+  <p class="section-label" id="measurements">Key Indicators</p>
   <div class="metrics-grid">
     <div class="metric-card">
       <div class="metric-card-label">Atmospheric CO₂</div>
@@ -403,6 +376,18 @@
       <div class="metric-card-label">Forest Coverage</div>
       <div class="metric-card-value" id="biodiversity">30%</div>
       <div class="metric-card-note">remaining · <a href="https://www.fao.org/forest-resources-assessment/en/" target="_blank">FAO assessment</a></div>
+    </div>
+  </div>
+
+  <div class="info-section">
+    <h3>More live trackers</h3>
+    <div class="feature-list">
+      <div class="feature-item">🌡️ <a href="https://climate.nasa.gov/vital-signs/" target="_blank"><strong>NASA Vital Signs</strong></a> — CO₂, global temperature, sea level, ice sheets, updated continuously</div>
+      <div class="feature-item">🛰️ <a href="https://atmosphere.copernicus.eu/" target="_blank"><strong>Copernicus Atmosphere</strong></a> — real-time air quality and emissions monitoring</div>
+      <div class="feature-item">🌲 <a href="https://www.globalforestwatch.org/" target="_blank"><strong>Global Forest Watch</strong></a> — near-real-time deforestation alerts</div>
+      <div class="feature-item">📊 <a href="https://ourworldindata.org/" target="_blank"><strong>Our World in Data</strong></a> — poverty, health, energy, and wellbeing trends with full datasets</div>
+      <div class="feature-item">🌊 <a href="https://coralreefwatch.noaa.gov/" target="_blank"><strong>NOAA Coral Reef Watch</strong></a> — live ocean heat-stress monitoring</div>
+      <div class="feature-item">🕊️ <a href="https://reliefweb.int/" target="_blank"><strong>ReliefWeb</strong></a> — live humanitarian situation reports from OCHA</div>
     </div>
   </div>
 
@@ -501,45 +486,45 @@
   }
   updateThemeIcon();
 
-  // Live measurements simulation
-  const measurements = {
-    airQuality: 342,
-    mentalHealth: 38,
-    socialConnection: 42,
-    wildlife: -68,
-    inequality: 0.68,
-    biodiversity: 30
-  };
-
-  function updateLiveMeasurements() {
-    measurements.airQuality += (Math.random() - 0.48) * 0.5;
-    measurements.mentalHealth += (Math.random() - 0.45) * 0.3;
-    measurements.socialConnection += (Math.random() - 0.52) * 0.2;
-    measurements.wildlife -= (Math.random() - 0.3) * 0.1;
-    measurements.inequality += (Math.random() - 0.45) * 0.001;
-    measurements.biodiversity += (Math.random() - 0.51) * 0.05;
-
-    document.getElementById('airQuality').textContent = Math.max(320, Math.round(measurements.airQuality));
-    document.getElementById('mentalHealth').textContent = Math.max(0, Math.min(100, Math.round(measurements.mentalHealth))) + '%';
-    document.getElementById('socialConnection').textContent = Math.max(0, Math.min(100, Math.round(measurements.socialConnection))) + '%';
-    document.getElementById('wildlife').textContent = Math.round(measurements.wildlife) + '%';
-    document.getElementById('inequality').textContent = Math.min(1, Math.max(0, measurements.inequality)).toFixed(2);
-    document.getElementById('biodiversity').textContent = Math.max(20, Math.round(measurements.biodiversity)) + '%';
+  // ── Live world news from /api/flourishing/news (RSS, server-cached) ──
+  const TOPIC_ICONS = { humanity: "🌍", health: "🩺", ecosystems: "🌳", data: "📊" };
+  async function loadWorldNews() {
+    try {
+      const r = await fetch('/api/flourishing/news');
+      const data = await r.json();
+      const list = document.getElementById('newsList');
+      if (!data.items || !data.items.length) {
+        list.innerHTML = '<div class="feature-item" style="color:var(--muted)">Live feeds unreachable right now — the source links on this page always work.</div>';
+        return;
+      }
+      // Interleave sources so one feed doesn't dominate
+      const bySource = {};
+      data.items.forEach(i => (bySource[i.source] = bySource[i.source] || []).push(i));
+      const interleaved = [];
+      for (let round = 0; round < 4; round++) {
+        for (const src of Object.keys(bySource)) {
+          if (bySource[src][round]) interleaved.push(bySource[src][round]);
+        }
+      }
+      list.innerHTML = interleaved.slice(0, 12).map(i => {
+        const when = i.published ? new Date(i.published) : null;
+        const ago = when && !isNaN(when) ? timeAgo(when) : '';
+        return `<div class="feature-item">${TOPIC_ICONS[i.topic] || '📰'} <a href="${i.link}" target="_blank" rel="noopener"><strong>${escapeHtml(i.title)}</strong></a> <span style="color:var(--muted)">· ${i.source}${ago ? ' · ' + ago : ''}</span></div>`;
+      }).join('');
+      document.getElementById('newsUpdated').textContent = '· refreshed ' + timeAgo(new Date(data.updated_at));
+      document.getElementById('lastRefresh').textContent = 'just now';
+    } catch (e) { /* leave the loading message */ }
   }
-
-  function updateLastRefresh() {
-    const now = Date.now();
-    const lastUpdate = parseInt(localStorage.getItem('flourish-last-update') || Date.now());
-    const secsSinceLast = Math.round((now - lastUpdate) / 1000);
-    document.getElementById('lastRefresh').textContent =
-      secsSinceLast < 60 ? `${secsSinceLast}s ago` : `${Math.round(secsSinceLast / 60)}m ago`;
+  function timeAgo(d) {
+    const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+    if (s < 90) return 'just now';
+    if (s < 3600) return Math.round(s / 60) + 'm ago';
+    if (s < 86400) return Math.round(s / 3600) + 'h ago';
+    return Math.round(s / 86400) + 'd ago';
   }
-
-  updateLiveMeasurements();
-  updateLastRefresh();
-  setInterval(updateLiveMeasurements, 2000);
-  setInterval(updateLastRefresh, 1000);
-  localStorage.setItem('flourish-last-update', Date.now());
+  function escapeHtml(s) { const div = document.createElement('div'); div.textContent = s; return div.innerHTML; }
+  loadWorldNews();
+  setInterval(loadWorldNews, 10 * 60 * 1000);
 
   // Smooth scroll for anchor links
   document.querySelectorAll('a[href^="#"]').forEach(link => {

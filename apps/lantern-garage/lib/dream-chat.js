@@ -401,7 +401,8 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
         upstream.on("error", reject);
       });
       req2.on("error", reject);
-      req2.setTimeout(30000, () => { req2.destroy(); reject(new Error("timeout")); });
+      const ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10) || 120000;
+      req2.setTimeout(ollamaTimeout, () => { req2.destroy(); reject(new Error("timeout")); });
       req2.write(payload);
       req2.end();
     });

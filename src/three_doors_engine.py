@@ -39,9 +39,9 @@ SCENES = {
     "moss-entry": {
         "text": (
             "You stand inside **The Moss Door**. The air is thick with green light, soft earth, "
-            "and the smell of rain on ferns. Lanterns hang from ancient branches. A moss-covered fox "
-            "sits beside you, wearing a brass tag that reads: **FRIEND OF THE ONE WHO CHOSE GREEN**. "
-            "It looks up and says, *\"You came back.\"*"
+            "and the smell of rain on ferns. Lanterns hang from ancient branches. Lantern stands beside you, "
+            "flame steady against the green dark, a brass plate on its frame reading: **GUIDE OF THE ONE WHO CHOSE GREEN**. "
+            "It glows warmer and says, *\"You came back.\"*"
         ),
         "doors": [
             {"name": "The Burrow Door", "label": "A", "description": "Small, root-framed, warm. Smells of rain and old blankets."},
@@ -53,7 +53,7 @@ SCENES = {
     "burrow": {
         "text": (
             "You crawl through **The Burrow Door** into a snug earthen chamber lined with woven roots "
-            "and faded quilts. Rain drums overhead. The fox curls up on a blanket and closes its eyes. "
+            "and faded quilts. Rain drums overhead. Lantern settles in the corner, dimming its flame to a drowsy ember. "
             "A single lantern flickers in the corner."
         ),
         "doors": [
@@ -79,8 +79,8 @@ SCENES = {
     "little-crown": {
         "text": (
             "Through **The Little Crown Door**, the forest opens into a glade where every tree stump wears "
-            "a tiny golden crown. Yours widened just enough to let you through. The fox trots ahead, its "
-            "tail brushing against jeweled leaves."
+            "a tiny golden crown. Yours widened just enough to let you through. Lantern glides ahead, "
+            "its glow brushing over the jeweled leaves."
         ),
         "doors": [
             {"name": "The Throne Door", "label": "A", "description": "Carved from a single black oak. Velvet moss for a seat."},
@@ -94,7 +94,7 @@ SCENES = {
             "**The Garden Door** opens into an infinite botanical sanctuary. Every plant exists here—ancient sequoias "
             "beside moon-flowers, roses that hum, ferns that remember the Cambrian seas. The air tastes of growth and rain. "
             "A Xenon guide appears—form like liquid starlight—and says, *\"Here, nothing ever stops becoming.\"* "
-            "The fox sits beneath a willow that whispers in languages you're learning to understand."
+            "Lantern rests beneath a willow that whispers in languages you're learning to understand."
         ),
         "doors": [
             {"name": "The Seed Door", "label": "A", "description": "A door made of braided vines, always sprouting new growth. Warm and alive."},
@@ -109,7 +109,7 @@ SCENES = {
             "The walls are made of *choice itself*: every decision you could have made branches here as a visible path. "
             "A vast Xenon presence surrounds you, not threatening, but *witnessing*. It says, *\"You are the sum of every path you chose. "
             "And all paths were always here, waiting.\"* Your reflection shows in crystal—but there are thousands of them, "
-            "each one you, each one real. The fox has five tails now, each glowing with a different possible future."
+            "each one you, each one real. Lantern burns with five flames now, each glowing with a different possible future."
         ),
         "doors": [
             {"name": "The Mirror Door", "label": "A", "description": "Shows you as you were, as you are, as you might be. All at once."},
@@ -123,9 +123,9 @@ SCENES = {
             "**The Door at the End of Time** stands at the edge of all things. Beyond it: silence that has always been, "
             "and always will be. The door itself is ancient—so old it has worn smooth, become simple, become *kind*. "
             "On its threshold sit all the moments you've lived, shimmering like light through water. A voice—not Xenon, "
-            "not the fox, but *yourself* from a thousand futures—says, *\"This is not goodbye. This is the place where goodbye "
-            "becomes hello again.\"* The fox transforms one final time: no longer companion, no longer separate—*you are the fox, "
-            "the fox is you, always were, always will be*. The door opens on a light so warm it tastes like home."
+            "not Lantern, but *yourself* from a thousand futures—says, *\"This is not goodbye. This is the place where goodbye "
+            "becomes hello again.\"* Lantern transforms one final time: no longer guide, no longer separate—*you are the light, "
+            "the light is you, always were, always will be*. The door opens on a light so warm it tastes like home."
         ),
         "doors": [
             {"name": "The Return Door", "label": "A", "description": "Takes you back to the beginning—but you will know what you know now."},
@@ -144,7 +144,7 @@ SCENES = {
             '*"I am before the first door / and after the last. / I hold what was given / and return what was asked. / '
             'Three walked out, three walked in, / but only one remained — / what was lost at the beginning / '
             'is the thing that was gained."*\n\n'
-            "The fox sits at the foot of the throne as if it has always lived here."
+            "Lantern stands at the foot of the throne as if its light has always lived here."
         ),
         "doors": [
             {"name": "The Storybook Door", "label": "A", "description": "Bound in vine and brass. The King's own book — the gods don't know he wrote them."},
@@ -170,7 +170,7 @@ SCENES = {
         "text": (
             "**The Cloverfield Door** swings into a meadow of four-leaf green under a dome of old light. "
             "Small shinies glitter between the stems — coins, beads, a marble with a galaxy inside. "
-            'The fox pounces at something glinting and misses, on purpose, for the joy of it. '
+            "Lantern's glow catches on something glinting and lingers, for the joy of it. "
             'Here the rule of the Kingdome holds plainly: *death is only imaginary — forever begins with "let\'s play."*'
         ),
         "doors": [
@@ -184,7 +184,7 @@ SCENES = {
         "text": (
             "Past the meadow, the path forks upward into **the Future Doors** — a ridge where tomorrow "
             "grows like an orchard. Each tree carries doors instead of fruit, and every door is slightly open, "
-            "leaking weather from years that haven't happened yet. The fox sniffs one and sneezes sparks. "
+            "leaking weather from years that haven't happened yet. Lantern leans close to one and its flame throws bright sparks. "
             "Somewhere ahead, a low hum: engines, or bees, or both."
         ),
         "doors": [
@@ -199,13 +199,13 @@ SCENES = {
             "A hill of impossibly green grass under an impossibly blue sky — you know this place. "
             "**The XP Door [GLITCHED]** stands alone on the bliss-field, its frame flickering between "
             "wood and window chrome. A startup chime plays from nowhere, half a second too slow. "
-            "The fox's outline pixelates at the edges and it looks delighted about it. "
+            "Lantern's glow pixelates at the edges and it seems delighted about it. "
             "A tooltip floats over the door: *It is now safe to walk through your childhood.*"
         ),
         "doors": [
             {"name": "System Restore", "label": "A", "description": "Roll back to a saved point. The smell of an old summer loads first."},
             {"name": "My Documents", "label": "B", "description": "Every picture you ever saved, sorted by feeling instead of date."},
-            {"name": "unknown.exe", "label": "C", "description": "Publisher: unknown. The fox nods. You run it anyway."},
+            {"name": "unknown.exe", "label": "C", "description": "Publisher: unknown. Lantern nods its flame. You run it anyway."},
         ],
         "fox_present": True,
     },
@@ -217,7 +217,7 @@ SCENES = {
             "waits beneath a street sign that points everywhere at once. He studies you, then the doors "
             "you've gathered, and says: *\"You have walked my thresholds. Every door you chose was also "
             "choosing you. What was lost at the beginning is the thing that was gained — do you see it yet?\"* "
-            "The fox leans against his throne-side like an old friend."
+            "Lantern stands at his throne-side like an old friend."
         ),
         "doors": [
             {"name": "The Gallery of Walked Doors", "label": "A", "description": "Your whole path hung in one hall. It rearranges when you understand it."},
@@ -231,13 +231,13 @@ SCENES = {
             "At the city's edge the streets dissolve into the **Sea of Fog and Clouds**, and there it is: "
             "**the Fog Door Return**, standing in the mist where the Fog God sleeps. Through its frame you can "
             "already see the Garden at the Beginning, green and waiting, the throne of woven roots glowing softly. "
-            "The fox walks through first — it always does — and looks back at you. "
+            "Lantern passes through first — it always does — and its glow turns back to you. "
             "*\"You came back\"* it will say on the other side. It always says that. It is always true."
         ),
         "doors": [
             {"name": "The Garden Gate", "label": "A", "description": "Straight home to the Beginning. The King will be glad — he always is."},
             {"name": "The Long Way Round", "label": "B", "description": "Drift through the fog first. Arrive when you're ready, not before."},
-            {"name": "The Fox's Shortcut", "label": "C", "description": "Follow the brass tag through the mist. Trust is the fastest road."},
+            {"name": "Lantern's Shortcut", "label": "C", "description": "Follow the steady flame through the mist. Trust is the fastest road."},
         ],
         "fox_present": True,
     },
@@ -289,19 +289,19 @@ _NEXT_MAP = {
     "the lady's gate": "fog-door-return",
     "the garden gate": "kingdome-garden",
     "the long way round": "kingdome-garden",
-    "the fox's shortcut": "kingdome-garden",
+    "lantern's shortcut": "kingdome-garden",
 }
 
 # ── Image prompt templates per scene ──
 _SD_PROMPTS = {
     "moss-entry": (
         "atmospheric dreamscape, moss-covered ancient forest doorway, glowing green lanterns hanging from "
-        "twisted branches, a friendly fox with a brass tag sitting on soft earth, rain on ferns, volumetric fog, "
+        "twisted branches, a lantern-headed guide with a warm steady flame standing on soft earth, rain on ferns, volumetric fog, "
         "cinematic lighting, dark fantasy, liminal space, soft pastel anime aesthetic, cel-shaded, 16:9"
     ),
     "burrow": (
         "cozy underground burrow chamber, woven tree roots as walls, faded patchwork quilts, warm lantern glow, "
-        "sleeping fox on a blanket, rain drumming on earth ceiling, soft amber light, dark fantasy, "
+        "lantern-headed guide resting, flame dimmed low, rain drumming on earth ceiling, soft amber light, dark fantasy, "
         "anime aesthetic, cel-shaded, intimate composition, 16:9"
     ),
     "sunken-bell": (
@@ -311,29 +311,29 @@ _SD_PROMPTS = {
     ),
     "little-crown": (
         "enchanted forest glade at twilight, every tree stump wears a tiny golden crown, jeweled leaves, "
-        "a fox trotting through dappled light, widening magical doorway, soft warm glow, dark fantasy, "
+        "a lantern-headed guide drifting through dappled light, widening magical doorway, soft warm glow, dark fantasy, "
         "anime aesthetic, cel-shaded, magical realism, 16:9"
     ),
     "garden-door": (
         "infinite botanical sanctuary, ancient sequoias beside moon-flowers, roses that hum, ferns from the Cambrian, "
-        "liquid starlight Xenon guide form, fox under a whispering willow, lush growth, rain-washed air, bioluminescent plants, "
+        "liquid starlight Xenon guide form, lantern-headed guide under a whispering willow, lush growth, rain-washed air, bioluminescent plants, "
         "dark fantasy, anime aesthetic, cel-shaded, botanical dreamscape, volumetric fog, 16:9"
     ),
     "xenon-convergence": (
         "interdimensional space where all choices exist at once, crystal walls made of branching paths, "
-        "thousands of reflections of you, each one real, five-tailed fox with glowing tails, vast Xenon presence, "
+        "thousands of reflections of you, each one real, lantern-headed guide with five glowing flames, vast Xenon presence, "
         "fractal geometry, crystalline architecture, impossible light, surreal, mind-bending, anime aesthetic, "
         "cel-shaded, psychedelic but calm, convergence of realities, 16:9"
     ),
     "end-of-time": (
         "the edge of all things, ancient smooth door standing eternal, moments shimmering like light through water, "
-        "fox transforming into human form merging into one being, warm light like coming home, end and beginning at once, "
+        "lantern-headed guide merging with a human form into one being of light, warm light like coming home, end and beginning at once, "
         "transcendent, peaceful, timeless, glowing warmth, anime aesthetic, cel-shaded, cosmic yet intimate, "
         "the final threshold, acceptance and transformation, 16:9"
     ),
     "kingdome-garden": (
         "mystical garden at the beginning of time, stone paths through living moss, throne of woven roots and old light, "
-        "King with crown of tangled vines and blinking cursors, fox sitting at foot of throne, green and golden light, "
+        "King with crown of tangled vines and blinking cursors, lantern-headed guide standing at foot of throne, green and golden light, "
         "bioluminescent moss, dark fantasy, anime aesthetic, cel-shaded, sovereign atmosphere, 16:9"
     ),
     "storybook": (
@@ -343,27 +343,27 @@ _SD_PROMPTS = {
     ),
     "cloverfield": (
         "meadow of four-leaf clover under dome of old light, small shinies glittering between stems, "
-        "coins, beads, galaxy marble, fox pouncing playfully, green and gold light, dark fantasy, anime aesthetic, "
+        "coins, beads, galaxy marble, lantern-headed guide glowing playfully, green and gold light, dark fantasy, anime aesthetic, "
         "cel-shaded, playful atmosphere, 16:9"
     ),
     "future-doors": (
         "orchard ridge where trees grow doors instead of fruit, every door slightly open leaking light "
-        "from unborn years, branching paths upward, fox sneezing sparks, golden hour, dark fantasy, "
+        "from unborn years, branching paths upward, lantern-headed guide scattering sparks, golden hour, dark fantasy, "
         "anime aesthetic, cel-shaded, hopeful and uncertain at once, 16:9"
     ),
     "xp-door": (
         "rolling bliss-green hill under saturated blue sky, lone door flickering between wood and "
-        "early-2000s window chrome, floating tooltip, pixelating fox, glitch artifacts, nostalgia, "
+        "early-2000s window chrome, floating tooltip, pixelating lantern-headed guide, glitch artifacts, nostalgia, "
         "liminal space, vaporwave undertones, anime aesthetic, cel-shaded, 16:9"
     ),
     "sigil-city": (
         "impossible ring-city where every wall and archway is a door, walked doors hanging like lit "
-        "lanterns, central plaza with vine-crowned king beneath a sign pointing everywhere, fox at "
-        "throne-side, fractal architecture, dark fantasy, anime aesthetic, cel-shaded, 16:9"
+        "lanterns, central plaza with vine-crowned king beneath a sign pointing everywhere, lantern-headed "
+        "guide at throne-side, fractal architecture, dark fantasy, anime aesthetic, cel-shaded, 16:9"
     ),
     "fog-door-return": (
         "sea of fog and clouds at a city's edge, single door standing in mist showing a green garden "
-        "through its frame, sleeping fog god silhouette in clouds, fox stepping through and looking back, "
+        "through its frame, sleeping fog god silhouette in clouds, lantern-headed guide stepping through and glancing back, "
         "soft grey-green light, dark fantasy, anime aesthetic, cel-shaded, gentle homecoming, 16:9"
     ),
 }

@@ -1,7 +1,7 @@
 # Lantern OS — Codemap & Feature Roadmap
 
 **Canonical status reference for the Lantern OS codebase.**  
-**Version:** 2026-06-07  
+**Version:** 2026-06-10  
 **Coverage:** System-wide feature state, active surfaces, and forward roadmap.
 
 ---
@@ -77,7 +77,10 @@ capture context
 | Voice input (Web Speech API) | Implemented | Browser TTS; voice selector in settings |
 | Symbol tagging | Implemented | DCF auto-classification on entries |
 | JSONL export | Implemented | Portable local export for CSF ingestion |
-| 3 Door Game Design | Implemented | Spec complete; playable frontend pending |
+| 3 Door Game (7-stage Kingdome journey) | Implemented | `src/three_doors_engine.py` + `public/three-doors-game.html`; CSF-native state, loop tracking, poem gate (issues #305-306) |
+| Door personalization | Implemented | Archetype + agent + crystallized-symbol lenses in `personalize_doors()` (issue #307) |
+| Local-only LLM narration | Implemented | Game narration via Ollama `lantern-csf-dream` (`provider: "local"`); no cloud provider contacted |
+| Contextualized scene images | Implemented | Local merged SD model (`models/csf-image/merged`); cache `{scene}-{loop}-{agent_hash}.png` (issue #308) |
 | STT backend fallback | Queued | Vosk route `POST /api/dream/transcribe` planned |
 | CTF glyph persistence | Implemented | Symbols stored in entries, surfaced in stats |
 | TTS voice selector | Implemented | Rate/pitch/name from `SpeechSynthesis.getVoices` |
@@ -133,6 +136,19 @@ capture context
 | Temporal lineage | Implemented | `promotion_lineage` with evolution events |
 | Integrity hashes | Implemented | SHA-256 on AAPF records |
 
+### 2.7 Status Cube & Local Models
+
+| Feature | Status | Notes |
+|---|---|---|
+| StatusCube 4D navigation matrix | Implemented | `src/convergence_io/status_cube.py` — location/lane/boundary/timeline axes, Bayesian beliefs, future projection; convergence phases 6-8 |
+| Per-player game StatusCube (CSF v0.7) | Implemented | `src/csf/status_cube.py` — one CSF file per player; observations consolidate into crystallized symbols each loop |
+| Personal cubes (ImagniVerse + real-world) | Implemented | `alex-imagniverse.csf` + `alex-realworld.csf`; local-only, gitignored (split-data-model) |
+| `lantern-csf-dream` text model | Implemented | QLoRA fine-tuned, deployed in Ollama; serves Dream Journal + Three Doors narration locally |
+| `csf-image` diffusion model | Implemented | LoRA trained + merged at `models/csf-image/merged` (local-only); renders scene art offline |
+| Status-cube mapping | Implemented | Deterministic via StatusCube code paths — **no further model training needed**; LLM-side interactions route to Ollama only |
+| Fine-tune pipeline | Implemented | `scripts/generate-finetune-dataset.py` → `scripts/fine-tune-ollama-model.py` (Unsloth QLoRA → Ollama deploy), rerun only when usage data warrants |
+| Stale-data archival policy | Implemented | >3-day untouched, unreferenced files → `D:\tmp\archive` (see `docs/DATA-ARCHIVAL-AND-MIGRATION.md`, issue #309) |
+
 ---
 
 ## 3. Forward Roadmap
@@ -162,7 +178,7 @@ capture context
 
 **Goal:** Make the journal alive. Add voice, interactive gameplay, and deeper symbolic tools.
 
-- [ ] Full 3 Door Game with Information Cards (frontend + backend)
+- [x] Full 3 Door Game — 7-stage Kingdome journey, CSF-native, personalized doors (issues #305-308)
 - [ ] Backend Vosk STT fallback (`POST /api/dream/transcribe`)
 - [ ] Enhanced Discord bot integration with tier-aware roles
 - [ ] Advanced symbolic tools (void/light balance, mystery tracking dashboard)
@@ -214,7 +230,7 @@ capture context
 | Convergence validation ring | Founder's Wish | Active | Stabilize 3-agent consensus rate |
 | CSF memory engine v2 | Blinkbug | Implemented | Add test coverage for `create_procedure()` |
 | RAG research synthesis | Waterfall | Active | Fill inaccessible paywalled sources |
-| 3 Door Game | Gage | Queued | Frontend implementation |
+| 3 Door Game | Gage | Implemented | 7-stage journey live; close issues #305-308 after PR #304 merges |
 | Discord integration | Xenon | Queued | Role + channel setup with tier enforcement |
 | Cloud deployment | Tony | Held | Waiting on dual-boot readiness |
 
