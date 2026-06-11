@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,16 +9,6 @@
   <title>Trading — Lantern OS</title>
   <style>
     :root {
-      --bg: #0b0d14;
-      --surface: #13161f;
-      --surface2: #1a1d2a;
-      --border: #252840;
-      --text: #e8eaf6;
-      --muted: #7880a4;
-      --accent: #7c6af7;
-      --green: #4caf82;
-      --gold: #e2c97e;
-      --danger: #e05555;
       --warning: #f0a040;
     }
     html, body {
@@ -269,7 +259,7 @@
     <a href="/knowledgecenter.html">Help</a>
   </div>
   <div class="nav-actions">
-    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode">☀</button>
+    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light / dark mode">☀</button>
     <a class="nav-cta" href="/dream-chat.html">Open Journal</a>
   </div>
 </nav>
@@ -592,5 +582,6 @@ class TradingDashboard {
 
 document.addEventListener('DOMContentLoaded', () => new TradingDashboard().init());
 </script>
+<script src="/js/theme-toggle.js"></script>
 </body>
 </html>
