@@ -83,6 +83,7 @@ const routes = [
   require("./routes/claims"),
   require("./routes/cubes"),
   require("./routes/csf"),
+  require("./routes/training"),
   require("./routes/surfaces"),
 ];
 

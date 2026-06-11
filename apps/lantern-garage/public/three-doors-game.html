@@ -176,6 +176,7 @@
     </div>
     <div class="nav-actions">
       <span id="status-line" style="font-size:11px;color:var(--muted);margin-right:6px"></span>
+      <button id="training-badge" onclick="showTrainingStatus()" title="LoRA training data collected" style="display:none;background:none;border:1px solid var(--border);border-radius:7px;padding:4px 8px;color:var(--accent);cursor:pointer;font-size:11px;font-family:inherit;gap:3px">📸 <span id="training-count">0</span></button>
       <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
       <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     </div>
@@ -723,6 +724,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     scene_key: sceneKey, doors, history,
     stage_index: sceneData.stage_index, stage_count: sceneData.stage_count,
     loop_count: sceneData.loop_count,
+    last_choice: sceneData.last_choice || "",
   };
 
   // Journey position in the header status line
@@ -781,8 +783,10 @@ function checkChallenges(sceneKey, turnCount) {
 
 // ── Pollinations.ai async image loader ───────────────────────────
 // Shows canvas art immediately; swaps in AI-generated image when ready.
+// Also collects images + prompts as LoRA training data.
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt/";
 const pollinationsCache = {};
+let trainingImageCount = 0;
 
 async function loadPollinationsImage(imgId, canvasId, sceneKey) {
   if (pollinationsCache[sceneKey]) return; // already loaded this scene
@@ -801,11 +805,89 @@ async function loadPollinationsImage(imgId, canvasId, sceneKey) {
       logThreeDoorsEvent('image_load', { sceneKey, source: 'pollinations' });
       if (cvs) cvs.style.display = "none";
       if (img) { img.src = url; img.style.display = ""; }
+      // Collect image as training sample (fire and forget)
+      collectTrainingImage(sceneKey, fullPrompt, url);
     };
     probe.onerror = () => {}; // canvas stays visible
     probe.src = url;
   } catch { /* silent */ }
 }
+
+async function collectTrainingImage(sceneKey, prompt, imageUrl) {
+  try {
+    const r = await fetch("/api/dream/training/collect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sceneKey,
+        prompt,
+        imageUrl,
+        playerChoice: gameState?.last_choice || "",
+        loopCount: gameState?.loop_count || 0,
+        stageIndex: gameState?.stage_index || 0,
+      }),
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    trainingImageCount = data.total || trainingImageCount + 1;
+    updateTrainingBadge();
+  } catch { /* silent — training collection is best-effort */ }
+}
+
+function updateTrainingBadge() {
+  const badge = document.getElementById("training-badge");
+  const count = document.getElementById("training-count");
+  if (!badge || !count) return;
+  count.textContent = trainingImageCount;
+  badge.style.display = trainingImageCount > 0 ? "" : "none";
+  badge.title = trainingImageCount >= 15
+    ? `${trainingImageCount} images collected — click to start LoRA training!`
+    : `${trainingImageCount}/15 images collected for LoRA training`;
+  badge.style.borderColor = trainingImageCount >= 15 ? "var(--accent)" : "var(--border)";
+}
+
+async function showTrainingStatus() {
+  try {
+    const r = await fetch("/api/dream/training/status");
+    const data = await r.json();
+    trainingImageCount = data.imageCount || trainingImageCount;
+    updateTrainingBadge();
+    const ready = data.imageCount >= data.minImagesForTraining;
+    const msg = [
+      `📸 Training dataset: ${data.imageCount} images`,
+      data.lastCheckpoint ? `✓ Last checkpoint: ${data.lastCheckpoint}` : "",
+      data.trainingActive ? "⚙️  Training in progress..." : "",
+      ready && !data.trainingActive ? `\n▶ Ready to train! (${data.imageCount}/${data.minImagesForTraining} images)` : "",
+      !ready ? `Need ${data.minImagesForTraining - data.imageCount} more images — keep exploring!` : "",
+    ].filter(Boolean).join("\n");
+    if (ready && !data.trainingActive && confirm(msg + "\n\nStart LoRA training now?")) {
+      startLoraTraining();
+    } else {
+      alert(msg);
+    }
+  } catch (e) {
+    alert(`Training status unavailable: ${e.message}`);
+  }
+}
+
+async function startLoraTraining() {
+  try {
+    const r = await fetch("/api/dream/training/start", { method: "POST" });
+    const data = await r.json();
+    if (data.error) { alert(`Training error: ${data.error}`); return; }
+    alert(`Training started! PID ${data.pid}\nLog: ${data.logPath}\nThis runs in the background — keep playing to add more training data.`);
+    const badge = document.getElementById("training-badge");
+    if (badge) badge.textContent = "⚙️ training";
+  } catch (e) {
+    alert(`Could not start training: ${e.message}`);
+  }
+}
+
+// Load training count on boot
+fetch("/api/dream/training/status").then(r => r.json()).then(d => {
+  trainingImageCount = d.imageCount || 0;
+  updateTrainingBadge();
+}).catch(() => {});
 
 function submitCustomDoor() {
   const input = document.getElementById("custom-door-input");
