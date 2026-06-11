@@ -6,6 +6,7 @@
 
 const http = require('http');
 const TradingAPIBridge = require('../lib/trading-api-bridge');
+const tradingMemory = require('../lib/trading-memory');
 
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
@@ -118,6 +119,18 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     try {
       const data = await callDashboard(DASHBOARD_PROXY_ROUTES[url.pathname]);
       sendJson(res, data, 200);
+
+      // Trading Phase 2 (#323): persist new orders/signals into CSF memory.
+      // Fire-and-forget — must never block or fail the dashboard response.
+      if (url.pathname === '/api/trading/dashboard/orders') {
+        tradingMemory.recordNewOrders(data).catch((e) => {
+          console.error('[trading-memory] recordNewOrders failed:', e.message);
+        });
+      } else if (url.pathname === '/api/trading/dashboard/agent-log') {
+        tradingMemory.recordNewSignals(data).catch((e) => {
+          console.error('[trading-memory] recordNewSignals failed:', e.message);
+        });
+      }
     } catch (error) {
       sendJson(res, { error: error.message }, 502);
     }
@@ -324,6 +337,22 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, result.data, result.status);
     } catch (error) {
       sendJson(res, { error: 'Status check failed', details: error.message }, 503);
+    }
+    return true;
+  }
+
+  // GET /api/trading/memory/recent?limit=20&kind=order|signal
+  // Trading Phase 2 (#323): recent orders/signals persisted into CSF memory
+  // (src/csf/trading_memory.py), queryable by dream-chat and other agents.
+  if (url.pathname === '/api/trading/memory/recent' && req.method === 'GET') {
+    try {
+      const limit = Number(url.searchParams.get('limit')) || 20;
+      const rawKind = url.searchParams.get('kind');
+      const kind = rawKind === 'order' || rawKind === 'signal' ? rawKind : undefined;
+      const records = await tradingMemory.queryRecent({ limit, kind });
+      sendJson(res, { records }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to query trading memory', details: error.message, records: [] }, 500);
     }
     return true;
   }
