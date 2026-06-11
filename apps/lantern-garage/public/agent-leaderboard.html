@@ -239,12 +239,12 @@
 
     <div class="leaderboard-controls">
       <select id="taskTypeSelect" aria-label="Filter by task type">
-        <option value="">All Task Types</option>
+        <option value="coding" selected>Coding</option>
+        <option value="reasoning">Reasoning</option>
         <option value="inspect">Inspect</option>
         <option value="state_objective">State Objective</option>
-        <option value="coding">Coding</option>
-        <option value="reasoning">Reasoning</option>
         <option value="creative">Creative</option>
+        <option value="">All Task Types</option>
       </select>
       <button onclick="loadData()" aria-label="Refresh leaderboard data">↻ Refresh</button>
       <button id="autoRefreshBtn" onclick="toggleAutoRefresh()" aria-pressed="true" aria-label="Toggle auto-refresh">◉ Auto-Refresh</button>

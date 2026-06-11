@@ -19,3 +19,4 @@
 {"timestamp":"2026-06-11T10:50:33.006Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
 {"timestamp":"2026-06-11T10:50:33.008Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
 {"timestamp":"2026-06-11T10:50:33.011Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
+{"timestamp":"2026-06-11T11:01:01.431Z","agentId":"test-agent","taskType":"test","success":true,"latencyMs":1000,"costUsd":0.01,"convergenceStep":1,"convergenceStepName":"test_step"}
