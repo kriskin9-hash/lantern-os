@@ -433,6 +433,15 @@ const SCENES = {
     ],
     fox: true, palette: ["#000001","#0a0a15","#1a1a3a","#6a6a9a","#c0c0e0","#020204"], archetype: "liminal-void",
   },
+  "raven-tower": {
+    text: "**The Raven Door** opens onto a tower that exists in perpetual twilight. Black wings circle endlessly, intelligent and watchful. Each raven carries a memory you almost forgot — they perch on shelves carved from shadow and starlight. The King's voice whispers: *\"The raven sees what others miss. What you came back to find.\"* Lantern dims here, as if respecting the ravens' ancient knowing.",
+    doors: [
+      { name: "The Nested Memory Door", label: "A", description: "Rooms within rooms, each one smaller and older. Memories nested like eggs." },
+      { name: "The Prophecy Door", label: "B", description: "The ravens carved this prophecy in wood and bone. It might be about you." },
+      { name: "The Mirror Crow Door", label: "C", description: "A single raven stands guard. It knows your name. It always has." },
+    ],
+    fox: true, palette: ["#0a0810","#1a101a","#3a1a4a","#7a5a9a","#d0b0e0","#050305"], archetype: "mysterious-wise",
+  },
 };
 
 // ── 7-stage Kingdome journey (stage_index → scene_key) ──
@@ -467,6 +476,7 @@ const NEXT_MAP = {
   "the first echo":"echo-chamber","the transformed echo":"dream-thread","the final echo":"xenon-convergence",
   "the blooming door":"flux-garden","the withering door":"garden-door","the eternal blossom":"xenon-convergence",
   "the form door":"void-threshold","the formless door":"convergence-node","the both door":"recursion-well",
+  "the raven door":"raven-tower","the nested memory door":"memory-vault","the prophecy door":"storybook","the mirror crow door":"sigil-city",
 };
 
 const SD_PROMPTS = {
@@ -494,6 +504,7 @@ const SD_PROMPTS = {
   "echo-chamber":"space where words transform as they travel, walls remembering future speech, time as conversation with itself, lantern-headed guide voice echoing fractally, reverberating light, dark fantasy, anime aesthetic, cel-shaded, resonant, 16:9",
   "flux-garden":"sanctuary of constant becoming, flowers shifting between species and colors, garden as transformation not growth, Xenon dancing as ribbon of becoming, lantern-headed guide pulsing with light, bioluminescent plants, dark fantasy, anime aesthetic, cel-shaded, 16:9",
   "void-threshold":"edge where existence questions itself, space between decisions, infinite potential not nothing, lantern-headed guide burning brightest against possibility, liminal boundary, dark fantasy, anime aesthetic, cel-shaded, transcendent void, 16:9",
+  "raven-tower":"tower in perpetual twilight, black ravens circling intelligently, shelves carved from shadow and starlight, lantern-headed guide dimmed in respect, ancient wisdom, memory and prophecy, dark fantasy, anime aesthetic, cel-shaded, mysterious and knowing, 16:9",
 };
 
 // High-quality fallback images with multiple sources (Unsplash, Picsum, gradient backups)
@@ -528,6 +539,7 @@ const PLACEHOLDER_IMAGES = {
   "recursion-well": "https://source.unsplash.com/800x450/?fractal,recursive,spiral&27",
   "echo-chamber": "https://source.unsplash.com/800x450/?echo,chamber,sound&28",
   "flux-garden": "https://source.unsplash.com/800x450/?flowers,changing,transforming&29",
+  "raven-tower": "https://source.unsplash.com/800x450/?ravens,tower,twilight&30",
 };
 
 function getSceneImageUrl(sceneKey) {
