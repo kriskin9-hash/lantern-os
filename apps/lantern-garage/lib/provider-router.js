@@ -187,94 +187,15 @@ async function callProvider(provider, model, payload, taskType = "default", cont
 
 /**
  * Actual provider API call (delegates to provider-specific code)
+ * NOTE: Streaming implementations stay in stream-chat.js for now
+ * This is used for sync chat and testing
  * @private
  */
 async function _callProviderImpl(provider, model, payload, context) {
-  switch (provider) {
-    case "anthropic":
-      return await _callAnthropic(model, payload, context);
-    case "openai":
-      return await _callOpenAI(model, payload, context);
-    case "gemini":
-      return await _callGemini(model, payload, context);
-    case "ollama":
-      return await _callOllama(model, payload, context);
-    case "mistral":
-      return await _callMistral(model, payload, context);
-    case "cohere":
-      return await _callCohere(model, payload, context);
-    case "deepseek":
-      return await _callDeepSeek(model, payload, context);
-    case "perplexity":
-      return await _callPerplexity(model, payload, context);
-    case "openrouter":
-      return await _callOpenRouter(model, payload, context);
-    case "xai":
-      return await _callXAI(model, payload, context);
-    default:
-      throw new Error(`Unknown provider: ${provider}`);
-  }
-}
-
-// Provider-specific implementations (stubs for now, integrate with existing code)
-async function _callAnthropic(model, payload, context) {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY not set");
-  // TODO: Integrate with existing Anthropic logic from dream-chat.js, stream-chat.js
-  throw new Error("_callAnthropic not yet implemented");
-}
-
-async function _callOpenAI(model, payload, context) {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY not set");
-  throw new Error("_callOpenAI not yet implemented");
-}
-
-async function _callGemini(model, payload, context) {
-  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!key) throw new Error("GEMINI_API_KEY not set");
-  throw new Error("_callGemini not yet implemented");
-}
-
-async function _callOllama(model, payload, context) {
-  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  throw new Error("_callOllama not yet implemented");
-}
-
-async function _callMistral(model, payload, context) {
-  const key = process.env.MISTRAL_API_KEY;
-  if (!key) throw new Error("MISTRAL_API_KEY not set");
-  throw new Error("_callMistral not yet implemented");
-}
-
-async function _callCohere(model, payload, context) {
-  const key = process.env.COHERE_API_KEY;
-  if (!key) throw new Error("COHERE_API_KEY not set");
-  throw new Error("_callCohere not yet implemented");
-}
-
-async function _callDeepSeek(model, payload, context) {
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) throw new Error("DEEPSEEK_API_KEY not set");
-  throw new Error("_callDeepSeek not yet implemented");
-}
-
-async function _callPerplexity(model, payload, context) {
-  const key = process.env.PERPLEXITY_API_KEY;
-  if (!key) throw new Error("PERPLEXITY_API_KEY not set");
-  throw new Error("_callPerplexity not yet implemented");
-}
-
-async function _callOpenRouter(model, payload, context) {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY not set");
-  throw new Error("_callOpenRouter not yet implemented");
-}
-
-async function _callXAI(model, payload, context) {
-  const key = process.env.XAI_API_KEY;
-  if (!key) throw new Error("XAI_API_KEY not set");
-  throw new Error("_callXAI not yet implemented");
+  // For now, sync calls are not implemented here
+  // Stream-chat.js has the streaming implementations
+  // This stub ensures the routing logic works
+  throw new Error(`Sync call not implemented for ${provider}. Use stream-chat.js for streaming.`);
 }
 
 /**

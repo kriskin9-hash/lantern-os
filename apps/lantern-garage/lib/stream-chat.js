@@ -15,6 +15,8 @@ const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
 const { generatePlan, generatePatch } = require("./self-edit-engine");
+const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
+const { detectTaskType } = require("./task-detector");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -846,6 +848,18 @@ Interpret this convergence result and provide:
     console.error("[Convergance] Router error (non-fatal):", e.message);
   }
 
+  // ── Keystone: Task-aware provider selection using performance leaderboard ──
+  let primaryProviderHint = null;
+  try {
+    const taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+    const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(message, taskType, requestedProvider);
+    primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
+    console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);
+  } catch (e) {
+    console.error("[provider-router] Selection error (non-fatal):", e.message);
+    // Continue with default fallback if router fails
+  }
+
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
   // When no specific cloud provider is requested, try all local Ollama models in sequence
   // for lower latency, zero cost, and offline resilience. Cloud providers are fallbacks.
@@ -1114,10 +1128,13 @@ Interpret this convergence result and provide:
         text: anthropicClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("anthropic");
+      recordProviderSuccessRouter("anthropic"); // Also log to provider-router for performance tracking
       sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
       return;
     } catch (err) {
+      const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
       recordProviderFailure("anthropic", err.message);
+      recordProviderFailureRouter("anthropic", errorCode); // Also log to provider-router
       if (requestedProvider) {
         sendError(humanError(err));
         await streamLocalFallback(err.message);
@@ -1185,10 +1202,13 @@ Interpret this convergence result and provide:
         text: openaiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("openai");
+      recordProviderSuccessRouter("openai"); // Also log to provider-router
       sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
       return;
     } catch (err) {
+      const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
       recordProviderFailure("openai", err.message);
+      recordProviderFailureRouter("openai", errorCode); // Also log to provider-router
       if (requestedProvider) {
         sendError(humanError(err));
         sendFail(err.message);
