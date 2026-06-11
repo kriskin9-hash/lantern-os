@@ -58,6 +58,12 @@ try:
 except Exception:
     _STATUS_CUBE_AVAILABLE = False
 
+try:
+    from agent_performance_bridge import get_bridge
+    _PERF_BRIDGE_AVAILABLE = True
+except Exception:
+    _PERF_BRIDGE_AVAILABLE = False
+
 
 class Layer(IntEnum):
     SURFACE = 0
@@ -765,6 +771,7 @@ class ConvergenceLoop:
         self._repo_hash: Optional[str] = None
         self._previous_receipt_path = self.repo_root / "manifests" / "evidence" / "convergence-latest.json"
         self._status_cube: Optional[Any] = None
+        self._perf_bridge: Optional[Any] = None
         self._web_search = WebSearchGrounding(
             host=os.environ.get("MCP_SERVER_HOST", "127.0.0.1"),
             port=int(os.environ.get("MCP_SERVER_PORT", "8771")),
@@ -772,6 +779,11 @@ class ConvergenceLoop:
         if _STATUS_CUBE_AVAILABLE:
             try:
                 self._status_cube = StatusCube.load(self.repo_root / "data" / "status-cube.json")
+            except Exception:
+                pass
+        if _PERF_BRIDGE_AVAILABLE:
+            try:
+                self._perf_bridge = get_bridge()
             except Exception:
                 pass
 
@@ -854,6 +866,21 @@ class ConvergenceLoop:
                     any_fail = True
                 if key in self._CACHEABLE_PHASES:
                     self._phase_cache[key] = result
+
+                # Record phase performance to leaderboard
+                if self._perf_bridge:
+                    try:
+                        self._perf_bridge.record_agent_call_from_convergence(
+                            agent_id="convergence-loop",
+                            task_type=key,
+                            validation_passed=result.status == "pass",
+                            latency_ms=result.elapsed_ms,
+                            cost_usd=0.0,
+                            convergence_step=num,
+                            step_name=desc,
+                        )
+                    except Exception:
+                        pass  # Non-fatal: logging failure doesn't stop convergence
 
             audit.extend(tick_results)
             self.results = tick_results
