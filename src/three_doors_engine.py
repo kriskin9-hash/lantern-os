@@ -504,7 +504,11 @@ class ThreeDoorsEngine:
                 chosen = d
                 break
         if not chosen:
-            return None
+            # Custom door: player invented their own — still advance the stage
+            if len(choice.strip()) > 1:
+                chosen = {"label": "CUSTOM", "name": choice.strip()}
+            else:
+                return None
 
         self.cube.add_observation(
             stage=self.cube.stage_index,
