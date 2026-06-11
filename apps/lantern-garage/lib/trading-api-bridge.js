@@ -1,208 +1,209 @@
 /**
  * Trading API Bridge
- * Connects to IBKR, KALSHI, and independent AI trader agents
- * Provides real-time market data and AI recommendations
+ * HTTP client for AI Trader microservice with retry logic and fallbacks
  */
 
 const http = require('http');
-const https = require('https');
 
 class TradingAPIBridge {
-  constructor() {
-    this.ibkrHost = process.env.IBKR_HOST || 'localhost';
-    this.ibkrPort = process.env.IBKR_PORT || 4001;
-    this.kalshiApiKey = process.env.KALSHI_API_KEY || '';
-    this.alpacaApiKey = process.env.ALPACA_API_KEY || '';
-    this.alpacaSecret = process.env.ALPACA_SECRET_KEY || '';
-    this.anthropicKey = process.env.ANTHROPIC_API_KEY || '';
-
-    this.marketCache = {};
-    this.adviceCache = {};
-    this.cacheExpiry = 30000; // 30 seconds
+  constructor(host = '127.0.0.1', port = 5555, apiKey = null, timeout = 10000) {
+    this.host = host;
+    this.port = port;
+    this.apiKey = apiKey;
+    this.timeout = timeout;
+    this.maxRetries = 3;
+    this.retryDelay = 500; // ms
+    this.cache = {};
+    this.lastHealthCheck = 0;
+    this.isHealthy = false;
   }
 
-  /**
-   * Fetch account data from IBKR
-   */
-  async getIBKRAccount() {
+  async _request(method, path, body = null, retries = 0) {
     return new Promise((resolve, reject) => {
       const options = {
-        hostname: this.ibkrHost,
-        port: this.ibkrPort,
-        path: '/api/account',
-        method: 'GET',
-        timeout: 5000
+        hostname: this.host,
+        port: this.port,
+        path,
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        timeout: this.timeout,
       };
+
+      if (this.apiKey && (method === 'POST' || method === 'PUT')) {
+        options.headers['X-API-Key'] = this.apiKey;
+      }
 
       const req = http.request(options, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
-            resolve(JSON.parse(data));
+            const parsed = data ? JSON.parse(data) : {};
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ status: res.statusCode, data: parsed });
+            } else {
+              reject(new Error(`HTTP ${res.statusCode}: ${parsed.error || 'Unknown error'}`));
+            }
           } catch (e) {
-            reject(new Error('Invalid IBKR response'));
+            reject(new Error(`Invalid JSON response: ${e.message}`));
           }
         });
       });
 
-      req.on('error', err => reject(err));
+      req.on('error', (err) => {
+        if (retries < this.maxRetries) {
+          setTimeout(() => {
+            this._request(method, path, body, retries + 1)
+              .then(resolve)
+              .catch(reject);
+          }, this.retryDelay * (retries + 1));
+        } else {
+          reject(err);
+        }
+      });
+
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('IBKR timeout'));
+        if (retries < this.maxRetries) {
+          setTimeout(() => {
+            this._request(method, path, body, retries + 1)
+              .then(resolve)
+              .catch(reject);
+          }, this.retryDelay * (retries + 1));
+        } else {
+          reject(new Error('Request timeout'));
+        }
       });
+
+      if (body) {
+        req.write(JSON.stringify(body));
+      }
 
       req.end();
     });
   }
 
-  /**
-   * Fetch positions from IBKR
-   */
-  async getIBKRPositions() {
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: this.ibkrHost,
-        port: this.ibkrPort,
-        path: '/api/portfolio/positions',
-        method: 'GET',
-        timeout: 5000
-      };
-
-      const req = http.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data) || []);
-          } catch (e) {
-            reject(new Error('Invalid positions response'));
-          }
-        });
-      });
-
-      req.on('error', err => reject(err));
-      req.on('timeout', () => {
-        req.destroy();
-        reject(new Error('IBKR timeout'));
-      });
-
-      req.end();
-    });
+  async healthCheck() {
+    try {
+      const result = await this._request('GET', '/health');
+      this.isHealthy = true;
+      this.lastHealthCheck = Date.now();
+      return { healthy: true, data: result.data };
+    } catch (error) {
+      this.isHealthy = false;
+      return { healthy: false, error: error.message };
+    }
   }
 
-  /**
-   * Fetch open events from KALSHI
-   */
-  async getKALSHIEvents() {
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.kalshi.com',
-        path: '/v1/events?status=open&limit=10',
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.kalshiApiKey}`,
-          'Accept': 'application/json'
-        },
-        timeout: 5000
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            resolve(result.events || []);
-          } catch (e) {
-            resolve([]);
-          }
-        });
-      });
-
-      req.on('error', err => {
-        console.error('KALSHI error:', err.message);
-        resolve([]);
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        resolve([]);
-      });
-
-      req.end();
-    });
+  async getStatus() {
+    try {
+      const result = await this._request('GET', '/api/status');
+      this.cache['status'] = result.data;
+      return result.data;
+    } catch (error) {
+      return this.cache['status'] || { error: error.message, status: 'disconnected' };
+    }
   }
 
-  /**
-   * Get Alpaca account data (paper trading)
-   */
-  async getAlpacaAccount() {
-    const auth = Buffer.from(`${this.alpacaApiKey}:${this.alpacaSecret}`).toString('base64');
-
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'paper-api.alpaca.markets',
-        path: '/v2/account',
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Accept': 'application/json'
-        },
-        timeout: 5000
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            resolve({});
-          }
-        });
-      });
-
-      req.on('error', err => {
-        console.error('Alpaca error:', err.message);
-        resolve({});
-      });
-      req.on('timeout', () => {
-        req.destroy();
-        resolve({});
-      });
-
-      req.end();
-    });
+  async getWatchlist() {
+    try {
+      const result = await this._request('GET', '/api/watchlist');
+      this.cache['watchlist'] = result.data;
+      return result.data;
+    } catch (error) {
+      return this.cache['watchlist'] || { error: error.message, watchlist: [] };
+    }
   }
 
-  /**
-   * Aggregate all API data into single dashboard response
-   */
+  async getZones() {
+    try {
+      const result = await this._request('GET', '/api/zones');
+      this.cache['zones'] = result.data;
+      return result.data;
+    } catch (error) {
+      return this.cache['zones'] || { error: error.message, zones: {} };
+    }
+  }
+
+  async getSignals(limit = 10) {
+    try {
+      const result = await this._request('GET', `/api/signals?limit=${limit}`);
+      this.cache['signals'] = result.data;
+      return result.data;
+    } catch (error) {
+      return this.cache['signals'] || { error: error.message, signals: [] };
+    }
+  }
+
+  async getPositions() {
+    try {
+      const result = await this._request('GET', '/api/positions');
+      this.cache['positions'] = result.data;
+      return result.data;
+    } catch (error) {
+      return this.cache['positions'] || { error: error.message, positions: [] };
+    }
+  }
+
+  async getAlerts(limit = 20) {
+    try {
+      const result = await this._request('GET', `/api/alerts?limit=${limit}`);
+      this.cache['alerts'] = result.data;
+      return result.data;
+    } catch (error) {
+      return this.cache['alerts'] || { error: error.message, alerts: [] };
+    }
+  }
+
   async getDashboardData() {
-    const [ibkrAccount, ibkrPos, kalshiEvents, alpacaAccount] = await Promise.all([
-      this.getIBKRAccount().catch(() => null),
-      this.getIBKRPositions().catch(() => []),
-      this.getKALSHIEvents().catch(() => []),
-      this.getAlpacaAccount().catch(() => null)
+    const [status, watchlist, zones, signals, positions, alerts] = await Promise.all([
+      this.getStatus(),
+      this.getWatchlist(),
+      this.getZones(),
+      this.getSignals(10),
+      this.getPositions(),
+      this.getAlerts(20),
     ]);
 
     return {
-      timestamp: new Date().toISOString(),
-      apis: {
-        ibkr: { connected: !!ibkrAccount, account: ibkrAccount || null, positions: ibkrPos || [] },
-        kalshi: { connected: kalshiEvents.length > 0, events: kalshiEvents || [] },
-        alpaca: { connected: !!alpacaAccount, account: alpacaAccount || null }
-      },
-      marketData: {
-        sp500: { value: '$5,843.25', change: '+0.8%' },
-        nasdaq: { value: '$18,427.44', change: '+1.2%' },
-        vix: { value: '14.32', change: '-2.1%' },
-        eurusd: { value: '1.1245', change: '+0.3%' },
-        btcusd: { value: '$67,432', change: '+2.8%' },
-        gold: { value: '$2,087', change: '+0.2%' }
-      }
+      status,
+      watchlist,
+      zones,
+      signals,
+      positions,
+      alerts,
+      health: { healthy: this.isHealthy, timestamp: new Date().toISOString() },
     };
+  }
+
+  async pauseTrading() {
+    try {
+      const result = await this._request('POST', '/api/control/pause');
+      return { success: true, data: result.data };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async resumeTrading() {
+    try {
+      const result = await this._request('POST', '/api/control/resume');
+      return { success: true, data: result.data };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  async closePosition(symbol) {
+    try {
+      const result = await this._request('POST', `/api/control/close-position?symbol=${symbol}`);
+      return { success: true, data: result.data };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   }
 }
 
