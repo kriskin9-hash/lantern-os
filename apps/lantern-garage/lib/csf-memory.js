@@ -8,6 +8,7 @@ const CSF_MEMORY_PATH = path.join(repoRoot, "data", "csf_memory");
 const CSF_INGEST_PATH = path.join(repoRoot, "csf", "ingest");
 const DREAM_JOURNAL_PATH = path.join(repoRoot, "data", "dream_journal");
 const DOOR_STATE_PATH = path.join(DREAM_JOURNAL_PATH, "door_state.json");
+const RAG_HOUSE_PATH = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 
 let _cache = { memories: null, ingest: null, ts: 0 };
 const CACHE_TTL_MS = 10_000;
@@ -135,6 +136,32 @@ function saveDoorChoice(doorText, allDoors) {
   saveDoorState(state);
 }
 
+// Query RAG house knowledge base — returns relevant records by keyword matching
+function queryRagHouse(message, limit = 2) {
+  try {
+    const text = _readText(RAG_HOUSE_PATH);
+    if (!text) return [];
+    const house = JSON.parse(text);
+    if (!house?.ragRecords || !Array.isArray(house.ragRecords)) return [];
+
+    const scored = house.ragRecords.map(r => ({
+      ...r,
+      score: Math.max(
+        relevanceScore(r.content || "", message),
+        relevanceScore(r.title || "", message),
+        relevanceScore((r.tags || []).join(" "), message)
+      ),
+    }));
+
+    return scored
+      .filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 // Old broad context loader (cached, for backwards compat)
 function buildCSFContext() {
   const now = Date.now();
@@ -183,6 +210,17 @@ function formatCSFContextForPrompt(message) {
     parts.push(`Doors: ${last3 || "none yet"}`);
   }
 
+  // RAG house knowledge base — relevant external records
+  if (message) {
+    const ragRecords = queryRagHouse(message, 2);
+    if (ragRecords.length > 0) {
+      const ragText = ragRecords.map(r =>
+        `- ${r.title || "Knowledge"}: ${(r.content || "").slice(0, 150)}`
+      ).join("\n");
+      parts.push(`Knowledge base (RAG):\n${ragText}`);
+    }
+  }
+
   // CSF delta layer — recurring symbols, mood arc, convergence trend
   try {
     const { formatDeltaContextForPrompt } = require("./csf-delta-store");
@@ -199,6 +237,7 @@ module.exports = {
   queryMemories,
   queryIngestDocs,
   queryDreamEntries,
+  queryRagHouse,
   loadDoorState,
   saveDoorState,
   saveDoorChoice,

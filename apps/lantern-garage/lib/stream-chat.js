@@ -13,6 +13,7 @@ const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
+const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -178,6 +179,44 @@ async function handleStreamChat(req, url, res) {
           sendDone("failed", { error: err.message });
           res.end();
         });
+      return;
+    }
+
+    if (cmd.name === "search" || cmd.name === "web-search") {
+      const searchQuery = cmd.args.trim() || message.replace(/!\w+\s*/, "").trim();
+      if (!searchQuery) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "search_query_required", message: "Usage: !search <query>" }));
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`🔍 Searching: "${searchQuery}"\n\n`);
+      try {
+        const result = await webSearchMcp(searchQuery, 5);
+        if (result.success && result.results) {
+          sendToken(`Found ${result.result_count || result.results.length} results:\n\n`);
+          for (const r of result.results) {
+            sendToken(`${r.rank}. **${r.title}**\n   ${r.url}\n   ${r.snippet || ""}\n\n`);
+          }
+          sendDone("web_search", { agent: "WebSearch", online: true, query: searchQuery, resultCount: result.result_count });
+        } else {
+          sendToken(`Search failed: ${result.error || "unknown error"}\n`);
+          sendDone("web_search", { agent: "WebSearch", online: false, error: result.error });
+        }
+      } catch (e) {
+        sendToken(`Search error: ${e.message}\n`);
+        sendDone("web_search", { agent: "WebSearch", online: false, error: e.message });
+      }
+      res.end();
       return;
     }
 
@@ -471,13 +510,29 @@ Interpret this convergence result and provide:
   // Keystone debug prompt — raw dev access, no persona, no doors
   const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
+  // ── Web Search Grounding ───────────────────────────────────────────
+  let groundingContext = "";
+  if (!isKeystoneDebug && needsGrounding(message)) {
+    const searchQuery = extractSearchQuery(message);
+    if (searchQuery) {
+      try {
+        const searchResult = await webSearchMcp(searchQuery, 5);
+        if (searchResult.success && searchResult.results) {
+          groundingContext = formatGroundingContext(searchResult.results, searchQuery);
+        }
+      } catch (e) {
+        console.error("[web-search] Grounding failed (non-fatal):", e.message);
+      }
+    }
+  }
+
   // CSF long-term memory + door state (query-time relevance filtered)
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
+    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
 
 
   const sendToken = (token) => sse.sendToken(res, token);
@@ -712,8 +767,9 @@ Interpret this convergence result and provide:
       // Disable with GEMINI_GROUNDING=false if needed
       const isGroundable = geminiModel.startsWith("gemini-3");
       const groundingEnabled = process.env.GEMINI_GROUNDING !== "false" && isGroundable;
+      const searchInstruction = groundingEnabled ? "\n\nYou have access to live web search. Use it to find current information, verify facts, or answer questions about recent events when relevant." : "";
       const geminiPayloadBase = {
-        contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${message}` }] }],
+        contents: [{ role: "user", parts: [{ text: `${systemPrompt}${searchInstruction}\n\n${message}` }] }],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
       };
       if (groundingEnabled) {

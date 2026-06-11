@@ -3,6 +3,7 @@ const http = require("http");
 const { handleThreeDoorsServer } = require("./three-doors-chat");
 const { readMcpResourceSync } = require("./mcp-resource-client");
 const { formatCSFContextForPrompt } = require("./csf-memory");
+const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
 
 // ------------------------------------------------------------------
 // Multi-Agent Personas — loaded from MCP resource (data/contexts/personas.json)
@@ -323,7 +324,23 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   let csfContext = "";
   try { csfContext = formatCSFContextForPrompt(text); } catch { /* non-fatal */ }
 
-  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}${csfContext ? "Symbolic memory:\n" + csfContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-4 sentences). Never diagnose or command.`;
+  // ── Web Search Grounding ───────────────────────────────────────────
+  let groundingContext = "";
+  if (needsGrounding(text)) {
+    const searchQuery = extractSearchQuery(text);
+    if (searchQuery) {
+      try {
+        const searchResult = await webSearchMcp(searchQuery, 5);
+        if (searchResult.success && searchResult.results) {
+          groundingContext = formatGroundingContext(searchResult.results, searchQuery);
+        }
+      } catch (e) {
+        console.error("[web-search] Grounding failed (non-fatal):", e.message);
+      }
+    }
+  }
+
+  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}${csfContext ? "Symbolic memory:\n" + csfContext + "\n\n" : ""}${groundingContext ? groundingContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-4 sentences). Never diagnose or command.`;
 
   const rp = String(requestedProvider || "").toLowerCase().trim();
 
@@ -519,7 +536,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     suggestions,
     online: false,
     source: "none",
-    help: "Ollama (local): install at http://127.0.0.1:11434 for offline AI. Cloud options: ANTHROPIC_API_KEY, GEMINI_API_KEY, OPENAI_API_KEY.",
+    help: "Ollama (local): install at http://127.0.0.1:11434 for offline AI. Cloud: GEMINI_API_KEY (with live web search), ANTHROPIC_API_KEY, OPENAI_API_KEY.",
   };
 }
 

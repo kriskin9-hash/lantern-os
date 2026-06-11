@@ -74,6 +74,7 @@ const routes = [
   require("./routes/rag"),
   require("./routes/operator"),
   require("./routes/files"),
+  require("./routes/files-upload"),
   require("./routes/dreamer"),
   require("./routes/dream"),
   require("./routes/keystone"),
