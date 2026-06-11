@@ -79,12 +79,14 @@ const routes = [
   require("./routes/dream"),
   require("./routes/keystone"),
   require("./routes/image"),
+  require("./routes/three-doors-image-pool"),
   require("./routes/flourishing"),
   require("./routes/claims"),
   require("./routes/cubes"),
   require("./routes/csf"),
   require("./routes/training"),
   require("./routes/surfaces"),
+  require("./routes/self-edit"),
 ];
 
 async function route(req, res) {
