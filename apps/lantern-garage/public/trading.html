@@ -595,19 +595,45 @@
       </div>
 
       <div style="border-top: 1px solid var(--border); padding-top: 16px;">
-        <h3 style="margin: 0 0 12px; font-size: 0.95rem;">Broker Integrations (MCP)</h3>
+        <h3 style="margin: 0 0 12px; font-size: 0.95rem;">Broker Integrations</h3>
 
+        <!-- IBKR Direct API -->
         <div style="padding: 12px; background: var(--surface2); border-radius: 6px; border-left: 3px solid var(--success); margin-bottom: 12px;">
-          <strong style="color: var(--success);">✓ IBKR</strong>
-          <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--muted-text);">Live quotes, positions, orderbook, account risk • Read-only via Claude Code MCP</p>
+          <strong style="color: var(--success);">📊 IBKR</strong>
+          <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--muted-text);">Direct REST API • Real portfolio, positions, P&L</p>
         </div>
 
-        <div style="padding: 12px; background: var(--surface2); border-radius: 6px; border-left: 3px solid var(--success);">
-          <strong style="color: var(--success);">✓ Alpaca</strong>
-          <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--muted-text);">Stocks, options, crypto, portfolio mgmt • Alpaca MCP Server (paper trading available)</p>
+        <div style="margin-bottom: 12px; display: grid; gap: 12px;">
+          <div>
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--muted-text); margin-bottom: 6px;">IBKR Account ID</label>
+            <input type="text" name="ibkr_account_id" placeholder="U12345678" style="width: 100%; padding: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; box-sizing: border-box;">
+            <div style="font-size: 0.75rem; color: var(--muted-text); margin-top: 4px;" id="status-ibkr-account-id">Not configured</div>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--muted-text); margin-bottom: 6px;">IBKR API Key</label>
+            <input type="password" name="ibkr_api_key" placeholder="Your API key..." style="width: 100%; padding: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; box-sizing: border-box;">
+            <div style="font-size: 0.75rem; color: var(--muted-text); margin-top: 4px;" id="status-ibkr-api-key">Not configured</div>
+          </div>
+
+          <div>
+            <label style="display: block; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--muted-text); margin-bottom: 6px;">IBKR API Secret</label>
+            <input type="password" name="ibkr_api_secret" placeholder="Your API secret..." style="width: 100%; padding: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; box-sizing: border-box;">
+            <div style="font-size: 0.75rem; color: var(--muted-text); margin-top: 4px;" id="status-ibkr-api-secret">Not configured</div>
+          </div>
+
+          <div style="font-size: 0.8rem; color: var(--muted-text); padding: 8px; background: rgba(16, 185, 129, 0.1); border-radius: 4px;">
+            Get keys at <code style="font-size: 0.75rem;">IBKR Account Settings → API</code> • No Gateway needed
+          </div>
         </div>
 
-        <div style="margin-top: 12px; display: grid; gap: 12px;">
+        <!-- Alpaca API -->
+        <div style="padding: 12px; background: var(--surface2); border-radius: 6px; border-left: 3px solid var(--success); margin-bottom: 12px;">
+          <strong style="color: var(--success);">🟢 Alpaca</strong>
+          <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--muted-text);">Stocks, options, crypto • Paper trading available</p>
+        </div>
+
+        <div style="margin-bottom: 12px; display: grid; gap: 12px;">
           <div>
             <label style="display: block; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--muted-text); margin-bottom: 6px;">Alpaca API Key</label>
             <input type="password" name="alpaca_key" placeholder="PK..." style="width: 100%; padding: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 0.9rem; box-sizing: border-box;">
@@ -651,7 +677,7 @@ async function loadSettingsStatus() {
     const res = await fetch('/api/trading/settings');
     const data = await res.json();
     if (data.configured) {
-      const { anthropic, openai, alpaca } = data.configured;
+      const { anthropic, openai, alpaca, ibkr } = data.configured;
       const setStatus = (id, val) => {
         const el = document.getElementById(`status-${id}`);
         if (el) {
@@ -663,6 +689,9 @@ async function loadSettingsStatus() {
       setStatus('openai', openai);
       setStatus('alpaca-key', alpaca);
       setStatus('alpaca-secret', alpaca);
+      setStatus('ibkr-account-id', ibkr);
+      setStatus('ibkr-api-key', ibkr);
+      setStatus('ibkr-api-secret', ibkr);
     }
   } catch (e) {
     console.warn('Failed to load settings:', e);
@@ -676,23 +705,33 @@ async function saveSettings(event) {
   const formData = new FormData(form);
   const payload = {};
 
-  // Handle individual fields and map alpaca_key/alpaca_secret to alpaca object
+  // Handle individual fields and map to objects
   const alpacaFields = {};
+  const ibkrFields = {};
   for (const [key, val] of formData) {
     if (val.trim()) {
       if (key === 'alpaca_key') {
         alpacaFields.key = val.trim();
       } else if (key === 'alpaca_secret') {
         alpacaFields.secret = val.trim();
+      } else if (key === 'ibkr_account_id') {
+        ibkrFields.account_id = val.trim();
+      } else if (key === 'ibkr_api_key') {
+        ibkrFields.api_key = val.trim();
+      } else if (key === 'ibkr_api_secret') {
+        ibkrFields.api_secret = val.trim();
       } else {
         payload[key] = val.trim();
       }
     }
   }
 
-  // Add alpaca object if any Alpaca fields were provided
+  // Add broker objects if any fields were provided
   if (Object.keys(alpacaFields).length > 0) {
     payload.alpaca = alpacaFields;
+  }
+  if (Object.keys(ibkrFields).length > 0) {
+    payload.ibkr = ibkrFields;
   }
 
   if (Object.keys(payload).length === 0) {
