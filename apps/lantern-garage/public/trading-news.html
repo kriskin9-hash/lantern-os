@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Trader — News</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg0:#0a0c0f;--bg1:#111318;--bg2:#181c22;--bg3:#1f242d;
+    --border:#252b35;--text0:#e8eaf0;--text1:#9aa0ad;--text2:#5c6370;
+    --green:#00d4aa;--red:#ff5f6d;--amber:#f5a623;--blue:#4a9eff;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  html,body{min-height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px}
+  .topbar{background:var(--bg1);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;gap:20px;position:sticky;top:0;z-index:10}
+  .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.1em}
+  .logo span{color:var(--text1);font-weight:400}
+  .back-btn{font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;text-decoration:none;transition:all .1s}
+  .back-btn:hover{background:var(--bg3);color:var(--text0)}
+  .tab-bar{display:flex;gap:4px;margin-left:20px}
+  .tab{font-family:var(--mono);font-size:10px;padding:4px 12px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .1s;letter-spacing:.08em}
+  .tab.active,.tab:hover{background:var(--bg2);color:var(--text0);border-color:var(--text2)}
+  .filter-bar{padding:12px 24px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .filter-input{font-family:var(--mono);font-size:11px;background:var(--bg2);border:1px solid var(--border);color:var(--text0);padding:5px 10px;border-radius:4px;outline:none;width:200px}
+  .filter-input:focus{border-color:var(--green)}
+  .ticker-filter{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:all .1s}
+  .ticker-filter.active{background:rgba(0,212,170,.12);color:var(--green);border-color:rgba(0,212,170,.4)}
+  .impact-filter{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;color:var(--text2);margin-left:auto}
+  .impact-filter select{font-family:var(--mono);font-size:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text0);padding:4px 8px;border-radius:3px;outline:none}
+  .content{max-width:1400px;margin:0 auto;padding:20px 24px}
+  .section-title{font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;margin-bottom:32px}
+  .news-card{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:14px;transition:border-color .1s;cursor:pointer}
+  .news-card:hover{border-color:var(--text2)}
+  .news-card-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+  .impact-badge{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 7px;border-radius:3px;flex-shrink:0;margin-top:1px}
+  .impact-high{background:rgba(255,95,109,.15);color:var(--red);border:1px solid rgba(255,95,109,.3)}
+  .impact-med{background:rgba(245,166,35,.12);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
+  .impact-low{background:rgba(92,99,112,.15);color:var(--text2);border:1px solid var(--border)}
+  .news-headline{font-size:13px;font-weight:500;line-height:1.4;color:var(--text0)}
+  .news-meta{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+  .news-source{font-family:var(--mono);font-size:10px;color:var(--text2)}
+  .news-date{font-family:var(--mono);font-size:10px;color:var(--text2)}
+  .news-tickers{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
+  .news-ticker-tag{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(0,212,170,.1);color:var(--green);border:1px solid rgba(0,212,170,.2)}
+  .loading{text-align:center;padding:60px;font-family:var(--mono);color:var(--text2)}
+  .stats-bar{display:flex;gap:24px;padding:12px 24px;background:var(--bg1);border-bottom:1px solid var(--border)}
+  .stat{font-family:var(--mono);font-size:11px}
+  .stat .l{color:var(--text2);font-size:9px;text-transform:uppercase;letter-spacing:.1em}
+  .stat .v{color:var(--text0);font-size:14px;font-weight:600}
+  .date-group-title{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.1em;margin:16px 0 8px;text-transform:uppercase}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">AI<span>trader</span> &mdash; News</div>
+  <a href="/trading.html" class="back-btn">← Dashboard</a>
+  <div class="tab-bar">
+    <button class="tab active" onclick="setTab('all')">All News</button>
+    <button class="tab" onclick="setTab('stocks')">Stocks</button>
+    <button class="tab" onclick="setTab('market')">Broad Market</button>
+  </div>
+  <div id="lastUpdate" style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text2)"></div>
+</div>
+
+<div class="stats-bar">
+  <div class="stat"><div class="l">Total Articles</div><div class="v" id="statTotal">—</div></div>
+  <div class="stat"><div class="l">High Impact</div><div class="v" id="statHigh" style="color:var(--red)">—</div></div>
+  <div class="stat"><div class="l">Period</div><div class="v" id="statPeriod">Last 30 Days</div></div>
+  <div class="stat"><div class="l">Tickers Covered</div><div class="v" id="statTickers">—</div></div>
+</div>
+
+<div class="filter-bar">
+  <input class="filter-input" id="searchInput" placeholder="Search headlines..." oninput="applyFilters()">
+  <div id="tickerFilters"></div>
+  <div class="impact-filter">
+    <span>Min impact:</span>
+    <select id="impactFilter" onchange="applyFilters()">
+      <option value="0">All</option>
+      <option value="40">Medium+</option>
+      <option value="70">High only</option>
+    </select>
+  </div>
+</div>
+
+<div class="content">
+  <div id="newsContainer"><div class="loading">Loading news...</div></div>
+</div>
+
+<script>
+let allNews = [];
+let currentTab = 'all';
+let activeTickerFilter = null;
+
+function setTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['all','stocks','market'][i] === tab));
+  applyFilters();
+}
+
+function applyFilters() {
+  const search     = document.getElementById('searchInput').value.toLowerCase();
+  const minImpact  = parseInt(document.getElementById('impactFilter').value);
+  let filtered = allNews;
+
+  if (currentTab === 'stocks')  filtered = filtered.filter(n => n.symbols && n.symbols.length > 0);
+  if (currentTab === 'market')  filtered = filtered.filter(n => !n.symbols || n.symbols.length === 0);
+  if (activeTickerFilter)       filtered = filtered.filter(n => n.symbols && n.symbols.includes(activeTickerFilter));
+  if (search)                   filtered = filtered.filter(n => (n.headline||'').toLowerCase().includes(search));
+  if (minImpact > 0)            filtered = filtered.filter(n => n.impact >= minImpact);
+
+  renderNews(filtered);
+}
+
+function renderNews(items) {
+  const el = document.getElementById('newsContainer');
+  if (!items.length) {
+    el.innerHTML = '<div class="loading">No articles match your filters.</div>';
+    return;
+  }
+
+  // Group by date
+  const groups = {};
+  items.forEach(n => {
+    const d = n.date || 'Unknown';
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(n);
+  });
+
+  const sortedDates = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+  let html = '';
+  sortedDates.forEach(date => {
+    const label = formatDate(date);
+    html += `<div class="date-group-title">${label} — ${groups[date].length} articles</div>`;
+    html += '<div class="news-grid">';
+    groups[date].sort((a,b) => b.impact - a.impact).forEach(n => {
+      const impactClass = n.impact >= 70 ? 'impact-high' : n.impact >= 40 ? 'impact-med' : 'impact-low';
+      const impactLabel = n.impact >= 70 ? '🔴 HIGH' : n.impact >= 40 ? '🟡 MED' : '⚪ LOW';
+      const tickers = (n.symbols||[]).slice(0,4).map(s => `<span class="news-ticker-tag">${s}</span>`).join('');
+      html += `
+        <div class="news-card" onclick="window.open('${n.url}','_blank')">
+          <div class="news-card-header">
+            <span class="impact-badge ${impactClass}">${impactLabel} ${n.impact}</span>
+            <span class="news-headline">${n.headline}</span>
+          </div>
+          <div class="news-meta">
+            <span class="news-source">${n.source}</span>
+            <span class="news-date">${n.published}</span>
+            <div class="news-tickers">${tickers}</div>
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function formatDate(dateStr) {
+  try {
+    const d = new Date(dateStr);
+    const today = new Date();
+    const diff  = Math.floor((today - d) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    return d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
+  } catch { return dateStr; }
+}
+
+function buildTickerFilters(news) {
+  const tickers = new Set();
+  news.forEach(n => (n.symbols||[]).forEach(s => tickers.add(s)));
+  const el = document.getElementById('tickerFilters');
+  el.innerHTML = Array.from(tickers).sort().map(t => `
+    <button class="ticker-filter" onclick="toggleTickerFilter('${t}',this)">${t}</button>
+  `).join('');
+}
+
+function toggleTickerFilter(ticker, btn) {
+  if (activeTickerFilter === ticker) {
+    activeTickerFilter = null;
+    btn.classList.remove('active');
+  } else {
+    activeTickerFilter = ticker;
+    document.querySelectorAll('.ticker-filter').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  applyFilters();
+}
+
+function loadNews() {
+  fetch('/api/trading/dashboard/news-feed')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) {
+        document.getElementById('newsContainer').innerHTML =
+          '<div class="loading" style="color:var(--red)">News API error: ' + data.error + '</div>';
+        return;
+      }
+      const ticker_news = data.ticker_news || [];
+      const broad_news  = data.broad_news  || [];
+      allNews = [...ticker_news, ...broad_news];
+
+      // Deduplicate by id
+      const seen = new Set();
+      allNews = allNews.filter(n => { if(seen.has(n.id)) return false; seen.add(n.id); return true; });
+
+      // Set accurate period label
+      if (allNews.length > 0) {
+        const dates = allNews.map(n => n.date).filter(Boolean).sort();
+        const oldest = dates[0];
+        const d = new Date(oldest);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        document.getElementById('statPeriod').textContent = label + ' — Today';
+      } else {
+        document.getElementById('statPeriod').textContent = 'Last 30 Days';
+      }
+
+      document.getElementById('statTotal').textContent = allNews.length;
+      document.getElementById('statHigh').textContent  = allNews.filter(n => n.impact >= 70).length;
+      const tickers = new Set();
+      allNews.forEach(n => (n.symbols||[]).forEach(s => tickers.add(s)));
+      document.getElementById('statTickers').textContent = tickers.size;
+      document.getElementById('lastUpdate').textContent  = 'Updated ' + new Date().toLocaleTimeString();
+
+      if (allNews.length === 0) {
+        document.getElementById('newsContainer').innerHTML =
+          '<div class="loading">No recent news articles found.</div>';
+        return;
+      }
+
+      buildTickerFilters(ticker_news);
+      applyFilters();
+    })
+    .catch(err => {
+      document.getElementById('newsContainer').innerHTML =
+        '<div class="loading" style="color:var(--red)">Failed to load news: ' + err.message + '</div>';
+    });
+}
+
+loadNews();
+setInterval(loadNews, 300000); // refresh every 5 min
+</script>
+</body>
+</html>
