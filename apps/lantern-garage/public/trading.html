@@ -333,12 +333,13 @@
           <div style="font-size:0.72rem;color:var(--muted)" id="status-kalshi">Not configured</div>
         </div>
 
-        <div style="margin-top:12px">
-          <label style="display:block;font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:6px">IBKR Account ID</label>
-          <input type="text" name="ibkr_account" placeholder="Your IBKR account ID" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;box-sizing:border-box;margin-bottom:8px">
-          <label style="display:block;font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:6px">IBKR Password</label>
-          <input type="password" name="ibkr_password" placeholder="Your IBKR password" style="width:100%;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:0.9rem;box-sizing:border-box;margin-bottom:8px">
-          <div style="font-size:0.72rem;color:var(--muted)" id="status-ibkr">Not configured</div>
+        <div style="margin-top:12px;padding:12px;background:var(--surface);border:1px solid rgba(76,175,130,0.3);border-radius:6px">
+          <label style="display:block;font-size:0.75rem;font-weight:600;text-transform:uppercase;color:var(--green);margin-bottom:8px">🔗 IBKR (Claude Code MCP)</label>
+          <div style="font-size:0.82rem;color:var(--muted);line-height:1.5">
+            <strong>Auto-configured via Claude Code MCP</strong><br>
+            Read-only access: quotes, positions, orderbook, account risk<br>
+            <span style="color:var(--green);font-size:0.75rem;margin-top:4px;display:block">✓ Live market data • No credentials needed</span>
+          </div>
         </div>
       </div>
 
@@ -898,7 +899,7 @@ async function loadSettingsStatus() {
       setStatus('gemini', gemini);
       setStatus('alpaca', alpaca);
       setStatus('kalshi', kalshi);
-      setStatus('ibkr', ibkr);
+      // IBKR note: always configured via MCP, no separate status needed
     }
   } catch (e) {
     console.warn('Failed to load settings status:', e);

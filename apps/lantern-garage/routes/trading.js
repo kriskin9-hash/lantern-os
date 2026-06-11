@@ -354,16 +354,22 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
   // GET /api/trading/settings
   // Get API key status (shows which are configured, no secrets exposed)
+  // IBKR is always true — configured via Claude Code MCP (read-only market data)
   if (url.pathname === '/api/trading/settings' && req.method === 'GET') {
     const providers = {
       anthropic: !!process.env.ANTHROPIC_API_KEY,
       openai: !!process.env.OPENAI_API_KEY,
       gemini: !!process.env.GEMINI_API_KEY,
-      ibkr: !!process.env.IBKR_ACCOUNT_ID && !!process.env.IBKR_PASSWORD,
+      ibkr: true, // Always configured via Claude Code MCP
       alpaca: !!process.env.ALPACA_API_KEY,
       kalshi: !!process.env.KALSHI_API_KEY,
     };
-    sendJson(res, { configured: providers }, 200);
+    sendJson(res, {
+      configured: providers,
+      mcp: {
+        ibkr: 'Claude Code MCP: read-only quotes, positions, orderbook, risk data'
+      }
+    }, 200);
     return true;
   }
 
