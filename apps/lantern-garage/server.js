@@ -160,6 +160,26 @@ if (discordToken && discordGuildId) {
   console.log("[Discord Bot] Skipped (set DISCORD_BOT_TOKEN + LANTERN_DISCORD_GUILD_ID in .env.local to enable)");
 }
 
+// ── Trading Microservice (Lantern OS Native) ──
+let tradingService = null;
+const tradingServiceScript = path.join(__dirname, "start-trading-service.js");
+if (fs.existsSync(tradingServiceScript)) {
+  tradingService = spawn("node", [tradingServiceScript], {
+    stdio: "inherit",
+    cwd: __dirname,
+    env: { ...process.env, AI_TRADER_DASHBOARD_PORT: 5050 },
+  });
+  tradingService.on("error", (err) => {
+    console.error(`[Trading Service] Failed to start: ${err.message}`);
+  });
+  tradingService.on("exit", (code) => {
+    console.log(`[Trading Service] Exited with code ${code}`);
+  });
+  console.log(`[Trading Service] Starting on port 5050...`);
+} else {
+  console.warn(`[Trading Service] Script not found: ${tradingServiceScript}`);
+}
+
 // ── AI Trader Process (autonomous trading system) ──
 const aiTraderStartupScript = path.join(__dirname, "..", "..", "scripts", "start-ai-trader.js");
 let aiTraderProcess = null;
@@ -177,7 +197,7 @@ if (fs.existsSync(aiTraderStartupScript)) {
   });
   console.log(`[AI Trader] Started process manager`);
 } else {
-  console.warn(`[AI Trader] Process manager script not found: ${aiTraderStartupScript}`);
+  console.log(`[AI Trader] Using native Lantern OS Trading Microservice`);
 }
 
 // Graceful shutdown
@@ -185,6 +205,9 @@ function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down...`);
   if (discordBot && !discordBot.killed) {
     discordBot.kill("SIGTERM");
+  }
+  if (tradingService && !tradingService.killed) {
+    tradingService.kill("SIGTERM");
   }
   if (aiTraderProcess && !aiTraderProcess.killed) {
     aiTraderProcess.kill("SIGTERM");
