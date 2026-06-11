@@ -280,13 +280,13 @@
       scrollToBottom();
       return;
     }
-    // Special handling for Three Doors game
-    const threeDoorsMatch = text.match(/^!(?:three-doors|threedoors|doors)\b/i);
-    if (threeDoorsMatch) {
+    // Special handling for Kingdome of Hearts game
+    const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts)\b/i);
+    if (kingdomeMatch) {
       if (emptyState) emptyState.style.display = "none";
       inputEl.value = "";
       analytics.messagesSent++;
-      analytics.record("send", "Three Doors game started");
+      analytics.record("send", "Kingdome of Hearts game started");
       startThreeDoors();
       return;
     }
@@ -1238,15 +1238,15 @@
   initVoice();
   loadVoiceSettings();
 
-  // ── Three Doors Game Integration ────────────────────────────────────────
+  // ── Kingdome of Hearts Game Integration ────────────────────────────────
   let doorsGameState = null;
   let doorsUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
   async function startThreeDoors() {
-    console.log("[Doors] Starting game...");
+    console.log("[Kingdome] Starting game...");
     const row = document.createElement("div");
     row.className = "msg-row agent";
-    row.innerHTML = `<div class="msg-label">🚪 Three Doors</div><div class="bubble"><b>Opening the first door...</b></div>`;
+    row.innerHTML = `<div class="msg-label">🚪 Kingdome of Hearts</div><div class="bubble"><b>Opening the first door...</b></div>`;
     messagesEl.appendChild(row);
     scrollToBottom();
 
@@ -1268,7 +1268,7 @@
       doorsGameState = data;
       renderDoorsScene(row, data);
     } catch (error) {
-      console.error("[Doors] Error:", error);
+      console.error("[Kingdome] Error:", error);
       row.querySelector(".bubble").textContent = `❌ Failed to start game: ${error.message}`;
     }
   }
@@ -1329,7 +1329,7 @@
       doorsGameState = data;
       renderDoorsScene(row, data);
     } catch (error) {
-      console.error("[Doors] Choice error:", error);
+      console.error("[Kingdome] Choice error:", error);
       row.querySelector(".bubble").textContent = `❌ Failed: ${error.message}`;
     }
   };

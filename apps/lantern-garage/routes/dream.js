@@ -273,7 +273,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     return true;
   }
 
-    // ── Three Doors game ────────────────────────────────────────────────
+    // ── Kingdome of Hearts game ─────────────────────────────────────────
   if (url.pathname === "/api/dream/doors" && req.method === "POST") {
     try {
       const raw = await collectRequestBody(req);
@@ -715,7 +715,7 @@ print(e.sd_prompt_for_state())`;
     return true;
   }
 
-  // ── Three Doors UI metrics collection ────────────────────────────────
+  // ── Kingdome of Hearts UI metrics collection ───────────────────────
   if (url.pathname === "/api/metrics/three-doors" && req.method === "POST") {
     try {
       const body = JSON.parse(await collectRequestBody(req));
@@ -736,7 +736,7 @@ print(e.sd_prompt_for_state())`;
   // ── Convergence Models 3 — live status from Ollama ────────────────────
   if (url.pathname === "/api/dream/lantern-models" && req.method === "GET") {
     const LANTERN_MODELS = [
-      { id: "lantern-csf-dream",   role: "dream",       icon: "🌙", base: "mistral",        description: "Three Doors game · Elephant Oasis · dream narrative" },
+      { id: "lantern-csf-dream",   role: "dream",       icon: "🌙", base: "mistral",        description: "Kingdome of Hearts game · Elephant Oasis · dream narrative" },
       { id: "lantern-convergance", role: "convergence", icon: "◈",  base: "qwen2.5-coder",  description: "Convergence receipts · AAPF provenance · structured output" },
       { id: "lantern-pcsf",        role: "pcsf",        icon: "⌖",  base: "qwen2.5-coder",  description: "PCSF state manifests · system receipts · agent declarations" },
     ];

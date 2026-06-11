@@ -846,6 +846,15 @@
     const text = input.value.trim();
     if (!text || isSending) return;
 
+    // Kingdome of Hearts interactive game — bypass normal chat stream
+    const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts)\b/i);
+    if (kingdomeMatch) {
+      hideEmptyState();
+      input.value = '';
+      startThreeDoors();
+      return;
+    }
+
     isSending = true;
     document.getElementById('send-btn').disabled = true;
 

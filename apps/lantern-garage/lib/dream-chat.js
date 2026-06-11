@@ -246,7 +246,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   const text = String(message || "").trim();
   const webSuggestions = generateWebSuggestions(message);
 
-  // ── Three Doors game intercept ──
+  // ── Kingdome of Hearts game intercept ──
   // Python ThreeDoorsEngine (scripted state machine, offline-capable)
   const threeDoors = handleThreeDoorsServer(text);
   if (threeDoors) {
@@ -288,7 +288,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       });
       const data = JSON.parse(result);
       if (data.error) {
-        return { reply: `Three Doors: ${data.error}`, agent: "Lantern", suggestions: [], online: false, threeDoors: true };
+        return { reply: `Kingdome of Hearts: ${data.error}`, agent: "Lantern", suggestions: [], online: false, threeDoors: true };
       }
       const lines = [data.text, ""];
       if (data.fox_present) lines.push("🦊 The fox is with you.");
@@ -297,7 +297,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       if (data.image_prompt) lines.push("", `🎨 *Image prompt:* ${data.image_prompt}`);
       return { reply: lines.join("\n"), agent: "Lantern", suggestions: data.doors.map(d => d.name), online: true, source: "python_engine", threeDoors: true, scene_key: data.scene_key, image_prompt: data.image_prompt };
     } catch (_e) {
-      return { reply: "Three Doors: no engine available. Ensure Python is installed and src/three_doors_engine.py exists.", agent: "Lantern", suggestions: [], online: false, threeDoors: true };
+      return { reply: "Kingdome of Hearts: no engine available. Ensure Python is installed and src/three_doors_engine.py exists.", agent: "Lantern", suggestions: [], online: false, threeDoors: true };
     }
   }
 

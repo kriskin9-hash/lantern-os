@@ -1,5 +1,5 @@
 /**
- * Three Doors Game Browser Tests (Playwright)
+ * Kingdome of Hearts Game Browser Tests (Playwright)
  * OSS stack tests using Playwright - tests the full game flow
  *
  * Run with server: npm start --prefix apps/lantern-garage
@@ -11,7 +11,7 @@ const { test, expect } = require("@playwright/test");
 const BASE_URL = "http://127.0.0.1:4177";
 const DREAM_CHAT_URL = `${BASE_URL}/dream-chat.html`;
 
-test.describe("Three Doors Game - API Tests", () => {
+test.describe("Kingdome of Hearts Game - API Tests", () => {
   test("API returns valid initial game state", async ({ page }) => {
     const response = await page.request.post(`${BASE_URL}/api/dream/doors`, {
       data: { userId: "test-player-1", action: "start" }
@@ -20,10 +20,10 @@ test.describe("Three Doors Game - API Tests", () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
 
-    expect(data.text).toContain("Moss Door");
+    expect(data.text).toContain("Kingdome");
     expect(data.doors).toHaveLength(3);
     expect(data.fox_present).toBe(true);
-    expect(data.scene_key).toBe("moss-entry");
+    expect(data.scene_key).toBe("kingdome-garden");
     expect(data.history).toBeDefined();
   });
 
@@ -55,12 +55,12 @@ test.describe("Three Doors Game - API Tests", () => {
   test("API handles multi-turn game progression", async ({ page }) => {
     const userId = "test-player-3";
 
-    // Turn 1: Start
+    // Turn 1: Reset to ensure fresh game
     const turn1 = await page.request.post(`${BASE_URL}/api/dream/doors`, {
-      data: { userId, action: "start" }
+      data: { userId, action: "reset" }
     });
     let state = await turn1.json();
-    expect(state.text).toContain("Moss Door");
+    expect(state.text).toContain("Kingdome");
 
     // Turn 2: Choose door C
     const turn2 = await page.request.post(`${BASE_URL}/api/dream/doors`, {
@@ -100,10 +100,10 @@ test.describe("Three Doors Game - API Tests", () => {
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
 
-    expect(data).toHaveProperty("available");
-    if (!data.available && data.suggestion) {
-      expect(data.suggestion).toHaveProperty("prompt");
-      expect(data.suggestion.prompt.length).toBeGreaterThan(20);
+    expect(data).toHaveProperty("image_available");
+    if (!data.image_available && data.image_prompt) {
+      expect(typeof data.image_prompt).toBe("string");
+      expect(data.image_prompt.length).toBeGreaterThan(20);
     }
   });
 
@@ -117,17 +117,17 @@ test.describe("Three Doors Game - API Tests", () => {
   });
 });
 
-test.describe("Three Doors Game - UI Tests", () => {
+test.describe("Kingdome of Hearts Game - UI Tests", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(DREAM_CHAT_URL);
     await page.waitForSelector("#input", { timeout: 10000 });
   });
 
-  test("Three Doors command launches game in Dream Chat", async ({ page }) => {
+  test("Kingdome of Hearts command launches game in Dream Chat", async ({ page }) => {
     const input = page.locator("#input");
     const sendBtn = page.locator("#send-btn");
 
-    // Type and send the Three Doors command
+    // Type and send the Kingdome of Hearts command
     await input.fill("!three-doors");
     await sendBtn.click();
 
@@ -152,7 +152,8 @@ test.describe("Three Doors Game - UI Tests", () => {
 
     // Check for scene content
     const bubbles = page.locator(".bubble");
-    const bubbleText = await bubbles.nth(bubbles.count() - 1).textContent();
+    const bubbleCount = await bubbles.count();
+    const bubbleText = await bubbles.nth(Math.max(0, bubbleCount - 1)).textContent();
 
     expect(bubbleText).toContain("Door");
   });
@@ -270,7 +271,7 @@ test.describe("Three Doors Game - UI Tests", () => {
   });
 });
 
-test.describe("Three Doors Game - Scene Progression", () => {
+test.describe("Kingdome of Hearts Game - Scene Progression", () => {
   test("All new scenes are accessible", async ({ page }) => {
     // The game engine includes: garden-door, xenon-convergence, end-of-time
     // We'll verify they're in the navigation graph by traversing
