@@ -10,6 +10,9 @@ const TradingAPIBridge = require('../lib/trading-api-bridge');
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
 
+const AI_TRADER_DASHBOARD_HOST = process.env.AI_TRADER_DASHBOARD_HOST || '127.0.0.1';
+const AI_TRADER_DASHBOARD_PORT = process.env.AI_TRADER_DASHBOARD_PORT || 5050;
+
 /**
  * Helper to call AI trader microservice
  */
@@ -56,9 +59,70 @@ function callAITrader(path, method = 'GET', body = null) {
   });
 }
 
+/**
+ * Helper to call the AI Trader dashboard service (dashboard.py, port 5050)
+ */
+function callDashboard(path) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: AI_TRADER_DASHBOARD_HOST,
+      port: AI_TRADER_DASHBOARD_PORT,
+      path,
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      timeout: 10000
+    };
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error('Invalid JSON response from trading dashboard service'));
+        }
+      });
+    });
+
+    req.on('error', err => reject(err));
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('Trading dashboard service timeout'));
+    });
+
+    req.end();
+  });
+}
+
+// Proxy map for the LanternOS-hosted /trading.html and /trading-news.html
+// pages, which talk to a single origin (this server) instead of the
+// AI Trader dashboard's own port (5050).
+const DASHBOARD_PROXY_ROUTES = {
+  '/api/trading/dashboard/positions': '/api/positions',
+  '/api/trading/dashboard/market-status': '/api/market-status',
+  '/api/trading/dashboard/zones': '/api/zones',
+  '/api/trading/dashboard/watchlist-prices': '/api/watchlist-prices',
+  '/api/trading/dashboard/agent-log': '/api/agent-log',
+  '/api/trading/dashboard/orders': '/api/orders',
+  '/api/trading/dashboard/news-feed': '/api/news-feed',
+};
+
 module.exports = async function tradingRoutes(req, res, url, deps) {
   const { sendJson } = deps;
   const bridge = new TradingAPIBridge();
+
+  // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
+  // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,agent-log,orders,news-feed}
+  if (req.method === 'GET' && DASHBOARD_PROXY_ROUTES[url.pathname]) {
+    try {
+      const data = await callDashboard(DASHBOARD_PROXY_ROUTES[url.pathname]);
+      sendJson(res, data, 200);
+    } catch (error) {
+      sendJson(res, { error: error.message }, 502);
+    }
+    return true;
+  }
 
   // GET /api/trading/status
   // Returns real-time status of all connected APIs

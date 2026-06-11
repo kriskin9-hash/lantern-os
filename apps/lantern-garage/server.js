@@ -85,6 +85,7 @@ const routes = [
   require("./routes/cubes"),
   require("./routes/csf"),
   require("./routes/training"),
+  require("./routes/trading"),
   require("./routes/surfaces"),
   require("./routes/self-edit"),
 ];
@@ -159,11 +160,34 @@ if (discordToken && discordGuildId) {
   console.log("[Discord Bot] Skipped (set DISCORD_BOT_TOKEN + LANTERN_DISCORD_GUILD_ID in .env.local to enable)");
 }
 
+// ── AI Trader Process (autonomous trading system) ──
+const aiTraderStartupScript = path.join(__dirname, "..", "..", "scripts", "start-ai-trader.js");
+let aiTraderProcess = null;
+if (fs.existsSync(aiTraderStartupScript)) {
+  aiTraderProcess = spawn("node", [aiTraderStartupScript], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    env: { ...process.env },
+  });
+  aiTraderProcess.on("error", (err) => {
+    console.error(`[AI Trader] Failed to start: ${err.message}`);
+  });
+  aiTraderProcess.on("exit", (code) => {
+    console.log(`[AI Trader] Process manager exited with code ${code}`);
+  });
+  console.log(`[AI Trader] Started process manager`);
+} else {
+  console.warn(`[AI Trader] Process manager script not found: ${aiTraderStartupScript}`);
+}
+
 // Graceful shutdown
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down...`);
   if (discordBot && !discordBot.killed) {
     discordBot.kill("SIGTERM");
+  }
+  if (aiTraderProcess && !aiTraderProcess.killed) {
+    aiTraderProcess.kill("SIGTERM");
   }
   server.close(() => {
     process.exit(0);

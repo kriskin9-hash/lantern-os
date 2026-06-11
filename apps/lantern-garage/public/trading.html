@@ -8,8 +8,12 @@
   <link rel="stylesheet" href="/css/site.css">
   <title>Trading — Lantern OS</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
     :root {
       --warning: #f0a040;
+      --purple: #a78bfa;
+      --mono: 'IBM Plex Mono', monospace;
     }
     html, body {
       min-height: 100%;
@@ -83,39 +87,6 @@
     .metric-label { font-size: 0.82rem; color: var(--muted); }
     .metric-value { font-size: 0.92rem; font-weight: 600; }
 
-    .stock-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .stock-row:last-child { border-bottom: none; }
-    .stock-symbol {
-      font-weight: 600;
-      font-size: 0.92rem;
-    }
-    .stock-price {
-      font-size: 0.92rem;
-      font-weight: 600;
-      font-family: monospace;
-    }
-    .stock-change {
-      font-size: 0.82rem;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-    .stock-change.up {
-      background: rgba(76, 175, 130, 0.2);
-      color: var(--green);
-    }
-    .stock-change.down {
-      background: rgba(224, 85, 85, 0.2);
-      color: var(--danger);
-    }
-
     .alert-item {
       background: var(--surface2);
       border-left: 3px solid var(--accent);
@@ -140,30 +111,6 @@
       margin: 0;
     }
     .alert-time {
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
-    .news-item {
-      background: var(--surface2);
-      padding: 12px;
-      margin: 8px 0;
-      border-radius: 6px;
-      border-left: 2px solid var(--accent);
-    }
-    .news-title {
-      font-weight: 600;
-      font-size: 0.92rem;
-      margin: 0 0 4px;
-      color: var(--text);
-    }
-    .news-source {
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin: 0;
-    }
-    .news-time {
       font-size: 0.72rem;
       color: var(--muted);
       margin-top: 4px;
@@ -234,6 +181,80 @@
 
     .full-width { grid-column: 1 / -1; }
 
+    /* ── AI Trader dashboard widgets ── */
+    .pulse{ animation:pulse 2s ease-in-out infinite; }
+    @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .stat-row{ display:flex; gap:28px; flex-wrap:wrap; margin-bottom:12px; }
+    .stat-block{ display:flex; flex-direction:column; gap:3px; }
+    .stat-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+    .stat-value{ font-family:var(--mono); font-size:1.15rem; font-weight:600; color:var(--text); }
+    .stat-value.pos{ color:var(--green); }
+    .stat-value.neg{ color:var(--danger); }
+
+    .mkt-row{ display:flex; justify-content:space-between; padding:3px 0; font-family:var(--mono); font-size:11px; }
+    .mkt-label{ color:var(--muted); } .mkt-val{ color:var(--text); }
+
+    .signal-body{ display:grid; grid-template-columns:200px 1fr; gap:16px; }
+    @media (max-width:860px){ .signal-body{ grid-template-columns:1fr; } }
+    .watchlist-col{ border-right:1px solid var(--border); padding-right:12px; max-height:640px; overflow-y:auto; }
+    @media (max-width:860px){
+      .watchlist-col{ border-right:none; border-bottom:1px solid var(--border); padding-right:0; padding-bottom:8px; max-height:240px; }
+    }
+
+    .wl-item{ padding:6px 8px; cursor:pointer; border-radius:6px; transition:background .1s; }
+    .wl-item:hover,.wl-item.active{ background:var(--surface2); }
+    .wl-sym{ font-family:var(--mono); font-size:11px; font-weight:600; }
+    .wl-row{ display:flex; justify-content:space-between; align-items:center; }
+    .wl-price{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+    .wl-chg{ font-family:var(--mono); font-size:9px; font-weight:600; }
+    .wl-up{ color:var(--green); } .wl-dn{ color:var(--danger); } .wl-flat{ color:var(--muted); }
+    .wl-signal{ font-family:var(--mono); font-size:8px; margin-top:2px; }
+
+    /* ── Per-ticker signal cards (zone-ladder) ── */
+    .cards-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; }
+    .ticker-card{ background:var(--surface2); border:1px solid var(--border); border-radius:8px; overflow:hidden; transition:border-color .15s; }
+    .ticker-card.state-open{ border-color:rgba(16,185,129,.4); grid-column:span 2; }
+    .ticker-card.state-watching{ border-color:rgba(14,165,233,.3); }
+    .ticker-card.state-quiet{ opacity:.7; }
+    .ticker-card .card-header{ padding:10px 14px 6px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .ticker-card .card-ticker{ font-family:var(--mono); font-size:14px; font-weight:600; }
+    .ticker-card .card-price{ font-family:var(--mono); font-size:12px; color:var(--muted); }
+    .ticker-card .card-state{ font-family:var(--mono); font-size:8px; padding:2px 6px; border-radius:4px; letter-spacing:.1em; }
+    .ticker-card.state-open .card-state{ background:rgba(16,185,129,.15); color:var(--green); }
+    .ticker-card.state-watching .card-state{ background:var(--accent-dim); color:var(--accent); }
+    .ticker-card.state-quiet .card-state{ background:var(--surface); color:var(--muted); }
+
+    .conf-badge{ font-family:var(--mono); font-size:9px; padding:3px 8px; border-radius:4px; display:flex; gap:6px; flex-wrap:wrap; margin:0 14px 6px; }
+    .conf-badge.bull{ background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3); color:var(--green); }
+    .conf-badge.bear{ background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:var(--danger); }
+    .conf-badge.neut{ background:var(--surface); border:1px solid var(--border); color:var(--muted); }
+
+    .pnl-badge{ font-family:var(--mono); font-size:10px; padding:2px 8px; border-radius:4px; font-weight:600; }
+    .pnl-pos{ background:rgba(16,185,129,.15); color:var(--green); }
+    .pnl-neg{ background:rgba(239,68,68,.15); color:var(--danger); }
+
+    .riley-badge{ font-family:var(--mono); font-size:8px; padding:2px 6px; border-radius:3px; }
+    .riley-PERFECT{ background:rgba(245,158,11,.2); color:var(--gold); }
+    .riley-GOOD{ background:rgba(16,185,129,.12); color:var(--green); }
+    .riley-WAIT{ background:var(--accent-dim); color:var(--accent); }
+    .riley-NO{ background:rgba(239,68,68,.1); color:var(--danger); }
+
+    .zone-ladder{ position:relative; height:220px; background:var(--bg); margin:0 14px 10px; border-radius:4px; overflow:hidden; cursor:default; border:1px solid var(--border); }
+    .ticker-card.state-open .zone-ladder{ height:280px; }
+    .ticker-card.state-quiet .zone-ladder{ height:130px; }
+
+    /* ── Activity feed panels ── */
+    .feed-list{ max-height:240px; overflow-y:auto; }
+    .log-item{ font-family:var(--mono); font-size:10px; padding:4px 0; border-bottom:1px solid var(--border); display:grid; grid-template-columns:45px 60px 1fr; gap:6px; align-items:start; }
+    .log-item:last-child{ border-bottom:none; }
+    .log-time{ color:var(--muted); } .log-agent{ font-weight:600; }
+    .log-grok{ color:var(--purple); } .log-claude{ color:var(--accent); } .log-risk{ color:var(--gold); }
+    .log-system{ color:var(--muted); } .log-trail{ color:var(--green); } .log-body{ color:var(--text); word-break:break-word; }
+
+    .order-row{ display:flex; justify-content:space-between; padding:4px 0; font-family:var(--mono); font-size:9px; border-bottom:1px solid var(--border); }
+    .order-row:last-child{ border-bottom:none; }
+
     @media (max-width: 768px) {
       .grid {
         grid-template-columns: 1fr;
@@ -255,6 +276,7 @@
   <div class="nav-links">
     <a href="/dream-chat.html">Journal</a>
     <a href="/trading.html" class="active">Trading</a>
+    <a href="/trading-news.html">News</a>
     <a href="/flourishing">Dashboard</a>
     <a href="/knowledgecenter.html">Help</a>
   </div>
@@ -320,60 +342,21 @@
 
   <div class="grid">
     <div class="card">
-      <h2>Watchlist</h2>
-      <div id="watchlist-container">
-        <div class="stock-row">
-          <span class="stock-symbol">AAPL</span>
-          <span class="stock-price">$185.92</span>
-          <span class="stock-change up">+2.1%</span>
-        </div>
-        <div class="stock-row">
-          <span class="stock-symbol">MSFT</span>
-          <span class="stock-price">$417.31</span>
-          <span class="stock-change up">+1.8%</span>
-        </div>
-        <div class="stock-row">
-          <span class="stock-symbol">GOOGL</span>
-          <span class="stock-price">$142.64</span>
-          <span class="stock-change down">-0.9%</span>
-        </div>
-        <div class="stock-row">
-          <span class="stock-symbol">TSLA</span>
-          <span class="stock-price">$246.87</span>
-          <span class="stock-change up">+3.2%</span>
-        </div>
-        <div class="stock-row">
-          <span class="stock-symbol">NVDA</span>
-          <span class="stock-price">$892.45</span>
-          <span class="stock-change up">+1.5%</span>
-        </div>
+      <h2>Portfolio</h2>
+      <div class="stat-row">
+        <div class="stat-block"><span class="stat-label">Equity</span><span class="stat-value" id="hEquity">—</span></div>
+        <div class="stat-block"><span class="stat-label">Day P&amp;L</span><span class="stat-value" id="hDayPnl">—</span></div>
+        <div class="stat-block"><span class="stat-label">Open Positions</span><span class="stat-value" id="hPos">—</span></div>
       </div>
     </div>
 
     <div class="card">
-      <h2>Trade Alerts</h2>
-      <div id="alerts-container">
-        <div class="alert-item warning">
-          <p class="alert-title">📊 EURUSD Breakout Signal</p>
-          <p class="alert-desc">Strong breakout above 1.1200 resistance detected. Entry at 1.1210, SL: 1.1150, TP: 1.1350</p>
-          <p class="alert-time">2 minutes ago</p>
-        </div>
-        <div class="alert-item">
-          <p class="alert-title">✅ GBPUSD Trade Closed</p>
-          <p class="alert-desc">Position closed at +125 pips. Target hit successfully. Win rate: 3/4 (75%)</p>
-          <p class="alert-time">15 minutes ago</p>
-        </div>
-        <div class="alert-item danger">
-          <p class="alert-title">⚠️ Risk Alert: Daily Limit</p>
-          <p class="alert-desc">Daily loss limit approaching. Current: -$450 of $500 max. Consider pausing.</p>
-          <p class="alert-time">24 minutes ago</p>
-        </div>
-        <div class="alert-item">
-          <p class="alert-title">🤖 Agent Consensus</p>
-          <p class="alert-desc">USDJPY: Trend 82%, Momentum 78%, Volatility 65%, Risk 100%, Strategy 85% → 82% consensus</p>
-          <p class="alert-time">1 hour ago</p>
-        </div>
+      <h2>Market Status</h2>
+      <div class="stat-row">
+        <div class="stat-block"><span class="stat-label">VIX</span><span class="stat-value" id="hVix">—</span></div>
+        <div class="stat-block"><span class="stat-label">Session</span><span class="stat-value" id="hMkt">—</span></div>
       </div>
+      <div id="mktStatus"></div>
     </div>
 
     <div class="card full-width">
@@ -403,117 +386,25 @@
     </div>
 
     <div class="card full-width">
-      <h2>Market News</h2>
-      <div id="news-container">
-        <div class="news-item">
-          <p class="news-title">Fed Signals Potential Rate Cuts in 2026</p>
-          <p class="news-source">Reuters · Financial Times</p>
-          <p class="news-time">Updated 2 hours ago</p>
+      <h2>Watchlist & Signals</h2>
+      <div class="signal-body">
+        <div class="watchlist-col">
+          <div id="wlList"></div>
         </div>
-        <div class="news-item">
-          <p class="news-title">Tech Giants Report Strong Q4 Earnings</p>
-          <p class="news-source">Bloomberg · MarketWatch</p>
-          <p class="news-time">Updated 4 hours ago</p>
-        </div>
-        <div class="news-item">
-          <p class="news-title">ECB Maintains Stance on Interest Rates</p>
-          <p class="news-source">Wall Street Journal · Deutsche Börse</p>
-          <p class="news-time">Updated 6 hours ago</p>
-        </div>
-        <div class="news-item">
-          <p class="news-title">Oil Prices Rise on Supply Concerns</p>
-          <p class="news-source">CNBC · Bloomberg</p>
-          <p class="news-time">Updated 8 hours ago</p>
-        </div>
-        <div class="news-item">
-          <p class="news-title">Asian Markets Close Mixed After US Rally</p>
-          <p class="news-source">South China Morning Post · Reuters</p>
-          <p class="news-time">Updated 12 hours ago</p>
-        </div>
+        <div class="cards-grid" id="cardsGrid"></div>
       </div>
     </div>
 
     <div class="card">
-      <h2>Performance Metrics</h2>
-      <div class="metric">
-        <span class="metric-label">Win Rate</span>
-        <span class="metric-value">73%</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Avg R Multiple</span>
-        <span class="metric-value">2.1</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Profit Factor</span>
-        <span class="metric-value">2.8</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Max Drawdown</span>
-        <span class="metric-value">-8.3%</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Total Trades</span>
-        <span class="metric-value">127</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Days Active</span>
-        <span class="metric-value">45</span>
-      </div>
+      <h2>Agent Feed</h2>
+      <div id="agentLog" class="feed-list"></div>
     </div>
 
     <div class="card">
-      <h2>Risk Management</h2>
-      <div class="metric">
-        <span class="metric-label">Account Size</span>
-        <span class="metric-value">$10,000</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Risk per Trade</span>
-        <span class="metric-value">5% ($500)</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Daily Loss Limit</span>
-        <span class="metric-value">10% ($1,000)</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Today's P&L</span>
-        <span class="metric-value" style="color: var(--green);">+$650</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Open Positions</span>
-        <span class="metric-value">2</span>
-      </div>
-      <div class="metric">
-        <span class="metric-label">Mode</span>
-        <span class="metric-value"><span class="badge active">Paper Trading</span></span>
-      </div>
+      <h2>Recent Orders</h2>
+      <div id="orders" class="feed-list"></div>
     </div>
   </div>
-
-  <div class="card full-width">
-    <h2>System Status</h2>
-    <div class="metric">
-      <span class="metric-label">Agent Fleet</span>
-      <span class="metric-value"><span class="badge active">5/5 Online</span></span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Claude Decision Engine</span>
-      <span class="metric-value"><span class="badge active">Ready</span></span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Signal Processing</span>
-      <span class="metric-value"><span class="badge active">Active</span></span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Memory System (CSF)</span>
-      <span class="metric-value"><span class="badge active">Synchronized</span></span>
-    </div>
-    <div class="metric">
-      <span class="metric-label">Provider Fallback Chain</span>
-      <span class="metric-value"><span class="badge active">Claude Primary</span></span>
-    </div>
-  </div>
-
 </div>
 
 <script>
@@ -580,7 +471,338 @@ class TradingDashboard {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => new TradingDashboard().init());
+// ── AI Trader dashboard — zones, watchlist, agent feed, orders ──────────────
+
+// State
+let zonesData    = {};
+let wlPrices     = [];
+let activeTicker = null;
+
+// Helpers
+function fmt(n, d=2){ return n == null ? '—' : Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function fmtPct(n){ if(n==null)return '—'; return (n>=0?'+':'')+fmt(n,2)+'%'; }
+function tickerState(d){
+  if(d.position) return 'open';
+  const c = d.last_signal?.confidence || d.confidence || 0;
+  return c >= 45 ? 'watching' : 'quiet';
+}
+function getCurrentPrice(ticker){
+  const wp = wlPrices.find(t => t.ticker === ticker);
+  return wp ? wp.price : 0;
+}
+
+// Zone ladder renderer (pure CSS/HTML, zero dependencies)
+function zlLine(topPct, color, label, textColor){
+  return `<div style="position:absolute;left:0;right:64px;top:${topPct};height:1px;
+    background:repeating-linear-gradient(90deg,${color} 0,${color} 5px,transparent 5px,transparent 9px);"></div>
+    <div style="position:absolute;left:4px;top:${topPct};transform:translateY(-100%);
+    font-family:'IBM Plex Mono',monospace;font-size:8px;color:${textColor};
+    background:rgba(10,12,15,.8);padding:1px 3px;border-radius:2px;white-space:nowrap;">${label}</div>`;
+}
+
+function renderZoneLadder(ticker, d, currentPrice){
+  const el = document.getElementById('ladder-'+ticker);
+  if(!el) return;
+
+  // Price fallback chain so the ladder always renders something useful:
+  // 1. Live market price (normal case)
+  // 2. Open-position entry price (market closed / data gap)
+  // 3. Median of zone midpoints (zones loaded but no price yet)
+  // 4. Only if all three fail: show a minimal placeholder
+  let priceLabel = null;   // null = exact price; string = substitute label
+  if(!currentPrice || currentPrice <= 0){
+    const pos   = d.position;
+    const zones = (d.zones || []).slice(0, 12);
+    if(pos && pos.entry > 0){
+      currentPrice = pos.entry;
+      priceLabel   = 'entry $' + (pos.entry >= 100
+                        ? pos.entry.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})
+                        : pos.entry.toFixed(4));
+    } else if(zones.length > 0){
+      const mids = zones.map(z => z.mid).filter(m => m > 0);
+      if(mids.length > 0){
+        currentPrice = mids.reduce((a,b)=>a+b,0) / mids.length;
+        priceLabel   = 'no price';
+      }
+    }
+    if(!currentPrice || currentPrice <= 0){
+      // Last resort: pull live price from wlPrices global
+      currentPrice = getCurrentPrice(ticker);
+      if(!currentPrice || currentPrice <= 0){
+        el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
+          + 'height:100%;font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)'
+          + '">Waiting for price data</div>';
+        return;
+      }
+      priceLabel = 'live';
+    }
+  }
+  const pos   = d.position;
+  const zones = (d.zones||[]).slice(0,12);
+
+  // Determine display range: ±3% around current price, expanded to include stop/TP/entry
+  let rMin = currentPrice * 0.97, rMax = currentPrice * 1.03;
+  if(pos){
+    if(pos.stop)  { rMin=Math.min(rMin,pos.stop*0.998);  rMax=Math.max(rMax,pos.stop*1.002);  }
+    if(pos.tp)    { rMin=Math.min(rMin,pos.tp*0.998);    rMax=Math.max(rMax,pos.tp*1.002);    }
+    if(pos.entry) { rMin=Math.min(rMin,pos.entry*0.998); rMax=Math.max(rMax,pos.entry*1.002); }
+  }
+  // Expand to include nearby zones
+  for(const z of zones){
+    if(z.mid){ if(z.mid>rMax*0.998) rMax=z.mid*1.002; if(z.mid<rMin*1.002) rMin=z.mid*0.998; }
+  }
+  const rng = rMax - rMin; if(rng<=0) return;
+
+  const pct  = p => (((rMax-p)/rng)*100).toFixed(2)+'%';
+  const hpct = (t,b) => (Math.max(0.3,(t-b)/rng*100)).toFixed(2)+'%';
+
+  let html = '';
+
+  // Zone bands
+  for(let i=0;i<zones.length;i++){
+    const z=zones[i]; if(!z.mid) continue;
+    const sup  = z.type==='SUPPORT';
+    const today= z.tier==='today'||z.tier==='weekly';
+    const op   = Math.max(0.07, Math.min(0.75, (z.strength||40)/100*0.9));
+    const zTop = Math.min(rMax, z.top    || z.mid*1.001);
+    const zBot = Math.max(rMin, z.bottom || z.mid*0.999);
+    if(zTop<=rMin||zBot>=rMax) continue;
+    const bgColor  = sup ? `rgba(0,212,170,${op})` : `rgba(255,95,109,${op})`;
+    const bdColor  = z.triggered_entry ? '#f5a623' : (today ? (sup?'rgba(0,212,170,.6)':'rgba(255,95,109,.6)') : 'transparent');
+    const bdWidth  = (today||z.triggered_entry) ? '1px' : '0';
+    html += `<div style="position:absolute;left:0;right:64px;top:${pct(zTop)};height:${hpct(zTop,zBot)};
+      background:${bgColor};border-top:${bdWidth} solid ${bdColor};border-bottom:${bdWidth} solid ${bdColor};
+      box-sizing:border-box;min-height:3px;"></div>`;
+    html += `<div style="position:absolute;right:0;width:62px;top:${pct(z.mid)};transform:translateY(-50%);
+      font-family:'IBM Plex Mono',monospace;font-size:8px;line-height:1.3;padding:1px 3px;white-space:nowrap;
+      color:${sup?'rgba(0,212,170,.85)':'rgba(255,95,109,.85)'}">${sup?'S':'R'} ${z.strength||'?'} \xb7 ${z.touches||'?'}T</div>`;
+  }
+
+  // P&L fill between entry and current price
+  if(pos&&pos.entry){
+    const fillTop = Math.max(rMin,Math.min(rMax,Math.max(currentPrice,pos.entry)));
+    const fillBot = Math.max(rMin,Math.min(rMax,Math.min(currentPrice,pos.entry)));
+    if(fillTop>fillBot){
+      const profit = currentPrice>=pos.entry;
+      html += `<div style="position:absolute;left:0;right:64px;top:${pct(fillTop)};height:${hpct(fillTop,fillBot)};
+        background:${profit?'rgba(0,212,170,.06)':'rgba(255,95,109,.06)'};min-height:2px;pointer-events:none;"></div>`;
+    }
+    // Entry line
+    if(pos.entry>=rMin&&pos.entry<=rMax)
+      html += zlLine(pct(pos.entry),'rgba(74,158,255,.8)',`Entry $${fmt(pos.entry,pos.entry>=100?2:4)}`,'#4a9eff');
+  }
+
+  // Stop + TP lines
+  if(pos&&pos.stop&&pos.stop>=rMin&&pos.stop<=rMax)
+    html += zlLine(pct(pos.stop),'rgba(255,95,109,.85)',`STOP $${fmt(pos.stop,pos.stop>=100?2:4)}`,'#ff5f6d');
+  if(pos&&pos.tp&&pos.tp>=rMin&&pos.tp<=rMax)
+    html += zlLine(pct(pos.tp),'rgba(0,212,170,.85)',`TP $${fmt(pos.tp,pos.tp>=100?2:4)}`,'#00d4aa');
+
+  // Current price line — use fallback label if we had no live price
+  const priceText = priceLabel || ('$' + fmt(currentPrice, currentPrice>=100?2:4));
+  const lineColor = priceLabel ? '#9aa0ad' : '#e8eaf0';   // dim line for fallback prices
+  html += `<div style="position:absolute;left:0;right:0;top:${pct(currentPrice)};height:1.5px;background:${lineColor};z-index:5;"></div>`;
+  html += `<div style="position:absolute;left:4px;top:${pct(currentPrice)};transform:translateY(-110%);z-index:6;
+    font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:${lineColor};
+    background:var(--surface);padding:1px 4px;border-radius:2px;white-space:nowrap;">${priceText}</div>`;
+
+  el.innerHTML = html;
+}
+
+// Build one ticker card
+function buildCard(ticker, d){
+  const state = tickerState(d);
+  const pos   = d.position;
+  const sig   = d.last_signal||{};
+  const conf  = d.confidence || sig.confidence || 0;
+  const dir   = d.direction  || sig.direction  || 'NEUTRAL';
+  const riley = d.riley_result || '';
+
+  const dirClass = dir==='BULLISH'?'bull':dir==='BEARISH'?'bear':'neut';
+  const dirIcon  = dir==='BULLISH'?'▲ LONG ':dir==='BEARISH'?'▼ SHORT':'--- ';
+  const confHtml = conf
+    ? `<div class="conf-badge ${dirClass}">${dirIcon}${conf}%${d.catalyst?' | '+d.catalyst.slice(0,45):''}</div>`
+    : '';
+
+  let pnlHtml = '';
+  if(pos){ const cl=pos.pnl_pct>=0?'pnl-pos':'pnl-neg'; pnlHtml=`<span class="pnl-badge ${cl}">${fmtPct(pos.pnl_pct)}</span>`; }
+
+  const rileyHtml = riley ? `<span class="riley-badge riley-${riley}">${riley}</span>` : '';
+  const patternHtml = pos?.candle_pattern && pos.candle_pattern!=='NONE'
+    ? `<div style="font-family:var(--mono);font-size:8px;color:var(--gold);padding:0 14px 4px">${pos.candle_pattern.replace(/_/g,' ')}</div>`
+    : '';
+
+  let watchHtml = '';
+  if(state==='watching'){
+    const near = (d.zones||[])[0];
+    if(near) watchHtml = `<div style="font-family:var(--mono);font-size:8px;color:var(--muted);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} \xb7 ${near.touches||'?'}T</div>`;
+  }
+
+  return `
+<div class="ticker-card state-${state}" id="card-${ticker}">
+  <div class="card-header">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="card-ticker">${ticker}</span>${rileyHtml}${pnlHtml}
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="card-price" id="cp-${ticker}">—</span>
+      <span class="card-state">${state.toUpperCase()}</span>
+    </div>
+  </div>
+  ${confHtml}${patternHtml}${watchHtml}
+  <div class="zone-ladder" id="ladder-${ticker}"></div>
+</div>`;
+}
+
+// Render all cards
+function renderCards(){
+  const grid = document.getElementById('cardsGrid');
+  const sorted = Object.keys(zonesData).filter(t=>!zonesData[t]?.is_crypto).sort((a,b)=>{
+    const order={open:0,watching:1,quiet:2};
+    return order[tickerState(zonesData[a])] - order[tickerState(zonesData[b])];
+  });
+  grid.innerHTML = sorted.map(t => buildCard(t, zonesData[t]||{})).join('');
+  sorted.forEach(t => renderZoneLadder(t, zonesData[t]||{}, getCurrentPrice(t)));
+}
+
+// Watchlist sidebar
+function renderWatchlist(){
+  document.getElementById('wlList').innerHTML = wlPrices.map(t=>{
+    const d  = zonesData[t.ticker]||{};
+    const sig= d.last_signal||{};
+    const dir= d.direction||sig.direction||'';
+    const cl = t.chg_pct>0?'wl-up':t.chg_pct<0?'wl-dn':'wl-flat';
+    const sigTxt = dir ? `<div class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--danger)':'var(--muted)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'\xb7'} ${d.confidence||sig.confidence||0}%</div>` : '';
+    return `<div class="wl-item${activeTicker===t.ticker?' active':''}" onclick="focusTicker('${t.ticker}')">
+      <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span></div>
+      <div class="wl-row"><span class="wl-price">$${t.price>100?t.price.toLocaleString():t.price.toFixed(4)}</span></div>
+      ${sigTxt}
+    </div>`;
+  }).join('');
+}
+
+function focusTicker(t){
+  activeTicker = t;
+  const el = document.getElementById('card-'+t);
+  if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  renderWatchlist();
+}
+
+// Data loaders
+async function loadZones(){
+  try{
+    const r = await fetch('/api/trading/dashboard/zones');
+    zonesData = await r.json();
+    // Re-render zone ladders and price labels with latest data
+    wlPrices.forEach(t=>{
+      renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price);
+      const el = document.getElementById('cp-'+t.ticker);
+      if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
+    });
+  }catch(e){ console.warn('zones load failed',e); }
+}
+
+async function loadWatchlistPrices(){
+  try{
+    const r = await fetch('/api/trading/dashboard/watchlist-prices');
+    // Only show stocks (no crypto) in sidebar
+    wlPrices = (await r.json()).filter(t => !t.is_crypto);
+    renderWatchlist();
+    wlPrices.forEach(t=>{
+      const el = document.getElementById('cp-'+t.ticker);
+      if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
+    });
+  }catch(e){}
+}
+
+async function loadPortfolio(){
+  try{
+    const r  = await fetch('/api/trading/dashboard/positions');
+    const d  = await r.json();
+    const a  = d.account||{};
+    document.getElementById('hEquity').textContent = a.equity ? '$'+fmt(a.equity,0) : '—';
+    const pnl= a.pnl_today||0;
+    const pe = document.getElementById('hDayPnl');
+    pe.textContent = (pnl>=0?'+':'')+'$'+fmt(Math.abs(pnl),0);
+    pe.classList.remove('pos','neg');
+    pe.classList.add(pnl>=0?'pos':'neg');
+    document.getElementById('hPos').textContent = (d.positions||[]).length;
+  }catch(e){}
+}
+
+async function loadMarketStatus(){
+  try{
+    const r = await fetch('/api/trading/dashboard/market-status');
+    const d = await r.json();
+    document.getElementById('hVix').textContent = d.vix ? d.vix+' '+d.vix_regime : '—';
+    document.getElementById('hMkt').textContent = d.market||'—';
+    const ms = document.getElementById('mktStatus');
+    ms.innerHTML = `
+      <div class="mkt-row"><span class="mkt-label">VIX</span><span class="mkt-val">${d.vix||'—'} (${d.vix_regime||'—'})</span></div>
+      <div class="mkt-row"><span class="mkt-label">Market</span><span class="mkt-val">${d.market||'—'}</span></div>
+      <div class="mkt-row"><span class="mkt-label">SPY 1D</span><span class="mkt-val" style="color:${(d.spy_1d||0)>=0?'var(--green)':'var(--danger)'}">${fmtPct(d.spy_1d)}</span></div>
+      <div class="mkt-row"><span class="mkt-label">SPY 5D</span><span class="mkt-val" style="color:${(d.spy_5d||0)>=0?'var(--green)':'var(--danger)'}">${fmtPct(d.spy_5d)}</span></div>
+      <div class="mkt-row"><span class="mkt-label">Day P&L</span><span class="mkt-val" style="color:${(d.day_pnl_pct||0)>=0?'var(--green)':'var(--danger)'}">${fmtPct(d.day_pnl_pct)}</span></div>
+      <div class="mkt-row"><span class="mkt-label">Status</span><span class="mkt-val" style="color:${d.market_open?'var(--green)':'var(--muted)'}">${d.market_open?'OPEN':'CLOSED'}</span></div>`;
+  }catch(e){}
+}
+
+let lastLogLen = 0;
+async function loadAgentLog(){
+  try{
+    const r = await fetch('/api/trading/dashboard/agent-log');
+    const logs = await r.json();
+    if(!Array.isArray(logs)||logs.length===lastLogLen) return;
+    lastLogLen = logs.length;
+    const cls = {grok:'log-grok',claude:'log-claude',risk:'log-risk',system:'log-system',trail:'log-trail'};
+    document.getElementById('agentLog').innerHTML = [...logs].reverse().map(l=>`
+      <div class="log-item">
+        <span class="log-time">${l.time||''}</span>
+        <span class="log-agent ${cls[l.type]||'log-system'}">${(l.agent||'').slice(0,8)}</span>
+        <span class="log-body">${(l.body||'').slice(0,90)}</span>
+      </div>`).join('');
+  }catch(e){}
+}
+
+async function loadOrders(){
+  try{
+    const r = await fetch('/api/trading/dashboard/orders');
+    const orders = await r.json();
+    if(!Array.isArray(orders)||!orders.length){
+      document.getElementById('orders').innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:var(--muted)">No recent orders</div>';
+      return;
+    }
+    document.getElementById('orders').innerHTML = orders.slice(0,8).map(o=>`
+      <div class="order-row">
+        <span style="color:${o.side==='buy'?'var(--green)':'var(--danger)'}">${o.side.toUpperCase()}</span>
+        <span>${o.symbol}</span>
+        <span style="color:var(--muted)">${o.qty}</span>
+        <span style="color:${o.status==='filled'?'var(--green)':o.status==='canceled'?'var(--danger)':'var(--gold)'}">${o.status}</span>
+        <span style="color:var(--muted)">${o.filled_at||'—'}</span>
+      </div>`).join('');
+  }catch(e){}
+}
+
+// Full refresh (every 30s)
+async function fullRefresh(){
+  await Promise.all([loadZones(), loadWatchlistPrices(), loadPortfolio(), loadMarketStatus()]);
+  renderCards();
+}
+
+// Init
+function startDashboard(){
+  fullRefresh();
+  loadAgentLog();
+  loadOrders();
+  setInterval(fullRefresh,  30000);
+  setInterval(loadAgentLog, 5000);
+  setInterval(loadOrders,   60000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  new TradingDashboard().init();
+  startDashboard();
+});
 </script>
 <script src="/js/theme-toggle.js"></script>
 </body>
