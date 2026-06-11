@@ -34,6 +34,16 @@ const INTENT_PATTERNS = {
     "why", "what happened", "debug", "fix", "issue", "problem",
     "chat bubble", "ui", "interface", "click", "not sending",
   ],
+  coding_change: [
+    "fix the", "fix a", "fix this", "refactor", "rename", "extract",
+    "add feature", "implement", "create function", "create route",
+    "update", "modify", "change", "patch", "open a pr", "open pr",
+    "self-edit", "edit code", "code change", "pull request", "pr",
+  ],
+  code_review: [
+    "review", "critique", "assess", "evaluate", "audit", "check code",
+    "does this look right", "is this safe", "security review",
+  ],
 };
 
 function classifyIntent(message) {
@@ -42,6 +52,14 @@ function classifyIntent(message) {
   // Bang commands override
   if (lower.startsWith("!convergance") || lower.startsWith("!converge")) {
     return "convergance_action";
+  }
+
+  if (lower.startsWith("!self-edit") || lower.startsWith("!selfedit") || lower.startsWith("!code")) {
+    return "coding_change";
+  }
+
+  if (lower.startsWith("!review")) {
+    return "code_review";
   }
 
   if (
@@ -74,7 +92,9 @@ const INTENT_TO_PROFILE = {
   three_doors: "lantern-csf-dream",
   convergance_action: "lantern-convergance",
   capacity_query: "lantern-pcsf",
-  technical_debug: "keystone", // Route to Keystone MCP for real-time debugging
+  technical_debug: "keystone",
+  coding_change: "lantern-coding",
+  code_review: "keystone",
 };
 
 /**

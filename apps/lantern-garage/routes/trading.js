@@ -6,6 +6,7 @@
 
 const http = require('http');
 const TradingAPIBridge = require('../lib/trading-api-bridge');
+const { recordOrder, recordSignal, queryRecentTradingRecords } = require('../lib/trading-memory');
 
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
@@ -116,7 +117,17 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,agent-log,orders,news-feed}
   if (req.method === 'GET' && DASHBOARD_PROXY_ROUTES[url.pathname]) {
     try {
-      const data = await callDashboard(DASHBOARD_PROXY_ROUTES[url.pathname]);
+      const proxyPath = DASHBOARD_PROXY_ROUTES[url.pathname];
+      const data = await callDashboard(proxyPath);
+      // CSF memory wiring: write orders and agent-log to CSF on state change
+      if (proxyPath === '/api/orders' && Array.isArray(data?.orders || data)) {
+        const orders = data.orders || data;
+        for (const o of orders) { recordOrder(o).catch(() => {}); }
+      }
+      if (proxyPath === '/api/agent-log' && Array.isArray(data?.logs || data)) {
+        const logs = data.logs || data;
+        for (const s of logs) { recordSignal(s).catch(() => {}); }
+      }
       sendJson(res, data, 200);
     } catch (error) {
       sendJson(res, { error: error.message }, 502);
@@ -324,6 +335,19 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, result.data, result.status);
     } catch (error) {
       sendJson(res, { error: 'Status check failed', details: error.message }, 503);
+    }
+    return true;
+  }
+
+  // GET /api/trading/csf-records
+  // Query recent trading CSF memory records (orders + signals)
+  if (url.pathname === '/api/trading/csf-records' && req.method === 'GET') {
+    try {
+      const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+      const records = queryRecentTradingRecords(limit);
+      sendJson(res, { records, count: records.length }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'CSF query failed', details: error.message }, 500);
     }
     return true;
   }

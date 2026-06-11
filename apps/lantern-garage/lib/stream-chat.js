@@ -14,6 +14,7 @@ const { route: converganceRoute, buildBehaviorPreamble } = require("./converganc
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
+const { generatePlan, generatePatch } = require("./self-edit-engine");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -151,6 +152,92 @@ function triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMes
     });
   
   return entryId;
+}
+
+/**
+ * Analyze a convergence loop result and determine:
+ * - What categories of failures exist
+ * - Which agent profile should handle them
+ * - Proposed next actions (with UI button metadata)
+ */
+function analyzeConvergenceResult(result) {
+  const phases = result.phases || [];
+  const findings = {
+    testFailures: [],
+    docDrift: [],
+    providerFailures: [],
+    validationFailures: [],
+    otherFailures: [],
+    actions: [],
+  };
+
+  for (const p of phases) {
+    if (p.status === "pass" || p.status === "skip") continue;
+    const name = p.name || "";
+    const evidence = p.evidence || {};
+    const fail = { name, status: p.status, evidence };
+
+    if (name.includes("test") || (evidence.tests && evidence.tests.failed > 0)) {
+      findings.testFailures.push(fail);
+    } else if (name.includes("doc") || name.includes("readme") || evidence.drift) {
+      findings.docDrift.push(fail);
+    } else if (name.includes("provider") || name.includes("capacity") || name.includes("pcsf")) {
+      findings.providerFailures.push(fail);
+    } else if (name.includes("valid") || name.includes("promote") || name.includes("hold")) {
+      findings.validationFailures.push(fail);
+    } else {
+      findings.otherFailures.push(fail);
+    }
+  }
+
+  // Build proposed actions
+  if (findings.testFailures.length > 0) {
+    findings.actions.push({
+      label: "Fix test failures",
+      action: "self-edit-plan",
+      profile: "lantern-coding",
+      intent: "coding_change",
+      hint: `Address ${findings.testFailures.length} test failure(s)`,
+    });
+  }
+  if (findings.providerFailures.length > 0) {
+    findings.actions.push({
+      label: "Check provider capacity",
+      action: "self-edit-plan",
+      profile: "lantern-pcsf",
+      intent: "capacity_query",
+      hint: `Investigate ${findings.providerFailures.length} provider issue(s)`,
+    });
+  }
+  if (findings.docDrift.length > 0) {
+    findings.actions.push({
+      label: "Update docs",
+      action: "self-edit-plan",
+      profile: "keystone",
+      intent: "code_review",
+      hint: `Resolve ${findings.docDrift.length} doc drift issue(s)`,
+    });
+  }
+  if (findings.validationFailures.length > 0) {
+    findings.actions.push({
+      label: "Review validation failures",
+      action: "self-edit-plan",
+      profile: "keystone",
+      intent: "code_review",
+      hint: `Review ${findings.validationFailures.length} validation issue(s)`,
+    });
+  }
+  if (result.promotion_ready && findings.actions.length === 0) {
+    findings.actions.push({
+      label: "Promote changes",
+      action: "self-edit-pr",
+      profile: "lantern-convergance",
+      intent: "convergance_action",
+      hint: "Convergence clean — open a promotion PR",
+    });
+  }
+
+  return findings;
 }
 
 async function handleStreamChat(req, url, res) {
@@ -342,15 +429,28 @@ async function handleStreamChat(req, url, res) {
         try {
           const result = JSON.parse(stdout);
           
-          // Build 12-step convergence context for AI interpretation
+          // Analyze convergence results for intelligent routing
+          const findings = analyzeConvergenceResult(result);
+
+          // Build 20-step tesseract convergence context for AI interpretation
           const convergenceContext = `
-12-Step Convergence Analysis:
+Tesseract Convergence Analysis (20 phases):
 Overall Score: ${result.convergence_score || 0}/100
 Status: ${result.promotion_ready ? "PROMOTION READY" : "NEEDS REVIEW"}
 Version: ${result.version?.build || result.version?.tag || "unknown"}
 
 Phase Results:
 ${result.phases ? result.phases.map((p, i) => `${i + 1}. ${p.name}: ${p.status}`).join("\n") : "No phase data"}
+
+Routing Findings:
+- Test failures: ${findings.testFailures.length}
+- Doc drift: ${findings.docDrift.length}
+- Provider/capacity failures: ${findings.providerFailures.length}
+- Validation failures: ${findings.validationFailures.length}
+- Other failures: ${findings.otherFailures.length}
+
+Proposed actions:
+${findings.actions.map((a, i) => `${i + 1}. [${a.profile}] ${a.label}: ${a.hint}`).join("\n")}
 
 Key Metrics:
 - Total phases: ${result.phases?.length || 0}
@@ -361,8 +461,9 @@ Key Metrics:
 Interpret this convergence result and provide:
 1. Executive summary (2-3 sentences)
 2. Top 3 blockers or risks
-3. Recommended next actions
-4. Confidence assessment for each of the 12 steps
+3. Recommended next actions with agent routing
+4. Confidence assessment for each phase
+5. If safe, suggest whether to "Create patch" or "Open PR"
 `;
 
           sse.writeStreamHeaders(res);
@@ -370,10 +471,10 @@ Interpret this convergence result and provide:
           const sendDone = (source, meta) => sse.sendDone(res, source, meta);
 
           // Stream the raw convergence data first
-          sendToken(`◈ 12-Step Convergence Analysis\n\n`);
+          sendToken(`◈ Tesseract Convergence Analysis\n\n`);
           sendToken(`Score: ${result.convergence_score || 0}/100\n`);
           sendToken(`Status: ${result.promotion_ready ? "✅ Ready" : "⚠️ Review Needed"}\n\n`);
-          
+
           if (result.phases) {
             sendToken(`Phase Breakdown:\n`);
             result.phases.forEach((p, i) => {
@@ -383,15 +484,23 @@ Interpret this convergence result and provide:
             sendToken(`\n`);
           }
 
+          if (findings.actions.length > 0) {
+            sendToken(`Proposed actions:\n`);
+            findings.actions.forEach((a, i) => {
+              sendToken(`${i + 1}. ${a.label} (${a.profile})\n`);
+            });
+            sendToken(`\n`);
+          }
+
           // Now use AI to interpret and provide contextual feedback
           const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
           const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
-          
+
           const payload = JSON.stringify({
             model: ollamaModel,
             stream: true,
             messages: [
-              { role: "system", content: "You are a convergence analyst. Interpret 12-step convergence results and provide actionable feedback. Be concise, specific, and prioritized." },
+              { role: "system", content: "You are a convergence analyst. Interpret tesseract convergence results and provide actionable feedback with agent routing. Be concise, specific, and prioritized. Route findings to the correct agent profile." },
               { role: "user", content: convergenceContext }
             ],
           });
@@ -407,11 +516,11 @@ Interpret this convergence result and provide:
             if (upstream.statusCode !== 200) {
               upstream.resume();
               sendToken(`\n⚠️ AI interpretation unavailable. Raw data shown above.\n`);
-              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score });
+              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score, actions: findings.actions });
               res.end();
               return;
             }
-            
+
             let buf = "";
             upstream.on("data", (chunk) => {
               buf += chunk.toString();
@@ -428,19 +537,19 @@ Interpret this convergence result and provide:
               }
             });
             upstream.on("end", () => {
-              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score });
+              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score, actions: findings.actions });
               res.end();
             });
             upstream.on("error", () => {
               sendToken(`\n⚠️ AI interpretation error. Raw data shown above.\n`);
-              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score });
+              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score, actions: findings.actions });
               res.end();
             });
           });
-          
+
           req2.on("error", () => {
             sendToken(`\n⚠️ Ollama unavailable. Raw data shown above.\n`);
-            sendDone("convergence", { agent: "Convergence", online: false, score: result.convergence_score });
+            sendDone("convergence", { agent: "Convergence", online: false, score: result.convergence_score, actions: findings.actions });
             res.end();
           });
           req2.setTimeout(30000, () => { req2.destroy(); });
@@ -463,6 +572,58 @@ Interpret this convergence result and provide:
         res.end();
       });
       
+      return;
+    }
+
+    if (cmd.name === "self-edit" || cmd.name === "selfedit" || cmd.name === "code") {
+      const requestText = cmd.args.trim() || message.replace(/^!\S+\s*/, "").trim();
+      if (!requestText) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "self_edit_request_required", message: "Usage: !self-edit <what to change>" }));
+        return;
+      }
+
+      sse.writeStreamHeaders(res);
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+
+      sendToken(`◈ Self-Edit Mode\n\n`);
+      sendToken(`Request: ${requestText}\n`);
+      sendToken(`Generating plan…\n\n`);
+
+      (async () => {
+        try {
+          const plan = await generatePlan(repoRoot, requestText, [], history || []);
+          sendToken(`Plan: ${plan.summary}\n`);
+          sendToken(`Risk: ${plan.riskLevel}\n`);
+          sendToken(`Files: ${plan.affectedFiles.join(", ")}\n\n`);
+
+          sendToken(`Generating patch…\n\n`);
+          const { diffText, files } = await generatePatch(repoRoot, plan);
+          const changedFiles = files.map((f) => f.newFile || f.oldFile).filter(Boolean);
+          sendToken(`Changed files: ${changedFiles.join(", ")}\n`);
+          sendToken(`\n--- Patch Preview ---\n${diffText.slice(0, 1500)}${diffText.length > 1500 ? "\n…(truncated)" : ""}\n`);
+
+          const actions = [
+            { label: "Apply patch + run tests", action: "self-edit-apply", hint: plan.summary, plan, diffText },
+            { label: "Open draft PR", action: "self-edit-pr", hint: plan.summary, plan, diffText },
+          ];
+
+          sendDone("self-edit", {
+            agent: "SelfEdit",
+            online: true,
+            plan,
+            diffText,
+            changedFiles,
+            actions,
+          });
+          res.end();
+        } catch (err) {
+          sse.sendError(res, `Self-edit failed: ${err.message}`);
+          sendDone("failed", { error: err.message });
+          res.end();
+        }
+      })();
       return;
     }
 
