@@ -12,3 +12,10 @@
 {"timestamp":"2026-06-11T10:46:16.740Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
 {"timestamp":"2026-06-11T10:46:16.742Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
 {"timestamp":"2026-06-11T10:46:16.744Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
+{"timestamp":"2026-06-11T10:50:32.980Z","agentId":"claude-sonnet","taskType":"reasoning","success":true,"latencyMs":2450,"costUsd":0.032,"convergenceStep":2,"convergenceStepName":"state_objective"}
+{"timestamp":"2026-06-11T10:50:32.987Z","agentId":"anthropic","taskType":"coding","success":true,"latencyMs":2400,"costUsd":0.03,"convergenceStep":1,"convergenceStepName":"inspect"}
+{"timestamp":"2026-06-11T10:50:32.990Z","agentId":"openai","taskType":"coding","success":true,"latencyMs":1800,"costUsd":0.025,"convergenceStep":1,"convergenceStepName":"inspect"}
+{"timestamp":"2026-06-11T10:50:32.993Z","agentId":"ollama","taskType":"coding","success":true,"latencyMs":800,"costUsd":0.001,"convergenceStep":1,"convergenceStepName":"inspect"}
+{"timestamp":"2026-06-11T10:50:33.006Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
+{"timestamp":"2026-06-11T10:50:33.008Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}
+{"timestamp":"2026-06-11T10:50:33.011Z","agentId":"flaky-agent","taskType":"reasoning","success":false,"latencyMs":5000,"costUsd":0,"convergenceStep":5,"convergenceStepName":"check_architecture"}

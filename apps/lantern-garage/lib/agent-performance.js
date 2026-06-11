@@ -4,10 +4,12 @@
  * Uses real Convergence loop receipts as training data (no separate benchmarks)
  */
 
+const fs = require("fs");
 const path = require("path");
 const { appendJsonlQueued, readJsonl } = require("./file-queue");
 
 const AGENT_PERF_PATH = path.resolve(__dirname, "..", "..", "data", "agent-performance.jsonl");
+const AGENT_PERF_REL_PATH = "apps/data/agent-performance.jsonl"; // Relative path for readJsonl (from repo root)
 const LOOKBACK_DAYS = 7;
 
 // In-memory cache of agent performance (loaded from JSONL)
@@ -192,8 +194,14 @@ async function retireAgent(agentId, taskType, reason) {
  */
 async function _loadPerformanceCache() {
   try {
-    const records = await readJsonl(AGENT_PERF_PATH);
+    // readJsonl expects a relative path and loads from repo root
+    const records = readJsonl(AGENT_PERF_REL_PATH, 1000) || [];
+
+    // Clear cache before loading
+    Object.keys(_performanceCache).forEach(k => delete _performanceCache[k]);
+
     for (const record of records) {
+      if (record.parseError) continue; // Skip parsing errors
       const key = `${record.taskType}_${record.agentId}`;
       if (!_performanceCache[key]) {
         _performanceCache[key] = [];
@@ -201,6 +209,7 @@ async function _loadPerformanceCache() {
       _performanceCache[key].push(record);
     }
     _cacheLoadedAt = Date.now();
+    console.log(`[agent-performance] Loaded cache: ${Object.keys(_performanceCache).length} agent-task combinations, ${records.length} total records`);
   } catch (err) {
     if (err.code !== "ENOENT") {
       console.error("[agent-performance] Failed to load cache:", err.message);
