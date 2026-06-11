@@ -4,6 +4,8 @@ const { handleThreeDoorsServer } = require("./three-doors-chat");
 const { readMcpResourceSync } = require("./mcp-resource-client");
 const { formatCSFContextForPrompt } = require("./csf-memory");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
+const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
+const { detectTaskType } = require("./task-detector");
 
 // Extract key topics from user message and generate 3 web search suggestion links
 function generateWebSuggestions(userMessage) {
@@ -452,6 +454,18 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   const rp = String(requestedProvider || "").toLowerCase().trim();
 
+  // ── Keystone: Task-aware provider selection using performance leaderboard ──
+  let primaryProviderHint = null;
+  try {
+    const taskType = detectTaskType(text, { isTradingQuery: tradingContext.length > 0 });
+    const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(text, taskType, requestedProvider);
+    primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
+    console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);
+  } catch (e) {
+    console.error("[provider-router] Selection error (non-fatal):", e.message);
+    // Continue with default fallback if router fails
+  }
+
   // PRIORITY 1: Ollama (Local-first — no API keys, full privacy, control)
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
   const ollamaModel = process.env.OLLAMA_MODEL || "lantern-csf-dream";
@@ -500,10 +514,12 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       });
       if (reply && reply.content) {
         const ollamaSuggestions = reply.doors && reply.doors.length > 0 ? reply.doors : suggestions;
+        recordProviderSuccessRouter("ollama"); // Log to provider-router for performance tracking
         return { reply: reply.content, agent: agent.name, suggestions: ollamaSuggestions, online: true, source: "ollama", webSuggestions };
       }
     } catch (err) {
       console.error("Ollama API error:", err.message);
+      recordProviderFailureRouter("ollama", err.message.split(" ")[0] || "unknown"); // Log to provider-router
       // If Ollama fails, try cloud fallbacks below
     }
   }
@@ -547,9 +563,13 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
         req2.end();
       });
       if (reply) {
+        recordProviderSuccessRouter("anthropic"); // Log to provider-router
         return { reply, agent: agent.name, suggestions, online: true, source: "claude", webSuggestions };
       }
-    } catch (err) { console.error("Claude API error:", err.message); }
+    } catch (err) {
+      console.error("Claude API error:", err.message);
+      recordProviderFailureRouter("anthropic", err.message.includes("anthropic_status_") ? err.message : "unknown"); // Log to provider-router
+    }
   }
 
   // PRIORITY 3: Google Gemini (if explicitly requested)
@@ -631,9 +651,13 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
         req2.end();
       });
       if (reply) {
+        recordProviderSuccessRouter("openai"); // Log to provider-router
         return { reply, agent: agent.name, suggestions, online: true, source: "openai", webSuggestions };
       }
-    } catch (err) { console.error("OpenAI API error:", err.message); }
+    } catch (err) {
+      console.error("OpenAI API error:", err.message);
+      recordProviderFailureRouter("openai", err.message.includes("openai_status_") ? err.message : "unknown"); // Log to provider-router
+    }
   }
 
   // No provider available — return clear error with setup instructions
