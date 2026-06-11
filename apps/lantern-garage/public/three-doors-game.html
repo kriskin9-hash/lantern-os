@@ -191,9 +191,18 @@
     </div>
   </div>
 
-  <!-- Door choice bar — 3 buttons only -->
+  <!-- Custom door input bar -->
   <div class="input-container" id="choice-bar" style="display:none">
-    <div style="display:flex;gap:10px" id="choice-buttons"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="custom-door-input" type="text"
+        placeholder="Choose A, B, or C — or describe your own door..."
+        style="flex:1;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color 0.15s"
+        onfocus="this.style.borderColor='var(--accent)'"
+        onblur="this.style.borderColor='var(--border)'"
+        onkeydown="if(event.key==='Enter')submitCustomDoor()" />
+      <button onclick="submitCustomDoor()"
+        style="padding:12px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0">→</button>
+    </div>
   </div>
 
 </div>
@@ -662,8 +671,7 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       <div class="scene-image">
         <img id="${imgId}" src="data/images/three-doors/${sceneKey}.png" alt="Scene art" loading="lazy"
           onload="logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })"
-          onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.removeAttribute('data-fallback');}else{this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' })}"
-          data-fallback="${PLACEHOLDER_IMAGES[sceneKey] || ''}">
+          onerror="this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' });loadPollinationsImage('${imgId}','${canvasId}','${sceneKey}')">
         <canvas id="${canvasId}" width="800" height="450" style="display:none"></canvas>
         <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
@@ -702,8 +710,15 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     }
   });
 
-  // Update quick chips
-  updateQuickChips(doors);
+  // Show custom door input
+  const bar = document.getElementById("choice-bar");
+  const input = document.getElementById("custom-door-input");
+  if (doors && doors.length) {
+    bar.style.display = "";
+    if (input) { input.value = ""; input.disabled = false; }
+  } else {
+    bar.style.display = "none";
+  }
   gameState = {
     scene_key: sceneKey, doors, history,
     stage_index: sceneData.stage_index, stage_count: sceneData.stage_count,
@@ -764,19 +779,48 @@ function checkChallenges(sceneKey, turnCount) {
   }
 }
 
-function updateQuickChips(doors) {
-  const bar = document.getElementById("choice-bar");
-  const btns = document.getElementById("choice-buttons");
-  if (!doors || !doors.length) { bar.style.display = "none"; return; }
-  bar.style.display = "";
-  btns.innerHTML = doors.map(d => `
-    <button id="qbtn-${d.label}" onclick="chooseDoor('${d.label}', '${d.name.replace(/'/g, "\\'")}')"
-      style="flex:1;padding:12px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:4px"
-      onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
-      onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'">
-      <span style="font-size:18px;font-weight:700;color:var(--accent)">${d.label}</span>
-      <span style="font-size:11px;color:var(--muted);text-align:center;line-height:1.3">${d.name}</span>
-    </button>`).join("");
+// ── Pollinations.ai async image loader ───────────────────────────
+// Shows canvas art immediately; swaps in AI-generated image when ready.
+const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt/";
+const pollinationsCache = {};
+
+async function loadPollinationsImage(imgId, canvasId, sceneKey) {
+  if (pollinationsCache[sceneKey]) return; // already loaded this scene
+  const scene = SCENES[sceneKey];
+  const sdPrompt = scene?.image_prompt || SD_PROMPTS?.[sceneKey] || (scene?.text?.slice(0, 120) || sceneKey);
+  const fullPrompt = `fantasy dreamworld, ${sdPrompt}, painterly, cinematic light, no text`;
+  const url = POLLINATIONS_BASE + encodeURIComponent(fullPrompt) + "?width=800&height=450&nologo=true&model=flux";
+  try {
+    const img = document.getElementById(imgId);
+    const cvs = document.getElementById(canvasId);
+    if (!img && !cvs) return;
+    const probe = new Image();
+    probe.crossOrigin = "anonymous";
+    probe.onload = () => {
+      pollinationsCache[sceneKey] = url;
+      logThreeDoorsEvent('image_load', { sceneKey, source: 'pollinations' });
+      if (cvs) cvs.style.display = "none";
+      if (img) { img.src = url; img.style.display = ""; }
+    };
+    probe.onerror = () => {}; // canvas stays visible
+    probe.src = url;
+  } catch { /* silent */ }
+}
+
+function submitCustomDoor() {
+  const input = document.getElementById("custom-door-input");
+  if (!input || !gameState) return;
+  const val = input.value.trim();
+  if (!val) return;
+  const upper = val.toUpperCase();
+  // If player typed A, B, or C — route to known door
+  const knownDoor = gameState.doors?.find(d => d.label.toUpperCase() === upper);
+  if (knownDoor) {
+    chooseDoor(knownDoor.label, knownDoor.name);
+  } else {
+    // Custom door — use the player's text as the door name
+    chooseDoor("CUSTOM", val);
+  }
 }
 
 // ── API calls ─────────────────────────────────────────────────────
@@ -835,10 +879,12 @@ function engineStart() {
 function engineChoose(label) {
   if (!gameState) return null;
   const door = gameState.doors.find(d => d.label.toUpperCase() === label.toUpperCase());
-  if (!door) return null;
+  // Custom door: advance stage using player's text as door name
+  const doorName = door ? door.name : label;
+  if (!door && label.length <= 1) return null; // single-char that isn't A/B/C = invalid
   let stageIndex = (gameState.stage_index ?? 0) + 1;
   let loopCount = gameState.loop_count ?? 0;
-  const history = [...(gameState.history || []), "Chose " + door.name];
+  const history = [...(gameState.history || []), "Chose " + doorName];
   let loopCompleted = false;
   if (stageIndex >= STAGES.length) {
     stageIndex = 0;
@@ -924,15 +970,18 @@ async function chooseDoor(label, name) {
   logThreeDoorsEvent("door_choice", { label, name, sceneKey: gameState?.scene_key });
   writeCubeDelta('story_choice', [name.toLowerCase().replace(/\s+/g, '-')], 'explore:' + (gameState?.scene_key || ''), { coordinate: `explore:${gameState?.scene_key || ''}:${label}` });
 
-  document.querySelectorAll(".door-chip, #choice-buttons button").forEach(b => b.disabled = true);
-  document.getElementById("choice-bar").style.opacity = "0.4";
-  appendUserMsg(`Choice ${label} — ${name}`);
+  document.querySelectorAll(".door-chip").forEach(b => b.disabled = true);
+  const bar = document.getElementById("choice-bar");
+  const input = document.getElementById("custom-door-input");
+  if (bar) bar.style.opacity = "0.4";
+  if (input) input.disabled = true;
+  appendUserMsg(label === "CUSTOM" ? `I step through: ${name}` : `Choice ${label} — ${name}`);
   appendTyping();
 
-  const result = await getSceneData("choose", label);
-  if (!result) { removeTyping(); doorsLocked = false; return; }
+  const result = await getSceneData("choose", label === "CUSTOM" ? name : label);
+  if (!result) { removeTyping(); doorsLocked = false; if (bar) bar.style.opacity = ""; if (input) input.disabled = false; return; }
   appendSceneMsg(result.data.scene_key, result.data, result.geminiText, result.source);
-  document.getElementById("choice-bar").style.opacity = "";
+  if (bar) bar.style.opacity = "";
   doorsLocked = false;
 }
 
@@ -941,7 +990,8 @@ function resetGame() {
   document.getElementById("chat").innerHTML = "";
   gameState = null;
   userId = "web-" + Math.random().toString(36).slice(2, 9);
-  document.getElementById("choice-buttons").innerHTML = "";
+  const inp = document.getElementById("custom-door-input");
+  if (inp) inp.value = "";
   // Clear saved progress (keep prizes)
   const prizes = playerProgress.prizes || [];
   playerProgress = { prizes };
