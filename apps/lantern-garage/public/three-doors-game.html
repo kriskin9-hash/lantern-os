@@ -929,41 +929,113 @@ function checkChallenges(sceneKey, turnCount) {
   }
 }
 
-// ── Pollinations.ai async image loader ───────────────────────────
-// Shows canvas art immediately; swaps in AI-generated image when ready.
+// ── 3-tier image loading hierarchy ──────────────────────────────────
+// 1. Local PNG files (fastest, guaranteed)
+// 2. Server-side DALLE3 (via /api/image/generate, uses OPENAI_API_KEY)
+// 3. Pollinations.ai fallback (free, no key required)
+// Shows canvas art immediately; swaps in best-available image when ready.
 // Also collects images + prompts as LoRA training data.
+
+const LOCAL_PNG_SCENES = new Set([
+  "moss-entry", "burrow", "sunken-bell", "little-crown", "garden-door",
+  "xenon-convergence", "end-of-time", "storybook", "cloverfield", "future-doors",
+  "xp-door", "kingdome-garden", "sigil-city", "fog-door-return"
+]);
+
+const SERVER_GENERATED_SCENES = new Set([
+  "csf-archive", "memory-vault", "convergence-node", "dream-thread",
+  "beacon-tower", "choice-archive", "recursion-well", "echo-chamber",
+  "flux-garden", "void-threshold", "raven-tower"
+]);
+
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt/";
 const pollinationsCache = {}; // keyed by sceneKey_loopCount for fresh art each loop
 let trainingImageCount = 0;
+
+function getSceneImageUrl(sceneKey) {
+  // Priority 1: Local PNG
+  if (LOCAL_PNG_SCENES.has(sceneKey)) {
+    return `/images/three-doors/${sceneKey}.png`;
+  }
+  // Priority 2 & 3: Server or Pollinations (handled in loadPollinationsImage)
+  return null;
+}
 
 async function loadPollinationsImage(imgId, canvasId, sceneKey) {
   const loopCount = gameState?.loop_count ?? 0;
   const cacheKey = `${sceneKey}_L${loopCount}`;
   if (pollinationsCache[cacheKey]) return; // already loaded this scene+loop
+
   const scene = SCENES[sceneKey];
   const sdPrompt = scene?.image_prompt || SD_PROMPTS?.[sceneKey] || (scene?.text?.slice(0, 120) || sceneKey);
-  // Include loop count in prompt for variation on revisit; random seed forces a fresh image
   const loopFlair = loopCount > 0 ? `, revisited ${loopCount > 1 ? "again " : ""}with new eyes` : "";
   const seed = Math.floor(Math.random() * 999983) + 1;
   const fullPrompt = `fantasy dreamworld, ${sdPrompt}${loopFlair}, painterly, cinematic light, no text`;
-  const url = POLLINATIONS_BASE + encodeURIComponent(fullPrompt) + `?width=800&height=450&nologo=true&model=flux&seed=${seed}`;
-  try {
-    const img = document.getElementById(imgId);
-    const cvs = document.getElementById(canvasId);
-    if (!img && !cvs) return;
+
+  const img = document.getElementById(imgId);
+  const cvs = document.getElementById(canvasId);
+  if (!img && !cvs) return;
+
+  // Tier 1: Try local PNG first
+  const localUrl = getSceneImageUrl(sceneKey);
+  if (localUrl) {
+    const probe = new Image();
+    probe.onload = () => {
+      pollinationsCache[cacheKey] = localUrl;
+      logThreeDoorsEvent('image_load', { sceneKey, source: 'local', loop: loopCount });
+      if (cvs) cvs.style.display = "none";
+      if (img) { img.src = localUrl; img.style.display = ""; }
+      collectTrainingImage(sceneKey, fullPrompt, localUrl);
+    };
+    probe.onerror = () => {
+      // Local PNG failed, fall through to server/Pollinations
+      tryServerThenPollinations();
+    };
+    probe.src = localUrl;
+    return;
+  }
+
+  // Tier 2 & 3: Server DALLE3 or Pollinations fallback
+  async function tryServerThenPollinations() {
+    // Tier 2: Try server-side DALLE3 for CSF scenes
+    if (SERVER_GENERATED_SCENES.has(sceneKey)) {
+      try {
+        const apiUrl = `/api/image/generate?scene=${sceneKey}&useApi=true&prompt=${encodeURIComponent(fullPrompt)}`;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 45000
+        });
+        const data = await response.json();
+        if (data.path) {
+          pollinationsCache[cacheKey] = data.path;
+          logThreeDoorsEvent('image_load', { sceneKey, source: 'dalle3', loop: loopCount });
+          if (cvs) cvs.style.display = "none";
+          if (img) { img.src = data.path; img.style.display = ""; }
+          collectTrainingImage(sceneKey, fullPrompt, data.path);
+          return;
+        }
+      } catch (e) {
+        logThreeDoorsEvent('image_error', { sceneKey, error: e.message });
+      }
+    }
+
+    // Tier 3: Fallback to Pollinations
+    const pollUrl = POLLINATIONS_BASE + encodeURIComponent(fullPrompt) + `?width=800&height=450&nologo=true&model=flux&seed=${seed}`;
     const probe = new Image();
     probe.crossOrigin = "anonymous";
     probe.onload = () => {
-      pollinationsCache[cacheKey] = url;
+      pollinationsCache[cacheKey] = pollUrl;
       logThreeDoorsEvent('image_load', { sceneKey, source: 'pollinations', loop: loopCount, seed });
       if (cvs) cvs.style.display = "none";
-      if (img) { img.src = url; img.style.display = ""; }
-      // Collect image as training sample (fire and forget)
-      collectTrainingImage(sceneKey, fullPrompt, url);
+      if (img) { img.src = pollUrl; img.style.display = ""; }
+      collectTrainingImage(sceneKey, fullPrompt, pollUrl);
     };
     probe.onerror = () => {}; // canvas stays visible
-    probe.src = url;
-  } catch { /* silent */ }
+    probe.src = pollUrl;
+  }
+
+  tryServerThenPollinations();
 }
 
 async function collectTrainingImage(sceneKey, prompt, imageUrl) {
