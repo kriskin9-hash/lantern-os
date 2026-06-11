@@ -534,7 +534,7 @@ function drawScene(canvas, sceneKey) {
   for (let i = 0; i < 24; i++) {
     const px = (Math.sin(i * 2.3 + 1.1) * 0.45 + 0.5) * W;
     const py = (Math.cos(i * 1.7 + 0.4) * 0.45 + 0.5) * H;
-    const r = Math.sin(i * 0.9) * 2 + 1.5;
+    const r = Math.max(0.5, Math.sin(i * 0.9) * 2 + 1.5);
     const a = (Math.sin(i * 0.6) * 0.3 + 0.4);
     ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
     ctx.fillStyle = pal[4] + Math.floor(a * 255).toString(16).padStart(2, "0"); ctx.fill();
@@ -673,10 +673,9 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       </div>
       ${breadcrumb}
       <div class="scene-image">
-        <img id="${imgId}" src="data/images/three-doors/${sceneKey}.png" alt="Scene art" loading="lazy"
-          onload="logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })"
-          onerror="this.style.display='none';document.getElementById('${canvasId}').style.display='block';drawScene(document.getElementById('${canvasId}'),'${sceneKey}');logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'canvas' });loadPollinationsImage('${imgId}','${canvasId}','${sceneKey}')">
-        <canvas id="${canvasId}" width="800" height="450" style="display:none"></canvas>
+        <img id="${imgId}" alt="Scene art" style="display:none"
+          onload="this.style.display='';document.getElementById('${canvasId}').style.display='none';logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })">
+        <canvas id="${canvasId}" width="800" height="450"></canvas>
         <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
       <div style="font-size:14px;line-height:1.6;margin-bottom:10px">${md(displayText)}</div>
@@ -686,6 +685,13 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
 
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
+
+  // Draw canvas placeholder immediately, then request Pollinations art
+  requestAnimationFrame(() => {
+    const cvs = document.getElementById(canvasId);
+    if (cvs) drawScene(cvs, sceneKey);
+    loadPollinationsImage(imgId, canvasId, sceneKey);
+  });
 
   // Wire SD prompt copy for both img and canvas
   requestAnimationFrame(() => {
