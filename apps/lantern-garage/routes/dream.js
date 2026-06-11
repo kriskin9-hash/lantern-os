@@ -528,6 +528,49 @@ print(e.sd_prompt_for_state())`;
     return true;
   }
 
+  // ── Web Search Grounding ───────────────────────────────────────────
+  if (url.pathname === "/api/dream/search/web" && req.method === "GET") {
+    const query = (url.searchParams.get("q") || "").trim();
+    if (!query) {
+      sendJson(res, { error: "q parameter required" }, 400);
+      return true;
+    }
+    const maxResults = Math.min(10, Math.max(1, parseInt(url.searchParams.get("max_results") || "5", 10) || 5));
+    const http = require("http");
+    const mcpHost = process.env.MCP_SERVER_HOST || "127.0.0.1";
+    const mcpPort = parseInt(process.env.MCP_SERVER_PORT || "8771", 10);
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: { name: "web_search", arguments: { query, max_results: maxResults } },
+    });
+    const mcpReq = http.request(
+      { hostname: mcpHost, port: mcpPort, path: "/messages", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }, timeout: 15000 },
+      (mcpRes) => {
+        let data = "";
+        mcpRes.on("data", (c) => { data += c; });
+        mcpRes.on("end", () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.result) {
+              sendJson(res, { success: parsed.result.success, query, ...parsed.result, generatedAt: new Date().toISOString() });
+            } else {
+              sendJson(res, { error: parsed.error?.message || "MCP error", generatedAt: new Date().toISOString() }, 502);
+            }
+          } catch (e) {
+            sendJson(res, { error: `Parse error: ${e.message}`, generatedAt: new Date().toISOString() }, 502);
+          }
+        });
+      }
+    );
+    mcpReq.on("error", (err) => sendJson(res, { error: err.message, generatedAt: new Date().toISOString() }, 502));
+    mcpReq.on("timeout", () => { mcpReq.destroy(); sendJson(res, { error: "MCP timeout", generatedAt: new Date().toISOString() }, 504); });
+    mcpReq.write(payload);
+    mcpReq.end();
+    return true;
+  }
+
   // ── Symbol co-occurrence timeline ────────────────────────────────────
   if (url.pathname === "/api/dream/symbols/timeline" && req.method === "GET") {
     try {

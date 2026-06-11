@@ -292,6 +292,53 @@ class HealthProbe:
             return {"url": url, "ok": False, "error": str(exc), "latency_ms": latency}
 
 
+class WebSearchGrounding:
+    """Ground convergence phases with real-time web search via MCP."""
+
+    def __init__(self, host: str = "127.0.0.1", port: int = 8771, timeout: float = 10.0):
+        self.host = host
+        self.port = port
+        self.timeout = timeout
+        self._opener = urllib.request.build_opener()
+
+    def search(self, query: str, max_results: int = 5) -> Dict[str, Any]:
+        try:
+            payload = json.dumps({
+                "jsonrpc": "2.0",
+                "id": int(time.time() * 1000),
+                "method": "tools/call",
+                "params": {
+                    "name": "web_search",
+                    "arguments": {"query": query, "max_results": max_results},
+                },
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                f"http://{self.host}:{self.port}/messages",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self._opener.open(req, timeout=self.timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                if data.get("result"):
+                    return data["result"]
+                return {"success": False, "error": data.get("error", {}).get("message", "unknown")}
+        except Exception as exc:
+            return {"success": False, "error": str(exc)}
+
+    def format_context(self, result: Dict[str, Any]) -> str:
+        if not result.get("success") or not result.get("results"):
+            return ""
+        lines = [f"--- Web Grounding (query: {result.get('query', '?')}) ---"]
+        for r in result["results"][:5]:
+            lines.append(f"[{r.get('rank', '?')}] {r.get('title', '?')}")
+            lines.append(f"    {r.get('url', '?')}")
+            if r.get("snippet"):
+                lines.append(f"    {r['snippet']}")
+        lines.append("--- End grounding ---")
+        return "\n".join(lines)
+
+
 class MetricsCollector:
     """Thread-safe rolling metrics with O(1) writes and O(k) percentile reads."""
 
@@ -718,6 +765,10 @@ class ConvergenceLoop:
         self._repo_hash: Optional[str] = None
         self._previous_receipt_path = self.repo_root / "manifests" / "evidence" / "convergence-latest.json"
         self._status_cube: Optional[Any] = None
+        self._web_search = WebSearchGrounding(
+            host=os.environ.get("MCP_SERVER_HOST", "127.0.0.1"),
+            port=int(os.environ.get("MCP_SERVER_PORT", "8771")),
+        )
         if _STATUS_CUBE_AVAILABLE:
             try:
                 self._status_cube = StatusCube.load(self.repo_root / "data" / "status-cube.json")
@@ -1004,9 +1055,21 @@ class ConvergenceLoop:
             if path.exists():
                 ext_sources.append(name)
         evidence["external_sources"] = ext_sources
-        evidence["grounding_status"] = "grounded" if len(ext_sources) >= 2 else "weak_grounding"
-        if len(ext_sources) < 2:
-            issues.append("Weak external grounding — fewer than 2 redundant sources")
+
+        # ── Web Search Grounding ──
+        web_grounding = self._web_search.search("Lantern OS dream journal convergence loop latest", max_results=3)
+        evidence["web_grounding"] = {
+            "success": web_grounding.get("success", False),
+            "query": web_grounding.get("query", ""),
+            "result_count": web_grounding.get("result_count", 0),
+            "grounded": web_grounding.get("success", False) and web_grounding.get("result_count", 0) > 0,
+        }
+        if web_grounding.get("success") and web_grounding.get("results"):
+            evidence["web_grounding"]["top_result"] = web_grounding["results"][0].get("title", "") if web_grounding["results"] else ""
+
+        evidence["grounding_status"] = "grounded" if len(ext_sources) >= 2 or evidence["web_grounding"]["grounded"] else "weak_grounding"
+        if len(ext_sources) < 2 and not evidence["web_grounding"]["grounded"]:
+            issues.append("Weak external grounding — fewer than 2 redundant sources and web search failed")
 
         # ── Externally Anchored ──
         axiomatic = [p.name for p in [

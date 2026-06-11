@@ -1067,18 +1067,31 @@ async function chooseDoor(label, name) {
   doorsLocked = false;
 }
 
-function resetGame() {
-  if (!confirm("Start a new game?")) return;
+function resetGame(skipConfirm) {
+  if (!skipConfirm) {
+    const btn = document.querySelector('[onclick="resetGame()"]');
+    if (btn) {
+      btn.textContent = "Confirm reset";
+      btn.setAttribute("onclick", "resetGame(true)");
+      setTimeout(() => {
+        btn.textContent = "↺ New";
+        btn.setAttribute("onclick", "resetGame()");
+      }, 3000);
+    }
+    return;
+  }
+  const btn = document.querySelector('[onclick="resetGame(true)"]');
+  if (btn) { btn.textContent = "↺ New"; btn.setAttribute("onclick", "resetGame()"); }
   document.getElementById("chat").innerHTML = "";
   gameState = null;
   userId = "web-" + Math.random().toString(36).slice(2, 9);
   const inp = document.getElementById("custom-door-input");
   if (inp) inp.value = "";
-  // Clear saved progress (keep prizes)
+  document.getElementById("choice-bar").style.display = "none";
+  document.getElementById("welcome").style.display = "";
   const prizes = playerProgress.prizes || [];
   playerProgress = { prizes };
   saveProgress();
-  startGame();
 }
 
 </script>
