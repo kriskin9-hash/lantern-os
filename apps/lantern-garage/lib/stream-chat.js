@@ -289,7 +289,7 @@ async function handleStreamChat(req, url, res) {
       const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
       const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
 
-      sendToken(`Swarm ${mode} · ${job} · routing…\n\n`);
+      sendToken(`Keystone routing…\n\n`);
       const agent = selectAgent(swarmMessage);
       const systemPrompt = `${agent.systemPrompt}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic.`;
 
@@ -297,10 +297,10 @@ async function handleStreamChat(req, url, res) {
         .then((result) => {
           const words = result.text.split(" ");
           for (const word of words) sendToken(word + " ");
-          const meta = { agent: agent.name, online: true, swarm: { provider: result.provider, model: result.model, mode, job } };
+          const meta = { agent: "Keystone", provider: result.provider, online: true, swarm: { provider: result.provider, model: result.model, mode, job } };
           if (result.consensus) meta.swarm.consensus = result.consensus;
           if (result.council) meta.swarm.council = result.council;
-          sendDone(result.provider, meta);
+          sendDone("keystone", meta);
           res.end();
         })
         .catch((err) => {
@@ -797,18 +797,18 @@ Interpret this convergence result and provide:
   const sendError = (msg) => sse.sendError(res, msg);
   const sendFail = (reason) => {
     sendError(humanError(reason));
-    sendDone("failed", { agent: agent.name, online: false });
+    sendDone("failed", { agent: "Keystone", online: false });
   };
   const sendLocalFallback = (reason) => {
     sendError(`local_fallback: ${reason}`);
-    sendDone("offline", { agent: agent.name, online: false });
+    sendDone("offline", { agent: "Keystone", online: false });
   };
 
   // No provider available — stream a clear error instead of static persona replies
   const streamLocalFallback = async (reason) => {
     const errorText = humanError(reason || "no_provider_configured");
     sendError(errorText);
-    sendDone("offline", { agent: agent.name, online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
+    sendDone("offline", { agent: "Keystone", online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
   };
 
   await appendConversationEntry({
@@ -954,7 +954,7 @@ Interpret this convergence result and provide:
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          const meta = { agent: agent.name, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions };
+          const meta = { agent: "Keystone", online: true, cleanText, suggestions, model: ollamaModel, webSuggestions };
           if (imageEntryId) meta.image = { entryId: imageEntryId, status: "generating" };
           sendDone("ollama", meta);
           return;
@@ -1044,7 +1044,7 @@ Interpret this convergence result and provide:
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("gemini");
-      sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions });
+      sendDone("gemini", { agent: "Keystone", provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions });
       return;
     } catch (err) {
       recordProviderFailure("gemini", err.message);
@@ -1129,7 +1129,7 @@ Interpret this convergence result and provide:
       }).catch(() => {});
       recordProviderSuccess("anthropic");
       recordProviderSuccessRouter("anthropic"); // Also log to provider-router for performance tracking
-      sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
+      sendDone("anthropic", { agent: "Keystone", provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
       return;
     } catch (err) {
       const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
@@ -1203,7 +1203,7 @@ Interpret this convergence result and provide:
       }).catch(() => {});
       recordProviderSuccess("openai");
       recordProviderSuccessRouter("openai"); // Also log to provider-router
-      sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
+      sendDone("openai", { agent: "Keystone", provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
       return;
     } catch (err) {
       const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
@@ -1253,7 +1253,7 @@ Interpret this convergence result and provide:
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
-      sendDone("grok", { agent: agent.name, online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
+      sendDone("grok", { agent: "Keystone", provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
       return;
     } catch (err) {
       recordProviderFailure("xai", err.message);
@@ -1294,7 +1294,7 @@ Interpret this convergence result and provide:
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+          sendDone("ollama", { agent: "Keystone", provider: "ollama", online: true, cleanText, suggestions });
           return;
         }
       } catch (err) {
@@ -1366,7 +1366,7 @@ Interpret this convergence result and provide:
           text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
         recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: agent.name, online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions });
+        sendDone("ollama", { agent: "Keystone", provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions });
         return;
       }
     } catch (err) {
