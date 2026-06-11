@@ -87,6 +87,7 @@ const routes = [
   require("./routes/training"),
   require("./routes/trading"),
   require("./routes/agent-performance"),
+  require("./routes/leaderboard"),
   require("./routes/surfaces"),
   require("./routes/self-edit"),
 ];
