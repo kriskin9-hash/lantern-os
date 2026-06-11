@@ -192,17 +192,20 @@
     </div>
   </div>
 
-  <!-- Custom door input bar -->
+  <!-- Door choice bar — quick picks + custom input -->
   <div class="input-container" id="choice-bar" style="display:none">
+    <!-- Current door quick-picks (updated each scene) -->
+    <div id="door-quick-picks" style="display:flex;gap:6px;margin-bottom:8px"></div>
+    <!-- Custom / free-text input -->
     <div style="display:flex;gap:8px;align-items:center">
       <input id="custom-door-input" type="text"
-        placeholder="Choose A, B, or C — or describe your own door..."
-        style="flex:1;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color 0.15s"
+        placeholder="or describe your own door..."
+        style="flex:1;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color 0.15s"
         onfocus="this.style.borderColor='var(--accent)'"
         onblur="this.style.borderColor='var(--border)'"
         onkeydown="if(event.key==='Enter')submitCustomDoor()" />
       <button onclick="submitCustomDoor()"
-        style="padding:12px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0">→</button>
+        style="padding:10px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0">→</button>
     </div>
   </div>
 
@@ -711,14 +714,26 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     }
   });
 
-  // Show custom door input
+  // Show choice bar with labelled quick-picks + custom input
   const bar = document.getElementById("choice-bar");
   const input = document.getElementById("custom-door-input");
+  const picks = document.getElementById("door-quick-picks");
   if (doors && doors.length) {
     bar.style.display = "";
     if (input) { input.value = ""; input.disabled = false; }
+    if (picks) {
+      picks.innerHTML = doors.map(d => `
+        <button onclick="chooseDoor('${d.label}','${d.name.replace(/'/g,"\\'")}')"
+          style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color 0.15s,background 0.15s;min-width:0"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'">
+          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:2px">${d.label}</div>
+          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.name}</div>
+        </button>`).join("");
+    }
   } else {
     bar.style.display = "none";
+    if (picks) picks.innerHTML = "";
   }
   gameState = {
     scene_key: sceneKey, doors, history,
@@ -785,15 +800,20 @@ function checkChallenges(sceneKey, turnCount) {
 // Shows canvas art immediately; swaps in AI-generated image when ready.
 // Also collects images + prompts as LoRA training data.
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt/";
-const pollinationsCache = {};
+const pollinationsCache = {}; // keyed by sceneKey_loopCount for fresh art each loop
 let trainingImageCount = 0;
 
 async function loadPollinationsImage(imgId, canvasId, sceneKey) {
-  if (pollinationsCache[sceneKey]) return; // already loaded this scene
+  const loopCount = gameState?.loop_count ?? 0;
+  const cacheKey = `${sceneKey}_L${loopCount}`;
+  if (pollinationsCache[cacheKey]) return; // already loaded this scene+loop
   const scene = SCENES[sceneKey];
   const sdPrompt = scene?.image_prompt || SD_PROMPTS?.[sceneKey] || (scene?.text?.slice(0, 120) || sceneKey);
-  const fullPrompt = `fantasy dreamworld, ${sdPrompt}, painterly, cinematic light, no text`;
-  const url = POLLINATIONS_BASE + encodeURIComponent(fullPrompt) + "?width=800&height=450&nologo=true&model=flux";
+  // Include loop count in prompt for variation on revisit; random seed forces a fresh image
+  const loopFlair = loopCount > 0 ? `, revisited ${loopCount > 1 ? "again " : ""}with new eyes` : "";
+  const seed = Math.floor(Math.random() * 999983) + 1;
+  const fullPrompt = `fantasy dreamworld, ${sdPrompt}${loopFlair}, painterly, cinematic light, no text`;
+  const url = POLLINATIONS_BASE + encodeURIComponent(fullPrompt) + `?width=800&height=450&nologo=true&model=flux&seed=${seed}`;
   try {
     const img = document.getElementById(imgId);
     const cvs = document.getElementById(canvasId);
@@ -801,8 +821,8 @@ async function loadPollinationsImage(imgId, canvasId, sceneKey) {
     const probe = new Image();
     probe.crossOrigin = "anonymous";
     probe.onload = () => {
-      pollinationsCache[sceneKey] = url;
-      logThreeDoorsEvent('image_load', { sceneKey, source: 'pollinations' });
+      pollinationsCache[cacheKey] = url;
+      logThreeDoorsEvent('image_load', { sceneKey, source: 'pollinations', loop: loopCount, seed });
       if (cvs) cvs.style.display = "none";
       if (img) { img.src = url; img.style.display = ""; }
       // Collect image as training sample (fire and forget)
@@ -1053,6 +1073,9 @@ async function chooseDoor(label, name) {
   writeCubeDelta('story_choice', [name.toLowerCase().replace(/\s+/g, '-')], 'explore:' + (gameState?.scene_key || ''), { coordinate: `explore:${gameState?.scene_key || ''}:${label}` });
 
   document.querySelectorAll(".door-chip").forEach(b => b.disabled = true);
+  // Also disable the quick-pick buttons in the choice bar
+  const picks = document.getElementById("door-quick-picks");
+  if (picks) picks.querySelectorAll("button").forEach(b => b.disabled = true);
   const bar = document.getElementById("choice-bar");
   const input = document.getElementById("custom-door-input");
   if (bar) bar.style.opacity = "0.4";
