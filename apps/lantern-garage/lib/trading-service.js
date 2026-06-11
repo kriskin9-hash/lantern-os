@@ -84,7 +84,7 @@ async function requestHandler(req, res) {
     return;
   }
 
-  // Portfolio / positions — fetch from IBKR or return zeros
+  // Portfolio / positions — fetch from IBKR REST API or return zeros
   if (pathname === '/api/positions') {
     try {
       const [ibkrAccount, ibkrPos] = await Promise.all([
@@ -96,7 +96,7 @@ async function requestHandler(req, res) {
       res.end(JSON.stringify({
         account: ibkrAccount || { equity: 0, cash: 0, pnl_today: 0, pnl_pct: 0 },
         positions: ibkrPos || [],
-        source: ibkrAccount ? 'IBKR' : 'mock'
+        source: ibkrAccount ? 'IBKR' : 'disconnected'
       }));
     } catch (e) {
       res.writeHead(200);
