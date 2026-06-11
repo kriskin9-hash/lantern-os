@@ -8,12 +8,13 @@
 <link rel="stylesheet" href="/css/site.css">
 <link rel="stylesheet" href="css/dream-chat.css">
 <style>
-  /* ── Override dream-chat.css scroll lock for this page ── */
+  /* ── Override dream-chat.css layout for this page ── */
   html, body { overflow: auto !important; height: auto !important; min-height: 100dvh; }
   ::-webkit-scrollbar { display: block !important; width: 4px; }
   * { -ms-overflow-style: auto !important; scrollbar-width: thin !important; }
-  .app { height: auto !important; min-height: 100dvh; }
-  .chat-container { overflow: visible !important; flex: none !important; max-height: none !important; }
+  .app { flex-direction: column !important; height: auto !important; min-height: 100dvh; }
+  .chat-container { overflow: visible !important; flex: 1 1 auto !important; max-height: none !important; width: 100% !important; max-width: 720px; margin: 0 auto; padding: 16px; box-sizing: border-box; }
+  .input-container { max-width: 720px; margin: 0 auto; width: 100%; padding: 8px 16px; box-sizing: border-box; }
 
   /* ── Explore additions on top of dream-chat.css ── */
   .doors-banner {
