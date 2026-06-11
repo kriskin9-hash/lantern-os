@@ -7,6 +7,12 @@
  *   Otherwise falls back to procedural Python generation.
  *
  * GET /api/image/list — list generated images in data/images/
+ *
+ * GET /api/image/pool/random — pick a random image from CAAD pool
+ *   Priority: THREE_DOORS_IMAGE_POOL_DIR env var → data/images/caadi/
+ *   Returns: { url: "/api/image/pool/serve?file=...&source=..." }
+ *
+ * GET /api/image/pool/serve?file=<name>&source=local|caadi — serve a pool image safely
  */
 const { execSync } = require("child_process");
 const fs = require("fs");
