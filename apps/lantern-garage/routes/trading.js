@@ -110,10 +110,9 @@ const DASHBOARD_PROXY_ROUTES = {
 
 module.exports = async function tradingRoutes(req, res, url, deps) {
   const { sendJson } = deps;
-  const apiKey = process.env.AI_TRADER_API_KEY || null;
-  const bridge = new TradingAPIBridge(AI_TRADER_HOST, AI_TRADER_PORT, apiKey);
+  const bridge = new TradingAPIBridge();
 
-  // ── /trading.html dashboard proxy routes ──────────────────────────────────
+  // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
   // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,agent-log,orders,news-feed}
   if (req.method === 'GET' && DASHBOARD_PROXY_ROUTES[url.pathname]) {
     try {
@@ -125,157 +124,12 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
-  // GET /api/trading/status (legacy endpoint)
+  // GET /api/trading/status
   // Returns real-time status of all connected APIs
   if (url.pathname === '/api/trading/status' && req.method === 'GET') {
     try {
       const data = await bridge.getDashboardData();
       sendJson(res, data, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // ── AI Trader Microservice Routes ─────────────────────────────────────────
-
-  // GET /api/trading/ai-trader/health
-  // Check AI trader microservice health
-  if (url.pathname === '/api/trading/ai-trader/health' && req.method === 'GET') {
-    try {
-      const result = await bridge.healthCheck();
-      sendJson(res, result, result.healthy ? 200 : 503);
-    } catch (error) {
-      sendJson(res, {
-        error: 'AI trader service unavailable',
-        details: error.message,
-        endpoint: `http://${AI_TRADER_HOST}:${AI_TRADER_PORT}`
-      }, 503);
-    }
-    return true;
-  }
-
-  // GET /api/trading/ai-trader/status
-  // Returns trading status (market open, equity, positions count, paused)
-  if (url.pathname === '/api/trading/ai-trader/status' && req.method === 'GET') {
-    try {
-      const status = await bridge.getStatus();
-      sendJson(res, status, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // GET /api/trading/ai-trader/watchlist
-  // Returns current watchlist and pause status
-  if (url.pathname === '/api/trading/ai-trader/watchlist' && req.method === 'GET') {
-    try {
-      const watchlist = await bridge.getWatchlist();
-      sendJson(res, watchlist, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // GET /api/trading/ai-trader/zones
-  // Returns market analysis zones for all watched tickers
-  if (url.pathname === '/api/trading/ai-trader/zones' && req.method === 'GET') {
-    try {
-      const zones = await bridge.getZones();
-      sendJson(res, zones, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // GET /api/trading/ai-trader/signals
-  // Returns recent AI-generated trading signals
-  if (url.pathname === '/api/trading/ai-trader/signals' && req.method === 'GET') {
-    try {
-      const limit = url.searchParams.get('limit') || 10;
-      const signals = await bridge.getSignals(parseInt(limit));
-      sendJson(res, signals, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // GET /api/trading/ai-trader/positions
-  // Returns open positions with entry, current price, P&L, stops, and take profits
-  if (url.pathname === '/api/trading/ai-trader/positions' && req.method === 'GET') {
-    try {
-      const positions = await bridge.getPositions();
-      sendJson(res, positions, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // GET /api/trading/ai-trader/alerts
-  // Returns recent trading alerts and notifications
-  if (url.pathname === '/api/trading/ai-trader/alerts' && req.method === 'GET') {
-    try {
-      const limit = url.searchParams.get('limit') || 20;
-      const alerts = await bridge.getAlerts(parseInt(limit));
-      sendJson(res, alerts, 200);
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // POST /api/trading/ai-trader/pause
-  // Pause all trading
-  if (url.pathname === '/api/trading/ai-trader/pause' && req.method === 'POST') {
-    try {
-      const result = await bridge.pauseTrading();
-      if (result.success) {
-        sendJson(res, { status: 'paused', timestamp: new Date().toISOString() }, 200);
-      } else {
-        sendJson(res, { error: result.error }, 500);
-      }
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // POST /api/trading/ai-trader/resume
-  // Resume trading
-  if (url.pathname === '/api/trading/ai-trader/resume' && req.method === 'POST') {
-    try {
-      const result = await bridge.resumeTrading();
-      if (result.success) {
-        sendJson(res, { status: 'resumed', timestamp: new Date().toISOString() }, 200);
-      } else {
-        sendJson(res, { error: result.error }, 500);
-      }
-    } catch (error) {
-      sendJson(res, { error: error.message }, 500);
-    }
-    return true;
-  }
-
-  // POST /api/trading/ai-trader/close-position
-  // Close a specific position
-  if (url.pathname === '/api/trading/ai-trader/close-position' && req.method === 'POST') {
-    try {
-      const symbol = url.searchParams.get('symbol');
-      if (!symbol) {
-        sendJson(res, { error: 'Missing symbol parameter' }, 400);
-        return true;
-      }
-      const result = await bridge.closePosition(symbol);
-      if (result.success) {
-        sendJson(res, { status: 'close_requested', symbol, timestamp: new Date().toISOString() }, 200);
-      } else {
-        sendJson(res, { error: result.error }, 500);
-      }
     } catch (error) {
       sendJson(res, { error: error.message }, 500);
     }

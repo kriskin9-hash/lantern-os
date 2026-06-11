@@ -1,137 +1,185 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#06b6d4">
-<title>Trading News — Lantern OS</title>
-<link rel="stylesheet" href="/css/site.css">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06b6d4">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/site.css">
+  <title>Trading News — Lantern OS</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-  :root{
-    /* AI Trader terminal palette mapped onto Lantern OS's shared theme
-       (site.css) so colors follow the global light/dark toggle. */
-    --bg0: var(--bg);
-    --bg1: var(--surface);
-    --bg2: var(--surface2);
-    --bg3: var(--surface2);
-    --text0: var(--text);
-    --text1: var(--muted);
-    --text2: var(--muted);
-    --red: var(--danger);
-    --blue: var(--accent);
-    --amber: var(--gold);
-    --mono: 'IBM Plex Mono', monospace;
-  }
+    :root {
+      --mono: 'IBM Plex Mono', monospace;
+    }
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 24px 80px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+    header p { font-size: 0.78rem; color: var(--muted); margin: 0; }
 
-  html,body{ font-size:13px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+    }
+    .card h2 {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 14px;
+    }
+    .full-width { grid-column: 1 / -1; }
 
-  /* ── Page shell ── */
-  .trading-page{ max-width:1400px; margin:0 auto; padding:16px 20px 60px; }
-  .zone{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); margin-bottom:14px; }
-  .zone-title{ font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:14px; }
+    .loading {
+      text-align: center;
+      padding: 60px;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
 
-  /* ── Stat row (overview) ── */
-  .stat-row{ display:flex; gap:28px; flex-wrap:wrap; }
-  .stat-block{ display:flex; flex-direction:column; gap:3px; }
-  .stat-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
-  .stat-value{ font-family:var(--mono); font-size:1.15rem; font-weight:600; color:var(--text); }
-  .stat-value.neg{ color:var(--danger); }
-  .last-update{ font-size:.7rem; color:var(--muted); margin-top:10px; }
+    /* ── News Overview stats ── */
+    .stat-row{ display:flex; gap:28px; flex-wrap:wrap; }
+    .stat-block{ display:flex; flex-direction:column; gap:3px; }
+    .stat-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+    .stat-value{ font-family:var(--mono); font-size:1.15rem; font-weight:600; color:var(--text); }
+    .stat-value.neg{ color:var(--danger); }
+    .last-update{ font-size:.7rem; color:var(--muted); margin-top:10px; }
 
-  /* ── Tab bar ── */
-  .tab-bar{ display:flex; gap:6px; margin-bottom:14px; }
-  .tab{ font-family:var(--mono); font-size:11px; padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; transition:all .15s; letter-spacing:.05em; }
-  .tab.active,.tab:hover{ background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+    /* ── Tab bar ── */
+    .tab-bar{ display:flex; gap:6px; margin-bottom:14px; }
+    .tab{ font-family:var(--mono); font-size:11px; padding:6px 14px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; transition:all .15s; letter-spacing:.05em; }
+    .tab.active,.tab:hover{ background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
 
-  /* ── Filters ── */
-  .filter-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-  .filter-input{ font-family:var(--mono); font-size:12px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:7px 12px; border-radius:8px; outline:none; flex:1; min-width:200px; }
-  .filter-input:focus{ border-color:var(--accent); }
-  .impact-filter{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); margin-left:auto; }
-  .impact-filter select{ font-family:var(--mono); font-size:11px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; outline:none; }
-  .ticker-filters{ display:flex; flex-wrap:wrap; gap:6px; }
-  .ticker-filter{ font-family:var(--mono); font-size:10px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; transition:all .15s; }
-  .ticker-filter.active{ background:rgba(16,185,129,.12); color:var(--green); border-color:rgba(16,185,129,.4); }
+    /* ── Filters ── */
+    .filter-row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+    .filter-input{ font-family:var(--mono); font-size:12px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:7px 12px; border-radius:8px; outline:none; flex:1; min-width:200px; }
+    .filter-input:focus{ border-color:var(--accent); }
+    .impact-filter{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); margin-left:auto; }
+    .impact-filter select{ font-family:var(--mono); font-size:11px; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; outline:none; }
+    .ticker-filters{ display:flex; flex-wrap:wrap; gap:6px; }
+    .ticker-filter{ font-family:var(--mono); font-size:10px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; transition:all .15s; }
+    .ticker-filter.active{ background:rgba(16,185,129,.12); color:var(--green); border-color:rgba(16,185,129,.4); }
 
-  /* ── News grid ── */
-  .date-group-title{ font-family:var(--mono); font-size:10px; color:var(--gold); letter-spacing:.1em; margin:16px 0 8px; text-transform:uppercase; }
-  .date-group-title:first-child{ margin-top:0; }
-  .news-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:24px; }
-  .news-card{ background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; transition:border-color .15s; cursor:pointer; }
-  .news-card:hover{ border-color:var(--accent); }
-  .news-card-header{ display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; }
-  .impact-badge{ font-family:var(--mono); font-size:10px; font-weight:600; padding:3px 7px; border-radius:4px; flex-shrink:0; margin-top:1px; }
-  .impact-high{ background:rgba(239,68,68,.15); color:var(--danger); border:1px solid rgba(239,68,68,.3); }
-  .impact-med{ background:rgba(245,158,11,.12); color:var(--gold); border:1px solid rgba(245,158,11,.3); }
-  .impact-low{ background:var(--surface); color:var(--muted); border:1px solid var(--border); }
-  .news-headline{ font-size:13px; font-weight:500; line-height:1.4; color:var(--text); }
-  .news-meta{ display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
-  .news-source{ font-family:var(--mono); font-size:10px; color:var(--muted); }
-  .news-date{ font-family:var(--mono); font-size:10px; color:var(--muted); }
-  .news-tickers{ display:flex; gap:4px; flex-wrap:wrap; margin-left:auto; }
-  .news-ticker-tag{ font-family:var(--mono); font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(16,185,129,.1); color:var(--green); border:1px solid rgba(16,185,129,.2); }
-  .loading{ text-align:center; padding:60px; font-family:var(--mono); color:var(--muted); }
-</style>
+    /* ── News grid ── */
+    .date-group-title{ font-family:var(--mono); font-size:10px; color:var(--gold); letter-spacing:.1em; margin:16px 0 8px; text-transform:uppercase; }
+    .date-group-title:first-child{ margin-top:0; }
+    .news-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; margin-bottom:24px; }
+    .news-card{ background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:14px; transition:border-color .15s; cursor:pointer; }
+    .news-card:hover{ border-color:var(--accent); }
+    .news-card-header{ display:flex; align-items:flex-start; gap:10px; margin-bottom:8px; }
+    .impact-badge{ font-family:var(--mono); font-size:10px; font-weight:600; padding:3px 7px; border-radius:4px; flex-shrink:0; margin-top:1px; }
+    .impact-high{ background:rgba(239,68,68,.15); color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .impact-med{ background:rgba(245,158,11,.12); color:var(--gold); border:1px solid rgba(245,158,11,.3); }
+    .impact-low{ background:var(--surface); color:var(--muted); border:1px solid var(--border); }
+    .news-headline{ font-size:13px; font-weight:500; line-height:1.4; color:var(--text); }
+    .news-meta{ display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
+    .news-source{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+    .news-date{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+    .news-tickers{ display:flex; gap:4px; flex-wrap:wrap; margin-left:auto; }
+    .news-ticker-tag{ font-family:var(--mono); font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(16,185,129,.1); color:var(--green); border:1px solid rgba(16,185,129,.2); }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
 
-<!-- ── Site nav ── -->
+<!-- ── Site nav (matching trading.html) ── -->
 <nav class="site-nav">
   <a class="nav-brand" href="/">
     <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
     Lantern OS
   </a>
   <div class="nav-links">
-    <a href="/">Home</a>
+    <a href="/dream-chat.html">Journal</a>
     <a href="/trading.html">Trading</a>
     <a href="/trading-news.html" class="active">News</a>
+    <a href="/flourishing">Dashboard</a>
+    <a href="/knowledgecenter.html">Help</a>
   </div>
   <div class="nav-actions">
-    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode">☀</button>
+    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light / dark mode">☀</button>
+    <a class="nav-cta" href="/dream-chat.html">Open Journal</a>
   </div>
 </nav>
 
-<div class="trading-page">
+<div class="page">
+  <header style="margin-bottom: 28px;">
+    <h1 style="font-size: 1.8rem; margin-bottom: 4px;">📰 Trading News</h1>
+    <p style="color: var(--muted); font-size: 0.95rem;">Market-moving headlines for your watchlist tickers</p>
+  </header>
 
-  <section class="zone">
-    <h2 class="zone-title">News Overview</h2>
-    <div class="stat-row">
-      <div class="stat-block"><span class="stat-label">Total Articles</span><span class="stat-value" id="statTotal">—</span></div>
-      <div class="stat-block"><span class="stat-label">High Impact</span><span class="stat-value neg" id="statHigh">—</span></div>
-      <div class="stat-block"><span class="stat-label">Period</span><span class="stat-value" id="statPeriod">Last 30 Days</span></div>
-      <div class="stat-block"><span class="stat-label">Tickers Covered</span><span class="stat-value" id="statTickers">—</span></div>
-    </div>
-    <div id="lastUpdate" class="last-update"></div>
-  </section>
-
-  <section class="zone">
-    <h2 class="zone-title">Filters</h2>
-    <div class="tab-bar">
-      <button class="tab active" onclick="setTab('all')">All News</button>
-      <button class="tab" onclick="setTab('stocks')">Stocks</button>
-      <button class="tab" onclick="setTab('market')">Broad Market</button>
-    </div>
-    <div class="filter-row">
-      <input class="filter-input" id="searchInput" placeholder="Search headlines..." oninput="applyFilters()">
-      <div class="impact-filter">
-        <span>Min impact:</span>
-        <select id="impactFilter" onchange="applyFilters()">
-          <option value="0">All</option>
-          <option value="40">Medium+</option>
-          <option value="70">High only</option>
-        </select>
+  <div class="grid">
+    <div class="card full-width">
+      <h2>News Overview</h2>
+      <div class="stat-row">
+        <div class="stat-block"><span class="stat-label">Total Articles</span><span class="stat-value" id="statTotal">—</span></div>
+        <div class="stat-block"><span class="stat-label">High Impact</span><span class="stat-value neg" id="statHigh">—</span></div>
+        <div class="stat-block"><span class="stat-label">Period</span><span class="stat-value" id="statPeriod">Last 30 Days</span></div>
+        <div class="stat-block"><span class="stat-label">Tickers Covered</span><span class="stat-value" id="statTickers">—</span></div>
       </div>
+      <div id="lastUpdate" class="last-update"></div>
     </div>
-    <div id="tickerFilters" class="ticker-filters"></div>
-  </section>
 
-  <section class="zone">
-    <h2 class="zone-title">Headlines</h2>
-    <div id="newsContainer"><div class="loading">Loading news...</div></div>
-  </section>
+    <div class="card full-width">
+      <h2>Filters</h2>
+      <div class="tab-bar">
+        <button class="tab active" onclick="setTab('all')">All News</button>
+        <button class="tab" onclick="setTab('stocks')">Stocks</button>
+        <button class="tab" onclick="setTab('market')">Broad Market</button>
+      </div>
+      <div class="filter-row">
+        <input class="filter-input" id="searchInput" placeholder="Search headlines..." oninput="applyFilters()">
+        <div class="impact-filter">
+          <span>Min impact:</span>
+          <select id="impactFilter" onchange="applyFilters()">
+            <option value="0">All</option>
+            <option value="40">Medium+</option>
+            <option value="70">High only</option>
+          </select>
+        </div>
+      </div>
+      <div id="tickerFilters" class="ticker-filters"></div>
+    </div>
 
+    <div class="card full-width">
+      <h2>Headlines</h2>
+      <div id="newsContainer"><div class="loading">Loading news...</div></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -240,7 +288,7 @@ function loadNews() {
     .then(data => {
       if (data.error) {
         document.getElementById('newsContainer').innerHTML =
-          '<div class="loading" style="color:var(--red)">News API error: ' + data.error + '</div>';
+          '<div class="loading" style="color:var(--danger)">News API error: ' + data.error + '</div>';
         return;
       }
       const ticker_news = data.ticker_news || [];
@@ -280,7 +328,7 @@ function loadNews() {
     })
     .catch(err => {
       document.getElementById('newsContainer').innerHTML =
-        '<div class="loading" style="color:var(--red)">Failed to load news: ' + err.message + '</div>';
+        '<div class="loading" style="color:var(--danger)">Failed to load news: ' + err.message + '</div>';
     });
 }
 
@@ -288,13 +336,5 @@ loadNews();
 setInterval(loadNews, 300000); // refresh every 5 min
 </script>
 <script src="/js/theme-toggle.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const themeToggle = document.getElementById('theme-toggle');
-  if (themeToggle && window.toggleTheme) {
-    themeToggle.addEventListener('click', toggleTheme);
-  }
-});
-</script>
 </body>
 </html>
