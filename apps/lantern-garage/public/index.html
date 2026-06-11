@@ -38,7 +38,7 @@
     <div class="hero-cta-row">
       <a class="btn-primary" href="/dream-chat.html">✦ Open Journal</a>
     </div>
-    <p class="sub"><span data-version-badge="">v—</span> · <span id="hero-git"></span></p>
+    <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">v—</span> · <span id="hero-git"></span></p>
   </div>
 
   <!-- ── Primary panel ── -->
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* Real-time honest state loader */
 (function() {
-  const $ = id => document.getElementById(id);
+  const $ = id => document.getElementById(id) || { textContent: '', className: '', style: {}, title: '', onclick: null };
   const fmtDate = iso => { try { return new Date(iso).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}); } catch { return iso; } };
 
   async function fetchJson(path) {

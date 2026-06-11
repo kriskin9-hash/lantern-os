@@ -16,9 +16,17 @@
     /* Main container */
     .app {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       height: 100vh;
       width: 100%;
+      overflow: hidden;
+    }
+    .app-main {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 0;
+      min-width: 0;
+      overflow: hidden;
     }
 
     /* Messages area - clean and spacious */
@@ -381,6 +389,7 @@
 </head>
 <body>
 <div class="app">
+  <div class="app-main">
   <!-- Header -->
   <nav class="site-nav">
     <a class="nav-brand" href="/">
@@ -395,6 +404,7 @@
     </div>
     <div class="nav-actions">
       <span id="header-status" style="display:none">· connecting…</span>
+      <button class="nav-btn observer-toggle" id="observer-toggle-btn" onclick="toggleObserver()" title="Observer panel">◈</button>
       <button class="nav-btn" id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
       <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     </div>
@@ -422,6 +432,39 @@
       <button class="send-button" id="send-btn" onclick="sendMessage()" title="Send">↑</button>
     </div>
   </div>
+  </div><!-- /.app-main -->
+
+  <!-- Observer side panel -->
+  <aside class="observer-panel collapsed" id="observer-panel">
+    <div class="observer-panel-header">
+      <span class="observer-panel-title">◈ Observer</span>
+      <button class="observer-panel-close" onclick="toggleObserver()" title="Close">×</button>
+    </div>
+    <div class="observer-panel-body">
+      <div>
+        <div class="obs-section-title">Mood Arc</div>
+        <div class="obs-value" id="obs-mood-arc">—</div>
+        <div class="obs-arc-bar"><div class="obs-arc-fill" id="obs-mood-fill" style="width:50%"></div></div>
+      </div>
+      <div>
+        <div class="obs-section-title">Recurring Symbols</div>
+        <div class="obs-symbol-list" id="obs-symbols">—</div>
+      </div>
+      <div>
+        <div class="obs-section-title">Last Delta</div>
+        <div class="obs-value" id="obs-last-delta">—</div>
+      </div>
+      <div>
+        <div class="obs-section-title">Convergence</div>
+        <div class="obs-value" id="obs-convergence">—</div>
+        <div class="obs-arc-bar"><div class="obs-arc-fill" id="obs-conv-fill" style="width:0%"></div></div>
+      </div>
+      <div>
+        <div class="obs-section-title">Dilation Ratio</div>
+        <div class="obs-value" id="obs-dilation">1.0×</div>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <!-- Settings modal -->
@@ -741,11 +784,11 @@
 
   // Fallback messages — shown ONLY when all providers fail (never as a normal reply)
   const FALLBACKS = [
-    "No AI model responded. Is Ollama running? Run: ollama serve",
-    "All providers offline. Add an API key in Settings, or start your local models.",
-    "Connection quiet. Try again in a moment, or check Settings.",
-    "Local model may be starting up — give it a moment and retry.",
-    "No provider answered. Check Settings for API keys, or run: ollama pull lantern-csf-dream",
+    "No AI providers are set up. Add an API key in Settings (⚙) to get started.",
+    "All providers offline. Check Settings to add an API key or start a local model.",
+    "Connection quiet. Try again in a moment, or check Settings for API keys.",
+    "No provider answered. Open Settings (⚙) to configure Gemini, Claude, or OpenAI.",
+    "AI unavailable. Add a provider key in Settings, or run: ollama serve for local mode.",
   ];
 
   // ── Quick-start chip fill ──────────────────────────────────────────
@@ -816,6 +859,7 @@
     const container = document.getElementById('messages');
 
     let fullText = '';
+    let serverErrorText = '';
     let didError = false;
 
     try {
@@ -857,8 +901,9 @@
               bubble.appendChild(cursor);
               container.scrollTop = container.scrollHeight;
             } else if (evt.type === 'error') {
-              // Server reported an error — may be followed by local fallback tokens, so don't stop
+              // Server reported an error — capture its text; may be followed by tokens so don't stop
               didError = true;
+              if (evt.text) serverErrorText = evt.text;
               if (!fullText) {
                 bubble.style.color = 'var(--muted)';
               }
@@ -876,8 +921,8 @@
     cursor.remove();
 
     if (!fullText) {
-      // All providers failed — show random fallback as an error note
-      fullText = FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
+      // Use server error text if available, otherwise random fallback
+      fullText = serverErrorText || FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
       msg.classList.add('error');
       bubble.style.color = 'var(--muted)';
       bubble.style.fontStyle = 'italic';
@@ -898,6 +943,64 @@
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
   });
+
+  // ── Observer side panel ───────────────────────────────────────────
+  function toggleObserver() {
+    const panel = document.getElementById('observer-panel');
+    const btn = document.getElementById('observer-toggle-btn');
+    const collapsed = panel.classList.toggle('collapsed');
+    btn.classList.toggle('active', !collapsed);
+    if (!collapsed) refreshObserver();
+  }
+
+  function refreshObserver() {
+    fetch('/api/csf/stats').then(r => r.ok ? r.json() : null).then(data => {
+      if (!data) return;
+      // Recurring symbols
+      const symList = document.getElementById('obs-symbols');
+      if (data.top10 && data.top10.length > 0) {
+        symList.innerHTML = data.top10.slice(0, 8).map(s =>
+          `<span class="obs-symbol-chip${s.count >= 3 ? ' hot' : ''}">${s.token} ×${s.count}</span>`
+        ).join('');
+      } else {
+        symList.textContent = 'none yet';
+      }
+      document.getElementById('obs-dilation').textContent =
+        data.delta_count ? `${data.delta_count} entries` : '—';
+    }).catch(() => {});
+
+    fetch('/api/csf/deltas?limit=5').then(r => r.ok ? r.json() : null).then(data => {
+      if (!data || !data.length) return;
+      const last = data[data.length - 1];
+      // Mood arc
+      const moods = data.filter(d => d.mood_abs != null).map(d => d.mood_abs);
+      if (moods.length >= 2) {
+        const first = moods[0], latest = moods[moods.length - 1];
+        const diff = latest - first;
+        const label = Math.abs(diff) < 0.1 ? 'stable' : diff > 0 ? '↑ rising' : '↓ falling';
+        document.getElementById('obs-mood-arc').textContent = `${label} (${first.toFixed(1)} → ${latest.toFixed(1)})`;
+        document.getElementById('obs-mood-fill').style.width = `${Math.round(latest * 100)}%`;
+      }
+      // Last delta
+      const deltaLines = [];
+      if (last.symbols_added?.length) deltaLines.push(`+symbols: ${last.symbols_added.slice(0,3).join(', ')}`);
+      if (last.tags_added?.length) deltaLines.push(`+tags: ${last.tags_added.slice(0,3).join(', ')}`);
+      if (last.mood_delta != null && Math.abs(last.mood_delta) >= 0.05)
+        deltaLines.push(`mood ${last.mood_delta > 0 ? '+' : ''}${last.mood_delta}`);
+      document.getElementById('obs-last-delta').textContent = deltaLines.join(' · ') || 'no change';
+      // Convergence
+      if (last.convergence != null) {
+        const pct = Math.round(last.convergence * 100);
+        document.getElementById('obs-convergence').textContent = `${pct}%`;
+        document.getElementById('obs-conv-fill').style.width = `${pct}%`;
+      }
+    }).catch(() => {});
+  }
+
+  // Refresh observer every 30s if open
+  setInterval(() => {
+    if (!document.getElementById('observer-panel').classList.contains('collapsed')) refreshObserver();
+  }, 30000);
 </script>
 <script src="js/convergance-sync.js"></script>
 </body>

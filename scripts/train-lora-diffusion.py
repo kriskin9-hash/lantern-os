@@ -122,10 +122,10 @@ class CSFImageLoRATrainer:
 
         print("\n[LoRA Trainer] Training ready!")
         print("[LoRA Trainer] To execute training:")
-        print("  python -m peft.train \\\")
-        print("    --model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 \\\")
-        print("    --peft_type LORA \\\")
-        print("    --task image_captioning \\\")
+        print("  python -m peft.train \\")
+        print("    --model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 \\")
+        print("    --peft_type LORA \\")
+        print("    --task image_captioning \\")
         print("    --output_dir models/csf-image/checkpoints")
 
         return True

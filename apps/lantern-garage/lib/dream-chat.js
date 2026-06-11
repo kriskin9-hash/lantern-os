@@ -2,6 +2,7 @@ const https = require("https");
 const http = require("http");
 const { handleThreeDoorsServer } = require("./three-doors-chat");
 const { readMcpResourceSync } = require("./mcp-resource-client");
+const { formatCSFContextForPrompt } = require("./csf-memory");
 
 // ------------------------------------------------------------------
 // Multi-Agent Personas — loaded from MCP resource (data/contexts/personas.json)
@@ -317,7 +318,12 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   const noRecords = !recentContext;
   const honesty = noRecords ? "IMPORTANT: There are no saved dream entries yet. If the dreamer asks about previous dreams, say honestly that you don't have any records yet — never fabricate or guess dream content.\n" : "";
-  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-3 sentences). Never diagnose or command.`;
+
+  // CSF symbolic memory — relevance-filtered, ~500-1500 chars, includes door history
+  let csfContext = "";
+  try { csfContext = formatCSFContextForPrompt(text); } catch { /* non-fatal */ }
+
+  const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}${csfContext ? "Symbolic memory:\n" + csfContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-4 sentences). Never diagnose or command.`;
 
   const rp = String(requestedProvider || "").toLowerCase().trim();
 
