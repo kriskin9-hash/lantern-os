@@ -3,137 +3,195 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Trading Desk — Zones</title>
+<meta name="theme-color" content="#06b6d4">
+<title>Trading — Lantern OS</title>
+<link rel="stylesheet" href="/css/site.css">
 <!-- No Chart.js — zone ladder is pure CSS/HTML -->
 
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
   :root{
-    --bg0:#0a0c0f;--bg1:#111318;--bg2:#181c22;--bg3:#1f242d;
-    --border:#252b35;--text0:#e8eaf0;--text1:#9aa0ad;--text2:#5c6370;
-    --green:#00d4aa;--red:#ff5f6d;--amber:#f5a623;--blue:#4a9eff;
-    --purple:#a78bfa;--gold:#f5a623;
-    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    /* AI Trader terminal palette mapped onto Lantern OS's shared theme
+       (site.css) so colors follow the global light/dark toggle. */
+    --bg0: var(--bg);
+    --bg1: var(--surface);
+    --bg2: var(--surface2);
+    --bg3: var(--surface2);
+    --text0: var(--text);
+    --text1: var(--muted);
+    --text2: var(--muted);
+    --red: var(--danger);
+    --blue: var(--accent);
+    --amber: var(--gold);
+    --purple: #a78bfa;
+    --mono: 'IBM Plex Mono', monospace;
   }
-  html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px;overflow-x:hidden}
-  /* ── Layout ── */
-  .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px 1fr auto;height:100vh}
-  .header{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
-  .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
-  .main{overflow-y:auto;padding:12px;background:var(--bg0)}
-  .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:1px;max-height:180px}
-  /* ── Header ── */
-  .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.08em;white-space:nowrap}
-  .logo span{color:var(--text1);font-weight:400}
-  .hstat{font-family:var(--mono);font-size:10px;display:flex;flex-direction:column;gap:1px;min-width:80px}
-  .hstat .l{color:var(--text2);font-size:8px;text-transform:uppercase;letter-spacing:.1em}
-  .hstat .v{color:var(--text0)}
-  .hstat .pos{color:var(--green)}.hstat .neg{color:var(--red)}
-  .badge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;letter-spacing:.1em}
-  .badge-paper{background:rgba(245,166,35,.15);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
-  .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;margin-left:auto}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  .news-btn{font-family:var(--mono);font-size:9px;padding:3px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer}
-  .news-btn:hover{color:var(--text0)}
-  /* ── Sidebar watchlist ── */
-  .wl-item{padding:6px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .1s}
-  .wl-item:hover,.wl-item.active{background:var(--bg2)}
-  .wl-sym{font-family:var(--mono);font-size:11px;font-weight:600}
-  .wl-row{display:flex;justify-content:space-between;align-items:center}
-  .wl-price{font-family:var(--mono);font-size:10px;color:var(--text1)}
-  .wl-chg{font-family:var(--mono);font-size:9px;font-weight:600}
-  .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
-  .wl-signal{font-family:var(--mono);font-size:8px;margin-top:2px}
+
+  html,body{ font-size:13px; }
+
+  /* ── Page shell ── */
+  .trading-page{ max-width:1400px; margin:0 auto; padding:16px 20px 60px; }
+
+  /* ── Zones ── */
+  .zone-row{ display:grid; gap:14px; margin-bottom:14px; }
+  .zone-row.top-row{ grid-template-columns:1fr 1fr; }
+  .zone-row.activity-row{ grid-template-columns:1fr 1fr; }
+  @media (max-width:760px){
+    .zone-row.top-row, .zone-row.activity-row{ grid-template-columns:1fr; }
+  }
+  .zone{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); }
+  .zone-title{ font-size:.7rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:14px; }
+
+  /* ── Live indicator ── */
+  .pulse{ animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── Portfolio / Market stat rows ── */
+  .stat-row{ display:flex; gap:28px; flex-wrap:wrap; margin-bottom:12px; }
+  .stat-block{ display:flex; flex-direction:column; gap:3px; }
+  .stat-label{ font-size:.66rem; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+  .stat-value{ font-family:var(--mono); font-size:1.15rem; font-weight:600; color:var(--text); }
+  .stat-value.pos{ color:var(--green); }
+  .stat-value.neg{ color:var(--danger); }
+
+  /* ── Market status table ── */
+  .mkt-row{ display:flex; justify-content:space-between; padding:3px 0; font-family:var(--mono); font-size:11px; }
+  .mkt-label{ color:var(--muted); } .mkt-val{ color:var(--text); }
+
+  /* ── Signal zone ── */
+  .signal-body{ display:grid; grid-template-columns:200px 1fr; gap:16px; }
+  @media (max-width:860px){ .signal-body{ grid-template-columns:1fr; } }
+  .watchlist-col{ border-right:1px solid var(--border); padding-right:12px; max-height:640px; overflow-y:auto; }
+  @media (max-width:860px){
+    .watchlist-col{ border-right:none; border-bottom:1px solid var(--border); padding-right:0; padding-bottom:8px; max-height:240px; }
+  }
+
+  /* ── Watchlist ── */
+  .wl-item{ padding:6px 8px; cursor:pointer; border-radius:6px; transition:background .1s; }
+  .wl-item:hover,.wl-item.active{ background:var(--surface2); }
+  .wl-sym{ font-family:var(--mono); font-size:11px; font-weight:600; }
+  .wl-row{ display:flex; justify-content:space-between; align-items:center; }
+  .wl-price{ font-family:var(--mono); font-size:10px; color:var(--muted); }
+  .wl-chg{ font-family:var(--mono); font-size:9px; font-weight:600; }
+  .up{ color:var(--green); } .dn{ color:var(--danger); } .flat{ color:var(--muted); }
+  .wl-signal{ font-family:var(--mono); font-size:8px; margin-top:2px; }
+
   /* ── Ticker cards grid ── */
-  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
-  .card{background:var(--bg1);border:1px solid var(--border);border-radius:6px;overflow:hidden;transition:border-color .15s}
-  .card.state-open{border-color:rgba(0,212,170,.35);grid-column:span 2}
-  .card.state-watching{border-color:rgba(74,158,255,.25)}
-  .card.state-quiet{opacity:.75}
-  .card-header{padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .card-ticker{font-family:var(--mono);font-size:14px;font-weight:600}
-  .card-price{font-family:var(--mono);font-size:12px;color:var(--text1)}
-  .card-state{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px;letter-spacing:.1em}
-  .state-open .card-state{background:rgba(0,212,170,.12);color:var(--green)}
-  .state-watching .card-state{background:rgba(74,158,255,.12);color:var(--blue)}
-  .state-quiet .card-state{background:rgba(92,99,112,.1);color:var(--text2)}
+  .cards-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:12px; }
+  .card{ background:var(--surface2); border:1px solid var(--border); border-radius:8px; overflow:hidden; transition:border-color .15s; }
+  .card.state-open{ border-color:rgba(16,185,129,.4); grid-column:span 2; }
+  .card.state-watching{ border-color:rgba(14,165,233,.3); }
+  .card.state-quiet{ opacity:.7; }
+  .card-header{ padding:10px 14px 6px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .card-ticker{ font-family:var(--mono); font-size:14px; font-weight:600; }
+  .card-price{ font-family:var(--mono); font-size:12px; color:var(--muted); }
+  .card-state{ font-family:var(--mono); font-size:8px; padding:2px 6px; border-radius:4px; letter-spacing:.1em; }
+  .state-open .card-state{ background:rgba(16,185,129,.15); color:var(--green); }
+  .state-watching .card-state{ background:var(--accent-dim); color:var(--accent); }
+  .state-quiet .card-state{ background:var(--surface); color:var(--muted); }
+
   /* Confidence badge */
-  .conf-badge{font-family:var(--mono);font-size:9px;padding:3px 8px;border-radius:3px;display:flex;gap:6px;flex-wrap:wrap;margin:0 14px 6px}
-  .conf-badge.bull{background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);color:var(--green)}
-  .conf-badge.bear{background:rgba(255,95,109,.1);border:1px solid rgba(255,95,109,.3);color:var(--red)}
-  .conf-badge.neut{background:rgba(92,99,112,.15);border:1px solid var(--border);color:var(--text2)}
+  .conf-badge{ font-family:var(--mono); font-size:9px; padding:3px 8px; border-radius:4px; display:flex; gap:6px; flex-wrap:wrap; margin:0 14px 6px; }
+  .conf-badge.bull{ background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3); color:var(--green); }
+  .conf-badge.bear{ background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:var(--danger); }
+  .conf-badge.neut{ background:var(--surface); border:1px solid var(--border); color:var(--muted); }
+
   /* P&L badge */
-  .pnl-badge{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;font-weight:600}
-  .pnl-pos{background:rgba(0,212,170,.15);color:var(--green)}
-  .pnl-neg{background:rgba(255,95,109,.15);color:var(--red)}
+  .pnl-badge{ font-family:var(--mono); font-size:10px; padding:2px 8px; border-radius:4px; font-weight:600; }
+  .pnl-pos{ background:rgba(16,185,129,.15); color:var(--green); }
+  .pnl-neg{ background:rgba(239,68,68,.15); color:var(--danger); }
+
   /* Riley badge */
-  .riley-badge{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px}
-  .riley-PERFECT{background:rgba(245,166,35,.2);color:var(--gold)}
-  .riley-GOOD{background:rgba(0,212,170,.1);color:var(--green)}
-  .riley-WAIT{background:rgba(74,158,255,.1);color:var(--blue)}
-  .riley-NO{background:rgba(255,95,109,.1);color:var(--red)}
-  .zone-ladder{position:relative;height:220px;background:var(--bg0);margin:0 14px 10px;border-radius:3px;overflow:hidden;cursor:default}
-  .card.state-open .zone-ladder{height:280px}
-  .card.state-quiet .zone-ladder{height:130px}
-  /* ── Footer panels ── */
-  .fpanel{padding:10px 14px;overflow-y:auto;max-height:180px}
-  .panel-title{font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
-  /* Agent log */
-  .log-item{font-family:var(--mono);font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:grid;grid-template-columns:45px 55px 1fr;gap:4px;align-items:start}
-  .log-time{color:var(--text2)}.log-agent{font-weight:600}
-  .log-grok{color:var(--purple)}.log-claude{color:var(--blue)}.log-risk{color:var(--amber)}
-  .log-system{color:var(--text1)}.log-trail{color:var(--green)}.log-body{color:var(--text0);word-break:break-word}
+  .riley-badge{ font-family:var(--mono); font-size:8px; padding:2px 6px; border-radius:3px; }
+  .riley-PERFECT{ background:rgba(245,158,11,.2); color:var(--gold); }
+  .riley-GOOD{ background:rgba(16,185,129,.12); color:var(--green); }
+  .riley-WAIT{ background:var(--accent-dim); color:var(--accent); }
+  .riley-NO{ background:rgba(239,68,68,.1); color:var(--danger); }
+
+  .zone-ladder{ position:relative; height:220px; background:var(--bg); margin:0 14px 10px; border-radius:4px; overflow:hidden; cursor:default; border:1px solid var(--border); }
+  .card.state-open .zone-ladder{ height:280px; }
+  .card.state-quiet .zone-ladder{ height:130px; }
+
+  /* ── Activity feed panels ── */
+  .feed-list{ max-height:240px; overflow-y:auto; }
+  .log-item{ font-family:var(--mono); font-size:10px; padding:4px 0; border-bottom:1px solid var(--border); display:grid; grid-template-columns:45px 60px 1fr; gap:6px; align-items:start; }
+  .log-item:last-child{ border-bottom:none; }
+  .log-time{ color:var(--muted); } .log-agent{ font-weight:600; }
+  .log-grok{ color:var(--purple); } .log-claude{ color:var(--accent); } .log-risk{ color:var(--gold); }
+  .log-system{ color:var(--muted); } .log-trail{ color:var(--green); } .log-body{ color:var(--text); word-break:break-word; }
+
   /* Orders */
-  .order-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:9px;border-bottom:1px solid rgba(255,255,255,.03)}
-  /* Market status */
-  .mkt-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:10px}
-  .mkt-label{color:var(--text2)}.mkt-val{color:var(--text0)}
+  .order-row{ display:flex; justify-content:space-between; padding:4px 0; font-family:var(--mono); font-size:9px; border-bottom:1px solid var(--border); }
+  .order-row:last-child{ border-bottom:none; }
 </style>
 </head>
 <body>
-<div class="layout">
 
-<!-- Header -->
-<div class="header">
-  <div class="logo">AI<span>trader</span></div>
-  <div class="badge badge-paper">PAPER</div>
-  <div class="hstat"><div class="l">Equity</div><div class="v" id="hEquity">—</div></div>
-  <div class="hstat"><div class="l">Day P&L</div><div class="v" id="hDayPnl">—</div></div>
-  <div class="hstat"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
-  <div class="hstat"><div class="l">Positions</div><div class="v" id="hPos">—</div></div>
-  <div class="hstat"><div class="l">Market</div><div class="v" id="hMkt">—</div></div>
-  <div class="pulse"></div>
-  <a href="/trading-news.html" target="_blank" class="news-btn">📰 News</a>
-</div>
-
-<!-- Sidebar -->
-<div class="sidebar">
-  <div id="wlList"></div>
-</div>
-
-<!-- Main: ticker cards -->
-<div class="main">
-  <div class="cards-grid" id="cardsGrid"></div>
-</div>
-
-<!-- Footer -->
-<div class="footer">
-  <div class="fpanel">
-    <div class="panel-title">Agent Feed</div>
-    <div id="agentLog"></div>
+<!-- ── Site nav ── -->
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/trading.html" class="active">Trading</a>
+    <a href="/trading-news.html">News</a>
   </div>
-  <div class="fpanel">
-    <div class="panel-title">Recent Orders</div>
-    <div id="orders"></div>
+  <div class="nav-actions">
+    <span class="pill held">Paper</span>
+    <span class="dot online pulse" title="Live data feed"></span>
+    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode">☀</button>
   </div>
-  <div class="fpanel">
-    <div class="panel-title">Market Status</div>
-    <div id="mktStatus"></div>
-  </div>
-</div>
+</nav>
 
-</div><!-- /layout -->
+<div class="trading-page">
+
+  <!-- Portfolio + Market zones -->
+  <div class="zone-row top-row">
+    <section class="zone">
+      <h2 class="zone-title">Portfolio</h2>
+      <div class="stat-row">
+        <div class="stat-block"><span class="stat-label">Equity</span><span class="stat-value" id="hEquity">—</span></div>
+        <div class="stat-block"><span class="stat-label">Day P&amp;L</span><span class="stat-value" id="hDayPnl">—</span></div>
+        <div class="stat-block"><span class="stat-label">Open Positions</span><span class="stat-value" id="hPos">—</span></div>
+      </div>
+    </section>
+    <section class="zone">
+      <h2 class="zone-title">Market</h2>
+      <div class="stat-row">
+        <div class="stat-block"><span class="stat-label">VIX</span><span class="stat-value" id="hVix">—</span></div>
+        <div class="stat-block"><span class="stat-label">Session</span><span class="stat-value" id="hMkt">—</span></div>
+      </div>
+      <div id="mktStatus"></div>
+    </section>
+  </div>
+
+  <!-- Signal zone: watchlist + ticker cards -->
+  <section class="zone">
+    <h2 class="zone-title">Signal</h2>
+    <div class="signal-body">
+      <div class="watchlist-col">
+        <div id="wlList"></div>
+      </div>
+      <div class="cards-grid" id="cardsGrid"></div>
+    </div>
+  </section>
+
+  <!-- Activity Feed zone: agent log + recent orders -->
+  <div class="zone-row activity-row">
+    <section class="zone">
+      <h2 class="zone-title">Agent Feed</h2>
+      <div id="agentLog" class="feed-list"></div>
+    </section>
+    <section class="zone">
+      <h2 class="zone-title">Recent Orders</h2>
+      <div id="orders" class="feed-list"></div>
+    </section>
+  </div>
+
+</div>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
@@ -387,7 +445,8 @@ async function loadPortfolio(){
     const pnl= a.pnl_today||0;
     const pe = document.getElementById('hDayPnl');
     pe.textContent = (pnl>=0?'+':'')+'$'+fmt(Math.abs(pnl),0);
-    pe.className   = 'v '+(pnl>=0?'pos':'neg');
+    pe.classList.remove('pos','neg');
+    pe.classList.add(pnl>=0?'pos':'neg');
     document.getElementById('hPos').textContent = (d.positions||[]).length;
   }catch(e){}
 }
@@ -462,6 +521,15 @@ function startDashboard(){
 }
 document.addEventListener('DOMContentLoaded', startDashboard);
 
+</script>
+<script src="/js/theme-toggle.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle && window.toggleTheme) {
+    themeToggle.addEventListener('click', toggleTheme);
+  }
+});
 </script>
 </body>
 </html>
