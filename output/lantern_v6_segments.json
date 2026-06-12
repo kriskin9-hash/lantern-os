@@ -1,0 +1,70 @@
+{
+  "total_segments": 8,
+  "total_duration": 28.0,
+  "segments": [
+    {
+      "index": 1,
+      "start": 50.0,
+      "end": 53.0,
+      "duration": 3.0,
+      "caption": "WAIT FOR IT...",
+      "reason": "motion"
+    },
+    {
+      "index": 2,
+      "start": 120.0,
+      "end": 124.0,
+      "duration": 4.0,
+      "caption": "CLUTCH MOMENT",
+      "reason": "audio_peak"
+    },
+    {
+      "index": 3,
+      "start": 200.0,
+      "end": 203.0,
+      "duration": 3.0,
+      "caption": "NO WAY",
+      "reason": "motion"
+    },
+    {
+      "index": 4,
+      "start": 300.0,
+      "end": 304.0,
+      "duration": 4.0,
+      "caption": "INSANE PLAY",
+      "reason": "audio_peak"
+    },
+    {
+      "index": 5,
+      "start": 400.0,
+      "end": 403.0,
+      "duration": 3.0,
+      "caption": "THIS IS CRAZY",
+      "reason": "motion"
+    },
+    {
+      "index": 6,
+      "start": 500.0,
+      "end": 504.0,
+      "duration": 4.0,
+      "caption": "GG EASY",
+      "reason": "audio_peak"
+    },
+    {
+      "index": 7,
+      "start": 600.0,
+      "end": 603.0,
+      "duration": 3.0,
+      "caption": "ONE SHOT",
+      "reason": "motion"
+    },
+    {
+      "index": 8,
+      "start": 700.0,
+      "end": 704.0,
+      "duration": 4.0,
+      "caption": "UNREAL",
+      "reason": "audio_peak"
+    }
+  ]
+}
