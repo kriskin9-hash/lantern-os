@@ -17,11 +17,8 @@ const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery
 const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
 const { detectTaskType } = require("./task-detector");
-<<<<<<< HEAD
 const { classifyIntent } = require("./intent-router");
 const { convergeMessage } = require("./convergence-adapter");
-=======
->>>>>>> pr-340
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
