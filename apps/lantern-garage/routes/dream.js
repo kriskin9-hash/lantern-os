@@ -376,50 +376,19 @@ print(e.sd_prompt_for_state())`;
         body.prompt = promptResult;
       }
 
-      // Use in-house SD server for image generation
-      const sdHost = process.env.SD_HOST || "127.0.0.1";
-      const sdPort = process.env.SD_PORT || "7860";
-
-      // Fast probe: check if SD server is reachable before attempting generation
-      const sdReachable = await new Promise((resolve) => {
-        const probe = http.request({ hostname: sdHost, port: sdPort, path: "/", method: "GET" },
-          () => { probe.destroy(); resolve(true); });
-        probe.on("error", () => resolve(false));
-        probe.setTimeout(2000, () => { probe.destroy(); resolve(false); });
-        probe.end();
-      });
-
-      if (!sdReachable) {
-        // Fallback: generic pre-rendered scene image if one exists
-        const genericPath = sceneKey
-          ? path.join(repoRoot, "apps", "lantern-garage", "public", "data", "images", "three-doors", `${sceneKey}.png`)
-          : "";
-        if (genericPath && fs.existsSync(genericPath)) {
-          sendJson(res, {
-            image_available: true,
-            image_url: `data/images/three-doors/${sceneKey}.png`,
-            cached: true,
-            fallback: "generic",
-            generatedAt: new Date().toISOString(),
-          });
-          return true;
-        }
+      // Image generation via ModelsLab API (cloud-based Stable Diffusion)
+      const modelsLabApiKey = process.env.MODELSLAB_API_KEY;
+      if (!modelsLabApiKey) {
         sendJson(res, {
           image_available: false,
           image_prompt: body.prompt || "",
-          error: "sd_server_unavailable",
+          error: "image_service_not_configured",
           generatedAt: new Date().toISOString(),
         });
         return true;
       }
 
       const imageResult = await new Promise(async (resolve, reject) => {
-        const modelsLabApiKey = process.env.MODELSLAB_API_KEY;
-
-        if (!modelsLabApiKey) {
-          return reject(new Error("no image generation service configured (MODELSLAB_API_KEY or SD server required)"));
-        }
-
         const payload = JSON.stringify({
           prompt: body.prompt,
           negative_prompt: "cartoon, anime, blurry, distorted, ugly, bad quality",
