@@ -31,38 +31,40 @@ console.log("Intent Classification → Routing Decision");
 test("trading intent routes to trading agent (no convergence)", () => {
   const route = classifyIntent("buy aapl stock");
   assert.strictEqual(route.agent, "trading", "Should route to trading agent");
-  assert.strictEqual(route.requires_convergence, false, "Trading has canConverge=false");
-  // Surface is "direct" if matchCount > 2, otherwise "ambient"
-  assert.ok(route.surface === "direct" || route.surface === "ambient", "Surface should be direct or ambient");
+  assert.strictEqual(route.intent, "trading");
+  assert.strictEqual(route.surface, "convergence");
+  assert.strictEqual(route.requires_convergence, true, "Trading routes through convergence");
 });
 
-test("code intent produces convergence for blocking or long messages", () => {
+test("code intent routes to Keystone via convergence", () => {
   const route = classifyIntent("refactor the authentication handler to support oauth and update the database schema");
   assert.strictEqual(route.agent, "keystone", "Should route to code agent (keystone)");
-  // Note: convergence only if message is long (>50 words) or agent is blocking
-  // This message should trigger convergence if >50 words
-  const wordCount = "refactor the authentication handler to support oauth and update the database schema".split(/\s+/).length;
-  if (wordCount > 50) {
-    assert.strictEqual(route.requires_convergence, true, "Long code message should require convergence");
-  }
+  assert.strictEqual(route.intent, "code");
+  assert.strictEqual(route.surface, "convergence");
+  assert.strictEqual(route.requires_convergence, true, "Code requests route through convergence");
 });
 
 test("rp_game intent does NOT require convergence", () => {
   const route = classifyIntent("play three doors");
-  assert.strictEqual(route.agent, "three-doors", "Should route to three-doors agent");
+  assert.strictEqual(route.agent, "three_doors", "Should route to three-doors agent");
+  assert.strictEqual(route.intent, "rp_game");
+  assert.strictEqual(route.surface, "three_doors");
   assert.strictEqual(route.requires_convergence, false, "RP game should not require convergence");
 });
 
 test("memory export intent (short message) does NOT require convergence", () => {
   const route = classifyIntent("export data");
   assert.strictEqual(route.agent, "csf", "Should route to CSF/memory agent");
+  assert.strictEqual(route.intent, "memory_export");
+  assert.strictEqual(route.surface, "csf_export");
   assert.strictEqual(route.requires_convergence, false, "Short message, not blocking");
 });
 
 test("strategy intent produces convergence (blocking agent)", () => {
   const route = classifyIntent("plan the next sprint");
   assert.strictEqual(route.agent, "founder", "Should route to strategy agent");
-  // Founder has isBlocking: true, so should converge
+  assert.strictEqual(route.intent, "strategy");
+  assert.strictEqual(route.surface, "convergence");
   assert.strictEqual(route.requires_convergence, true, "Blocking agent (founder) should require convergence");
 });
 
@@ -74,7 +76,7 @@ test("getAgent returns valid agent for keystone", () => {
   assert.ok(agent, "Agent should exist");
   assert.strictEqual(agent.id, "keystone");
   assert.strictEqual(agent.canConverge, true, "Keystone should support convergence");
-  assert.strictEqual(agent.isBlocking, false, "Keystone is not blocking");
+  assert.strictEqual(agent.isBlocking, true, "Keystone blocks while convergence completes");
 });
 
 test("getAgent returns valid agent for founder", () => {
@@ -126,6 +128,8 @@ test("convergence-enabled intents have confidence > 0", () => {
 test("unknown intents default to lantern with 0 confidence", () => {
   const route = classifyIntent("xyz abc 123");
   assert.strictEqual(route.agent, "lantern", "Should default to lantern");
+  assert.strictEqual(route.intent, "dream_analysis");
+  assert.strictEqual(route.surface, "dream_chat");
   assert.strictEqual(route.confidence, 0, "Unknown intent should have 0 confidence");
 });
 
@@ -144,6 +148,9 @@ test("all agents have required fields", () => {
     assert.ok(Array.isArray(agent.triggers), `Agent ${agent.id} should have triggers array`);
     assert.ok(typeof agent.canConverge === "boolean", `Agent ${agent.id} should have canConverge boolean`);
     assert.ok(typeof agent.isBlocking === "boolean", `Agent ${agent.id} should have isBlocking boolean`);
+    assert.ok(agent.input_contract, `Agent ${agent.id} should have input contract`);
+    assert.ok(agent.output_contract, `Agent ${agent.id} should have output contract`);
+    assert.ok(["dream_chat", "three_doors", "convergence", "csf_export"].includes(agent.surface), `Agent ${agent.id} should have canonical surface`);
   }
 });
 
@@ -162,7 +169,7 @@ test("code bug fix routes to keystone", () => {
   assert.ok(route.reason.includes("Keystone"));
   const agent = getAgent(route.agent);
   assert.ok(agent.canConverge);
-  // Convergence depends on word count (>50) or isBlocking
+  assert.strictEqual(route.requires_convergence, true);
 });
 
 test("strategy planning routes to founder with convergence (blocking)", () => {
@@ -177,6 +184,12 @@ test("dream introspection routes to lantern without convergence", () => {
   const route = classifyIntent("what does this dream symbol mean");
   assert.strictEqual(route.agent, "lantern");
   assert.strictEqual(route.requires_convergence, false, "Short dream message doesn't require convergence");
+});
+
+test("bare door keyword does not switch into Three Doors RP game", () => {
+  const route = classifyIntent("I saw a door in my dream");
+  assert.strictEqual(route.agent, "lantern");
+  assert.strictEqual(route.intent, "dream_analysis");
 });
 
 // Summary

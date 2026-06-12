@@ -751,9 +751,17 @@ Interpret this convergence result and provide:
   const isRpMode = RP_OPT_IN_RE.test(message) || surfaceMode === "three-doors"
     || (requestedAgent && ["lantern", "blinkbug", "waterfall", "xenon"].includes(requestedAgent));
 
+  const routeDecision = classifyIntent(message);
+
   // ── Route label (sent in every done event; shown below each assistant bubble) ─
-  const converganceIntent = converganceDecision?.intent || routeIntent || "general";
+  const converganceIntent = converganceDecision?.intent || routeIntent || routeDecision.intent || "general";
   const ROUTE_LABEL_MAP = {
+    code: "Keystone - code via convergence",
+    strategy: "Founder - strategy via convergence",
+    trading: "Trading - market route",
+    memory_export: "CSF - memory export",
+    dream_analysis: "Lantern - dream analysis",
+    rp_game: "Three Doors - RP game",
     coding_change: "Keystone · code / GitHub route",
     technical_debug: "Keystone · debug route",
     code_review: "Keystone · review route",
@@ -876,6 +884,32 @@ Interpret this convergence result and provide:
   let fullReply = "";
 
   // converganceDecision already computed above (before systemPrompt)
+
+  if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
+    sendToken(`Routing to ${routeLabel}...\n`);
+    sendToken("Waiting for convergence result...\n\n");
+    const result = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
+      timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 8000),
+    });
+    if (result.reply) {
+      await appendConversationEntry({
+        recordedAt: new Date().toISOString(),
+        surface: "dream-chat-stream",
+        role: "lantern",
+        text: String(result.reply).slice(0, maxConversationTextLength),
+      }).catch(() => {});
+      sendToken(result.reply);
+      sendDone(result.error ? "failed" : "convergence", {
+        agent: result.agent || routeDecision.agent,
+        online: !result.error,
+        error: result.error,
+        route: routeDecision,
+      });
+      return;
+    }
+    sendFail(result.error || "convergence_failed");
+    return;
+  }
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;

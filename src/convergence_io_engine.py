@@ -2404,6 +2404,17 @@ class HeadlessAgentDaemon:
 
 if __name__ == "__main__":
     import argparse
+
+    def _finish_cli(engine: Optional[TesseractEngine]) -> None:
+        if engine is not None:
+            try:
+                engine._executor.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                engine._executor.shutdown(wait=False)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
+
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command")
 
@@ -2442,24 +2453,33 @@ if __name__ == "__main__":
 
     if args.command == "converge":
         engine = TesseractEngine()
-        result = engine.converge(args.message, {"persona": args.persona, "provider": args.provider})
-        print(json.dumps(result, indent=2))
+        try:
+            result = engine.converge(args.message, {"persona": args.persona, "provider": args.provider})
+            print(json.dumps(result, indent=2))
+        finally:
+            _finish_cli(engine)
     elif args.command == "batch":
         engine = TesseractEngine()
-        tasks = []
-        if args.tasks:
-            tasks = json.loads(Path(args.tasks).read_text(encoding="utf-8"))
-        else:
-            tasks = [
-                {"id": "a", "message": "Summarize Three Doors Kingdome integration", "persona": "lantern", "provider": "offline"},
-                {"id": "b", "message": "List open issues for convergence engine", "persona": "keystone", "provider": "offline"},
-                {"id": "c", "message": "Check repository health metrics", "persona": "lantern", "provider": "offline"},
-            ]
-        results = engine.batch_converge(tasks)
-        print(json.dumps(results, indent=2))
+        try:
+            tasks = []
+            if args.tasks:
+                tasks = json.loads(Path(args.tasks).read_text(encoding="utf-8"))
+            else:
+                tasks = [
+                    {"id": "a", "message": "Summarize Three Doors Kingdome integration", "persona": "lantern", "provider": "offline"},
+                    {"id": "b", "message": "List open issues for convergence engine", "persona": "keystone", "provider": "offline"},
+                    {"id": "c", "message": "Check repository health metrics", "persona": "lantern", "provider": "offline"},
+                ]
+            results = engine.batch_converge(tasks)
+            print(json.dumps(results, indent=2))
+        finally:
+            _finish_cli(engine)
     elif args.command == "inspect":
         engine = TesseractEngine()
-        print(json.dumps(engine.inspect(), indent=2))
+        try:
+            print(json.dumps(engine.inspect(), indent=2))
+        finally:
+            _finish_cli(engine)
     elif args.command == "loop":
         loop = ConvergenceLoop(
             internal_multiplier=args.internal_multiplier,
@@ -2468,7 +2488,10 @@ if __name__ == "__main__":
         print(json.dumps(loop.run(), indent=2))
     elif args.command == "health":
         engine = TesseractEngine()
-        print(json.dumps(engine.health_check(args.url), indent=2))
+        try:
+            print(json.dumps(engine.health_check(args.url), indent=2))
+        finally:
+            _finish_cli(engine)
     elif args.command == "validate-ring":
         ring = ValidationRing(max_jobs=args.max_jobs, max_seconds=args.max_seconds)
         print(json.dumps(ring.run(), indent=2))
