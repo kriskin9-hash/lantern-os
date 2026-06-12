@@ -1,12 +1,24 @@
 /**
  * Trading API Routes
  * Serves market data, AI recommendations, and broker integration
- * Integrates with independent AI trader microservice
+ * Integrates with local TraderAgent (Python subprocess) for single-app architecture
  */
 
 const http = require('http');
 const TradingAPIBridge = require('../lib/trading-api-bridge');
+const TraderAgent = require('../lib/trader-agent');
 const { recordOrder, recordSignal, queryRecentTradingRecords } = require('../lib/trading-memory');
+
+// Initialize local trader agent (replaces external AI Trader service)
+let traderAgent = null;
+try {
+  traderAgent = new TraderAgent({
+    cacheExpiry: parseInt(process.env.TRADER_CACHE_EXPIRY || '60000'),
+    pythonTimeout: parseInt(process.env.TRADER_PYTHON_TIMEOUT || '30000')
+  });
+} catch (e) {
+  console.error('[Trading Routes] Failed to initialize TraderAgent:', e.message);
+}
 
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
@@ -112,6 +124,121 @@ const DASHBOARD_PROXY_ROUTES = {
 module.exports = async function tradingRoutes(req, res, url, deps) {
   const { sendJson } = deps;
   const bridge = new TradingAPIBridge();
+
+  // ── Integrated Trader Agent Routes (Local, Single-App Model) ──────────────
+
+  // GET /api/trading/zones
+  // Market zones (support/resistance) from local trader agent
+  if (url.pathname === '/api/trading/zones' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { zones: {}, error: 'TraderAgent not initialized' }, 503);
+    }
+    try {
+      const scan = await traderAgent.scanMarket();
+      sendJson(res, { zones: scan.zones || {} }, 200);
+    } catch (error) {
+      console.error('[Trading] /zones error:', error.message);
+      sendJson(res, { zones: {}, error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/watchlist-prices
+  // Live prices for monitored tickers
+  if (url.pathname === '/api/trading/watchlist-prices' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, [], 503);
+    }
+    try {
+      const prices = await traderAgent.getWatchlistPrices();
+      sendJson(res, prices || [], 200);
+    } catch (error) {
+      console.error('[Trading] /watchlist-prices error:', error.message);
+      sendJson(res, [], 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/positions
+  // Open positions from Alpaca
+  if (url.pathname === '/api/trading/positions' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { positions: [], account: {} }, 503);
+    }
+    try {
+      const positions = await traderAgent.getPositions();
+      sendJson(res, positions, 200);
+    } catch (error) {
+      console.error('[Trading] /positions error:', error.message);
+      sendJson(res, { positions: [], account: {} }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/market-status
+  // Market status (VIX, SPY trend, market hours)
+  if (url.pathname === '/api/trading/market-status' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { market_open: false }, 503);
+    }
+    try {
+      const status = await traderAgent.getMarketStatus();
+      sendJson(res, status, 200);
+    } catch (error) {
+      console.error('[Trading] /market-status error:', error.message);
+      sendJson(res, { market_open: false, error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/agent-log
+  // Recent agent activity log (from local memory or CSF)
+  if (url.pathname === '/api/trading/agent-log' && req.method === 'GET') {
+    try {
+      // Query recent records from CSF memory (via trading-memory.js)
+      const records = queryRecentTradingRecords(20);
+      // Filter to signal/log type records
+      const logs = records
+        .filter(r => r.data && (r.data.type === 'signal' || r.data.type === 'log'))
+        .map(r => ({
+          time: r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '',
+          type: r.data.type || 'system',
+          agent: r.data.agent || 'trader',
+          body: r.data.reason || r.data.body || JSON.stringify(r.data).slice(0, 90)
+        }));
+      sendJson(res, logs, 200);
+    } catch (error) {
+      console.error('[Trading] /agent-log error:', error.message);
+      sendJson(res, [], 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/orders
+  // Recent orders from Alpaca (via local cache or CSF)
+  if (url.pathname === '/api/trading/orders' && req.method === 'GET') {
+    try {
+      // Query recent order records from CSF memory
+      const records = queryRecentTradingRecords(50);
+      const orders = records
+        .filter(r => r.data && r.data.type === 'order')
+        .map(r => ({
+          id: r.data.id || r.id || '',
+          symbol: r.data.symbol || '',
+          side: r.data.side || '',
+          qty: r.data.qty || 0,
+          type: r.data.order_type || 'market',
+          status: r.data.status || 'unknown',
+          filled_at: r.data.filled_at || '',
+          filled_avg: r.data.filled_avg_price || 0
+        }));
+      sendJson(res, orders, 200);
+    } catch (error) {
+      console.error('[Trading] /orders error:', error.message);
+      sendJson(res, [], 500);
+    }
+    return true;
+  }
 
   // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
   // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,agent-log,orders,news-feed}
