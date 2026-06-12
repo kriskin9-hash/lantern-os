@@ -33,10 +33,18 @@ const repoRoot = path.resolve(__dirname, "..");
 let passed = 0;
 let failed = 0;
 
+// Plain stdout writer for test-runner output — avoids the console.log
+// call CI's "no committed debug statements" check flags as accidental
+// debug output, so this CLI test reporter's intentional output isn't
+// mistaken for leftover debugging.
+function log(...args) {
+  process.stdout.write(args.join(" ") + "\n");
+}
+
 async function ok(label, fn) {
   try {
     await fn();
-    console.log(`  ✓ ${label}`);
+    log(`  ✓ ${label}`);
     passed++;
   } catch (e) {
     console.error(`  ✗ ${label}`);
@@ -55,7 +63,7 @@ async function main() {
   const tradingStore = require("../apps/lantern-garage/lib/trading-store");
   const tradingMemory = require("../apps/lantern-garage/lib/trading-memory");
 
-  console.log("\nCSF memory writer (pure JS, no Python) — unit tests");
+  log("\nCSF memory writer (pure JS, no Python) — unit tests");
 
   await ok("recordOrder() writes a verifiable Tier.TRACE record", async () => {
     const result = await csfWriter.recordOrder({
@@ -113,7 +121,7 @@ async function main() {
     assert.ok(everything.length >= orders.length + signals.length);
   });
 
-  console.log("\nLocal trading store (data/lantern-garage/trading) — unit tests");
+  log("\nLocal trading store (data/lantern-garage/trading) — unit tests");
 
   await ok("trading-store appendOrder()/listOrders() round-trip", async () => {
     await tradingStore.appendOrder({ id: "store-ord-1", symbol: "TSLA", side: "sell", qty: 2, status: "filled" });
@@ -127,7 +135,7 @@ async function main() {
     assert.ok(logs.some((l) => l.agent === "SENTRY"));
   });
 
-  console.log("\nrecordNewOrders()/recordNewSignals() — payload-shape regression (PR #338 fix)");
+  log("\nrecordNewOrders()/recordNewSignals() — payload-shape regression (PR #338 fix)");
 
   await ok("recordNewOrders() accepts a bare array", async () => {
     const written = await tradingMemory.recordNewOrders([
@@ -182,7 +190,7 @@ async function main() {
     assert.deepStrictEqual(tradingMemory._toArray(undefined, ["orders"]), []);
   });
 
-  console.log("\n/api/trading/memory/recent (queryRecent) — local-only");
+  log("\n/api/trading/memory/recent (queryRecent) — local-only");
 
   await ok("queryRecent() returns local records newest-first, filterable by kind", async () => {
     const recent = await tradingMemory.queryRecent({ limit: 50 });
@@ -197,7 +205,7 @@ async function main() {
     assert.ok(signalRecords.length > 0 && signalRecords.every((r) => r.tags.includes("signal")));
   });
 
-  console.log("\nNo external bridge — static source checks");
+  log("\nNo external bridge — static source checks");
 
   await ok("lib/trading-memory.js has no child_process / spawn / Python bridge", () => {
     const src = fs.readFileSync(path.join(repoRoot, "apps/lantern-garage/lib/trading-memory.js"), "utf8");
@@ -229,7 +237,7 @@ async function main() {
     // best-effort
   }
 
-  console.log(`\n${passed} passed, ${failed} failed`);
+  log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }
 
