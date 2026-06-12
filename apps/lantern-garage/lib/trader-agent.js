@@ -15,7 +15,7 @@ const fs = require('fs');
 class TraderAgent {
   constructor(config = {}) {
     this.config = config;
-    this.pythonPath = path.join(__dirname, '../../src/trading_agents');
+    this.pythonPath = path.join(__dirname, '../../../src/trading_agents');
     this.cache = {};
     this.cacheExpiry = config.cacheExpiry || 60000; // 60s default
     this.pythonTimeout = config.pythonTimeout || 30000; // 30s timeout
@@ -248,7 +248,7 @@ class TraderAgent {
       }
 
       // Build Python command
-      const pythonScript = path.join(__dirname, '../../src/trading_agents/cli.py');
+      const pythonScript = path.join(__dirname, '../../../src/trading_agents/cli.py');
       if (!fs.existsSync(pythonScript)) {
         return reject(new Error(`Python CLI script not found: ${pythonScript}`));
       }
