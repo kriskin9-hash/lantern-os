@@ -18,6 +18,7 @@ const CAPABILITY_REGISTRY = [
     triggers: [
       /\b(code|repo|github|pull request|pr|branch|commit|push|merge|deploy)\b/i,
       /\b(implement|integrate|wire|refactor|bug|fix|debug|error|trace|review|lint|test)\b/i,
+      /\b(router|route|endpoint|api|server|client|ui|handler)\b/i,
       /\b(function|class|var|const|return|throw|import|export)\b/i,
       /\b(crash|fail|broke|broken|issue|problem|exception)\b/i,
       /\b(clean up|rewrite|optimize|simplify|performance)\b/i,

@@ -172,6 +172,13 @@ test("code bug fix routes to keystone", () => {
   assert.strictEqual(route.requires_convergence, true);
 });
 
+test("router fix beats dream keyword overlap", () => {
+  const route = classifyIntent("fix the dream chat router");
+  assert.strictEqual(route.agent, "keystone");
+  assert.strictEqual(route.intent, "code");
+  assert.strictEqual(route.requires_convergence, true);
+});
+
 test("strategy planning routes to founder with convergence (blocking)", () => {
   const route = classifyIntent("plan the sprint roadmap");
   assert.strictEqual(route.agent, "founder");
