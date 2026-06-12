@@ -176,49 +176,157 @@ class ThreeDoorsEngine:
         return text
 
     def _generate_doors(self, stage: str, state: ThreeDoorsGameState) -> list:
+        """
+        Phase 3 Refactored: Generate personalized 3-5 doors.
+        Pipeline: Load → Archetype filter → Agent filter → Symbol unlocks → Observation weight → Return
+        """
+        base_doors = self._load_stage_doors(stage)
+        if not base_doors:
+            return [
+                {"name": "The Lost Door", "label": "A", "description": "Unknown path."},
+                {"name": "The Return Door", "label": "B", "description": "Way back."},
+                {"name": "The Wait Door", "label": "C", "description": "Stay a moment."},
+            ]
+
+        for door in base_doors:
+            door.setdefault("unlocked_by", "default")
+            door.setdefault("archetype_match", [])
+            door.setdefault("agent_affinity", {})
+
+        archetype_filtered = [
+            door for door in base_doors
+            if not door.get("archetype_match") or state.archetype in door.get("archetype_match", [])
+        ]
+        if not archetype_filtered:
+            archetype_filtered = base_doors
+
+        agent_filtered = self._apply_agent_filter(archetype_filtered, state.agent, stage)
+        agent_filtered = self._apply_symbol_unlocks(agent_filtered, state.symbols, stage, state.archetype, state.agent)
+
+        if state.observations:
+            agent_filtered = self._apply_observation_weighting(agent_filtered, state.observations, stage)
+
+        final_doors = agent_filtered[:5]
+        if len(final_doors) < 3:
+            final_doors = agent_filtered + base_doors
+            final_doors = final_doors[:5]
+
+        for i, door in enumerate(final_doors):
+            door["label"] = chr(65 + i)
+
+        return final_doors
+
+    def _load_stage_doors(self, stage: str) -> list:
+        """Load base doors for stage with archetype matching."""
         doors_by_stage = {
             "garden-at-beginning": [
-                {"name": "The Storybook Door", "label": "A", "description": "The Kings own book."},
-                {"name": "The Cloverfield Door", "label": "B", "description": "Green and gold. Luck and today."},
-                {"name": "The Fog Door Return", "label": "C", "description": "The way back."},
+                {"name": "The Storybook Door", "label": "A", "description": "The Kings own book.", "archetype_match": []},
+                {"name": "The Cloverfield Door", "label": "B", "description": "Green and gold. Luck and today.", "archetype_match": []},
+                {"name": "The Fog Door Return", "label": "C", "description": "The way back.", "archetype_match": []},
             ],
             "present-day": [
-                {"name": "The Burrow Door", "label": "A", "description": "Deep roots, comfortable dark."},
-                {"name": "The Sunken Bell Door", "label": "B", "description": "Ringing underwater songs."},
-                {"name": "The Little Crown Door", "label": "C", "description": "Small, precious, overlooked."},
+                {"name": "The Burrow Door", "label": "A", "description": "Deep roots, comfortable dark.", "archetype_match": ["healer", "explorer"]},
+                {"name": "The Sunken Bell Door", "label": "B", "description": "Ringing underwater songs.", "archetype_match": []},
+                {"name": "The Little Crown Door", "label": "C", "description": "Small, precious, overlooked.", "archetype_match": ["seeker"]},
             ],
             "future-doors": [
-                {"name": "The Root Door", "label": "A", "description": "What grows beneath."},
-                {"name": "The Ember Door", "label": "B", "description": "What burns forward."},
-                {"name": "The Stream Door", "label": "C", "description": "What flows ahead."},
+                {"name": "The Root Door", "label": "A", "description": "What grows beneath.", "archetype_match": ["healer"]},
+                {"name": "The Ember Door", "label": "B", "description": "What burns forward.", "archetype_match": ["explorer"]},
+                {"name": "The Stream Door", "label": "C", "description": "What flows ahead.", "archetype_match": []},
             ],
             "xp-door": [
-                {"name": "The Deep Door", "label": "A", "description": "Windows crashing softly."},
-                {"name": "The Echo Door", "label": "B", "description": "Voices from the past."},
-                {"name": "The Surface Door", "label": "C", "description": "Desktop blue. Eternal."},
+                {"name": "The Deep Door", "label": "A", "description": "Windows crashing softly.", "archetype_match": []},
+                {"name": "The Echo Door", "label": "B", "description": "Voices from the past.", "archetype_match": ["seeker"]},
+                {"name": "The Surface Door", "label": "C", "description": "Desktop blue. Eternal.", "archetype_match": []},
             ],
             "xenon-starship": [
-                {"name": "The Throne Door", "label": "A", "description": "Convergence center."},
-                {"name": "The Hollow Door", "label": "B", "description": "Void of all time."},
-                {"name": "The Star Door", "label": "C", "description": "Light born here."},
+                {"name": "The Throne Door", "label": "A", "description": "Convergence center.", "archetype_match": []},
+                {"name": "The Hollow Door", "label": "B", "description": "Void of all time.", "archetype_match": ["explorer"]},
+                {"name": "The Star Door", "label": "C", "description": "Light born here.", "archetype_match": ["seeker"]},
             ],
             "sigil-city-of-doors": [
-                {"name": "The Synthesis Door", "label": "A", "description": "All paths meet."},
-                {"name": "The Mirror Door", "label": "B", "description": "Your own reflection."},
-                {"name": "The Archive Door", "label": "C", "description": "Every version stored."},
+                {"name": "The Synthesis Door", "label": "A", "description": "All paths meet.", "archetype_match": []},
+                {"name": "The Mirror Door", "label": "B", "description": "Your own reflection.", "archetype_match": []},
+                {"name": "The Archive Door", "label": "C", "description": "Every version stored.", "archetype_match": []},
             ],
             "fog-door-return": [
-                {"name": "The Gate Door", "label": "A", "description": "The garden calls again."},
-                {"name": "The Loop Door", "label": "B", "description": "Endless return."},
-                {"name": "The Exit Door", "label": "C", "description": "The way out."},
+                {"name": "The Gate Door", "label": "A", "description": "The garden calls again.", "archetype_match": []},
+                {"name": "The Loop Door", "label": "B", "description": "Endless return.", "archetype_match": []},
+                {"name": "The Exit Door", "label": "C", "description": "The way out.", "archetype_match": []},
             ],
         }
-        doors = doors_by_stage.get(stage, [])
-        if state.agent == "blinkbug":
-            doors = doors[1:] + [doors[0]]
-        elif state.agent == "xenon":
-            doors = sorted(doors, key=lambda d: d["label"])
-        return doors
+        return [dict(d) for d in doors_by_stage.get(stage, [])]
+
+    def _apply_agent_filter(self, doors: list, agent: str, stage: str) -> list:
+        """Reorder doors by agent persona (6 distinct filtering strategies)."""
+        result = [dict(d) for d in doors]
+
+        if agent == "lantern":
+            return result
+        elif agent == "blinkbug":
+            return result[1:] + [result[0]] if len(result) > 1 else result
+        elif agent == "keystone":
+            return sorted(result, key=lambda d: d.get("agent_affinity", {}).get("keystone", 1.0), reverse=True)
+        elif agent == "waterfall":
+            return list(reversed(result))
+        elif agent == "xenon":
+            return sorted(result, key=lambda d: d.get("name", "").lower())
+        elif agent == "founder":
+            roots = [d for d in result if "root" in d.get("name", "").lower() or "origin" in d.get("description", "").lower()]
+            return roots + [d for d in result if d not in roots]
+        return result
+
+    def _apply_symbol_unlocks(self, doors: list, symbols: dict, stage: str, archetype: str, agent: str) -> list:
+        """Unlock hidden doors based on consolidated symbols."""
+        result = [dict(d) for d in doors]
+        if not symbols:
+            return result
+
+        symbol_key = f"archetype={archetype}_agent={agent}"
+        frequency = symbols.get(symbol_key, {}).get("frequency", 0)
+        max_frequency = max([s.get("frequency", 0) for s in symbols.values()] if symbols else [0])
+
+        if frequency >= 2:
+            result.append({
+                "name": "The Hidden Door (You've Been Here Before)",
+                "label": "H",
+                "description": "A familiar feeling. Your echo from before.",
+                "unlocked_by": f"symbol:{symbol_key}",
+                "archetype_match": [],
+            })
+
+        if max_frequency >= 3:
+            result.append({
+                "name": "The Crystalline Door",
+                "label": "X",
+                "description": "Your patterns have solidified. Step through.",
+                "unlocked_by": "symbol:high_frequency",
+                "archetype_match": [],
+            })
+
+        if len(symbols) > 5:
+            result.append({
+                "name": "The Infinite Door",
+                "label": "∞",
+                "description": "All your choices converge here.",
+                "unlocked_by": "symbol:convergence",
+                "archetype_match": [],
+            })
+
+        return result
+
+    def _apply_observation_weighting(self, doors: list, observations: list, stage: str) -> list:
+        """Boost doors matching themes from current loop's choices."""
+        result = [dict(d) for d in doors]
+        if not observations:
+            return result
+
+        recent_choices = [o["data"].get("choice") for o in observations if o["type"] == "door_choice"]
+        theme_words = {"A": "first", "B": "middle", "C": "last"}
+        for i, door in enumerate(result):
+            door["weight"] = 1.0 + (0.1 * recent_choices.count(chr(65 + i)))
+
+        return sorted(result, key=lambda d: d.get("weight", 1.0), reverse=True)
 
     def to_api_response(self, scene: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         if not scene:

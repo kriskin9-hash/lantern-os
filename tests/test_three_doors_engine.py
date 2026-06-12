@@ -135,16 +135,16 @@ class TestThreeDoorsEngine:
         assert file_size_kb < 10, f"CSF file too large: {file_size_kb:.2f}KB"
 
     def test_agent_filters_doors(self, engine):
-        # Test that agent changes door order
+        # Test that agent changes door order (by name, not label, since labels get reassigned)
         engine.agent = "blinkbug"
         scene_blinkbug = engine.start_game()
-        doors_blinkbug = [d["label"] for d in scene_blinkbug["doors"]]
+        doors_blinkbug = [d["name"] for d in scene_blinkbug["doors"]]
 
         engine.agent = "lantern"
         scene_lantern = engine.start_game()
-        doors_lantern = [d["label"] for d in scene_lantern["doors"]]
+        doors_lantern = [d["name"] for d in scene_lantern["doors"]]
 
-        # Blinkbug rotates doors
+        # Blinkbug rotates doors (different order by name)
         assert doors_blinkbug != doors_lantern
 
     def test_archetype_persistence(self, engine):
