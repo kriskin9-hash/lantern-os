@@ -1,0 +1,558 @@
+/**
+ * Self-Edit Engine — bounded coding operator for Dream Chat
+ *
+ * Safety rules:
+ * - All file paths must resolve inside repoRoot
+ * - Branch names are sanitized and prefixed with "auto/"
+ * - Only unified diffs are applied (no arbitrary writes)
+ * - Tests are allowlisted patterns only
+ * - Never push directly to master
+ * - PRs are always draft
+ */
+
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
+const https = require("https");
+
+const MAX_OUTPUT = 8000;
+const MAX_DIFF_SIZE = 128000;
+
+// ── Path safety ─────────────────────────────────────────────────────────
+
+function isPathSafe(repoRoot, filePath) {
+  const resolved = path.resolve(repoRoot, filePath);
+  const relative = path.relative(repoRoot, resolved);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return false;
+  return true;
+}
+
+function requireSafePaths(repoRoot, filePaths) {
+  for (const fp of filePaths) {
+    if (!isPathSafe(repoRoot, fp)) {
+      throw new Error(`unsafe_path: ${fp}`);
+    }
+  }
+}
+
+// ── Branch safety ───────────────────────────────────────────────────────
+
+function sanitizeBranchName(raw) {
+  const base = String(raw || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\-_\s]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 60)
+    .replace(/^-|-$/g, "");
+  const safe = base || "auto-change";
+  return `auto/${safe}`;
+}
+
+// ── Diff parsing ──────────────────────────────────────────────────────────
+
+/**
+ * Parse a unified diff into hunks.
+ * Returns: [{ oldFile, newFile, hunks: [{ oldStart, oldCount, newStart, newCount, lines: [] }] }]
+ */
+function parseUnifiedDiff(diffText) {
+  const lines = diffText.split(/\r?\n/);
+  const files = [];
+  let current = null;
+  let currentHunk = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith("--- ")) {
+      if (current) files.push(current);
+      const oldFile = line.slice(4).split("\t")[0];
+      current = { oldFile, newFile: null, hunks: [] };
+      currentHunk = null;
+    } else if (line.startsWith("+++ ") && current) {
+      current.newFile = line.slice(4).split("\t")[0];
+    } else if (line.startsWith("@@") && current) {
+      const m = line.match(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      if (!m) continue;
+      currentHunk = {
+        oldStart: parseInt(m[1], 10),
+        oldCount: parseInt(m[2] || "1", 10),
+        newStart: parseInt(m[3], 10),
+        newCount: parseInt(m[4] || "1", 10),
+        lines: [],
+      };
+      current.hunks.push(currentHunk);
+    } else if (currentHunk) {
+      currentHunk.lines.push(line);
+    }
+  }
+  if (current) files.push(current);
+  return files;
+}
+
+function validateDiff(diffText, repoRoot) {
+  if (diffText.length > MAX_DIFF_SIZE) {
+    throw new Error("diff_too_large");
+  }
+  const files = parseUnifiedDiff(diffText);
+  if (files.length === 0) {
+    throw new Error("diff_parse_failed: no valid hunks found");
+  }
+  for (const f of files) {
+    let target = f.newFile && f.newFile !== "/dev/null" ? f.newFile : f.oldFile;
+    if (!target || target === "/dev/null") continue;
+    target = target.replace(/^(a|b)\//, "");
+    if (!isPathSafe(repoRoot, target)) {
+      throw new Error(`diff_unsafe_path: ${target}`);
+    }
+  }
+  return files;
+}
+
+// ── Diff application ────────────────────────────────────────────────────
+
+function applyHunk(lines, hunk) {
+  const result = [...lines];
+  const insertIndex = hunk.oldStart - 1;
+  let contextCount = 0;
+  let removeCount = 0;
+  let addCount = 0;
+  for (const l of hunk.lines) {
+    if (l.startsWith("-")) removeCount++;
+    else if (l.startsWith("+")) addCount++;
+    else if (l.startsWith(" ")) contextCount++;
+  }
+  if (contextCount + removeCount !== hunk.oldCount) {
+    throw new Error(`hunk_old_count_mismatch: expected ${hunk.oldCount}, got ${contextCount + removeCount}`);
+  }
+  if (contextCount + addCount !== hunk.newCount) {
+    throw new Error(`hunk_new_count_mismatch: expected ${hunk.newCount}, got ${contextCount + addCount}`);
+  }
+
+  // Remove old lines
+  let removed = 0;
+  for (const l of hunk.lines) {
+    if (l.startsWith("-")) {
+      const expected = l.slice(1);
+      const actual = result[insertIndex + removed];
+      if (actual !== expected) {
+        throw new Error(`hunk_content_mismatch at line ${insertIndex + removed + 1}: expected "${expected}", got "${actual}"`);
+      }
+      result.splice(insertIndex + removed, 1);
+    } else if (l.startsWith("+")) {
+      result.splice(insertIndex + removed, 0, l.slice(1));
+      removed++;
+    } else if (l.startsWith(" ")) {
+      const expected = l.slice(1);
+      const actual = result[insertIndex + removed];
+      if (actual !== expected) {
+        throw new Error(`hunk_context_mismatch at line ${insertIndex + removed + 1}: expected "${expected}", got "${actual}"`);
+      }
+      removed++;
+    }
+  }
+  return result;
+}
+
+function applyPatch(repoRoot, diffText) {
+  const files = validateDiff(diffText, repoRoot);
+  const stats = { changed: [], created: [], errors: [] };
+
+  for (const f of files) {
+    let target = f.newFile && f.newFile !== "/dev/null" ? f.newFile : f.oldFile;
+    if (!target || target === "/dev/null") continue;
+    // Strip standard git diff a/ and b/ prefixes
+    target = target.replace(/^(a|b)\//, "");
+    const fullPath = path.join(repoRoot, target);
+    let lines = [];
+    if (fs.existsSync(fullPath)) {
+      lines = fs.readFileSync(fullPath, "utf8").split(/\r?\n/);
+    } else {
+      // new file
+    }
+
+    try {
+      let working = lines;
+      // Apply hunks in reverse order to preserve line numbers
+      for (let hi = f.hunks.length - 1; hi >= 0; hi--) {
+        working = applyHunk(working, f.hunks[hi]);
+      }
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, working.join("\n"), "utf8");
+      if (lines.length === 0 && f.hunks.length > 0) {
+        stats.created.push(target);
+      } else {
+        stats.changed.push(target);
+      }
+    } catch (err) {
+      stats.errors.push({ file: target, error: err.message });
+    }
+  }
+
+  return stats;
+}
+
+// ── Git operations ──────────────────────────────────────────────────────
+
+function gitCurrentBranch(repoRoot) {
+  return execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf8", timeout: 5000 }).trim();
+}
+
+function gitCreateBranch(repoRoot, branchName) {
+  const safe = sanitizeBranchName(branchName);
+  execSync(`git checkout -b ${safe}`, { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
+  return safe;
+}
+
+function gitCommit(repoRoot, message) {
+  const safeMsg = String(message || "auto commit").replace(/"/g, "'").slice(0, 200);
+  execSync(`git commit -m "${safeMsg}"`, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 10000,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  });
+}
+
+function gitPush(repoRoot, branchName) {
+  const safe = sanitizeBranchName(branchName);
+  if (!safe.startsWith("auto/")) throw new Error("invalid_branch_prefix");
+  execSync(`git push origin ${safe}`, {
+    cwd: repoRoot,
+    encoding: "utf8",
+    timeout: 30000,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+  });
+  return safe;
+}
+
+function gitDiffStat(repoRoot) {
+  return execSync("git diff --stat", { cwd: repoRoot, encoding: "utf8", timeout: 5000 }).trim();
+}
+
+function gitAddAll(repoRoot) {
+  execSync("git add -A", { cwd: repoRoot, encoding: "utf8", timeout: 5000 });
+}
+
+function openDraftPr(repoRoot, branch, title, body) {
+  const safeBranch = sanitizeBranchName(branch);
+  const safeTitle = String(title || "Auto PR").replace(/"/g, "'").slice(0, 256);
+  const safeBody = String(body || "").replace(/"/g, "'").slice(0, 4000);
+  const result = execSync(
+    `gh pr create --head ${safeBranch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
+    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }
+  );
+  // Extract URL from gh output
+  const urlMatch = result.match(/(https:\/\/github\.com\/[^\s]+)/);
+  return urlMatch ? urlMatch[1] : result.trim();
+}
+
+// ── Test runner ─────────────────────────────────────────────────────────
+
+const ALLOWED_TESTS = [
+  /^node tests\/test_dream_journal_api\.js$/,
+  /^node tests\/test_dream_journal_chat\.js$/,
+  /^node tests\/test_dream_chat_multiturns\.js$/,
+  /^node tests\/test_dream_journal_keystone\.js$/,
+  /^node tests\/test_dream_chat_self_edit\.js$/,
+  /^node tests\/test_convergance_routing\.js$/,
+  /^python -m pytest tests\/(.+)\.py$/,
+  /^npm test$/,
+  /^npm run test$/,
+];
+
+function isAllowedTest(cmd) {
+  return ALLOWED_TESTS.some((re) => re.test(cmd));
+}
+
+function runTests(repoRoot, testCommands) {
+  const results = [];
+  for (const cmd of testCommands) {
+    if (!isAllowedTest(cmd)) {
+      results.push({ cmd, ok: false, error: "test_not_allowlisted", output: "" });
+      continue;
+    }
+    try {
+      const out = execSync(cmd, { cwd: repoRoot, encoding: "utf8", timeout: 60000, maxBuffer: 1024 * 1024 });
+      results.push({ cmd, ok: true, output: out.slice(0, MAX_OUTPUT), truncated: out.length > MAX_OUTPUT });
+    } catch (err) {
+      results.push({
+        cmd,
+        ok: false,
+        error: String(err.stderr || err.message || "").slice(0, MAX_OUTPUT),
+        output: String(err.stdout || "").slice(0, MAX_OUTPUT),
+        exit_code: err.status,
+      });
+    }
+  }
+  return results;
+}
+
+// ── LLM helper (non-streaming) ──────────────────────────────────────────
+
+async function callLlm(system, user, providerHint = "auto") {
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+
+  // Simple provider selection
+  let provider = providerHint;
+  if (provider === "auto") {
+    if (anthropicKey) provider = "claude";
+    else if (openaiKey) provider = "openai";
+    else if (geminiKey) provider = "gemini";
+    else provider = "ollama";
+  }
+
+  const messages = [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
+
+  if (provider === "claude" && anthropicKey) {
+    return callClaude(system, user);
+  }
+  if (provider === "openai" && openaiKey) {
+    return callOpenAI(messages);
+  }
+  if (provider === "gemini" && geminiKey) {
+    return callGemini(system, user);
+  }
+  if (provider === "ollama") {
+    return callOllama(messages);
+  }
+  throw new Error("no_provider_available");
+}
+
+function callOpenAI(messages) {
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const payload = JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.3 });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.openai.com",
+      path: "/v1/chat/completions",
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}`, "Content-Length": Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(data);
+          if (j.error) return reject(new Error(j.error.message || "openai_error"));
+          resolve(j.choices?.[0]?.message?.content || "");
+        } catch { reject(new Error("openai_parse_error")); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error("openai_timeout")); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+function callClaude(system, user) {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const model = process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022";
+  const payload = JSON.stringify({ model, max_tokens: 2048, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.anthropic.com",
+      path: "/v1/messages",
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Length": Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(data);
+          if (j.error) return reject(new Error(j.error.message || "claude_error"));
+          resolve(j.content?.[0]?.text || "");
+        } catch { reject(new Error("claude_parse_error")); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error("claude_timeout")); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+function callGemini(system, user) {
+  const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const payload = JSON.stringify({
+    contents: [{ role: "user", parts: [{ text: `${system}\n\n${user}` }] }],
+    generationConfig: { maxOutputTokens: 2048, temperature: 0.3 },
+  });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "generativelanguage.googleapis.com",
+      path: `/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(data);
+          if (j.error) return reject(new Error(j.error.message || "gemini_error"));
+          resolve(j.candidates?.[0]?.content?.parts?.[0]?.text || "");
+        } catch { reject(new Error("gemini_parse_error")); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error("gemini_timeout")); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+function callOllama(messages) {
+  const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+  const model = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+  const httpLib = ollamaBase.startsWith("https") ? require("https") : require("http");
+  const payload = JSON.stringify({ model, messages, stream: false });
+  return new Promise((resolve, reject) => {
+    const req = httpLib.request({
+      hostname: new URL(ollamaBase).hostname,
+      port: new URL(ollamaBase).port || 11434,
+      path: "/api/chat",
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(data);
+          resolve(j.message?.content || "");
+        } catch { reject(new Error("ollama_parse_error")); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error("ollama_timeout")); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+// ── Plan generation ─────────────────────────────────────────────────────
+
+const PLAN_SYSTEM_PROMPT = `You are a disciplined code-change planner. Given a user request and relevant file contents, produce a structured plan.
+
+Respond ONLY with valid JSON in this exact shape (no markdown, no commentary outside the JSON):
+{
+  "summary": "one-line description",
+  "affectedFiles": ["relative/path/to/file.js"],
+  "riskLevel": "low|medium|high",
+  "testsToRun": ["node tests/test_dream_journal_api.js"],
+  "steps": [
+    { "action": "edit", "file": "path", "description": "what to change" }
+  ],
+  "branchHint": "short-kebab-name"
+}`;
+
+async function generatePlan(repoRoot, userRequest, scopeFiles, history) {
+  let fileContext = "";
+  if (Array.isArray(scopeFiles) && scopeFiles.length > 0) {
+    for (const fp of scopeFiles) {
+      if (!isPathSafe(repoRoot, fp)) continue;
+      const full = path.join(repoRoot, fp);
+      if (fs.existsSync(full)) {
+        const content = fs.readFileSync(full, "utf8").slice(0, 4000);
+        fileContext += `\n--- ${fp} ---\n${content}\n`;
+      }
+    }
+  }
+
+  const historyContext = Array.isArray(history) && history.length > 0
+    ? `Chat history:\n${history.slice(-6).map(h => `${h.role}: ${h.text}`).join("\n")}\n\n`
+    : "";
+
+  const userPrompt = `${historyContext}User request: ${userRequest}\n\nRelevant files:\n${fileContext || "(none specified — infer from request)"}\n\nProduce the JSON plan.`;
+
+  const raw = await callLlm(PLAN_SYSTEM_PROMPT, userPrompt, "auto");
+  let plan;
+  try {
+    // Strip markdown fences if present
+    const jsonText = raw.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
+    plan = JSON.parse(jsonText);
+  } catch {
+    throw new Error("plan_parse_failed: model did not return valid JSON");
+  }
+
+  // Validate plan structure
+  if (!Array.isArray(plan.affectedFiles)) plan.affectedFiles = [];
+  if (!Array.isArray(plan.testsToRun)) plan.testsToRun = [];
+  if (!Array.isArray(plan.steps)) plan.steps = [];
+  plan.riskLevel = ["low", "medium", "high"].includes(plan.riskLevel) ? plan.riskLevel : "medium";
+  plan.branchHint = sanitizeBranchName(plan.branchHint || "auto-change").replace(/^auto\//, "");
+
+  // Ensure all affected files are safe
+  requireSafePaths(repoRoot, plan.affectedFiles);
+  // Filter tests to allowlisted only
+  plan.testsToRun = plan.testsToRun.filter((cmd) => isAllowedTest(cmd));
+
+  return plan;
+}
+
+// ── Patch generation ────────────────────────────────────────────────────
+
+const PATCH_SYSTEM_PROMPT = `You are a precise patch generator. Given an approved plan and file contents, generate a unified diff (git diff format) that implements the plan.
+
+Rules:
+- Output ONLY the unified diff. No markdown fences, no explanation.
+- Use \`--- a/path\` and \`+++ b/path\` headers.
+- Each hunk must have \`@@ -start,count +start,count @@\`.
+- Context lines start with a space. Removed lines start with \`-\`. Added lines start with \`+\`.
+- Do NOT change unrelated lines.
+- If creating a new file, use \`--- /dev/null\` and \`+++ b/path\` with a single hunk starting at line 0.
+`;
+
+async function generatePatch(repoRoot, plan) {
+  let fileContext = "";
+  for (const fp of plan.affectedFiles || []) {
+    if (!isPathSafe(repoRoot, fp)) continue;
+    const full = path.join(repoRoot, fp);
+    if (fs.existsSync(full)) {
+      const content = fs.readFileSync(full, "utf8").slice(0, 6000);
+      fileContext += `\n--- ${fp} ---\n${content}\n`;
+    } else {
+      fileContext += `\n--- ${fp} ---\n<new file>\n`;
+    }
+  }
+
+  const userPrompt = `Plan summary: ${plan.summary}\n\nSteps:\n${plan.steps.map((s, i) => `${i + 1}. [${s.action}] ${s.file}: ${s.description}`).join("\n")}\n\n${fileContext}\n\nGenerate the unified diff.`;
+
+  const raw = await callLlm(PATCH_SYSTEM_PROMPT, userPrompt, "auto");
+  const diffText = raw.replace(/^```diff\n?/, "").replace(/^```\n?/, "").replace(/\n?```$/, "").trim();
+  const files = validateDiff(diffText, repoRoot);
+  return { diffText, files };
+}
+
+// ── Module exports ────────────────────────────────────────────────────────
+
+module.exports = {
+  isPathSafe,
+  sanitizeBranchName,
+  parseUnifiedDiff,
+  validateDiff,
+  applyPatch,
+  gitCreateBranch,
+  gitCommit,
+  gitPush,
+  gitDiffStat,
+  gitAddAll,
+  gitCurrentBranch,
+  openDraftPr,
+  runTests,
+  generatePlan,
+  generatePatch,
+  callLlm,
+  isAllowedTest,
+  requireSafePaths,
+};

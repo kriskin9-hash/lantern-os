@@ -5,8 +5,8 @@
  *  - a local JSONL trading store (./trading-store.js), the system of
  *    record for GET /api/trading/dashboard/{orders,agent-log}
  *  - CSF MemoryEngine-compatible Tier.TRACE records (./csf-memory-writer.js),
- *    queryable via GET /api/trading/memory/recent and by dream-chat /
- *    other LanternOS agents.
+ *    queryable via GET /api/trading/memory/recent, GET /api/trading/csf-records,
+ *    and by dream-chat / other LanternOS agents.
  *
  * Both dependencies are pure JS and local-first: no external service and
  * no Python process is spawned at runtime. (src/csf/trading_memory.py
@@ -27,6 +27,16 @@
  * adapter polling an external source) does not produce a duplicate-write
  * storm. Direct POST /api/trading/{orders,agent-log} writes go through
  * the same path, so retried/duplicate POSTs are idempotent.
+ *
+ * Compatibility exports (queryRecentTradingRecords, ingestTradingData):
+ * a parallel implementation of #323 landed on master that wrote CSF
+ * records directly to data/csf_memory/raw.jsonl with its own in-memory
+ * (per-process) dedup and a non-canonical checksum scheme. Rather than
+ * keep two CSF writers, that implementation's exports are reproduced
+ * here as thin wrappers over csf-memory-writer.js / recordNewOrders() /
+ * recordNewSignals() so routes/trading.js's GET /api/trading/csf-records
+ * and dashboard-proxy CSF wiring keep working, now backed by this
+ * module's persisted dedup and ticker-extracting record shape.
  */
 
 const fs = require("fs");
@@ -117,6 +127,15 @@ function queryRecent({ limit = 20, kind } = {}) {
 }
 
 /**
+ * Read recent trading CSF records from the registry, most recent first.
+ * Synchronous compat wrapper (matches the earlier #323 implementation's
+ * signature) — used directly without `await` by GET /api/trading/csf-records.
+ */
+function queryRecentTradingRecords(limit = 50) {
+  return csfMemory.queryRecent({ limit });
+}
+
+/**
  * Given a payload containing orders (bare array or `{ orders: [...] }`),
  * persist any orders not seen before into the local trading store and
  * CSF memory. Returns the list of newly-written orders. Errors for
@@ -177,12 +196,36 @@ async function recordNewSignals(data) {
   return written;
 }
 
+/**
+ * Batch-ingest orders and/or signals (compat with the earlier #323
+ * implementation's ingestTradingData()). Orders without an `id` get a
+ * generated one so they aren't silently dropped by recordNewOrders()'s
+ * id-based dedup. Errors for individual items are logged by
+ * recordNewOrders()/recordNewSignals(), never thrown.
+ */
+async function ingestTradingData({ orders = [], signals = [] } = {}) {
+  const stamped = orders.map((order) =>
+    order && !order.id
+      ? { ...order, id: `ingest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` }
+      : order
+  );
+  const writtenOrders = await recordNewOrders({ orders: stamped });
+  const writtenSignals = await recordNewSignals({ logs: signals });
+  return {
+    orders_written: writtenOrders.length,
+    signals_written: writtenSignals.length,
+    errors: [],
+  };
+}
+
 module.exports = {
   recordOrder,
   recordSignal,
   queryRecent,
+  queryRecentTradingRecords,
   recordNewOrders,
   recordNewSignals,
+  ingestTradingData,
   _toArray,
   _resetSeenCache,
 };

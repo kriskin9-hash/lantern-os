@@ -67,6 +67,38 @@ const MODEL_PROFILES = {
     temperature: 0.4,
     maxTokens: 384,
   },
+
+  "keystone": {
+    id: "keystone",
+    description: "Debug interface, code review, safety gate validation",
+    ollamaModel: "qwen2.5-coder",
+    fallbackProvider: "claude",
+    behavior: [
+      "Respond as a senior engineer — concise, honest, actionable",
+      "No dream persona, no doors, no metaphors",
+      "Reference exact file paths and line numbers",
+      "Flag unsafe patterns: arbitrary exec, path traversal, secret leaks",
+      "When asked to change code, route to /api/self-edit/plan instead of emitting raw diffs",
+    ],
+    temperature: 0.3,
+    maxTokens: 1024,
+  },
+
+  "lantern-coding": {
+    id: "lantern-coding",
+    description: "Code generation, patch creation, feature implementation",
+    ollamaModel: "qwen2.5-coder",
+    fallbackProvider: "openai",
+    behavior: [
+      "Generate precise, minimal changes",
+      "Always validate paths are within the repo before suggesting writes",
+      "Prefer unified diffs over full-file rewrites",
+      "Flag when a change needs human approval before apply",
+      "Never emit shell commands that are not allowlisted",
+    ],
+    temperature: 0.2,
+    maxTokens: 2048,
+  },
 };
 
 /**

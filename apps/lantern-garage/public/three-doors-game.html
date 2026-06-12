@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#06b6d4">
-<title>Explore</title>
+<title>Kingdome of Hearts</title>
 <link rel="stylesheet" href="/css/site.css">
 <link rel="stylesheet" href="css/dream-chat.css">
 <style>
@@ -170,7 +170,7 @@
     </a>
     <div class="nav-links">
       <a href="/dream-chat.html">Journal</a>
-      <a href="/three-doors-game.html" class="active">Explore</a>
+      <a href="/three-doors-game.html" class="active">Kingdome</a>
       <a href="/flourishing">Dashboard</a>
       <a href="/knowledgecenter.html">Help</a>
     </div>
@@ -178,6 +178,7 @@
       <span id="status-line" style="font-size:11px;color:var(--muted);margin-right:6px"></span>
       <button id="training-badge" onclick="showTrainingStatus()" title="LoRA training data collected" style="display:none;background:none;border:1px solid var(--border);border-radius:7px;padding:4px 8px;color:var(--accent);cursor:pointer;font-size:11px;font-family:inherit;gap:3px">📸 <span id="training-count">0</span></button>
       <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
+      <button class="nav-btn" id="narrator-toggle" onclick="toggleNarrator()" title="Narrator on/off">🎙</button>
       <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
     </div>
   </nav>
@@ -185,10 +186,10 @@
   <!-- Chat area -->
   <div class="chat-container" id="chat">
     <div class="welcome-doors" id="welcome">
-      <div class="big-door">🧭</div>
-      <h2>Explore</h2>
-      <p>An interactive story where your choices shape the path. Journey through seven stages, discover different worlds, and see where your decisions lead. Each playthrough is unique.</p>
-      <button class="start-btn" onclick="startGame()">Start Adventure</button>
+      <div class="big-door">🏯</div>
+      <h2>Kingdome of Hearts</h2>
+      <p>A seven-stage dream journey through the Kingdome. Three doors each scene — no wrong choices. Lantern guides you. Each loop is different.</p>
+      <button class="start-btn" onclick="startGame()">Enter the Kingdome</button>
     </div>
   </div>
 
@@ -541,6 +542,19 @@ let gameState = null;
 let userId = "web-" + Math.random().toString(36).slice(2, 9);
 let doorsLocked = false;
 let serverAvailable = null;
+let narratorEnabled = localStorage.getItem("three-doors-narrator") !== "off";
+
+function toggleNarrator() {
+  narratorEnabled = !narratorEnabled;
+  localStorage.setItem("three-doors-narrator", narratorEnabled ? "on" : "off");
+  const btn = document.getElementById("narrator-toggle");
+  if (btn) btn.style.opacity = narratorEnabled ? "1" : "0.4";
+}
+// Apply initial state once DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("narrator-toggle");
+  if (btn && !narratorEnabled) btn.style.opacity = "0.4";
+});
 
 // ── Persistence ────────────────────────────────────────────────────
 const PROGRESS_KEY = "three-doors-progress";
@@ -775,11 +789,13 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
           what was lost at the beginning is the thing that was gained.
         </div>
         <input id="poem-answer" type="text" placeholder="Speak your answer..." style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px" onkeydown="if(event.key==='Enter')submitPoem()">
-        <button onclick="submitPoem()" style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Answer the King</button>
+        <button onclick="submitPoem()" style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px">Answer the King</button>
+        <button onclick="skipPoem()" style="width:100%;padding:8px;background:none;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;color:var(--muted);cursor:pointer">Skip — just show me the doors</button>
       </div>`;
   } else {
     doorHTML = `
       <div style="margin-top:12px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:0.03em">Choose a door to continue</div>
         <div class="doors-banner">
           ${doors.map(d => `
             <button class="door-chip" onclick="chooseDoor('${d.label}', '${d.name.replace(/'/g, "\\'")}')">
@@ -814,17 +830,55 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 
-  // Draw canvas placeholder immediately, then request Pollinations art
-  requestAnimationFrame(() => {
-    const cvs = document.getElementById(canvasId);
+  // Capture refs directly — avoids getElementById timing race in rAF
+  const cvsEl = el.querySelector(`#${canvasId}`);
+  const imgEl = el.querySelector(`#${imgId}`);
+  const descEl = el.querySelector(`#${descId}`);
+
+  // Draw canvas placeholder immediately, then load image by priority:
+  // 1. CAAD local pool (THREE_DOORS_IMAGE_POOL_DIR) or repo caadi/
+  // 2. Dedicated three-doors PNG (LOCAL_PNG_SCENES)
+  // 3. Pollinations / server generation
+  requestAnimationFrame(async () => {
+    const cvs = cvsEl;
     if (cvs) drawScene(cvs, sceneKey);
-    loadPollinationsImage(imgId, canvasId, sceneKey);
+    const img = imgEl;
+
+    // Priority 1: CAAD pool (server picks from local pool or caadi/, lore-aware)
+    try {
+      const r = await fetch(`/api/three-doors/image-pool/random?sceneKey=${encodeURIComponent(sceneKey)}`);
+      if (r.ok) {
+        const d = await r.json();
+        if (d.ok && d.url && img) {
+          img.onerror = () => tryLocalThenPollinations(imgId, canvasId, sceneKey);
+          img.onload = () => {
+            if (cvs) cvs.style.display = "none";
+            img.style.display = "";
+            logThreeDoorsEvent("image_load", { sceneKey, source: `pool:${d.source}`, reason: d.reason });
+          };
+          img.src = d.url;
+          return;
+        }
+      }
+    } catch { /* fall through to local PNGs */ }
+
+    tryLocalThenPollinations(imgId, canvasId, sceneKey);
   });
+
+  function tryLocalThenPollinations(iId, cId, sk) {
+    const i = document.getElementById(iId);
+    if (LOCAL_PNG_SCENES.has(sk) && i) {
+      i.onerror = () => loadPollinationsImage(iId, cId, sk);
+      i.src = getSceneImageUrl(sk);
+      return;
+    }
+    loadPollinationsImage(iId, cId, sk);
+  }
 
   // Wire SD prompt copy for both img and canvas
   requestAnimationFrame(() => {
-    const img = document.getElementById(imgId);
-    const cvs = document.getElementById(canvasId);
+    const img = imgEl;
+    const cvs = cvsEl;
     const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
 
     if (img) {
@@ -847,6 +901,9 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
       };
     }
   });
+
+  // Async-refresh scene description with LLM-generated variant
+  if (descEl) refreshSceneText(sceneKey, descEl);
 
   // Show choice bar with labelled quick-picks + custom input
   const bar = document.getElementById("choice-bar");
@@ -909,6 +966,14 @@ function submitPoem() {
   }
 }
 
+function skipPoem() {
+  playerProgress.poemSolved = true;
+  saveProgress();
+  const scene = SCENES["kingdome-garden"];
+  const data = { scene_key: "kingdome-garden", text: scene.text, doors: scene.doors, fox_present: scene.fox, history: gameState?.history || [] };
+  appendSceneMsg("kingdome-garden", data, "", "offline");
+}
+
 function checkChallenges(sceneKey, turnCount) {
   // Speedwalker: complete a first full loop of the Kingdome
   if ((playerProgress.loop_count || 0) >= 1 && !playerProgress.speedwalker) {
@@ -945,7 +1010,7 @@ async function loadPollinationsImage(imgId, canvasId, sceneKey) {
   const sdPrompt = scene?.image_prompt || SD_PROMPTS?.[sceneKey] || (scene?.text?.slice(0, 120) || sceneKey);
   const loopFlair = loopCount > 0 ? `, revisited ${loopCount > 1 ? "again " : ""}with new eyes` : "";
   const seed = Math.floor(Math.random() * 999983) + 1;
-  const fullPrompt = `fantasy dreamworld, ${sdPrompt}${loopFlair}, painterly, cinematic light, no text`;
+  const fullPrompt = buildDynamicImagePrompt(sceneKey, seed);
 
   const img = document.getElementById(imgId);
   const cvs = document.getElementById(canvasId);
@@ -1115,6 +1180,86 @@ async function apiNarrate(sceneKey, sceneText) {
   } finally { clearTimeout(t); }
 }
 
+// ── Dynamic image prompts — vary style/mood/color each visit ─────
+const IMAGE_STYLES = [
+  "watercolor wash, soft bleeding edges, dreamy",
+  "oil painting, thick impasto, dramatic shadows",
+  "digital concept art, cinematic volumetric lighting",
+  "ink illustration, fine crosshatch, graphic novel",
+  "impressionist, dappled light, loose brushstrokes",
+  "surrealist painting, dreamlike distortion, melting forms",
+  "fantasy matte painting, photorealistic epic scale",
+  "Japanese woodblock print, flat color, bold outlines",
+  "charcoal sketch, deep contrast, textured grain",
+  "neon-lit dreamscape, glowing edges, atmospheric haze",
+  "stained glass illustration, jewel tones, luminous",
+  "art nouveau, flowing organic lines, ornate borders",
+];
+const ARCHETYPE_MOODS = {
+  primordial: "ancient moss, root-deep shadows, primeval green light",
+  intimate: "warm amber glow, cozy enclosed space, hearth warmth",
+  mystical: "deep underwater blue, refracted light, ethereal silence",
+  whimsical: "golden firefly light, tiny crowns, enchanted glade",
+  bountiful: "lush crystalline flowers, overflowing growth, verdant",
+  cosmic: "purple void, infinite branching paths, crystal reflections",
+  transcendent: "soft radiance, self dissolving into light, threshold",
+  sovereign: "throne of roots, vine crown, old returning light",
+  mythic: "floating pages, written margins, impossible library",
+  playful: "four-leaf shimmer, lucky glints, meadow shimmer",
+  possible: "orchard of doors, future weather, golden branch light",
+  liminal: "glitched pixels, childhood bliss field, loading shimmer",
+  convergent: "sigil streets, door-lanterns everywhere, purple convergence",
+  returning: "fog and mist, circular threshold, lantern going first",
+};
+const LOOP_COLOR_SHIFTS = [
+  "",
+  "deeper saturation, edges softening, more vivid than remembered",
+  "crystalline quality, reality thinning, colors bleeding through",
+  "neon-edged dreamspace, every surface luminous, time folding",
+  "mythic scale, symbolic geometry visible, dreamer is the light",
+];
+
+function buildDynamicImagePrompt(sceneKey, seed) {
+  const scene = SCENES[sceneKey];
+  const archetype = scene?.archetype || "mystical";
+  const loopCount = gameState?.loop_count ?? 0;
+  const lastChoice = (gameState?.history || []).filter(h => h.startsWith("Chose ")).slice(-1)[0]?.replace("Chose ", "") || "";
+  const style = IMAGE_STYLES[seed % IMAGE_STYLES.length];
+  const mood = ARCHETYPE_MOODS[archetype] || archetype;
+  const loopShift = LOOP_COLOR_SHIFTS[Math.min(loopCount, LOOP_COLOR_SHIFTS.length - 1)];
+  const choiceCtx = lastChoice ? `, player chose "${lastChoice}"` : "";
+  return ["fantasy dreamworld door scene", mood, style, loopShift, "Lantern glowing guide", choiceCtx, "no text no words no letters"].filter(Boolean).join(", ");
+}
+
+// ── Async scene text refresh — unique LLM take on each visit ─────
+async function refreshSceneText(sceneKey, textEl) {
+  if (!textEl) return;
+  const scene = SCENES[sceneKey];
+  if (!scene) return;
+  const loopCount = gameState?.loop_count ?? 0;
+  const archetype = scene.archetype || "mystical";
+  const history = (gameState?.history || []).filter(h => h.startsWith("Chose ")).slice(-3).join(", ") || "just arrived";
+  const loopNote = loopCount > 0 ? ` Loop ${loopCount + 1} — the space feels rewritten, familiar but altered.` : "";
+  const prompt = `You are Lantern, the dreaming guide. Describe the scene "${sceneKey}" (archetype: ${archetype}) in 3 evocative sentences. The dreamer arrived via: ${history}.${loopNote} Be symbolic and sensory — never the same twice. End on a threshold feeling. Scene core: ${scene.text.replace(/\*\*/g,"").replace(/\*/g,"").slice(0,200)}`;
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const r = await fetch("/api/dream/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: prompt, agent: "lantern" }),
+      signal: ctrl.signal,
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const fresh = (data.reply || "").trim();
+    if (fresh.length < 40) return;
+    textEl.style.transition = "opacity 0.6s";
+    textEl.style.opacity = "0";
+    setTimeout(() => { textEl.innerHTML = md(fresh); textEl.style.opacity = "1"; }, 600);
+  } catch { /* static text stays */ }
+}
+
 // ── Inline engine fallback ────────────────────────────────────────
 function stageState(stageIndex, loopCount, history) {
   const key = STAGES[stageIndex % STAGES.length];
@@ -1182,7 +1327,7 @@ async function getSceneData(action, label) {
 
   // Step 2: local LLM narration — only if we successfully used the server
   let geminiText = "", source = usedServer ? "engine" : "offline";
-  if (usedServer) {
+  if (usedServer && narratorEnabled) {
     try {
       const narration = await apiNarrate(data.scene_key, data.text || SCENES[data.scene_key]?.text || "");
       if (narration) { geminiText = narration; source = "local"; }

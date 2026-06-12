@@ -9,11 +9,18 @@ const https = require('https');
 
 class TradingAPIBridge {
   constructor() {
-    this.ibkrHost = process.env.IBKR_HOST || 'localhost';
-    this.ibkrPort = process.env.IBKR_PORT || 4001;
-    this.kalshiApiKey = process.env.KALSHI_API_KEY || '';
+    // IBKR API (direct REST API - no Gateway needed)
+    this.ibkrAccountId = process.env.IBKR_ACCOUNT_ID || '';
+    this.ibkrApiKey = process.env.IBKR_API_KEY || '';
+    this.ibkrApiSecret = process.env.IBKR_API_SECRET || '';
+    this.ibkrBaseUrl = process.env.IBKR_BASE_URL || 'https://api.ibkr.com/v1';
+
+    // Alpaca API (for comparison/fallback)
     this.alpacaApiKey = process.env.ALPACA_API_KEY || '';
     this.alpacaSecret = process.env.ALPACA_SECRET_KEY || '';
+    this.alpacaBaseUrl = 'https://paper-api.alpaca.markets/v2';
+
+    this.kalshiApiKey = process.env.KALSHI_API_KEY || '';
     this.anthropicKey = process.env.ANTHROPIC_API_KEY || '';
 
     this.marketCache = {};
@@ -22,34 +29,49 @@ class TradingAPIBridge {
   }
 
   /**
-   * Fetch account data from IBKR
+   * Fetch account data from IBKR REST API (direct API, no Gateway)
    */
   async getIBKRAccount() {
-    return new Promise((resolve, reject) => {
+    if (!this.ibkrApiKey || !this.ibkrAccountId) {
+      return null; // No credentials configured
+    }
+
+    return new Promise((resolve) => {
       const options = {
-        hostname: this.ibkrHost,
-        port: this.ibkrPort,
-        path: '/api/account',
+        hostname: new URL(this.ibkrBaseUrl).hostname,
+        path: `/accounts/${this.ibkrAccountId}/summary`,
         method: 'GET',
-        timeout: 5000
+        headers: {
+          'Authorization': `Bearer ${this.ibkrApiKey}`,
+          'Accept': 'application/json'
+        },
+        timeout: 8000
       };
 
-      const req = http.request(options, (res) => {
+      const req = https.request(options, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
-            resolve(JSON.parse(data));
+            const parsed = JSON.parse(data);
+            // Normalize to match Alpaca format
+            resolve({
+              account_id: this.ibkrAccountId,
+              equity: parseFloat(parsed.equity || parsed.net_liquidation || 0),
+              cash: parseFloat(parsed.cash || parsed.buying_power || 0),
+              pnl_today: parseFloat(parsed.unrealized_pl || 0),
+              pnl_pct: parseFloat(parsed.unrealized_pl_pct || 0)
+            });
           } catch (e) {
-            reject(new Error('Invalid IBKR response'));
+            resolve(null);
           }
         });
       });
 
-      req.on('error', err => reject(err));
+      req.on('error', () => resolve(null));
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('IBKR timeout'));
+        resolve(null);
       });
 
       req.end();
@@ -57,34 +79,49 @@ class TradingAPIBridge {
   }
 
   /**
-   * Fetch positions from IBKR
+   * Fetch positions from IBKR REST API (direct API, no Gateway)
    */
   async getIBKRPositions() {
-    return new Promise((resolve, reject) => {
+    if (!this.ibkrApiKey || !this.ibkrAccountId) {
+      return []; // No credentials configured
+    }
+
+    return new Promise((resolve) => {
       const options = {
-        hostname: this.ibkrHost,
-        port: this.ibkrPort,
-        path: '/api/portfolio/positions',
+        hostname: new URL(this.ibkrBaseUrl).hostname,
+        path: `/accounts/${this.ibkrAccountId}/positions`,
         method: 'GET',
-        timeout: 5000
+        headers: {
+          'Authorization': `Bearer ${this.ibkrApiKey}`,
+          'Accept': 'application/json'
+        },
+        timeout: 8000
       };
 
-      const req = http.request(options, (res) => {
+      const req = https.request(options, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
-            resolve(JSON.parse(data) || []);
+            const parsed = JSON.parse(data);
+            const positions = Array.isArray(parsed) ? parsed : parsed.positions || [];
+            resolve(positions.map(p => ({
+              symbol: p.contract?.symbol || p.symbol || '',
+              qty: p.position || p.qty || 0,
+              avg_fill_price: p.avgPrice || p.avg_fill_price || 0,
+              current_price: p.currentPrice || p.current_price || 0,
+              unrealized_pl: p.unrealizedPL || p.unrealized_pl || 0
+            })));
           } catch (e) {
-            reject(new Error('Invalid positions response'));
+            resolve([]);
           }
         });
       });
 
-      req.on('error', err => reject(err));
+      req.on('error', () => resolve([]));
       req.on('timeout', () => {
         req.destroy();
-        reject(new Error('IBKR timeout'));
+        resolve([]);
       });
 
       req.end();

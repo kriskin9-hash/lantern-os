@@ -12,10 +12,8 @@
       "name": "dream-journal-dev",
       "runtimeExecutable": "node",
       "runtimeArgs": ["apps/lantern-garage/server.js"],
-      "port": 4178,
-      "env": {
-        "PORT": "4178"
-      }
+      "port": 4177,
+      "autoPort": false
     },
     {
       "name": "lantern-api",

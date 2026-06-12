@@ -21,6 +21,123 @@
       width: 100%;
       overflow: hidden;
     }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sidebar-header h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+    }
+    .sidebar-new-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 2px 6px;
+      line-height: 1;
+    }
+    .sidebar-new-btn:hover { opacity: 0.7; }
+
+    .sidebar-search {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-search input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+      font-size: 12px;
+    }
+    .sidebar-search input::placeholder { color: var(--muted); }
+
+    .convo-list {
+      flex: 1;
+      overflow-y: auto;
+      list-style: none;
+      margin: 0;
+      padding: 4px;
+    }
+    .convo-item {
+      padding: 8px 10px;
+      margin: 4px 0;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: all 0.15s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .convo-item:hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .convo-item.active {
+      background: var(--accent);
+      color: white;
+    }
+    .convo-item-delete {
+      opacity: 0;
+      font-size: 14px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .convo-item:hover .convo-item-delete { opacity: 0.6; }
+    .convo-item-delete:hover { opacity: 1; }
+
+    @media (max-width: 768px) {
+      .sidebar { width: 0; border: none; }
+      .sidebar.mobile-open { width: 240px; position: absolute; z-index: 100; height: 100vh; box-shadow: var(--shadow-hover); }
+      .app-main { margin-left: 0; }
+      .site-nav { flex-direction: column; padding: 8px; gap: 8px; }
+      .nav-links { display: none; }
+      .nav-actions { flex-direction: column; gap: 4px; }
+      .nav-cta { display: none; }
+      .input-wrapper { flex-direction: column; }
+      .send-button { width: 100%; }
+      .perf-monitor { bottom: 8px; right: 8px; font-size: 10px; padding: 8px 12px; }
+    }
+
+    @media (max-width: 480px) {
+      .sidebar { width: 0; }
+      .chat-container { padding: 12px; }
+      .message-content { max-width: 90%; }
+      .modal-content { margin: 16px; }
+      .input-container { padding: 12px; }
+      .file-chip { font-size: 10px; padding: 2px 4px; }
+      .empty-state { padding: 20px; }
+      .empty-state h2 { font-size: 16px; }
+    }
+
     .app-main {
       display: flex;
       flex-direction: column;
@@ -97,6 +214,45 @@
       gap: 8px;
       align-items: flex-end;
     }
+
+    /* File upload */
+    .file-upload-area {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    #file-input { display: none; }
+    .file-upload-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+    }
+    .file-upload-btn:hover { color: var(--accent); }
+    .attached-files {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      font-size: 11px;
+    }
+    .file-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 6px;
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .file-chip .remove { cursor: pointer; opacity: 0.6; }
+    .file-chip .remove:hover { opacity: 1; }
+
     .input-field {
       flex: 1;
       background: var(--surface2);
@@ -133,6 +289,32 @@
     }
     .send-button:hover { background: var(--accent-hover); }
     .send-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Performance monitor */
+    .perf-monitor {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 11px;
+      color: var(--muted);
+      max-width: 200px;
+      z-index: 999;
+      opacity: 0.7;
+      transition: opacity 0.2s;
+    }
+    .perf-monitor:hover { opacity: 1; }
+    .perf-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 2px 0;
+    }
+    .perf-label { font-weight: 600; }
+    .perf-value { text-align: right; color: var(--text); }
 
     /* Modal overlays */
     .modal-overlay {
@@ -389,6 +571,20 @@
 </head>
 <body>
 <div class="app">
+  <!-- Left sidebar: Conversation list -->
+  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Conversation history">
+    <div class="sidebar-header">
+      <h3>Conversations</h3>
+      <button class="sidebar-new-btn" onclick="newConversation()" title="New conversation" aria-label="Start new conversation">+</button>
+    </div>
+    <div class="sidebar-search">
+      <input type="text" id="search-convos" placeholder="Search…" onkeyup="filterConversations()" aria-label="Search conversations">
+    </div>
+    <ul class="convo-list" id="convo-list" role="list">
+      <!-- Populated by JS -->
+    </ul>
+  </aside>
+
   <div class="app-main">
   <!-- Header -->
   <nav class="site-nav">
@@ -411,22 +607,34 @@
   </nav>
 
   <!-- Chat area -->
-  <div class="chat-container" id="messages">
+  <div class="chat-container" id="messages" role="log" aria-label="Conversation messages" aria-live="polite">
     <div class="empty-state" id="empty-state">
       <div class="empty-icon" style="opacity:0.5;font-size:48px">📝</div>
       <h2>What's on your mind?</h2>
       <p>Write a reflection, ask a question, or just think out loud. Everything stays private on your device.</p>
       <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px;margin-top:8px">
-        <button onclick="fillPrompt('Today I noticed that ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">� Record a thought…</button>
+        <button onclick="fillPrompt('Today I noticed that ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">📝 Record a thought…</button>
         <button onclick="fillPrompt('I keep thinking about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">🔄 Explore a recurring thought…</button>
         <button onclick="fillPrompt('What do you know about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">✨ Ask about a topic…</button>
         <button onclick="fillAndSend('!explore')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='var(--border)'" title="Start interactive story">🚪 Start an interactive story…</button>
+      </div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Trading & Markets</div>
+        <button onclick="fillPrompt('Buy 10 shares of AAPL')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#10b981'" onmouseout="this.style.borderColor='var(--border)'">💰 Execute a trade…</button>
+        <button onclick="fillPrompt('Check my portfolio')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='var(--border)'">📊 View your portfolio…</button>
+        <button onclick="fillPrompt('What are the trading signals for today?')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='var(--border)'">📈 Ask for trading signals…</button>
+        <button onclick="fillPrompt('What is the market status?')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">🌐 Check market status…</button>
       </div>
     </div>
   </div>
 
   <!-- Input area -->
   <div class="input-container">
+    <div class="file-upload-area">
+      <button class="file-upload-btn" onclick="document.getElementById('file-input').click()" title="Attach file">📎</button>
+      <input type="file" id="file-input" accept=".txt,.pdf,.json,.csv,.md" onchange="attachFile(event)">
+      <div class="attached-files" id="attached-files"></div>
+    </div>
     <div class="input-wrapper">
       <textarea id="input" class="input-field" placeholder="Write something, ask a question…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
       <button class="send-button" id="send-btn" onclick="sendMessage()" title="Send">↑</button>
@@ -465,6 +673,22 @@
       </div>
     </div>
   </aside>
+</div>
+
+<!-- Performance Monitor -->
+<div class="perf-monitor" id="perf-monitor" style="display:none">
+  <div class="perf-row">
+    <span class="perf-label">Tokens:</span>
+    <span class="perf-value" id="perf-tokens">0</span>
+  </div>
+  <div class="perf-row">
+    <span class="perf-label">Cost:</span>
+    <span class="perf-value" id="perf-cost">$0</span>
+  </div>
+  <div class="perf-row">
+    <span class="perf-label">Latency:</span>
+    <span class="perf-value" id="perf-latency">0ms</span>
+  </div>
 </div>
 
 <!-- Settings modal -->
@@ -606,6 +830,30 @@
             <span class="connector-card-status err" id="conn-status-grok">No key</span>
             <button class="connector-btn" onclick="focusKey('key-grok')">Add Key</button>
           </div>
+        </div>
+      </div>
+
+      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
+
+      <div class="form-group">
+        <label class="form-label">Context Modes</label>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-search" checked onchange="updateContext()">
+            <span>Web Search (MCP)</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-memory" checked onchange="updateContext()">
+            <span>CSF Memory / Symbols</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-trading" onchange="updateContext()">
+            <span>Trading Context (IBKR)</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-perf" onchange="togglePerfMonitor()">
+            <span>Performance Monitor</span>
+          </label>
         </div>
       </div>
 
@@ -1010,6 +1258,273 @@
   setInterval(() => {
     if (!document.getElementById('observer-panel').classList.contains('collapsed')) refreshObserver();
   }, 30000);
+
+  // ====== CONVERSATION MANAGEMENT (SIDEBAR) ======
+  let currentConversationId = null;
+
+  function loadConversations() {
+    const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
+    const list = document.getElementById('convo-list');
+    list.innerHTML = '';
+
+    convos.forEach(c => {
+      const item = document.createElement('li');
+      item.className = 'convo-item' + (c.id === currentConversationId ? ' active' : '');
+      const time = new Date(c.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const preview = c.messages[0]?.text.slice(0, 30) || 'Empty';
+
+      item.innerHTML = `<span onclick="loadConversation('${c.id}')" style="flex:1">${preview}… ${time}</span>
+        <span class="convo-item-delete" onclick="deleteConversation(event, '${c.id}')">✕</span>`;
+      list.appendChild(item);
+    });
+  }
+
+  function newConversation() {
+    const id = 'convo-' + Date.now();
+    currentConversationId = id;
+    history = [];
+    document.getElementById('messages').innerHTML = document.getElementById('empty-state').outerHTML;
+    loadConversations();
+  }
+
+  function loadConversation(id) {
+    const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
+    const convo = convos.find(c => c.id === id);
+    if (!convo) return;
+
+    currentConversationId = id;
+    history = convo.messages;
+    document.getElementById('messages').innerHTML = '';
+
+    convo.messages.forEach(msg => {
+      if (msg.role === 'user') addUserBubble(msg.text);
+      else if (msg.role === 'assistant') {
+        const { msg: msgEl, bubble } = createAgentBubble(true);
+        bubble.textContent = msg.text;
+        document.getElementById('messages').appendChild(msgEl);
+      }
+    });
+
+    loadConversations();
+  }
+
+  function saveConversation() {
+    if (!currentConversationId) return;
+    const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
+    const idx = convos.findIndex(c => c.id === currentConversationId);
+
+    if (idx >= 0) {
+      convos[idx] = { id: currentConversationId, timestamp: convos[idx].timestamp, messages: history };
+    } else {
+      convos.unshift({ id: currentConversationId, timestamp: Date.now(), messages: history });
+    }
+
+    localStorage.setItem('conversations', JSON.stringify(convos.slice(0, 50))); // Keep 50 max
+    loadConversations();
+  }
+
+  function deleteConversation(e, id) {
+    e.stopPropagation();
+    if (confirm('Delete this conversation?')) {
+      const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
+      localStorage.setItem('conversations', JSON.stringify(convos.filter(c => c.id !== id)));
+      if (currentConversationId === id) newConversation();
+      else loadConversations();
+    }
+  }
+
+  function filterConversations() {
+    const q = document.getElementById('search-convos').value.toLowerCase();
+    document.querySelectorAll('.convo-item').forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(q) ? '' : 'none';
+    });
+  }
+
+  // Init sidebar
+  newConversation();
+  loadConversations();
+
+  // Auto-save on each message
+  const origAddUserBubble = window.addUserBubble;
+  window.addUserBubble = function(text) {
+    origAddUserBubble(text);
+    setTimeout(saveConversation, 100);
+  };
+
+  // ====== FILE UPLOAD ======
+  let attachedFiles = [];
+
+  function attachFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const fileObj = { name: file.name, size: file.size, type: file.type };
+    attachedFiles.push(fileObj);
+    renderAttachedFiles();
+
+    // Reset input
+    event.target.value = '';
+  }
+
+  function renderAttachedFiles() {
+    const container = document.getElementById('attached-files');
+    container.innerHTML = attachedFiles.map((f, i) => `
+      <div class="file-chip">
+        <span>📄 ${f.name}</span>
+        <span class="remove" onclick="attachedFiles.splice(${i},1);renderAttachedFiles()">✕</span>
+      </div>
+    `).join('');
+  }
+
+  function clearAttachedFiles() {
+    attachedFiles = [];
+    renderAttachedFiles();
+  }
+
+  // ====== KEYBOARD SHORTCUTS ======
+  document.addEventListener('keydown', (e) => {
+    // Cmd/Ctrl + N = new conversation
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      e.preventDefault();
+      newConversation();
+    }
+    // Cmd/Ctrl + K = focus search
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('search-convos').focus();
+    }
+    // Cmd/Ctrl + ? = show help
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '?') {
+      e.preventDefault();
+      showHelp();
+    }
+  });
+
+  function showHelp() {
+    alert(`Dream Chat Keyboard Shortcuts
+
+⌘/Ctrl + N  — New conversation
+⌘/Ctrl + K  — Search conversations
+⌘/Ctrl + ?  — Show this help
+
+Enter       — Send message
+Shift+Enter — New line
+
+📎 Attach files (.txt, .pdf, .json, .csv, .md)
+`);
+  }
+
+  // ====== SERVER SYNC ======
+  async function syncConversationToServer(convoId) {
+    if (!convoId || !history.length) return;
+
+    try {
+      // Ensure conversation exists on server
+      const createRes = await fetch('/api/dreams/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: convoId })
+      }).catch(() => null);
+
+      // Send each message
+      for (const msg of history) {
+        await fetch(`/api/dreams/conversations/${convoId}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role: msg.role,
+            text: msg.text || msg.content,
+            timestamp: Date.now()
+          })
+        }).catch(() => null);
+      }
+    } catch (err) {
+      console.error('Sync failed:', err);
+    }
+  }
+
+  // Sync every 30s if conversation exists
+  setInterval(() => {
+    if (currentConversationId && history.length > 0) {
+      syncConversationToServer(currentConversationId);
+    }
+  }, 30000);
+
+  // ====== CONTEXT MANAGEMENT ======
+  let contextMode = {
+    search: true,
+    memory: true,
+    trading: false,
+  };
+
+  function updateContext() {
+    contextMode = {
+      search: document.getElementById('ctx-search').checked,
+      memory: document.getElementById('ctx-memory').checked,
+      trading: document.getElementById('ctx-trading').checked,
+    };
+    localStorage.setItem('contextMode', JSON.stringify(contextMode));
+  }
+
+  // Load context mode from storage
+  try {
+    const saved = JSON.parse(localStorage.getItem('contextMode') || '{}');
+    Object.assign(contextMode, saved);
+    document.getElementById('ctx-search').checked = contextMode.search;
+    document.getElementById('ctx-memory').checked = contextMode.memory;
+    document.getElementById('ctx-trading').checked = contextMode.trading;
+  } catch (e) {}
+
+  // ====== PERFORMANCE MONITORING ======
+  let perfStats = {
+    totalTokens: 0,
+    totalCost: 0,
+    lastLatency: 0,
+  };
+
+  function togglePerfMonitor() {
+    const enabled = document.getElementById('ctx-perf').checked;
+    document.getElementById('perf-monitor').style.display = enabled ? 'block' : 'none';
+    localStorage.setItem('perfMonitorEnabled', enabled);
+  }
+
+  // Load perf monitor preference
+  const perfEnabled = localStorage.getItem('perfMonitorEnabled') === 'true';
+  if (perfEnabled) {
+    document.getElementById('ctx-perf').checked = true;
+    document.getElementById('perf-monitor').style.display = 'block';
+  }
+
+  function updatePerfStats(tokens, cost, latency) {
+    perfStats.totalTokens += tokens || 0;
+    perfStats.totalCost += cost || 0;
+    perfStats.lastLatency = latency || 0;
+
+    document.getElementById('perf-tokens').textContent = perfStats.totalTokens.toLocaleString();
+    document.getElementById('perf-cost').textContent = '$' + perfStats.totalCost.toFixed(3);
+    document.getElementById('perf-latency').textContent = perfStats.lastLatency + 'ms';
+  }
+
+  // Hook into the original stream fetch to capture metrics
+  const origFetch = window.fetch;
+  window.fetch = async function(...args) {
+    const startTime = Date.now();
+    const response = await origFetch.apply(this, args);
+
+    // Capture metrics from /api/dream/chat/stream responses
+    if (args[0] && args[0].includes('dream/chat')) {
+      const latency = Date.now() - startTime;
+      // Extract tokens/cost from response headers or body
+      const tokens = parseInt(response.headers?.get('X-Tokens-Used') || '0');
+      const cost = parseFloat(response.headers?.get('X-Cost-Usd') || '0');
+      if (tokens || cost) {
+        updatePerfStats(tokens, cost, latency);
+      }
+    }
+
+    return response;
+  };
 </script>
 <script src="js/convergance-sync.js"></script>
 </body>

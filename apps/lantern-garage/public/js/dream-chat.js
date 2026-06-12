@@ -292,7 +292,7 @@
     }
 
     // Allow backend-streaming bang commands through; reject truly unknown ones
-    const STREAMING_BANGS = ["swarm", "converge", "convergance"];
+    const STREAMING_BANGS = ["swarm", "converge", "convergance", "self-edit", "selfedit", "code", "review"];
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
       const cmdName = bangMatch[1].toLowerCase();
@@ -414,7 +414,7 @@
                     suggestions = doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean);
                   }
                 }
-                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt, evt.webSuggestions);
+                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt, evt.webSuggestions, evt.actions);
               }
             } catch { /* skip malformed */ }
           }
@@ -426,7 +426,7 @@
               if (buf.trim()) processLines([buf]);
               if (!streamFinished) {
                 if (!hasTokens) bubble.textContent = "No response received.";
-                finishStream(row, bubble, cursor, fullText, "done", undefined, undefined, undefined, undefined);
+                finishStream(row, bubble, cursor, fullText, "done", undefined, undefined, undefined, undefined, undefined);
               }
               return;
             }
@@ -435,7 +435,7 @@
             buf = lines.pop();
             processLines(lines);
             read();
-          }).catch(() => { if (!streamFinished) finishStream(row, bubble, cursor, fullText, "error", undefined, undefined, undefined, undefined); });
+          }).catch(() => { if (!streamFinished) finishStream(row, bubble, cursor, fullText, "error", undefined, undefined, undefined, undefined, undefined); });
         }
         read();
       })
@@ -443,11 +443,11 @@
         setThinking(false);
         bubble.textContent = "Failed to reach the server.";
         cursor.remove();
-        finishStream(row, bubble, cursor, "", "error", undefined, undefined, undefined, undefined);
+        finishStream(row, bubble, cursor, "", "error", undefined, undefined, undefined, undefined, undefined);
       });
   }
 
-  function finishStream(row, bubble, cursor, text, source, error, suggestions, imagePrompt, webSuggestions) {
+  function finishStream(row, bubble, cursor, text, source, error, suggestions, imagePrompt, webSuggestions, actions) {
     cursor.remove();
     if (!text && !error) {
       bubble.textContent = bubble.textContent || "…";
@@ -608,6 +608,199 @@
         };
         row.appendChild(execBtn);
       });
+    }
+
+    // Convergence / self-edit action buttons
+    if (Array.isArray(actions) && actions.length > 0) {
+      const actionRow = document.createElement("div");
+      actionRow.className = "suggestions";
+      actionRow.style.marginTop = "8px";
+      actions.forEach((a) => {
+        const btn = document.createElement("button");
+        btn.className = "suggestion";
+        btn.style.cssText = "margin-top:4px;border-color:#e2c97e;color:#e2c97e;";
+        btn.textContent = `⚡ ${a.label}`;
+        btn.onclick = async () => {
+          if (isStreaming) return;
+          btn.disabled = true;
+          btn.textContent = "Working…";
+          try {
+            if (a.action === "self-edit-apply") {
+              // Direct apply from !self-edit action
+              const diffText = a.diffText;
+              const testsToRun = (a.plan && a.plan.testsToRun) ? a.plan.testsToRun : [];
+              const ar = await fetch(`${serverBase}/api/self-edit/apply`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ diffText, testsToRun }),
+              });
+              const ad = await ar.json();
+              const applyRow = document.createElement("div");
+              applyRow.className = "msg-row agent";
+              const applyText = ad.ok
+                ? `Applied: ${ad.applied.changed.join(", ")}\nTests: ${ad.tests.map(t => `${t.ok ? "✓" : "✗"} ${t.cmd}`).join("\n")}\nDiff stat:\n${ad.diffStat}`
+                : `Apply failed: ${ad.error}`;
+              applyRow.innerHTML = `<div class="msg-label">Self-Edit · Apply</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(applyText)}</div>`;
+              messagesEl.appendChild(applyRow);
+              if (ad.ok && ad.allTestsOk) {
+                const prBtn = document.createElement("button");
+                prBtn.className = "suggestion";
+                prBtn.style.cssText = "margin-top:4px;border-color:#e2c97e;color:#e2c97e;";
+                prBtn.textContent = "Open draft PR";
+                prBtn.onclick = async () => {
+                  prBtn.disabled = true;
+                  prBtn.textContent = "Opening…";
+                  try {
+                    const plan = a.plan;
+                    const prr = await fetch(`${serverBase}/api/self-edit/pr`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ title: plan.summary, body: plan.summary, branch: plan.branchHint, diffText: a.diffText }),
+                    });
+                    const prd = await prr.json();
+                    const prRow = document.createElement("div");
+                    prRow.className = "msg-row agent";
+                    const prText = prd.ok ? `Branch: ${prd.branch}\nPR: ${prd.prUrl || "created"}` : `PR failed: ${prd.error}`;
+                    prRow.innerHTML = `<div class="msg-label">Self-Edit · PR</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(prText)}</div>`;
+                    messagesEl.appendChild(prRow);
+                    scrollToBottom();
+                  } catch (e) { prBtn.textContent = `✗ ${e.message}`; }
+                };
+                messagesEl.lastChild.appendChild(prBtn);
+              }
+              scrollToBottom();
+              btn.textContent = `✓ ${a.label}`;
+            } else if (a.action === "self-edit-plan") {
+              // Trigger a plan via self-edit endpoint
+              const r = await fetch(`${serverBase}/api/self-edit/plan`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ request: a.hint || a.label, history: conversationHistory.slice(-6) }),
+              });
+              const d = await r.json();
+              const planText = d.ok ? `Plan: ${d.plan.summary}\nFiles: ${d.plan.affectedFiles.join(", ")}\nRisk: ${d.plan.riskLevel}` : `Plan failed: ${d.error}`;
+              const outRow = document.createElement("div");
+              outRow.className = "msg-row agent";
+              outRow.innerHTML = `<div class="msg-label">Self-Edit · Plan</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(planText)}</div>`;
+              messagesEl.appendChild(outRow);
+              // If plan succeeded, offer patch generation
+              if (d.ok) {
+                const patchBtn = document.createElement("button");
+                patchBtn.className = "suggestion";
+                patchBtn.style.cssText = "margin-top:4px;border-color:#4caf82;color:#4caf82;";
+                patchBtn.textContent = "Generate patch";
+                patchBtn.onclick = async () => {
+                  patchBtn.disabled = true;
+                  patchBtn.textContent = "Generating…";
+                  try {
+                    const pr = await fetch(`${serverBase}/api/self-edit/patch`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ plan: d.plan }),
+                    });
+                    const pd = await pr.json();
+                    const patchRow = document.createElement("div");
+                    patchRow.className = "msg-row agent";
+                    const patchText = pd.ok ? `Changed: ${pd.changedFiles.join(", ")}\n\n${pd.diffText.slice(0, 1200)}${pd.diffText.length > 1200 ? "\n…(truncated)" : ""}` : `Patch failed: ${pd.error}`;
+                    patchRow.innerHTML = `<div class="msg-label">Self-Edit · Patch</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(patchText)}</div>`;
+                    messagesEl.appendChild(patchRow);
+                    if (pd.ok) {
+                      const applyBtn = document.createElement("button");
+                      applyBtn.className = "suggestion";
+                      applyBtn.style.cssText = "margin-top:4px;border-color:#4caf82;color:#4caf82;";
+                      applyBtn.textContent = "Apply patch + run tests";
+                      applyBtn.onclick = async () => {
+                        applyBtn.disabled = true;
+                        applyBtn.textContent = "Applying…";
+                        try {
+                          const ar = await fetch(`${serverBase}/api/self-edit/apply`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ diffText: pd.diffText, testsToRun: d.plan.testsToRun }),
+                          });
+                          const ad = await ar.json();
+                          const applyRow = document.createElement("div");
+                          applyRow.className = "msg-row agent";
+                          const applyText = ad.ok
+                            ? `Applied: ${ad.applied.changed.join(", ")}\nTests: ${ad.tests.map(t => `${t.ok ? "✓" : "✗"} ${t.cmd}`).join("\n")}\nDiff stat:\n${ad.diffStat}`
+                            : `Apply failed: ${ad.error}`;
+                          applyRow.innerHTML = `<div class="msg-label">Self-Edit · Apply</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(applyText)}</div>`;
+                          messagesEl.appendChild(applyRow);
+                          if (ad.ok && ad.allTestsOk) {
+                            const prBtn = document.createElement("button");
+                            prBtn.className = "suggestion";
+                            prBtn.style.cssText = "margin-top:4px;border-color:#e2c97e;color:#e2c97e;";
+                            prBtn.textContent = "Open draft PR";
+                            prBtn.onclick = async () => {
+                              prBtn.disabled = true;
+                              prBtn.textContent = "Opening…";
+                              try {
+                                const prr = await fetch(`${serverBase}/api/self-edit/pr`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ title: d.plan.summary, body: d.plan.summary, branch: d.plan.branchHint, diffText: pd.diffText }),
+                                });
+                                const prd = await prr.json();
+                                const prRow = document.createElement("div");
+                                prRow.className = "msg-row agent";
+                                const prText = prd.ok ? `Branch: ${prd.branch}\nPR: ${prd.prUrl || "created"}` : `PR failed: ${prd.error}`;
+                                prRow.innerHTML = `<div class="msg-label">Self-Edit · PR</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(prText)}</div>`;
+                                messagesEl.appendChild(prRow);
+                                scrollToBottom();
+                              } catch (e) { prBtn.textContent = `✗ ${e.message}`; }
+                            };
+                            messagesEl.lastChild.appendChild(prBtn);
+                          }
+                          scrollToBottom();
+                        } catch (e) { applyBtn.textContent = `✗ ${e.message}`; }
+                      };
+                      messagesEl.lastChild.appendChild(applyBtn);
+                    }
+                    scrollToBottom();
+                  } catch (e) { patchBtn.textContent = `✗ ${e.message}`; }
+                };
+                outRow.appendChild(patchBtn);
+              }
+              scrollToBottom();
+              btn.textContent = `✓ ${a.label}`;
+            } else if (a.action === "self-edit-pr") {
+              // Open draft PR — supports both convergence-derived and direct self-edit actions
+              const hasPlan = !!(a.plan && a.plan.summary);
+              const title = hasPlan ? a.plan.summary : (a.hint || "Auto PR");
+              const branch = hasPlan ? a.plan.branchHint : undefined;
+              const diffText = a.diffText || "";
+              const r = await fetch(`${serverBase}/api/self-edit/status`, { method: "GET" });
+              const sd = await r.json();
+              if (sd.isMaster && !branch) {
+                const outRow = document.createElement("div");
+                outRow.className = "msg-row agent";
+                outRow.innerHTML = `<div class="msg-label">Self-Edit</div><div class="bubble">Cannot open PR from master. Create a feature branch first.</div>`;
+                messagesEl.appendChild(outRow);
+                scrollToBottom();
+                btn.textContent = `✗ ${a.label}`;
+                return;
+              }
+              const prr = await fetch(`${serverBase}/api/self-edit/pr`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, body: a.hint || "", branch: branch || sd.branch, diffText }),
+              });
+              const prd = await prr.json();
+              const prRow = document.createElement("div");
+              prRow.className = "msg-row agent";
+              const prText = prd.ok ? `Branch: ${prd.branch}\nPR: ${prd.prUrl || "created"}` : `PR failed: ${prd.error}`;
+              prRow.innerHTML = `<div class="msg-label">Self-Edit · PR</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(prText)}</div>`;
+              messagesEl.appendChild(prRow);
+              scrollToBottom();
+              btn.textContent = `✓ ${a.label}`;
+            }
+          } catch (e) {
+            btn.textContent = `✗ ${a.label}`;
+          }
+        };
+        actionRow.appendChild(btn);
+      });
+      row.appendChild(actionRow);
     }
 
     isStreaming = false;
