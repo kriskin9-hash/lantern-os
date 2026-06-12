@@ -413,36 +413,53 @@ print(e.sd_prompt_for_state())`;
         return true;
       }
 
-      const imageResult = await new Promise((resolve, reject) => {
+      const imageResult = await new Promise(async (resolve, reject) => {
+        const modelsLabApiKey = process.env.MODELSLAB_API_KEY;
+
+        if (!modelsLabApiKey) {
+          return reject(new Error("no image generation service configured (MODELSLAB_API_KEY or SD server required)"));
+        }
+
         const payload = JSON.stringify({
           prompt: body.prompt,
-          negative_prompt: "cartoon, anime, blurry, distorted",
-          steps: 25,
+          negative_prompt: "cartoon, anime, blurry, distorted, ugly, bad quality",
+          height: "512",
+          width: "768",
+          steps: "25",
           guidance_scale: 7.5,
-          width: 768,
-          height: 512,
+          model_id: "DreamShaper XL 7.0",
+          base64: false,
         });
 
-        const reqSD = http.request({
-          hostname: sdHost,
-          port: sdPort,
-          path: "/generate",
+        const https = require("https");
+        const reqModelsLab = https.request({
+          hostname: "api.modelslab.com",
+          path: "/api/v6/images/text2img",
           method: "POST",
-          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-        }, (upstream) => {
-          let raw = "";
-          upstream.on("data", (c) => (raw += c));
-          upstream.on("end", () => {
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+            "Authorization": `Bearer ${modelsLabApiKey}`,
+          },
+        }, (res) => {
+          let data = "";
+          res.on("data", (chunk) => { data += chunk; });
+          res.on("end", () => {
             try {
-              const json = JSON.parse(raw);
-              resolve(json);
-            } catch { reject(new Error("invalid response from SD server")); }
+              const result = JSON.parse(data);
+              if (result.status === "success" && result.images && result.images.length > 0) {
+                resolve({ image: result.images[0], prompt: body.prompt });
+              } else {
+                reject(new Error("ModelsLab: " + (result.message || "no image generated")));
+              }
+            } catch (e) { reject(new Error("invalid ModelsLab response")); }
           });
         });
-        reqSD.on("error", reject);
-        reqSD.setTimeout(120000, () => { reqSD.destroy(); reject(new Error("SD server timeout")); });
-        reqSD.write(payload);
-        reqSD.end();
+
+        reqModelsLab.on("error", reject);
+        reqModelsLab.setTimeout(120000, () => { reqModelsLab.destroy(); reject(new Error("image generation timeout")); });
+        reqModelsLab.write(payload);
+        reqModelsLab.end();
       });
 
       // Persist into the contextualized cache for replay
