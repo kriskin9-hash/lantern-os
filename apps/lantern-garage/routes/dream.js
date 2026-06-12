@@ -292,6 +292,7 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
 from three_doors_engine import ThreeDoorsEngine
 req = json.loads(sys.stdin.read())
 e = ThreeDoorsEngine(req['userId'])
+<<<<<<< HEAD
 if req.get('agent'):
     e.agent = req['agent']
 if req['action'] == 'reset':
@@ -305,6 +306,15 @@ elif req['action'] == 'choose':
     result = e.to_api_response(scene)
 else:
     result = {"error": "unknown_action"}
+=======
+e.agent = req.get('agent', '')
+result = e.to_api_response()
+if req['action'] in ['start','reset']:
+    result = e.to_api_response(e.reset() if req['action']=='reset' else e.start_game())
+elif req['action']=='choose':
+    s = e.choose_door(req['choice'])
+    result = e.to_api_response(s) if s else {"error":"invalid_choice"}
+>>>>>>> pr-340
 print(json.dumps(result))`;
 
       const result = await new Promise((resolve, reject) => {
@@ -376,6 +386,7 @@ print(e.sd_prompt_for_state())`;
         body.prompt = promptResult;
       }
 
+<<<<<<< HEAD
       // Image generation via ModelsLab API (cloud-based Stable Diffusion)
       const modelsLabApiKey = process.env.MODELSLAB_API_KEY;
       if (!modelsLabApiKey) {
@@ -383,11 +394,46 @@ print(e.sd_prompt_for_state())`;
           image_available: false,
           image_prompt: body.prompt || "",
           error: "image_service_not_configured",
+=======
+      // Use in-house SD server for image generation
+      const sdHost = process.env.SD_HOST || "127.0.0.1";
+      const sdPort = process.env.SD_PORT || "7860";
+
+      // Fast probe: check if SD server is reachable before attempting generation
+      const sdReachable = await new Promise((resolve) => {
+        const probe = http.request({ hostname: sdHost, port: sdPort, path: "/", method: "GET" },
+          () => { probe.destroy(); resolve(true); });
+        probe.on("error", () => resolve(false));
+        probe.setTimeout(2000, () => { probe.destroy(); resolve(false); });
+        probe.end();
+      });
+
+      if (!sdReachable) {
+        // Fallback: generic pre-rendered scene image if one exists
+        const genericPath = sceneKey
+          ? path.join(repoRoot, "apps", "lantern-garage", "public", "data", "images", "three-doors", `${sceneKey}.png`)
+          : "";
+        if (genericPath && fs.existsSync(genericPath)) {
+          sendJson(res, {
+            image_available: true,
+            image_url: `data/images/three-doors/${sceneKey}.png`,
+            cached: true,
+            fallback: "generic",
+            generatedAt: new Date().toISOString(),
+          });
+          return true;
+        }
+        sendJson(res, {
+          image_available: false,
+          image_prompt: body.prompt || "",
+          error: "sd_server_unavailable",
+>>>>>>> pr-340
           generatedAt: new Date().toISOString(),
         });
         return true;
       }
 
+<<<<<<< HEAD
       const imageResult = await new Promise(async (resolve, reject) => {
         const payload = JSON.stringify({
           prompt: body.prompt,
@@ -429,6 +475,38 @@ print(e.sd_prompt_for_state())`;
         reqModelsLab.setTimeout(120000, () => { reqModelsLab.destroy(); reject(new Error("image generation timeout")); });
         reqModelsLab.write(payload);
         reqModelsLab.end();
+=======
+      const imageResult = await new Promise((resolve, reject) => {
+        const payload = JSON.stringify({
+          prompt: body.prompt,
+          negative_prompt: "cartoon, anime, blurry, distorted",
+          steps: 25,
+          guidance_scale: 7.5,
+          width: 768,
+          height: 512,
+        });
+
+        const reqSD = http.request({
+          hostname: sdHost,
+          port: sdPort,
+          path: "/generate",
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          let raw = "";
+          upstream.on("data", (c) => (raw += c));
+          upstream.on("end", () => {
+            try {
+              const json = JSON.parse(raw);
+              resolve(json);
+            } catch { reject(new Error("invalid response from SD server")); }
+          });
+        });
+        reqSD.on("error", reject);
+        reqSD.setTimeout(120000, () => { reqSD.destroy(); reject(new Error("SD server timeout")); });
+        reqSD.write(payload);
+        reqSD.end();
+>>>>>>> pr-340
       });
 
       // Persist into the contextualized cache for replay

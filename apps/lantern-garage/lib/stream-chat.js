@@ -17,8 +17,11 @@ const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery
 const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
 const { detectTaskType } = require("./task-detector");
+<<<<<<< HEAD
 const { classifyIntent } = require("./intent-router");
 const { convergeMessage } = require("./convergence-adapter");
+=======
+>>>>>>> pr-340
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -84,8 +87,13 @@ function extractDoors(text) {
   return { cleanText, doors };
 }
 
+<<<<<<< HEAD
 function doorsOrFallback(text, isKeystoneDebug = false, isEngineeringMode = false) {
   if (isKeystoneDebug || isEngineeringMode) return { cleanText: text.trim(), suggestions: [] };
+=======
+function doorsOrFallback(text, isKeystoneDebug = false) {
+  if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
+>>>>>>> pr-340
   const { cleanText, doors } = extractDoors(text);
   // Always return exactly 3 suggestions. Pad with fallbacks if model gave fewer than 3.
   let finalDoors;
@@ -252,6 +260,7 @@ async function handleStreamChat(req, url, res) {
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
 
+<<<<<<< HEAD
   // Classify intent and route to appropriate agent/surface
   const route = classifyIntent(message);
   if (!requestedAgent) {
@@ -260,6 +269,10 @@ async function handleStreamChat(req, url, res) {
   let surfaceMode = route.surface || "dream-chat";
   const requiresConvergence = route.requires_convergence;
   const suppressDoors = route.intent === "code" || route.intent === "bug_fix" || route.intent === "refactor" || route.intent === "debug";
+=======
+  // Surface mode: dream-chat (default) or three-doors
+  let surfaceMode = "dream-chat";
+>>>>>>> pr-340
 
   // Handle bang commands
   const cmd = parseBangCommand(message);
@@ -723,7 +736,11 @@ Interpret this convergence result and provide:
 
   // ── Web Search Grounding ───────────────────────────────────────────
   let groundingContext = "";
+<<<<<<< HEAD
   if (!isKeystoneDebug && !suppressDoors && needsGrounding(message)) {
+=======
+  if (!isKeystoneDebug && needsGrounding(message)) {
+>>>>>>> pr-340
     const searchQuery = extractSearchQuery(message);
     if (searchQuery) {
       try {
@@ -741,11 +758,16 @@ Interpret this convergence result and provide:
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
+<<<<<<< HEAD
   // Engineering mode: plain technical prompt without doors or dream context
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
     : suppressDoors
     ? agent.systemPrompt  // Engineer persona has its full prompt already
+=======
+  const systemPrompt = isKeystoneDebug
+    ? KEYSTONE_DEBUG_PROMPT
+>>>>>>> pr-340
     : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
 
 
@@ -913,6 +935,7 @@ Interpret this convergence result and provide:
   const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
   
   const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
+<<<<<<< HEAD
 
   // ── Convergence Delegation (if intent requires multi-agent coordination) ────
   if (requiresConvergence && message && !isKeystoneDebug) {
@@ -953,6 +976,9 @@ Interpret this convergence result and provide:
     }
   }
 
+=======
+  
+>>>>>>> pr-340
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
     
     for (const ollamaModel of modelChain) {
@@ -995,7 +1021,11 @@ Interpret this convergence result and provide:
         });
         
         if (fullReply) {
+<<<<<<< HEAD
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
           const imageEntryId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
@@ -1086,7 +1116,11 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
+<<<<<<< HEAD
       const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1170,7 +1204,11 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
+<<<<<<< HEAD
       const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1244,7 +1282,11 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
+<<<<<<< HEAD
       const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1300,7 +1342,11 @@ Interpret this convergence result and provide:
         req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
         req2.write(payload); req2.end();
       });
+<<<<<<< HEAD
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
       sendDone("grok", { agent: "Keystone", provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
@@ -1336,7 +1382,11 @@ Interpret this convergence result and provide:
         });
         if (sseErr) throw sseErr;
         if (fullReply) {
+<<<<<<< HEAD
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
@@ -1408,7 +1458,11 @@ Interpret this convergence result and provide:
         req2.end();
       });
       if (ollamaOk) {
+<<<<<<< HEAD
         const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
+=======
+        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+>>>>>>> pr-340
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",

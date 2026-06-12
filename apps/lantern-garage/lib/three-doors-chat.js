@@ -67,6 +67,7 @@ function formatThreeDoorsResponse(data) {
   // If image generation is available, include prompts
   const imagePrompts = data.image_available ? [{ prompt: data.image_prompt, label: "scene" }] : [];
 
+<<<<<<< HEAD
   // Breadcrumb/stage tracking
   const breadcrumbs = [];
   if (data.loop && data.stage !== undefined) {
@@ -75,16 +76,21 @@ function formatThreeDoorsResponse(data) {
     if (data.stage_name) breadcrumbs.push(data.stage_name);
   }
 
+=======
+>>>>>>> pr-340
   return {
     type: "doors",
     content,
     doors: data.doors,
     scene_key: data.scene_key,
     imagePrompts,
+<<<<<<< HEAD
     breadcrumbs,
     loop: data.loop,
     stage: data.stage,
     stage_name: data.stage_name,
+=======
+>>>>>>> pr-340
     raw: data,
   };
 }

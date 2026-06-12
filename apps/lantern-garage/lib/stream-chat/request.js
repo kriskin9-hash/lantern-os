@@ -22,7 +22,10 @@ async function parseStreamChatRequest(req, url, deps = {}) {
     requestedProvider: "",
     history: [],
     mcpFlag: false,
+<<<<<<< HEAD
     engineeringMode: false,
+=======
+>>>>>>> pr-340
   };
 
   if (req.method === "GET") {
@@ -30,7 +33,10 @@ async function parseStreamChatRequest(req, url, deps = {}) {
     parsed.user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
     parsed.requestedAgent = String(url.searchParams.get("agent") || "").trim();
     parsed.requestedProvider = String(url.searchParams.get("provider") || "").trim().toLowerCase();
+<<<<<<< HEAD
     parsed.engineeringMode = url.searchParams.get("engineeringMode") === "true";
+=======
+>>>>>>> pr-340
     return parsed;
   }
 
@@ -45,7 +51,10 @@ async function parseStreamChatRequest(req, url, deps = {}) {
     parsed.requestedAgent = String(body.agent || "").trim();
     parsed.requestedProvider = String(body.provider || "").trim().toLowerCase();
     parsed.history = sanitizeHistory(body.history);
+<<<<<<< HEAD
     parsed.engineeringMode = !!body.engineeringMode;
+=======
+>>>>>>> pr-340
   } catch {
     // Keep safe defaults for malformed JSON or body read failures.
   }

@@ -9,6 +9,7 @@
   let directModeEnabled = false;
   let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
+<<<<<<< HEAD
   // ── ENGINEERING MODE DETECTION ────────────────────────────────────────────
   // Keywords that trigger engineering/coding mode (non-RP, structured output)
   const ENGINEERING_TRIGGERS = [
@@ -74,6 +75,8 @@
     return ENGINEERING_TRIGGERS.some(trigger => lower.includes(trigger));
   }
 
+=======
+>>>>>>> pr-340
   // Agent is contextual — Lantern is default, others triggered by name in message
   function detectAgent(msg) {
     const lower = (msg || "").toLowerCase();
@@ -421,14 +424,19 @@
     let fullText = "";
     let hasTokens = false;
     const provider = providerSelect.value;
+<<<<<<< HEAD
     const isEngineeringMode = detectEngineeringMode(message);
     const agent = directModeEnabled ? "" : (isEngineeringMode ? "engineer" : detectAgent(message));
+=======
+    const agent = directModeEnabled ? "" : detectAgent(message);
+>>>>>>> pr-340
     // POST with history for multi-turn context; history excludes current message (already appended)
     const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
 
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+<<<<<<< HEAD
       body: JSON.stringify({
         message,
         provider: provider || undefined,
@@ -437,6 +445,9 @@
         mcp: directModeEnabled,
         engineeringMode: isEngineeringMode,
       }),
+=======
+      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: directModeEnabled }),
+>>>>>>> pr-340
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
