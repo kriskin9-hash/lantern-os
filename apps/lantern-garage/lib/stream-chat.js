@@ -82,8 +82,8 @@ function extractDoors(text) {
   return { cleanText, doors };
 }
 
-function doorsOrFallback(text, isKeystoneDebug = false) {
-  if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
+function doorsOrFallback(text, isKeystoneDebug = false, isEngineeringMode = false) {
+  if (isKeystoneDebug || isEngineeringMode) return { cleanText: text.trim(), suggestions: [] };
   const { cleanText, doors } = extractDoors(text);
   // Always return exactly 3 suggestions. Pad with fallbacks if model gave fewer than 3.
   let finalDoors;
@@ -248,7 +248,12 @@ async function handleStreamChat(req, url, res) {
     normalizeDreamerUser,
     collectRequestBody,
   });
-  let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
+  let { message, user, requestedAgent, requestedProvider, history, mcpFlag, engineeringMode } = parsed;
+
+  // Force engineer agent if engineeringMode is true (overrides requestedAgent)
+  if (engineeringMode && !requestedAgent) {
+    requestedAgent = "engineer";
+  }
 
   // Surface mode: dream-chat (default) or three-doors
   let surfaceMode = "dream-chat";
@@ -715,7 +720,7 @@ Interpret this convergence result and provide:
 
   // ── Web Search Grounding ───────────────────────────────────────────
   let groundingContext = "";
-  if (!isKeystoneDebug && needsGrounding(message)) {
+  if (!isKeystoneDebug && !engineeringMode && needsGrounding(message)) {
     const searchQuery = extractSearchQuery(message);
     if (searchQuery) {
       try {
@@ -733,8 +738,11 @@ Interpret this convergence result and provide:
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
+  // Engineering mode: plain technical prompt without doors or dream context
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
+    : engineeringMode
+    ? agent.systemPrompt  // Engineer persona has its full prompt already
     : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
 
 
@@ -945,7 +953,7 @@ Interpret this convergence result and provide:
         });
         
         if (fullReply) {
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
           const imageEntryId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
@@ -1036,7 +1044,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1120,7 +1128,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1194,7 +1202,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1250,7 +1258,7 @@ Interpret this convergence result and provide:
         req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
         req2.write(payload); req2.end();
       });
-      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
       sendDone("grok", { agent: "Keystone", provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
@@ -1286,7 +1294,7 @@ Interpret this convergence result and provide:
         });
         if (sseErr) throw sseErr;
         if (fullReply) {
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
@@ -1358,7 +1366,7 @@ Interpret this convergence result and provide:
         req2.end();
       });
       if (ollamaOk) {
-        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug, engineeringMode);
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
