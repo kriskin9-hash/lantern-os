@@ -292,13 +292,19 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
 from three_doors_engine import ThreeDoorsEngine
 req = json.loads(sys.stdin.read())
 e = ThreeDoorsEngine(req['userId'])
-e.agent = req.get('agent', '')
-result = e.to_api_response()
-if req['action'] in ['start','reset']:
-    result = e.to_api_response(e.reset() if req['action']=='reset' else e.start_game())
-elif req['action']=='choose':
-    s = e.choose_door(req['choice'])
-    result = e.to_api_response(s) if s else {"error":"invalid_choice"}
+if req.get('agent'):
+    e.agent = req['agent']
+if req['action'] == 'reset':
+    e.reset()
+    result = e.to_api_response(e.start_game())
+elif req['action'] in ['start']:
+    scene = e.start_game()
+    result = e.to_api_response(scene)
+elif req['action'] == 'choose':
+    scene = e.choose_door(req['choice'])
+    result = e.to_api_response(scene)
+else:
+    result = {"error": "unknown_action"}
 print(json.dumps(result))`;
 
       const result = await new Promise((resolve, reject) => {
