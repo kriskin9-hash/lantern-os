@@ -887,28 +887,26 @@ Interpret this convergence result and provide:
 
   if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
     sendToken(`Routing to ${routeLabel}...\n`);
-    sendToken("Waiting for convergence result...\n\n");
-    const result = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
+    const convResult = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
       timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 8000),
     });
-    if (result.reply) {
+    if (convResult.reply && !convResult.error) {
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
         role: "lantern",
-        text: String(result.reply).slice(0, maxConversationTextLength),
+        text: String(convResult.reply).slice(0, maxConversationTextLength),
       }).catch(() => {});
-      sendToken(result.reply);
-      sendDone(result.error ? "failed" : "convergence", {
-        agent: result.agent || routeDecision.agent,
-        online: !result.error,
-        error: result.error,
+      sendToken(convResult.reply);
+      sendDone("convergence", {
+        agent: convResult.agent || routeDecision.agent,
+        online: true,
         route: routeDecision,
       });
       return;
     }
-    sendFail(result.error || "convergence_failed");
-    return;
+    // Convergence unavailable or timed out — fall through to direct LLM providers
+    sendToken("(Convergence unavailable — answering directly)\n\n");
   }
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
