@@ -222,6 +222,28 @@ class UnifiedAgentConnector:
             cfg = ProviderConfig.from_env(name, name)
             if cfg.enabled:
                 self._providers[name] = cfg
+        # Load keystone-ft managed agent config if available
+        ft_result_path = DATA_DIR / "training" / "ft-result.json"
+        if ft_result_path.exists():
+            try:
+                with open(ft_result_path, "r", encoding="utf-8") as f:
+                    ft = json.load(f)
+                if ft.get("agent_id") and ft.get("model"):
+                    self._providers["keystone-ft"] = ProviderConfig(
+                        name="keystone-ft",
+                        provider="keystone-ft",
+                        model=ft["model"],
+                        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+                        max_tokens=2048,
+                        temperature=0.3,
+                        timeout=30.0,
+                        enabled=True,
+                        priority=10,
+                    )
+                    self._providers["keystone-ft"]._agent_id = ft["agent_id"]
+                    self._providers["keystone-ft"]._memory_store_id = ft.get("memory_store_id", "")
+            except Exception as e:
+                print(f"[warn] keystone-ft config: {e}")
         profiles_path = CONFIG_DIR / "agent-profiles.json"
         if profiles_path.exists():
             try:
@@ -455,6 +477,43 @@ class UnifiedAgentConnector:
         if cfg.api_key:
             headers["Authorization"] = f"Bearer {cfg.api_key}"
         return self._parse_sse(f"{cfg.base_url.rstrip('/')}/chat/completions", payload, cfg.timeout, lambda d: d.get("choices", [{}])[0].get("delta", {}).get("content", ""), headers)
+
+    def _stream_keystone_ft(self, cfg, system, message, temperature, max_tokens):
+        """Keystone managed agent with memory store. Falls back to standard messages API."""
+        if not cfg.api_key:
+            raise RuntimeError("No ANTHROPIC_API_KEY for keystone-ft")
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=cfg.api_key)
+            agent_id = getattr(cfg, "_agent_id", None)
+            memory_store_id = getattr(cfg, "_memory_store_id", None)
+            if agent_id and memory_store_id:
+                resources = [{
+                    "type": "memory_store",
+                    "memory_store_id": memory_store_id,
+                    "access": "read_write",
+                    "instructions": "Recall patterns from past Lantern OS engineering sessions to improve code suggestions.",
+                }]
+                session = client.beta.agents.sessions.create(
+                    agent_id=agent_id,
+                    resources=resources,
+                )
+                response = client.beta.agents.sessions.turns.create(
+                    session_id=session.id,
+                    messages=[{"role": "user", "content": message}],
+                )
+                text = ""
+                for block in (response.content if hasattr(response, "content") else []):
+                    if hasattr(block, "text"):
+                        text += block.text
+                if text:
+                    yield text
+                    return
+        except Exception as e:
+            print(f"[keystone-ft] sessions API failed ({e}), falling back to messages API")
+        # Fallback: standard messages API with keystone SYSTEM_PROMPT
+        payload = json.dumps({"model": cfg.model, "max_tokens": max_tokens or cfg.max_tokens, "stream": True, "system": system, "messages": [{"role": "user", "content": message}]}).encode()
+        yield from self._parse_sse("https://api.anthropic.com/v1/messages", payload, cfg.timeout, lambda d: d.get("delta", {}).get("text", "") if d.get("type") == "content_block_delta" else "", {"Content-Type": "application/json", "x-api-key": cfg.api_key, "anthropic-version": "2023-06-01"})
 
     def _stream_offline(self, cfg, system, message, temperature, max_tokens):
         """Offline provider: yields the offline reply text directly without any HTTP call."""
