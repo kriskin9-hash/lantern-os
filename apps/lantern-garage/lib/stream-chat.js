@@ -252,8 +252,9 @@ async function handleStreamChat(req, url, res) {
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
 
-  // Surface mode: dream-chat (default) or three-doors
-  let surfaceMode = "dream-chat";
+  // Surface mode: dream-chat (default) or three-doors.
+  // The game page declares itself via body.surface; bang commands can also flip it below.
+  let surfaceMode = parsed.surface === "three-doors" ? "three-doors" : "dream-chat";
 
   // Handle bang commands
   const cmd = parseBangCommand(message);
@@ -499,14 +500,22 @@ async function handleStreamChat(req, url, res) {
     return { ...d, text: `[${d.kind || 'dream'} — ${d.tags?.[0] || 'untitled'}]`, _fidelity: 'placeholder' }; // Placeholder
   });
 
-  const agent = requestedAgent
-    ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
-    : selectAgent(message);
+  // Dream Chat is Keystone-only: the desk agent is always Keystone.
+  // Personas (Lantern et al.) live in the Three Doors game surface, where the
+  // game may request a specific guide via body.agent (defaults to Lantern).
+  const agent = surfaceMode === "three-doors"
+    ? (AGENT_PERSONAS.find((a) => a.id === (requestedAgent || "lantern"))
+        || AGENT_PERSONAS.find((a) => a.id === "lantern")
+        || selectAgent(message))
+    : (AGENT_PERSONAS.find((a) => a.id === "keystone") || selectAgent(message));
 
   // ── Keystone debug mode ───────────────────────────────────────────────
   // When Keystone is selected, bypass persona/doors and talk raw to the model
   // about app dev, repo state, and convergence. Direct API access from the UX.
   const isKeystoneDebug = agent.id === "keystone" && (mcpFlag || message.startsWith("[Convergence task]"));
+
+  // Name reported in done events — Keystone at the desk, the persona (Lantern) in the game
+  const doneAgentName = agent.name || "Keystone";
 
   let dreamContext = recentDreams.length > 0
     ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
@@ -585,28 +594,27 @@ async function handleStreamChat(req, url, res) {
     console.error("[Convergance] Router error (non-fatal):", e.message);
   }
 
-  // ── RP opt-in: persona/doors only when user explicitly requests RP ────────
-  const RP_OPT_IN_RE = /open.*three[-_]?doors|roleplay|role[-\s]?play|continue the scene|\bas (lantern|blinkbug|waterfall|xenon|founder)\b/i;
-  const isRpMode = RP_OPT_IN_RE.test(message) || surfaceMode === "three-doors"
-    || (requestedAgent && ["lantern", "blinkbug", "waterfall", "xenon"].includes(requestedAgent));
+  // ── RP lives in the Three Doors game only. Dream Chat is always plain Keystone;
+  // roleplay requests in chat get pointed at /three-doors-game.html instead.
+  const isRpMode = surfaceMode === "three-doors";
 
   const routeDecision = classifyIntent(message);
 
   // ── Route label (sent in every done event; shown below each assistant bubble) ─
   const converganceIntent = converganceDecision?.intent || routeIntent || routeDecision.intent || "general";
   const ROUTE_LABEL_MAP = {
-    code: "Keystone - code via convergence",
-    strategy: "Founder - strategy via convergence",
-    trading: "Trading - market route",
-    memory_export: "CSF - memory export",
-    dream_analysis: "Lantern - dream analysis",
-    rp_game: "Three Doors - RP game",
+    code: "Keystone · code via convergence",
+    strategy: "Keystone · strategy via convergence",
+    trading: "Keystone · market route",
+    memory_export: "Keystone · CSF memory export",
+    dream_analysis: "Keystone · dream analysis",
+    rp_game: "Three Doors · RP game",
     coding_change: "Keystone · code / GitHub route",
     technical_debug: "Keystone · debug route",
     code_review: "Keystone · review route",
     convergance_action: "Convergence · loop route",
-    capacity_query: "Dream Chat · capacity query",
-    dream_chat: "Lantern · RP route",
+    capacity_query: "Keystone · capacity query",
+    dream_chat: "Keystone · chat",
     three_doors: "Three Doors · RP game",
   };
   const routeLabel = isKeystoneDebug
@@ -614,13 +622,11 @@ async function handleStreamChat(req, url, res) {
     : requestedProvider === "keystone-ft"
       ? "Keystone FT · memory route"
       : surfaceMode === "three-doors"
-        ? "Three Doors · RP game"
-        : isRpMode
-          ? `${agent.name || "Lantern"} · RP route`
-          : (ROUTE_LABEL_MAP[converganceIntent] || "Dream Chat · router");
+        ? `${agent.name || "Lantern"} · Three Doors`
+        : (ROUTE_LABEL_MAP[converganceIntent] || "Keystone · router");
 
-  // Plain router prompt — no persona, no doors (default for non-RP messages)
-  const ROUTER_PROMPT = `You are Dream Chat, the orchestration router for Lantern OS. Route requests to the correct agent or surface. Respond directly and concisely — no roleplay, no dream personas, no door suggestions unless the user explicitly opts in.\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+  // Plain Keystone desk prompt — no persona voice, no doors. Dream Chat is Keystone-only.
+  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Lantern OS. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. If the user asks for roleplay, Lantern, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html) — that is where Lantern guides.\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
@@ -688,18 +694,18 @@ async function handleStreamChat(req, url, res) {
   const sendError = (msg) => sse.sendError(res, msg);
   const sendFail = (reason) => {
     sendError(humanError(reason));
-    sendDone("failed", { agent: "Keystone", online: false });
+    sendDone("failed", { agent: doneAgentName, online: false });
   };
   const sendLocalFallback = (reason) => {
     sendError(`local_fallback: ${reason}`);
-    sendDone("offline", { agent: "Keystone", online: false });
+    sendDone("offline", { agent: doneAgentName, online: false });
   };
 
   // No provider available — stream a clear error instead of static persona replies
   const streamLocalFallback = async (reason) => {
     const errorText = humanError(reason || "no_provider_configured");
     sendError(errorText);
-    sendDone("offline", { agent: "Keystone", online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
+    sendDone("offline", { agent: doneAgentName, online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
   };
 
   await appendConversationEntry({
@@ -855,7 +861,7 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          const meta = { agent: "Keystone", online: true, cleanText, suggestions, model: ollamaModel, webSuggestions };
+          const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions };
           if (imageEntryId) meta.image = { entryId: imageEntryId, status: "generating" };
           sendDone("ollama", meta);
           return;
@@ -985,7 +991,7 @@ async function handleStreamChat(req, url, res) {
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("gemini");
-      sendDone("gemini", { agent: "Keystone", provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions });
+      sendDone("gemini", { agent: doneAgentName, provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions });
       return;
     } catch (err) {
       recordProviderFailure("gemini", err.message);
@@ -1070,7 +1076,7 @@ async function handleStreamChat(req, url, res) {
       }).catch(() => {});
       recordProviderSuccess("anthropic");
       recordProviderSuccessRouter("anthropic"); // Also log to provider-router for performance tracking
-      sendDone("anthropic", { agent: "Keystone", provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
+      sendDone("anthropic", { agent: doneAgentName, provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
       return;
     } catch (err) {
       const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
@@ -1144,7 +1150,7 @@ async function handleStreamChat(req, url, res) {
       }).catch(() => {});
       recordProviderSuccess("openai");
       recordProviderSuccessRouter("openai"); // Also log to provider-router
-      sendDone("openai", { agent: "Keystone", provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
+      sendDone("openai", { agent: doneAgentName, provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
       return;
     } catch (err) {
       const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
@@ -1194,7 +1200,7 @@ async function handleStreamChat(req, url, res) {
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
-      sendDone("grok", { agent: "Keystone", provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
+      sendDone("grok", { agent: doneAgentName, provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
       return;
     } catch (err) {
       recordProviderFailure("xai", err.message);
@@ -1235,7 +1241,7 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          sendDone("ollama", { agent: "Keystone", provider: "ollama", online: true, cleanText, suggestions });
+          sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText, suggestions });
           return;
         }
       } catch (err) {
@@ -1307,7 +1313,7 @@ async function handleStreamChat(req, url, res) {
           text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
         recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: "Keystone", provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions });
+        sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions });
         return;
       }
     } catch (err) {
