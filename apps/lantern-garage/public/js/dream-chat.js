@@ -9,7 +9,6 @@
   let directModeEnabled = false;
   let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
-<<<<<<< HEAD
   // ── ENGINEERING MODE DETECTION ────────────────────────────────────────────
   // Keywords that trigger engineering/coding mode (non-RP, structured output)
   const ENGINEERING_TRIGGERS = [
@@ -75,8 +74,6 @@
     return ENGINEERING_TRIGGERS.some(trigger => lower.includes(trigger));
   }
 
-=======
->>>>>>> pr-340
   // Agent is contextual — Lantern is default, others triggered by name in message
   function detectAgent(msg) {
     const lower = (msg || "").toLowerCase();
@@ -128,26 +125,37 @@
       const elapsed = Math.round((Date.now() - this.sessionStart) / 1000);
       const mins = Math.floor(elapsed / 60).toString().padStart(2, "0");
       const secs = (elapsed % 60).toString().padStart(2, "0");
-      document.getElementById("dbg-session").textContent = `${mins}:${secs}`;
-      document.getElementById("dbg-messages").textContent = this.messagesSent;
-      document.getElementById("dbg-tokens").textContent = this.tokensReceived;
+      const sessionEl = document.getElementById("dbg-session");
+      if (sessionEl) sessionEl.textContent = `${mins}:${secs}`;
+      const msgEl = document.getElementById("dbg-messages");
+      if (msgEl) msgEl.textContent = this.messagesSent;
+      const tokenEl = document.getElementById("dbg-tokens");
+      if (tokenEl) tokenEl.textContent = this.tokensReceived;
       const errEl = document.getElementById("dbg-errors");
-      errEl.textContent = this.errors;
-      errEl.className = "debug-val " + (this.errors > 0 ? "err" : "ok");
+      if (errEl) {
+        errEl.textContent = this.errors;
+        errEl.className = "debug-val " + (this.errors > 0 ? "err" : "ok");
+      }
       const fbEl = document.getElementById("dbg-fallbacks");
-      fbEl.textContent = this.fallbacks;
-      fbEl.className = "debug-val " + (this.fallbacks > 0 ? "warn" : "ok");
+      if (fbEl) {
+        fbEl.textContent = this.fallbacks;
+        fbEl.className = "debug-val " + (this.fallbacks > 0 ? "warn" : "ok");
+      }
       const avg = this.latencies.length > 0
         ? Math.round(this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length) + " ms"
         : "—";
-      document.getElementById("dbg-latency").textContent = avg;
-      document.getElementById("dbg-provider").textContent = this.lastProvider || "—";
-      document.getElementById("dbg-agent").textContent = this.lastAgent || "—";
+      const latEl = document.getElementById("dbg-latency");
+      if (latEl) latEl.textContent = avg;
+      const provEl = document.getElementById("dbg-provider");
+      if (provEl) provEl.textContent = this.lastProvider || "—";
+      const agentEl = document.getElementById("dbg-agent");
+      if (agentEl) agentEl.textContent = this.lastAgent || "—";
     },
   };
   setInterval(() => analytics.render(), 1000);
   function toggleDebug() {
-    document.getElementById("debug-panel").classList.toggle("open");
+    const panel = document.getElementById("debug-panel");
+    if (panel) panel.classList.toggle("open");
   }
 
   function toggleKeystoneMcp() {
@@ -199,8 +207,8 @@
         agents = data.agents || [];
         originalAgents = agents;
         originalAgents = agents;
-        statusDot.className = "dot online";
-        statusLabel.textContent = "online";
+        if (statusDot) statusDot.className = "dot online";
+        if (statusLabel) statusLabel.textContent = "online";
         TELEMETRY.log("agents", `Loaded ${agents.length} agents`);
         return;
       }
@@ -208,8 +216,8 @@
     } catch (err) {
       TELEMETRY.error("agents", `Failed to load agents: ${err.message}`, { serverBase });
     }
-    statusDot.className = "dot";
-    statusLabel.textContent = "offline";
+    if (statusDot) statusDot.className = "dot";
+    if (statusLabel) statusLabel.textContent = "offline";
   }
   loadAgents();
 
@@ -424,19 +432,14 @@
     let fullText = "";
     let hasTokens = false;
     const provider = providerSelect.value;
-<<<<<<< HEAD
     const isEngineeringMode = detectEngineeringMode(message);
     const agent = directModeEnabled ? "" : (isEngineeringMode ? "engineer" : detectAgent(message));
-=======
-    const agent = directModeEnabled ? "" : detectAgent(message);
->>>>>>> pr-340
     // POST with history for multi-turn context; history excludes current message (already appended)
     const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
 
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-<<<<<<< HEAD
       body: JSON.stringify({
         message,
         provider: provider || undefined,
@@ -445,9 +448,7 @@
         mcp: directModeEnabled,
         engineeringMode: isEngineeringMode,
       }),
-=======
       body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: directModeEnabled }),
->>>>>>> pr-340
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
