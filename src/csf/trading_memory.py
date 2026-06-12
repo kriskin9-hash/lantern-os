@@ -1,19 +1,35 @@
 """
-CSF Memory wiring for AI Trader orders & agent signals (Trading Phase 2, issue #323).
+CSF Memory: trading orders & agent signals (Trading Phase 2, issue #323).
 
-Persists new trading orders and agent signals into the existing CSF
+Persists trading orders and agent signals into the existing CSF
 MemoryEngine (src/csf/memory_engine.py) as Tier.TRACE records, tagged
 "trading" + "order"/"signal", so dream-chat and other LanternOS agents can
 query recent trading activity (e.g. "what happened with AAPL today?").
 
-Scope: orders + signals only (per #323) — not a general trading->CSF
-pipeline yet. Each record_*() call writes ONE trace record per invocation;
-callers (apps/lantern-garage/lib/trading-memory.js) are responsible for
-de-duplicating against already-seen order ids / signal entries so that 5s
-dashboard polling does not produce a duplicate-write storm.
+This module is the **Python-native reference implementation** of that CSF
+record shape (Tier.TRACE, PrivacyScope.INTERNAL, CubePartition.RAW, tags
+"trading" + "order"/"signal" + status/type) and is exercised by
+tests/test_trading_memory.py.
 
-CLI usage (invoked from Node via spawn, mirroring
-src/unified_agent_connector.py's --action convention):
+LanternOS's Node runtime does **not** call this module — it has its own
+pure-JS implementation with the same record shape and the same
+data/csf_memory/raw.jsonl registry format:
+apps/lantern-garage/lib/csf-memory-writer.js (writes) and
+apps/lantern-garage/lib/trading-memory.js (orders/signals API + local
+trading store). That keeps the trading-memory feature local-first — no
+Python process is spawned at runtime, and no external service is required.
+Records written by either side land in the same registry and are
+queryable by both MemoryEngine.query() and the JS queryRecent().
+
+Scope: orders + signals only (per #323) — not a general trading->CSF
+pipeline. Each record_*() call writes ONE trace record per invocation;
+callers are responsible for de-duplicating against already-seen order ids /
+signal entries so that repeated ingestion does not produce a
+duplicate-write storm (see apps/lantern-garage/lib/trading-memory.js's
+seen-set).
+
+Optional CLI, useful for manual inspection/debugging (not used by any
+runtime code path):
 
     python -m csf.trading_memory --action record-order  --data '<json order>'
     python -m csf.trading_memory --action record-signal --data '<json signal>'

@@ -7,6 +7,7 @@
 const http = require('http');
 const TradingAPIBridge = require('../lib/trading-api-bridge');
 const tradingMemory = require('../lib/trading-memory');
+const tradingStore = require('../lib/trading-store');
 
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
@@ -99,38 +100,116 @@ function callDashboard(path) {
 // Proxy map for the LanternOS-hosted /trading.html and /trading-news.html
 // pages, which talk to a single origin (this server) instead of the
 // AI Trader dashboard's own port (5050).
+//
+// NOTE — legacy/optional: this proxies to an EXTERNAL AI Trader dashboard
+// service (dashboard.py, port 5050) and is not required for any LanternOS
+// feature. In particular, trading memory (orders, agent-log/signals, and
+// CSF-backed recent-memory queries — see #323) is served entirely from
+// local LanternOS data (data/lantern-garage/trading/ and data/csf_memory/)
+// by the routes below and does NOT depend on this proxy or on port 5050.
+// If the external service isn't running, these routes simply 502 — the
+// rest of LanternOS keeps working.
 const DASHBOARD_PROXY_ROUTES = {
   '/api/trading/dashboard/positions': '/api/positions',
   '/api/trading/dashboard/market-status': '/api/market-status',
   '/api/trading/dashboard/zones': '/api/zones',
   '/api/trading/dashboard/watchlist-prices': '/api/watchlist-prices',
-  '/api/trading/dashboard/agent-log': '/api/agent-log',
-  '/api/trading/dashboard/orders': '/api/orders',
   '/api/trading/dashboard/news-feed': '/api/news-feed',
 };
 
 module.exports = async function tradingRoutes(req, res, url, deps) {
-  const { sendJson } = deps;
+  const { sendJson, collectRequestBody } = deps;
   const bridge = new TradingAPIBridge();
 
+  // ── Trading memory: local orders & agent-log (Trading Phase 2, #323) ──────
+  // LanternOS-native: reads/writes data/lantern-garage/trading/*.jsonl and
+  // CSF Tier.TRACE records under data/csf_memory/ directly. No external
+  // service, no Python process — works from a fresh checkout of this repo
+  // alone.
+
+  // GET /api/trading/dashboard/orders
+  // Local order history, newest entries last (matches the order they were
+  // recorded). Returns a bare array — trading.html does
+  // `Array.isArray(orders)`.
+  if (url.pathname === '/api/trading/dashboard/orders' && req.method === 'GET') {
+    try {
+      const limitParam = Number(url.searchParams.get('limit'));
+      const orders = tradingStore.listOrders(limitParam > 0 ? { limit: limitParam } : {});
+      sendJson(res, orders, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to read local orders', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/dashboard/agent-log
+  // Local agent/signal log, newest entries last. Returns a bare array —
+  // trading.html does `Array.isArray(logs)`.
+  if (url.pathname === '/api/trading/dashboard/agent-log' && req.method === 'GET') {
+    try {
+      const limitParam = Number(url.searchParams.get('limit'));
+      const logs = tradingStore.listLogEntries({ limit: limitParam > 0 ? limitParam : 100 });
+      sendJson(res, logs, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to read local agent log', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/trading/orders
+  // Body: a single order object, `{ orders: [...] }`, or a bare array of
+  // orders. Orders without an `id` get a local one generated. Persists into
+  // the local trading store and into CSF memory as Tier.TRACE records
+  // (tags: trading, order, <status>). Idempotent for repeated `id`s.
+  if (url.pathname === '/api/trading/orders' && req.method === 'POST') {
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const orders = tradingMemory._toArray(payload, ['orders']);
+      for (const order of orders) {
+        if (order && !order.id) {
+          order.id = `local_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        }
+      }
+      const written = await tradingMemory.recordNewOrders(orders);
+      sendJson(res, { recorded: written.length, orders: written }, 201);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to record order', details: error.message }, 400);
+    }
+    return true;
+  }
+
+  // POST /api/trading/agent-log
+  // Body: a single agent-log entry, `{ logs: [...] }` / `{ agentLog: [...] }`
+  // / `{ agent_log: [...] }`, or a bare array of entries. Entries without a
+  // `time` get one generated. Persists into the local trading store and into
+  // CSF memory as Tier.TRACE records (tags: trading, signal, <type>).
+  if (url.pathname === '/api/trading/agent-log' && req.method === 'POST') {
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const entries = tradingMemory._toArray(payload, ['logs', 'agentLog', 'agent_log']);
+      for (const entry of entries) {
+        if (entry && !entry.time) {
+          entry.time = new Date().toISOString();
+        }
+      }
+      const written = await tradingMemory.recordNewSignals({ logs: entries });
+      sendJson(res, { recorded: written.length, logs: written }, 201);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to record agent-log entry', details: error.message }, 400);
+    }
+    return true;
+  }
+
   // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
-  // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,agent-log,orders,news-feed}
+  // Legacy/optional — see DASHBOARD_PROXY_ROUTES note above. Not required
+  // for trading memory (orders/agent-log/CSF), which is served above.
+  // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,news-feed}
   if (req.method === 'GET' && DASHBOARD_PROXY_ROUTES[url.pathname]) {
     try {
       const data = await callDashboard(DASHBOARD_PROXY_ROUTES[url.pathname]);
       sendJson(res, data, 200);
-
-      // Trading Phase 2 (#323): persist new orders/signals into CSF memory.
-      // Fire-and-forget — must never block or fail the dashboard response.
-      if (url.pathname === '/api/trading/dashboard/orders') {
-        tradingMemory.recordNewOrders(data).catch((e) => {
-          console.error('[trading-memory] recordNewOrders failed:', e.message);
-        });
-      } else if (url.pathname === '/api/trading/dashboard/agent-log') {
-        tradingMemory.recordNewSignals(data).catch((e) => {
-          console.error('[trading-memory] recordNewSignals failed:', e.message);
-        });
-      }
     } catch (error) {
       sendJson(res, { error: error.message }, 502);
     }
@@ -343,7 +422,8 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
   // GET /api/trading/memory/recent?limit=20&kind=order|signal
   // Trading Phase 2 (#323): recent orders/signals persisted into CSF memory
-  // (src/csf/trading_memory.py), queryable by dream-chat and other agents.
+  // (apps/lantern-garage/lib/csf-memory-writer.js, pure JS — no Python
+  // process), queryable by dream-chat and other agents. Newest first.
   if (url.pathname === '/api/trading/memory/recent' && req.method === 'GET') {
     try {
       const limit = Number(url.searchParams.get('limit')) || 20;
