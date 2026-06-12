@@ -234,5 +234,215 @@ class TestThreeDoorsEngine:
         assert state2.stage_number == 1
 
 
+class TestPhase4NarrationIntegration:
+    """Test Phase 4: Narration Integration for stages 2, 3, 5 and agent flavor appending."""
+
+    @pytest.fixture
+    def temp_data_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield tmpdir
+
+    @pytest.fixture
+    def engine(self, temp_data_dir):
+        engine = ThreeDoorsEngine("test-user")
+        engine.data_dir = Path(temp_data_dir)
+        return engine
+
+    def test_generate_text_stages_2_3_5_have_rich_narration(self, engine):
+        """Verify stages 2, 3, 5 have >100 char narration (not stubs)."""
+        state = ThreeDoorsGameState("test-user")
+        state.agent = "lantern"
+
+        # Stage 2: future-doors
+        text_stage_2 = engine._generate_text("future-doors", state)
+        assert len(text_stage_2) > 100, f"Stage 2 narration too short: {len(text_stage_2)} chars"
+        assert "Branches of possibility" in text_stage_2
+        assert "futures" in text_stage_2.lower() or "unwritten" in text_stage_2.lower()
+
+        # Stage 3: xp-door
+        text_stage_3 = engine._generate_text("xp-door", state)
+        assert len(text_stage_3) > 100, f"Stage 3 narration too short: {len(text_stage_3)} chars"
+        assert "Windows XP" in text_stage_3 or "XP" in text_stage_3
+        assert "liminal" in text_stage_3.lower() or "nostalgia" in text_stage_3.lower()
+
+        # Stage 5: sigil-city-of-doors
+        text_stage_5 = engine._generate_text("sigil-city-of-doors", state)
+        assert len(text_stage_5) > 100, f"Stage 5 narration too short: {len(text_stage_5)} chars"
+        assert "Synthesis hub" in text_stage_5 or "King" in text_stage_5
+        assert "doors" in text_stage_5.lower()
+
+    def test_agent_flavor_narration_appends_all_agents(self, engine):
+        """Test all 6 agent flavors append to narration without truncation."""
+        state = ThreeDoorsGameState("test-user")
+
+        for agent in AGENTS:
+            state.agent = agent
+            text = engine._generate_text("future-doors", state)
+
+            # Verify agent flavor is appended
+            assert text.endswith((".",".",".")) or len(text) > 150, f"Agent {agent} flavor not properly appended"
+
+            # Verify minimum length (base narration + agent flavor)
+            assert len(text) > 100, f"Text for agent {agent} too short: {len(text)} chars"
+
+            # Verify agent flavor is present (check for agent-specific suffix)
+            agent_flavors = {
+                "lantern": "Light guides the way",
+                "blinkbug": "glitches playfully",
+                "keystone": "Doors align",
+                "waterfall": "Water flows",
+                "xenon": "possibilities shimmer",
+                "founder": "root of all",
+            }
+            flavor = agent_flavors[agent]
+            assert flavor in text, f"Agent flavor for {agent} not found in: {text}"
+
+    def test_agent_flavor_narration_with_symbols(self, engine):
+        """Test agent flavor appends correctly with symbol tracking."""
+        state = ThreeDoorsGameState("test-user")
+        state.agent = "xenon"
+        state.symbols = {
+            "archetype=seeker_agent=xenon": {"frequency": 3, "loop": 2},
+            "archetype=explorer_agent=founder": {"frequency": 1, "loop": 1},
+        }
+
+        text = engine._generate_text("sigil-city-of-doors", state)
+
+        # Verify symbol count is appended
+        assert "crystallized patterns" in text
+        assert "2 crystallized patterns" in text
+
+        # Verify length is not truncated
+        assert len(text) > 150, f"Text with symbols too short: {len(text)} chars"
+
+    def test_no_stub_text_remains_in_all_stages(self, engine):
+        """Verify no 1-sentence stubs remain. All 7 stages have rich narration."""
+        state = ThreeDoorsGameState("test-user")
+        state.agent = "lantern"
+
+        stub_indicators = {
+            "garden-at-beginning": ["The King's opening poem", "seed", "bloom"],  # OK - rich
+            "present-day": ["Cloverfield", "scent"],  # OK - rich
+            "future-doors": ["shimmer", "futures", "spirals"],  # Verify rich content
+            "xp-door": ["Windows XP", "liminal", "pixels"],  # Verify rich content
+            "xenon-starship": ["Convergence", "timelines", "throne"],  # OK - rich
+            "sigil-city-of-doors": ["Synthesis", "Fractal", "King returns"],  # Verify rich content
+            "fog-door-return": ["Fog coils", "escape", "spiral"],  # OK - rich
+        }
+
+        for stage in STAGES:
+            text = engine._generate_text(stage, state)
+
+            # Remove agent flavor suffix to test base narration
+            agent_flavor_end = text.rfind('.')
+            base_text = text[:agent_flavor_end + 1] if agent_flavor_end > 0 else text
+
+            # Verify base narration is substantial (not a one-liner stub)
+            # A proper narration should be multiple sentences or multi-line
+            sentences = [s.strip() for s in base_text.split('.') if s.strip()]
+            assert len(sentences) >= 2, f"Stage {stage} appears to be single sentence: {base_text}"
+            assert len(base_text) > 100, f"Stage {stage} base narration too short: {len(base_text)} chars"
+
+            # Verify stage-specific content (multiple keywords)
+            if stage in stub_indicators:
+                indicators = stub_indicators[stage]
+                found_count = sum(1 for indicator in indicators if indicator.lower() in text.lower())
+                assert found_count >= 2, f"Stage {stage} missing rich content. Found {found_count}/{len(indicators)} keywords. Text: {text}"
+
+    def test_narration_character_count_reasonable_for_display(self, engine):
+        """Verify character counts are reasonable for UI display (not too short, not too long)."""
+        state = ThreeDoorsGameState("test-user")
+        state.agent = "waterfall"
+
+        for stage in STAGES:
+            text = engine._generate_text(stage, state)
+
+            # Min: meaningful narration (> 60 chars)
+            assert len(text) > 60, f"Stage {stage} narration too short: {len(text)} chars"
+
+            # Max: readable on mobile (< 500 chars, to fit in ~8 lines at 60 chars/line)
+            assert len(text) < 500, f"Stage {stage} narration too long: {len(text)} chars"
+
+    def test_all_agents_with_all_stages_no_errors(self, engine):
+        """Comprehensive test: all 6 agents x all 7 stages = 42 combinations."""
+        state = ThreeDoorsGameState("test-user")
+
+        combination_count = 0
+        for stage in STAGES:
+            for agent in AGENTS:
+                state.agent = agent
+                text = engine._generate_text(stage, state)
+
+                # Basic sanity checks
+                assert isinstance(text, str), f"Stage {stage}, Agent {agent}: not a string"
+                assert len(text) > 0, f"Stage {stage}, Agent {agent}: empty text"
+                assert len(text) > 60, f"Stage {stage}, Agent {agent}: too short ({len(text)} chars)"
+
+                combination_count += 1
+
+        assert combination_count == 42, f"Expected 42 combinations, got {combination_count}"
+
+    def test_agent_flavor_consistency_across_stages(self, engine):
+        """Verify each agent's flavor suffix is consistent across all stages."""
+        state = ThreeDoorsGameState("test-user")
+
+        agent_expected_suffix = {
+            "lantern": "Light guides the way.",
+            "blinkbug": "Something glitches playfully.",
+            "keystone": "Doors align with intention.",
+            "waterfall": "Water flows through choices.",
+            "xenon": "All possibilities shimmer.",
+            "founder": "The root of all lies here.",
+        }
+
+        for agent, expected_suffix in agent_expected_suffix.items():
+            state.agent = agent
+
+            # Test across multiple stages (not just one)
+            for stage in ["garden-at-beginning", "future-doors", "sigil-city-of-doors"]:
+                text = engine._generate_text(stage, state)
+                assert expected_suffix in text, \
+                    f"Agent {agent} suffix missing in stage {stage}. Text: {text}"
+
+    def test_symbol_tracking_affects_narration(self, engine):
+        """Verify symbols affect narration text (crystallized patterns count appended)."""
+        state = ThreeDoorsGameState("test-user")
+        state.agent = "founder"
+
+        # Without symbols
+        text_no_symbols = engine._generate_text("future-doors", state)
+        assert "crystallized patterns" not in text_no_symbols
+
+        # With 3 symbols
+        state.symbols = {
+            "pattern1": {"frequency": 1, "loop": 1},
+            "pattern2": {"frequency": 2, "loop": 2},
+            "pattern3": {"frequency": 1, "loop": 1},
+        }
+        text_with_symbols = engine._generate_text("future-doors", state)
+        assert "crystallized patterns" in text_with_symbols
+        assert "3 crystallized patterns" in text_with_symbols
+
+        # Verify symbol count increases with more symbols
+        assert len(text_with_symbols) > len(text_no_symbols)
+
+    def test_narration_in_full_scene_generation(self, engine):
+        """Integration test: verify narration appears correctly in full scene response."""
+        engine.start_game()
+        scene = engine.start_game()
+
+        # Scene should have text field
+        assert "text" in scene
+        text = scene["text"]
+
+        # Should contain narration + agent flavor + optional symbols
+        assert len(text) > 100
+        assert isinstance(text, str)
+
+        # Verify it's not just a stub
+        assert any(keyword in text for keyword in
+                   ["King", "doors", "light", "glitch", "water", "root", "fog", "possibility"])
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

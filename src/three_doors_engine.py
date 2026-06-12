@@ -153,13 +153,13 @@ class ThreeDoorsEngine:
 
     def _generate_text(self, stage: str, state: ThreeDoorsGameState) -> str:
         texts = {
-            "garden-at-beginning": "The King's opening poem echoes through ancient paths.",
-            "present-day": "Cloverfield—lucky doors, today alive.",
-            "future-doors": "Branches of possibility stretch before you.",
-            "xp-door": "A Windows XP liminal landscape glitches with nostalgia.",
-            "xenon-starship": "Convergence—all timelines visible at once.",
-            "sigil-city-of-doors": "Synthesis hub. The King returns. Fractal architecture.",
-            "fog-door-return": "Fog coils past the gate. The escape hatch. Loops back.",
+            "garden-at-beginning": "The King's opening poem echoes through ancient paths. Each word a seed, each image a door waiting to bloom.",
+            "present-day": "Cloverfield - lucky doors, today alive. The scent of grass and possibility mingles with the weight of the present moment.",
+            "future-doors": "Branches of possibility stretch before you, each limb heavy with unwritten futures. You see them shimmer and dance at the edge of certainty, calling to your deepest hopes and fears. Time spirals outward. What you choose here echoes forward.",
+            "xp-door": "A Windows XP liminal landscape glitches with nostalgia - blue-screen reveries, the hum of dial-up eternity, folders within folders containing forgotten dreams. The air tastes like memory. Pixels drift like snowfall. Everything feels close and infinitely far away.",
+            "xenon-starship": "Convergence - all timelines visible at once. The ship hums with the weight of infinite choice. You stand at the still center where all moments exist simultaneously, a nexus of every decision ever made and unmade. The King's throne rises in the distance.",
+            "sigil-city-of-doors": "Synthesis hub. The King returns. Fractal architecture blooms in all directions - doors opening into doors, symbols reflecting into symbols, your own patterns made manifest in architecture. Every choice you've made is written in light here. The city knows you.",
+            "fog-door-return": "Fog coils past the gate. The escape hatch. Loops back. You feel the pull of return, the gentle spiral that will carry you back to the beginning - not to forget, but to remember with new eyes.",
         }
         text = texts.get(stage, "You stand in the Kingdome.")
         agent_flavor = {
