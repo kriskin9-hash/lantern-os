@@ -84,13 +84,8 @@ function extractDoors(text) {
   return { cleanText, doors };
 }
 
-<<<<<<< HEAD
-function doorsOrFallback(text, isKeystoneDebug = false, isEngineeringMode = false) {
-  if (isKeystoneDebug || isEngineeringMode) return { cleanText: text.trim(), suggestions: [] };
-=======
-function doorsOrFallback(text, isKeystoneDebug = false) {
-  if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
->>>>>>> pr-340
+function doorsOrFallback(text, skipDoors = false) {
+  if (skipDoors) return { cleanText: text.trim(), suggestions: [] };
   const { cleanText, doors } = extractDoors(text);
   // Always return exactly 3 suggestions. Pad with fallbacks if model gave fewer than 3.
   let finalDoors;
@@ -255,21 +250,10 @@ async function handleStreamChat(req, url, res) {
     normalizeDreamerUser,
     collectRequestBody,
   });
-  let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
+  let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
 
-<<<<<<< HEAD
-  // Classify intent and route to appropriate agent/surface
-  const route = classifyIntent(message);
-  if (!requestedAgent) {
-    requestedAgent = route.agent;
-  }
-  let surfaceMode = route.surface || "dream-chat";
-  const requiresConvergence = route.requires_convergence;
-  const suppressDoors = route.intent === "code" || route.intent === "bug_fix" || route.intent === "refactor" || route.intent === "debug";
-=======
   // Surface mode: dream-chat (default) or three-doors
   let surfaceMode = "dream-chat";
->>>>>>> pr-340
 
   // Handle bang commands
   const cmd = parseBangCommand(message);
@@ -733,11 +717,7 @@ Interpret this convergence result and provide:
 
   // ── Web Search Grounding ───────────────────────────────────────────
   let groundingContext = "";
-<<<<<<< HEAD
-  if (!isKeystoneDebug && !suppressDoors && needsGrounding(message)) {
-=======
   if (!isKeystoneDebug && needsGrounding(message)) {
->>>>>>> pr-340
     const searchQuery = extractSearchQuery(message);
     if (searchQuery) {
       try {
@@ -755,21 +735,53 @@ Interpret this convergence result and provide:
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
-<<<<<<< HEAD
-  // Engineering mode: plain technical prompt without doors or dream context
+  // ── Convergance OS routing (runs before systemPrompt so intent drives prompt + label) ──
+  let converganceDecision = null;
+  try {
+    converganceDecision = await converganceRoute(message, {
+      requestedProvider,
+      forceProfile: surfaceMode === "three-doors" ? "lantern-csf-dream" : undefined,
+    });
+  } catch (e) {
+    console.error("[Convergance] Router error (non-fatal):", e.message);
+  }
+
+  // ── RP opt-in: persona/doors only when user explicitly requests RP ────────
+  const RP_OPT_IN_RE = /open.*three[-_]?doors|roleplay|role[-\s]?play|continue the scene|\bas (lantern|blinkbug|waterfall|xenon|founder)\b/i;
+  const isRpMode = RP_OPT_IN_RE.test(message) || surfaceMode === "three-doors"
+    || (requestedAgent && ["lantern", "blinkbug", "waterfall", "xenon"].includes(requestedAgent));
+
+  // ── Route label (sent in every done event; shown below each assistant bubble) ─
+  const converganceIntent = converganceDecision?.intent || routeIntent || "general";
+  const ROUTE_LABEL_MAP = {
+    coding_change: "Keystone · code / GitHub route",
+    technical_debug: "Keystone · debug route",
+    code_review: "Keystone · review route",
+    convergance_action: "Convergence · loop route",
+    capacity_query: "Dream Chat · capacity query",
+    dream_chat: "Lantern · RP route",
+    three_doors: "Three Doors · RP game",
+  };
+  const routeLabel = isKeystoneDebug
+    ? "Keystone · direct debug"
+    : surfaceMode === "three-doors"
+      ? "Three Doors · RP game"
+      : isRpMode
+        ? `${agent.name || "Lantern"} · RP route`
+        : (ROUTE_LABEL_MAP[converganceIntent] || "Dream Chat · router");
+
+  // Plain router prompt — no persona, no doors (default for non-RP messages)
+  const ROUTER_PROMPT = `You are Dream Chat, the orchestration router for Lantern OS. Route requests to the correct agent or surface. Respond directly and concisely — no roleplay, no dream personas, no door suggestions unless the user explicitly opts in.\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : suppressDoors
-    ? agent.systemPrompt  // Engineer persona has its full prompt already
-=======
-  const systemPrompt = isKeystoneDebug
-    ? KEYSTONE_DEBUG_PROMPT
->>>>>>> pr-340
-    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
+    : isRpMode
+      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
+      : ROUTER_PROMPT;
 
 
   const sendToken = (token) => sse.sendToken(res, token);
-  const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
+  const sendDone = (source, extra = {}) => sse.sendDone(res, source, { ...extra, routeLabel });
   // Human-readable error translator — turns internal codes into plain language
   function humanError(err) {
     const msg = String(err?.message || err || "");
@@ -863,20 +875,7 @@ Interpret this convergence result and provide:
 
   let fullReply = "";
 
-  // ── Convergance OS: Route intent and select model profile ─────────────────
-  let converganceDecision = null;
-  try {
-    converganceDecision = await converganceRoute(message, {
-      requestedProvider,
-      forceProfile: surfaceMode === "three-doors" ? "lantern-csf-dream" : undefined,
-    });
-    // Inject behavior preamble into system prompt context
-    if (converganceDecision.behaviorRules && dreamContext) {
-      dreamContext = buildBehaviorPreamble(converganceDecision) + "\n" + dreamContext;
-    }
-  } catch (e) {
-    console.error("[Convergance] Router error (non-fatal):", e.message);
-  }
+  // converganceDecision already computed above (before systemPrompt)
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
@@ -932,50 +931,6 @@ Interpret this convergence result and provide:
   const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
   
   const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
-<<<<<<< HEAD
-
-  // ── Convergence Delegation (if intent requires multi-agent coordination) ────
-  if (requiresConvergence && message && !isKeystoneDebug) {
-    try {
-      sendToken(`◈ Convergence synthesis (${requestedAgent})…\n\n`);
-      const primaryProvider = primaryProviderHint?.provider || "ollama";
-      const convergenceResult = await convergeMessage(message, requestedAgent, primaryProvider);
-
-      if (convergenceResult && convergenceResult.reply) {
-        fullReply = convergenceResult.reply;
-        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-        await appendConversationEntry({
-          recordedAt: new Date().toISOString(),
-          surface: "dream-chat-stream",
-          role: "convergence",
-          text: cleanText.slice(0, maxConversationTextLength),
-        }).catch(() => {});
-        const imageSidecarId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
-        sendDone("convergence", {
-          agent: requestedAgent,
-          online: true,
-          cleanText,
-          suggestions,
-          source: "convergence",
-          provider: convergenceResult.provider || primaryProvider,
-          timing: convergenceResult.timing || {},
-          webSuggestions,
-          image: imageSidecarId ? { entryId: imageSidecarId, status: "generating" } : undefined,
-        });
-        return;
-      } else if (convergenceResult?.error) {
-        // Convergence failed — fall through to standard provider chain
-        console.warn(`[convergence] Failed for ${requestedAgent}: ${convergenceResult.error}`);
-      }
-    } catch (err) {
-      console.error(`[convergence] Exception: ${err.message}`);
-      // Fall through to standard providers
-    }
-  }
-
-=======
-  
->>>>>>> pr-340
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
     
     for (const ollamaModel of modelChain) {
@@ -1018,11 +973,7 @@ Interpret this convergence result and provide:
         });
         
         if (fullReply) {
-<<<<<<< HEAD
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
           const imageEntryId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
@@ -1113,11 +1064,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-<<<<<<< HEAD
-      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1146,9 +1093,9 @@ Interpret this convergence result and provide:
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && message && (!requestedProvider || requestedProvider === "claude" || requestedProvider === "anthropic" || requestedProvider === "claude-sonnet")) {
     try {
-      let claudeModel = "claude-3-5-haiku-20241022";
+      let claudeModel = "claude-haiku-4-5-20251001";
       if (requestedProvider === "claude-sonnet") {
-        claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-3-5-sonnet-20241022";
+        claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-4-6";
       } else {
         claudeModel = process.env.ANTHROPIC_MODEL || claudeModel;
       }
@@ -1201,11 +1148,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-<<<<<<< HEAD
-      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1279,11 +1222,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-<<<<<<< HEAD
-      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1339,11 +1278,7 @@ Interpret this convergence result and provide:
         req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
         req2.write(payload); req2.end();
       });
-<<<<<<< HEAD
-      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
       sendDone("grok", { agent: "Keystone", provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
@@ -1379,11 +1314,7 @@ Interpret this convergence result and provide:
         });
         if (sseErr) throw sseErr;
         if (fullReply) {
-<<<<<<< HEAD
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
@@ -1455,11 +1386,7 @@ Interpret this convergence result and provide:
         req2.end();
       });
       if (ollamaOk) {
-<<<<<<< HEAD
-        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug, suppressDoors);
-=======
-        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
->>>>>>> pr-340
+        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",

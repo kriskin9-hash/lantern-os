@@ -1,16 +1,11 @@
 /**
  * Trading API Routes
  * Serves market data, AI recommendations, and broker integration
-<<<<<<< HEAD
  * Integrates with local TraderAgent (Python subprocess) for single-app architecture
-=======
- * Integrates with independent AI trader microservice
->>>>>>> pr-340
  */
 
 const http = require('http');
 const TradingAPIBridge = require('../lib/trading-api-bridge');
-<<<<<<< HEAD
 const TraderAgent = require('../lib/trader-agent');
 const tradingMemory = require('../lib/trading-memory');
 const tradingStore = require('../lib/trading-store');
@@ -26,9 +21,6 @@ try {
 } catch (e) {
   console.error('[Trading Routes] Failed to initialize TraderAgent:', e.message);
 }
-=======
-const { recordOrder, recordSignal, queryRecentTradingRecords } = require('../lib/trading-memory');
->>>>>>> pr-340
 
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
@@ -121,33 +113,22 @@ function callDashboard(path) {
 // Proxy map for the LanternOS-hosted /trading.html and /trading-news.html
 // pages, which talk to a single origin (this server) instead of the
 // AI Trader dashboard's own port (5050).
-<<<<<<< HEAD
 //
 // NOTE — legacy/optional: this proxies to an EXTERNAL AI Trader dashboard
 // service (dashboard.py, port 5050) and is not required for any LanternOS
-// feature. In particular, trading memory (orders, agent-log/signals, and
-// CSF-backed recent-memory queries — see #323) is served entirely from
-// local LanternOS data (data/lantern-garage/trading/ and data/csf_memory/)
-// by the routes below and does NOT depend on this proxy or on port 5050.
-// If the external service isn't running, these routes simply 502 — the
-// rest of LanternOS keeps working.
-=======
->>>>>>> pr-340
+// feature. Trading memory (orders, agent-log/signals, CSF-backed queries)
+// is served from local data by the routes below — no port 5050 required.
 const DASHBOARD_PROXY_ROUTES = {
   '/api/trading/dashboard/positions': '/api/positions',
   '/api/trading/dashboard/market-status': '/api/market-status',
   '/api/trading/dashboard/zones': '/api/zones',
   '/api/trading/dashboard/watchlist-prices': '/api/watchlist-prices',
-<<<<<<< HEAD
-=======
   '/api/trading/dashboard/agent-log': '/api/agent-log',
   '/api/trading/dashboard/orders': '/api/orders',
->>>>>>> pr-340
   '/api/trading/dashboard/news-feed': '/api/news-feed',
 };
 
 module.exports = async function tradingRoutes(req, res, url, deps) {
-<<<<<<< HEAD
   const { sendJson, collectRequestBody } = deps;
   const bridge = new TradingAPIBridge();
 
@@ -350,14 +331,7 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
   // Legacy/optional — see DASHBOARD_PROXY_ROUTES note above. Not required
   // for trading memory (orders/agent-log/CSF), which is served above.
-  // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,news-feed}
-=======
-  const { sendJson } = deps;
-  const bridge = new TradingAPIBridge();
-
-  // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
   // GET /api/trading/dashboard/{positions,market-status,zones,watchlist-prices,agent-log,orders,news-feed}
->>>>>>> pr-340
   if (req.method === 'GET' && DASHBOARD_PROXY_ROUTES[url.pathname]) {
     try {
       const proxyPath = DASHBOARD_PROXY_ROUTES[url.pathname];
@@ -582,11 +556,9 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
-<<<<<<< HEAD
   // GET /api/trading/memory/recent?limit=20&kind=order|signal
   // Trading Phase 2 (#323): recent orders/signals persisted into CSF memory
-  // (apps/lantern-garage/lib/csf-memory-writer.js, pure JS — no Python
-  // process), queryable by dream-chat and other agents. Newest first.
+  // queryable by dream-chat and other agents. Newest first.
   if (url.pathname === '/api/trading/memory/recent' && req.method === 'GET') {
     try {
       const limit = Number(url.searchParams.get('limit')) || 20;
@@ -601,14 +573,7 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   }
 
   // GET /api/trading/csf-records?limit=50
-  // Same CSF registry as /api/trading/memory/recent, in the shape used by
-  // the earlier #323 implementation (records + count, no kind filter).
-  // queryRecentTradingRecords() is a sync compat wrapper around
-  // csf-memory-writer's queryRecent() — see lib/trading-memory.js.
-=======
-  // GET /api/trading/csf-records
-  // Query recent trading CSF memory records (orders + signals)
->>>>>>> pr-340
+  // Same CSF registry as /memory/recent, records + count, no kind filter.
   if (url.pathname === '/api/trading/csf-records' && req.method === 'GET') {
     try {
       const limit = parseInt(url.searchParams.get('limit') || '50', 10);
