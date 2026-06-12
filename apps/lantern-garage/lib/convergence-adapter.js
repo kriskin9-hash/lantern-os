@@ -26,7 +26,7 @@ const CONVERGENCE_TIMEOUT_MS = process.env.CONVERGENCE_TIMEOUT_MS
   : 5000;
 
 const PYTHON_PATH = process.env.PYTHON_PATH || "python";
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 // Simple circuit breaker state
 const circuitState = {
