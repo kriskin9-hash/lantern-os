@@ -489,10 +489,56 @@
       font-style: italic;
       letter-spacing: 0.02em;
     }
-    /* Heartbeat animation for mandala in simple mode */
-    @keyframes heartbeat {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.15); opacity: 0.8; }
+    /* PR / Issue link pills */
+    .pr-pill {
+      display: inline-block;
+      background: rgba(52,211,153,0.12);
+      border: 1px solid rgba(52,211,153,0.35);
+      color: #34d399;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.82rem;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.15s;
+      margin: 2px 0;
+      word-break: break-all;
+    }
+    .pr-pill:hover { background: rgba(52,211,153,0.22); }
+    .issue-pill {
+      display: inline-block;
+      background: rgba(251,191,36,0.10);
+      border: 1px solid rgba(251,191,36,0.30);
+      color: #fbbf24;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.82rem;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.15s;
+      margin: 2px 0;
+    }
+    .issue-pill:hover { background: rgba(251,191,36,0.20); }
+    /* Code blocks */
+    .code-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-family: 'SF Mono','Monaco','Consolas',monospace;
+      font-size: 0.82rem;
+      overflow-x: auto;
+      margin: 6px 0;
+      white-space: pre;
+      display: block;
+    }
+    .inline-code {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: 'SF Mono','Monaco','Consolas',monospace;
+      font-size: 0.85em;
     }
   </style>
 </head>
@@ -511,16 +557,6 @@
       <a href="/flourishing" style="font-size:16px;padding:12px 16px">📊 Dashboard</a>
     </div>
     <div class="nav-actions">
-      <button class="nav-btn" id="simple-mode-btn" onclick="
-        if (!window.simpleMode) window.simpleMode = false;
-        window.simpleMode = !window.simpleMode;
-        this.style.opacity = window.simpleMode ? '1' : '0.5';
-        this.style.background = window.simpleMode ? 'rgba(52,211,153,0.2)' : 'transparent';
-        this.style.border = window.simpleMode ? '2px solid #34d399' : 'none';
-        const mandala = document.querySelector('.nav-brand img');
-        if (mandala) mandala.style.animation = window.simpleMode ? 'heartbeat 1.5s ease-in-out infinite' : '';
-        console.log('[inline] Simple mode toggled:', window.simpleMode);
-      " title="Simple Mode" style="font-size:20px;padding:8px 12px">👶</button>
       <button class="nav-btn" id="voice-btn" onclick="
         if (!window.voiceMode) window.voiceMode = false;
         window.voiceMode = !window.voiceMode;
@@ -539,71 +575,15 @@
   <div class="chat-container" id="messages" role="log" aria-label="Conversation messages" aria-live="polite">
     <div class="empty-state" id="empty-state">
       <div style="text-align:center;padding:40px 20px">
-        <div style="font-size:64px;margin-bottom:16px">🏮</div>
-        <h1 style="font-size:28px;font-weight:600;margin-bottom:8px;color:var(--text)">Welcome to Lantern OS</h1>
-        <p style="font-size:15px;color:var(--muted);max-width:400px;margin:0 auto 24px">Your cockpit for helping others. Write a reflection, ask a question, or help someone with their challenges.</p>
-        
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;max-width:500px;margin:0 auto">
-          <button onclick="fillPrompt('Today I noticed that ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-            <span style="font-size:24px">📝</span>
-            <span>Record a thought</span>
-          </button>
-          <button onclick="fillPrompt('I keep thinking about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-            <span style="font-size:24px">🔄</span>
-            <span>Explore thoughts</span>
-          </button>
-          <button onclick="fillPrompt('What do you know about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-            <span style="font-size:24px">✨</span>
-            <span>Ask a question</span>
-          </button>
-          <button onclick="fillAndSend('!explore')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#a78bfa';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'" title="Start interactive story">
-            <span style="font-size:24px">🚪</span>
-            <span>Start a story</span>
-          </button>
-        </div>
-        
-        <div style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border)">
-          <div style="font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px">Help Someone Else</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;max-width:500px;margin:0 auto">
-            <button onclick="fillPrompt('Help me help my grandkid with homework')" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#34d399';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(52,211,153,0.3)';this.style.transform='translateY(0)'">
-              <span style="font-size:24px">👶</span>
-              <span>Help with homework</span>
-            </button>
-            <button onclick="fillPrompt('Help me help my neighbor with tech problems')" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#34d399';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(52,211,153,0.3)';this.style.transform='translateY(0)'">
-              <span style="font-size:24px">🤝</span>
-              <span>Help with tech</span>
-            </button>
-            <button onclick="fillPrompt('Help me help a friend learn to code')" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.3);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#34d399';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='rgba(52,211,153,0.3)';this.style.transform='translateY(0)'">
-              <span style="font-size:24px">💻</span>
-              <span>Teach coding</span>
-            </button>
-          </div>
-        </div>
-        
-        <div style="margin-top:24px">
-          <button onclick="toggleTradingSection()" id="trading-toggle" style="background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 16px;border-radius:20px;transition:all 0.2s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
-            <span id="trading-toggle-text">Show Trading & Markets</span> <span id="trading-toggle-icon">▼</span>
-          </button>
-          <div id="trading-section" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;max-width:500px;margin:0 auto">
-              <button onclick="fillPrompt('Buy 10 shares of AAPL')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#10b981';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-                <span style="font-size:24px">💰</span>
-                <span>Execute a trade</span>
-              </button>
-              <button onclick="fillPrompt('Check my portfolio')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#3b82f6';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-                <span style="font-size:24px">📊</span>
-                <span>View portfolio</span>
-              </button>
-              <button onclick="fillPrompt('What are the trading signals for today?')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#f59e0b';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-                <span style="font-size:24px">📈</span>
-                <span>Trading signals</span>
-              </button>
-              <button onclick="fillPrompt('What is the market status?')" style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;color:var(--text);cursor:pointer;text-align:center;font-size:14px;transition:all 0.2s;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:8px" onmouseover="this.style.borderColor='#f59e0b';this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)';this.style.transform='translateY(0)'">
-                <span style="font-size:24px">🌐</span>
-                <span>Market status</span>
-              </button>
-            </div>
-          </div>
+        <div style="font-size:48px;margin-bottom:12px">🏮</div>
+        <h1 style="font-size:26px;font-weight:600;margin-bottom:6px;color:var(--text)">Keystone Desk</h1>
+        <p style="font-size:14px;color:var(--muted);max-width:340px;margin:0 auto 28px;line-height:1.5">Route work to Keystone, Lantern, or Founder — or just ask anything.</p>
+        <div class="starter-chips">
+          <button class="starter-chip" onclick="fillPrompt('What open GitHub issues should I tackle first?')">Open issues?</button>
+          <button class="starter-chip" onclick="fillPrompt('Help me plan what to work on today')">Plan today</button>
+          <button class="starter-chip" onclick="fillPrompt('Summarize open pull requests that need review')">Review PRs</button>
+          <button class="starter-chip" onclick="fillPrompt('What is the current agent fleet status and what are they working on?')">Agent status</button>
+          <button class="starter-chip" onclick="fillAndSend('!explore')">Explore ↗</button>
         </div>
       </div>
     </div>
@@ -841,12 +821,6 @@
         </div>
       </div>
 
-      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
-
-      <div class="form-group">
-        <label class="form-label">Dream Actions</label>
-        <button class="button-primary" onclick="openLogDream()" style="width: 100%;">+ Record a Dream</button>
-      </div>
     </div>
   </div>
 </div>
@@ -954,7 +928,6 @@
   // ── Modal controls ─────────────────────────────────────────────────
   function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
   function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
-  function openLogDream() { alert('Log entry coming soon'); closeSettings(); }
 
   function startVoiceInput() {
     if (!voiceMode || !recognition) return;
@@ -962,22 +935,6 @@
       recognition.start();
     } catch (e) {
       console.error('Failed to start recognition:', e);
-    }
-  }
-
-  function toggleTradingSection() {
-    const section = document.getElementById('trading-section');
-    const toggleText = document.getElementById('trading-toggle-text');
-    const toggleIcon = document.getElementById('trading-toggle-icon');
-    
-    if (section.style.display === 'none') {
-      section.style.display = 'block';
-      toggleText.textContent = 'Hide Trading & Markets';
-      toggleIcon.textContent = '▲';
-    } else {
-      section.style.display = 'none';
-      toggleText.textContent = 'Show Trading & Markets';
-      toggleIcon.textContent = '▼';
     }
   }
 
@@ -996,8 +953,6 @@
       });
     } catch (e) { /* silent — cube is best-effort */ }
   }
-  function saveKey() {}
-
   // ── Connector sidecar ────────────────────────────────────────────
   function focusKey(inputId) {
     const el = document.getElementById(inputId);
@@ -1131,6 +1086,35 @@
     _origOpenSettings();
     updateConnectorStatuses();
   };
+
+  // ── Markdown + PR link renderer ───────────────────────────────────
+  function renderMarkdown(text) {
+    // 1. HTML-escape first — prevents XSS from any source
+    let h = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // 2. Fenced code blocks (``` ... ```)
+    h = h.replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>');
+    // 3. Inline code
+    h = h.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
+    // 4. Bold
+    h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    // 5. GitHub PR links → green pill card
+    h = h.replace(
+      /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/(\d+)/g,
+      '<a href="https://github.com/$1/$2/pull/$3" target="_blank" rel="noopener" class="pr-pill">🔗 PR #$3 — $1/$2 →</a>'
+    );
+    // 6. GitHub issue links → yellow pill card
+    h = h.replace(
+      /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/issues\/(\d+)/g,
+      '<a href="https://github.com/$1/$2/issues/$3" target="_blank" rel="noopener" class="issue-pill">⚑ Issue #$3 — $1/$2 →</a>'
+    );
+    // 7. Newlines → <br> (pre blocks already have their own whitespace)
+    h = h.replace(/\n/g, '<br>');
+    return h;
+  }
 
   // ── Conversation state ─────────────────────────────────────────────
   let isSending = false;
@@ -1281,8 +1265,7 @@
             if (evt.type === 'token' && evt.text) {
               fullText += evt.text;
               cursor.remove();
-              // Strip [DOORS:...] during streaming
-              bubble.textContent = fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd();
+              bubble.innerHTML = renderMarkdown(fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd());
               bubble.appendChild(cursor);
               container.scrollTop = container.scrollHeight;
             } else if (evt.type === 'error') {
@@ -1314,7 +1297,7 @@
       bubble.style.fontStyle = 'italic';
     }
 
-    bubble.textContent = fullText;
+    bubble.innerHTML = renderMarkdown(fullText);
 
     if (routeLabel) {
       const sig = document.createElement('div');
