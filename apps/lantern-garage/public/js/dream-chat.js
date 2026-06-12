@@ -9,69 +9,31 @@
   let directModeEnabled = false;
   let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
-  // ── ENGINEERING MODE DETECTION ────────────────────────────────────────────
-  // Keywords that trigger engineering/coding mode (non-RP, structured output)
-  const ENGINEERING_TRIGGERS = [
-    // Repo/code changes
-    "make changes",
-    "make a change",
-    "change the code",
-    "edit the code",
-    "modify the code",
-    "integrate this",
-    "wire this",
-    "wire into",
-    "add to repo",
-    "add to the repo",
-    "commit to",
-    "push to",
-
-    // GitHub/PR work
-    "prep a pr",
-    "prepare a pr",
-    "create a pr",
-    "open a pr",
-    "fix the pr",
-    "fix latest pr",
-    "scan the pr",
-    "scan latest pr",
-    "review the pr",
-    "merge the pr",
-
-    // Claude Code handoff
-    "handoff to claude code",
-    "handoff to claude",
-    "make a handoff",
-    "claude code",
-    "use claude code",
-
-    // General coding/engineering
-    "coding agent",
-    "code change",
-    "code changes",
-    "repo change",
-    "repo changes",
-    "git change",
-    "github change",
-    "bug fix",
-    "fix the bug",
-    "fix bug",
-    "fix this bug",
-    "refactor",
-    "improve the code",
-    "test this",
-    "add tests",
-    "add a test",
-    "fix the test",
-    "implement",
-    "implementation",
-    "deploy",
-    "deployment"
+  // ── ROUTE INTENT DETECTION ────────────────────────────────────────────────
+  // Returns a route intent string used to select the backend agent/surface.
+  // RP is opt-in only — general chat, code work, and GitHub work use the router.
+  const RP_OPT_IN_RE = /open.*three[-_]?doors|roleplay|role[-\s]?play|continue the scene|\bas (lantern|blinkbug|waterfall|xenon|founder)\b/i;
+  const CODING_TRIGGERS = [
+    "make changes", "make a change", "change the code", "edit the code",
+    "modify the code", "integrate this", "wire this", "wire into",
+    "add to repo", "add to the repo", "commit to", "push to",
+    "prep a pr", "prepare a pr", "create a pr", "open a pr", "fix the pr",
+    "fix latest pr", "scan the pr", "scan latest pr", "review the pr",
+    "merge the pr", "handoff to claude code", "handoff to claude",
+    "make a handoff", "claude code", "use claude code", "coding agent",
+    "code change", "code changes", "repo change", "repo changes",
+    "git change", "github change", "bug fix", "fix the bug", "fix bug",
+    "fix this bug", "refactor", "improve the code", "add tests",
+    "add a test", "fix the test", "implement", "implementation",
+    "deploy", "deployment", "pull request", "open pr", "create pr",
   ];
 
-  function detectEngineeringMode(msg) {
+  function detectRouteIntent(msg) {
     const lower = (msg || "").toLowerCase().trim();
-    return ENGINEERING_TRIGGERS.some(trigger => lower.includes(trigger));
+    if (RP_OPT_IN_RE.test(msg)) return "dream_chat";
+    if (CODING_TRIGGERS.some(t => lower.includes(t))) return "coding_change";
+    if (/\b(debug|error|broken|crash|not working|not responding)\b/i.test(lower)) return "technical_debug";
+    return "general";
   }
 
   // Agent is contextual — Lantern is default, others triggered by name in message
@@ -432,10 +394,25 @@
     let fullText = "";
     let hasTokens = false;
     const provider = providerSelect.value;
-    const isEngineeringMode = detectEngineeringMode(message);
-    const agent = directModeEnabled ? "" : (isEngineeringMode ? "engineer" : detectAgent(message));
+    const routeIntent = detectRouteIntent(message);
+    // Only send a persona agent name when the user has explicitly opted into RP
+    const isRpIntent = routeIntent === "dream_chat";
+    const agent = directModeEnabled ? "" : (isRpIntent ? detectAgent(message) : "");
     // POST with history for multi-turn context; history excludes current message (already appended)
     const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
+
+    // Show routing card in the bubble before first token arrives
+    if (routeIntent === "coding_change") {
+      const rc = document.createElement("div");
+      rc.className = "route-card";
+      rc.textContent = "⚙ Routing to Keystone…";
+      bubble.insertBefore(rc, cursor);
+    } else if (routeIntent === "technical_debug") {
+      const rc = document.createElement("div");
+      rc.className = "route-card";
+      rc.textContent = "⚙ Routing to debug interface…";
+      bubble.insertBefore(rc, cursor);
+    }
 
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
@@ -446,9 +423,8 @@
         agent: agent || undefined,
         history: historyToSend,
         mcp: directModeEnabled,
-        engineeringMode: isEngineeringMode,
+        routeIntent,
       }),
-      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: directModeEnabled }),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -499,7 +475,7 @@
                     suggestions = doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean);
                   }
                 }
-                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt, evt.webSuggestions, evt.actions);
+                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt, evt.webSuggestions, evt.actions, evt.routeLabel);
               }
             } catch { /* skip malformed */ }
           }
@@ -532,7 +508,7 @@
       });
   }
 
-  function finishStream(row, bubble, cursor, text, source, error, suggestions, imagePrompt, webSuggestions, actions) {
+  function finishStream(row, bubble, cursor, text, source, error, suggestions, imagePrompt, webSuggestions, actions, routeLabel) {
     cursor.remove();
     if (!text && !error) {
       bubble.textContent = bubble.textContent || "…";
@@ -552,6 +528,14 @@
       const turn = conversationHistory.filter(m => m.role === "assistant").length;
       const latStr = latency ? `${(latency / 1000).toFixed(1)}s` : null;
       const isErr = source === "failed" || source === "unavailable" || source === "error" || !!error;
+      // Route signature — who/what the user is talking to
+      if (routeLabel) {
+        const sig = document.createElement("div");
+        sig.className = "msg-route-sig";
+        sig.setAttribute("aria-label", `Active route: ${routeLabel}`);
+        sig.textContent = routeLabel;
+        row.appendChild(sig);
+      }
       const footer = document.createElement("div");
       footer.className = `msg-footer${isErr ? " offline" : source ? ` ${source}` : ""}`;
       const parts = [];
