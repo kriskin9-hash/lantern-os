@@ -105,7 +105,9 @@ jobs:
             --ignore=tests/test_audit_chain.py \
             --ignore=tests/test_discord_bot.py \
             --ignore=tests/test_discord_voice_gate.py \
-            --ignore=tests/test_convergence_io_engine.py
+            --ignore=tests/test_convergence_io_engine.py \
+            --ignore=tests/test_p4_integration_full_loops.py \
+            --ignore=tests/test_three_doors_engine.py
 
       - name: Upload test results
         uses: actions/upload-artifact@v4

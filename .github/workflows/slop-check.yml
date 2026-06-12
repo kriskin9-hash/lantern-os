@@ -44,12 +44,15 @@ jobs:
       - name: Check for committed debug statements
         run: |
           set +e
-          diff=$(git diff origin/master...HEAD -- '*.js' '*.ts' '*.py' '*.mjs')
+          # Exclude test files — console.log is the test reporter, not a debug leak
+          diff=$(git diff origin/master...HEAD -- '*.js' '*.ts' '*.py' '*.mjs' \
+            ':(exclude)tests/*.js' ':(exclude)tests/*.ts' ':(exclude)tests/*.py' \
+            ':(exclude)test_*.js' ':(exclude)test_*.ts' ':(exclude)test_*.py')
           hits=$(echo "$diff" | grep -E \
             '^\+(.*)(console\.log\(|debugger;|pdb\.set_trace\(\)|breakpoint\(\))' \
             | grep -v '^+++')
           if [ -n "$hits" ]; then
-            echo "::error::Debug statements found in PR diff:"
+            echo "::error::Debug statements found in PR diff (test files exempt):"
             echo "$hits"
             exit 1
           fi
