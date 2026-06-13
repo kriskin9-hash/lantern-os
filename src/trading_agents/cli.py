@@ -20,7 +20,7 @@ import sys
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Setup logging to stderr so stdout stays clean for JSON
 logging.basicConfig(
@@ -247,8 +247,9 @@ def action_get_watchlist_prices(args):
                 try:
                     bar = alpaca.get_latest_bar(ticker)
                     price = float(bar.c) if bar else 0
-                    bars = alpaca.get_bars(ticker, '1Day', limit=2).df
-                    prev = float(bars['close'].iloc[-2]) if len(bars) >= 2 else price
+                    day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
+                    bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
+                    prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
                 except:
                     price = 0
                     prev = 0
@@ -347,12 +348,20 @@ def action_get_bars(args):
 
     alpaca_tf = timeframe_map.get(timeframe, '1Hour')
 
+    # Alpaca's bars endpoint returns no bars at all if `start` is omitted,
+    # so request a lookback window wide enough to cover ~100 bars even
+    # accounting for weekends/holidays/after-hours gaps.
+    lookback_days = {
+        '1m': 7, '5m': 14, '15m': 21, '1h': 30, '4h': 60, '1d': 200,
+    }
+    start = (datetime.now(timezone.utc) - timedelta(days=lookback_days.get(timeframe, 30))).strftime('%Y-%m-%d')
+
     try:
         if is_crypto(ticker):
             sym = ticker.replace('USD', '/USD')
-            bars_df = alpaca.get_crypto_bars(sym, alpaca_tf, limit=100).df
+            bars_df = alpaca.get_crypto_bars(sym, alpaca_tf, start=start, limit=100, sort='desc').df.iloc[::-1]
         else:
-            bars_df = alpaca.get_bars(ticker, alpaca_tf, limit=100).df
+            bars_df = alpaca.get_bars(ticker, alpaca_tf, start=start, limit=100, feed='iex', sort='desc').df.iloc[::-1]
 
         bars = []
         for idx, row in bars_df.iterrows():
@@ -382,6 +391,84 @@ def action_get_bars(args):
         }
 
 
+def action_place_order(args):
+    """
+    Place a manual paper order via Alpaca. Optionally attaches a bracket
+    (stop-loss / take-profit) for non-crypto tickers.
+
+    Args: {ticker, side: "buy"|"sell", qty: number, type?: "market"|"limit",
+           limit_price?: number, time_in_force?: "day"|"gtc",
+           stop_loss?: number, take_profit?: number}
+    Returns: {status: "placed"|"error", order_id, ticker, side, qty, type,
+              stop_loss, take_profit, submitted_at}
+    """
+    ticker = args.get('ticker')
+    side = str(args.get('side', '')).lower()
+    qty = args.get('qty')
+    order_type = str(args.get('type') or 'market').lower()
+    limit_price = args.get('limit_price')
+    stop_loss = args.get('stop_loss')
+    take_profit = args.get('take_profit')
+
+    if not ticker or side not in ('buy', 'sell') or not qty or float(qty) <= 0:
+        return {'status': 'error', 'error': 'ticker, side (buy/sell), and positive qty are required'}
+
+    try:
+        sym = ticker.replace('USD', '/USD') if is_crypto(ticker) else ticker
+        tif = args.get('time_in_force') or ('gtc' if is_crypto(ticker) else 'day')
+
+        order_kwargs = dict(
+            symbol=sym,
+            qty=qty,
+            side=side,
+            type=order_type,
+            time_in_force=tif,
+            limit_price=round(float(limit_price), 4) if limit_price else None,
+        )
+
+        # Bracket orders (stop-loss / take-profit legs) — Alpaca doesn't
+        # support these for crypto, so fall back to a plain order there.
+        if (stop_loss or take_profit) and not is_crypto(ticker):
+            order_kwargs['order_class'] = 'bracket'
+            if take_profit:
+                order_kwargs['take_profit'] = {'limit_price': round(float(take_profit), 4)}
+            if stop_loss:
+                order_kwargs['stop_loss'] = {'stop_price': round(float(stop_loss), 4)}
+
+        order = alpaca.submit_order(**order_kwargs)
+        return {
+            'status': 'placed', 'order_id': order.id, 'ticker': ticker,
+            'side': side, 'qty': qty, 'type': order_type,
+            'stop_loss': stop_loss, 'take_profit': take_profit,
+            'submitted_at': str(getattr(order, 'submitted_at', '') or ''),
+        }
+    except Exception as e:
+        log.error(f"place_order failed for {ticker}: {str(e)}")
+        return {'status': 'error', 'error': str(e), 'ticker': ticker}
+
+
+def action_get_bars_multi(args):
+    """
+    Get OHLCV bars for multiple tickers in a single process call (avoids
+    spawning one Python process per ticker for chart refreshes).
+
+    Args: {tickers: ["SPY", "AAPL", ...], timeframe: "5m"}
+    Returns: {bars: {TICKER: {bars: [...], count: N}}, timeframe: "5m"}
+    """
+    tickers = args.get('tickers') or DEFAULT_WATCHLIST
+    timeframe = args.get('timeframe', '5m')
+
+    result = {}
+    for ticker in tickers:
+        bars_result = action_get_bars({'ticker': ticker, 'timeframe': timeframe})
+        result[ticker] = {
+            'bars': bars_result.get('bars', []),
+            'count': bars_result.get('count', 0),
+        }
+
+    return {'bars': result, 'timeframe': timeframe}
+
+
 def main():
     """Main CLI entry point"""
     if len(sys.argv) < 2:
@@ -393,7 +480,9 @@ def main():
                 'get_market_status',
                 'get_watchlist_prices',
                 'get_positions',
-                'get_bars'
+                'get_bars',
+                'get_bars_multi',
+                'place_order'
             ]
         }))
         sys.exit(1)
@@ -418,6 +507,8 @@ def main():
         'get_watchlist_prices': action_get_watchlist_prices,
         'get_positions': action_get_positions,
         'get_bars': action_get_bars,
+        'get_bars_multi': action_get_bars_multi,
+        'place_order': action_place_order,
     }
 
     if action not in handlers:

@@ -158,8 +158,8 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     }
     try {
       const scan = await traderAgent.scanMarket();
+      const signals = Array.isArray(scan.signals) ? scan.signals : [];
       if (!scan.error) {
-        const signals = Array.isArray(scan.signals) ? scan.signals : [];
         const logEntries = [
           {
             id: `scan_${scan.timestamp}_summary`,
@@ -181,7 +181,34 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
           console.error('[Trading] /zones agent-log write failed:', e.message);
         });
       }
-      sendJson(res, { zones: scan.zones || {} }, 200);
+
+      // Reshape into the per-ticker shape trader-dashboard.html expects:
+      // { zones: [...], position, last_signal, confidence, direction, catalyst }
+      let positions = [];
+      try {
+        const posData = await traderAgent.getPositions();
+        positions = (posData && posData.positions) || [];
+      } catch (e) {
+        console.error('[Trading] /zones positions fetch failed:', e.message);
+      }
+      const reshaped = {};
+      const tickers = new Set([
+        ...Object.keys(scan.zones || {}),
+        ...signals.map((s) => s.symbol || s.ticker).filter(Boolean),
+      ]);
+      for (const ticker of tickers) {
+        const sig = signals.find((s) => (s.symbol || s.ticker) === ticker) || null;
+        const pos = positions.find((p) => p.symbol === ticker) || null;
+        reshaped[ticker] = {
+          zones: scan.zones && scan.zones[ticker] ? [scan.zones[ticker]] : [],
+          position: pos ? { entry: pos.avg_entry_price, current: pos.current_price, qty: pos.qty, pnl_pct: pos.pnl_pct } : null,
+          last_signal: sig,
+          confidence: (sig && sig.confidence) || 0,
+          direction: (sig && sig.direction) || 'NEUTRAL',
+          catalyst: (sig && sig.catalyst) || '',
+        };
+      }
+      sendJson(res, { zones: reshaped }, 200);
     } catch (error) {
       console.error('[Trading] /zones error:', error.message);
       sendJson(res, { zones: {}, error: error.message }, 500);
@@ -201,6 +228,26 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     } catch (error) {
       console.error('[Trading] /watchlist-prices error:', error.message);
       sendJson(res, [], 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/bars-multi?timeframe=5m
+  // OHLCV bars for the whole watchlist in one subprocess call — used to
+  // draw the candlestick/line charts on the trader dashboard.
+  if (url.pathname === '/api/trading/bars-multi' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { bars: {} }, 503);
+    }
+    const ALLOWED_TIMEFRAMES = new Set(['1m', '5m', '15m', '1h', '4h', '1d']);
+    const timeframeParam = url.searchParams.get('timeframe') || '5m';
+    const timeframe = ALLOWED_TIMEFRAMES.has(timeframeParam) ? timeframeParam : '5m';
+    try {
+      const result = await traderAgent.getBarsMulti(traderAgent.watchlist, timeframe);
+      sendJson(res, result, 200);
+    } catch (error) {
+      console.error('[Trading] /bars-multi error:', error.message);
+      sendJson(res, { bars: {}, timeframe, error: error.message }, 500);
     }
     return true;
   }
@@ -337,6 +384,85 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, { error: 'Failed to record order', details: error.message }, 400);
     }
     return true;
+  }
+
+  // POST /api/trading/orders/place
+  // Place a manual paper order (buy/sell) via Alpaca, routed through the
+  // local TraderAgent → cli.py → Alpaca paper account.
+  if (url.pathname === '/api/trading/orders/place' && req.method === 'POST') {
+    if (!traderAgent) {
+      return sendJson(res, { status: 'error', error: 'TraderAgent not initialized' }, 503);
+    }
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const { ticker, side, qty, type, limitPrice, timeInForce, stopLoss, takeProfit } = payload;
+      if (!ticker || !['buy', 'sell'].includes(String(side || '').toLowerCase()) || !qty || Number(qty) <= 0) {
+        return sendJson(res, { status: 'error', error: 'ticker, side (buy/sell), and positive qty are required' }, 400);
+      }
+      if (stopLoss != null && Number(stopLoss) <= 0) {
+        return sendJson(res, { status: 'error', error: 'stopLoss must be a positive number' }, 400);
+      }
+      if (takeProfit != null && Number(takeProfit) <= 0) {
+        return sendJson(res, { status: 'error', error: 'takeProfit must be a positive number' }, 400);
+      }
+      const result = await traderAgent.placeOrder({ ticker, side, qty, type, limitPrice, timeInForce, stopLoss, takeProfit });
+      if (result && result.status === 'placed') {
+        await tradingMemory.recordNewOrders([{
+          id: result.order_id,
+          symbol: result.ticker,
+          side: result.side,
+          qty: result.qty,
+          status: 'submitted',
+          order_type: result.type,
+        }]);
+        sendJson(res, result, 201);
+      } else {
+        sendJson(res, result || { status: 'error', error: 'Unknown error' }, 400);
+      }
+    } catch (error) {
+      sendJson(res, { status: 'error', error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/watchlist
+  if (url.pathname === '/api/trading/watchlist' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { watchlist: [] }, 503);
+    }
+    sendJson(res, { watchlist: traderAgent.watchlist }, 200);
+    return true;
+  }
+
+  // POST /api/trading/watchlist
+  // Body: { ticker } — add a ticker to the persisted watchlist
+  if (url.pathname === '/api/trading/watchlist' && req.method === 'POST') {
+    if (!traderAgent) {
+      return sendJson(res, { watchlist: [], error: 'TraderAgent not initialized' }, 503);
+    }
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const watchlist = traderAgent.addTicker(payload.ticker);
+      sendJson(res, { watchlist }, 200);
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return true;
+  }
+
+  // DELETE /api/trading/watchlist/:ticker — remove a ticker from the watchlist
+  if (req.method === 'DELETE') {
+    const watchlistMatch = url.pathname.match(/^\/api\/trading\/watchlist\/([A-Za-z]{1,10})$/);
+    if (watchlistMatch) {
+      if (!traderAgent) {
+        return sendJson(res, { watchlist: [], error: 'TraderAgent not initialized' }, 503);
+      }
+      const watchlist = traderAgent.removeTicker(watchlistMatch[1]);
+      sendJson(res, { watchlist }, 200);
+      return true;
+    }
   }
 
   // POST /api/trading/agent-log
