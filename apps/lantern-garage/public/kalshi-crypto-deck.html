@@ -409,9 +409,6 @@ async function loadAllCards() {
 
     if (markets.length > 0) {
 
-      // Filter for active markets with real spreads and order book depth
-      const now = Date.now();
-
       // Helper: check for real trading activity
       function hasRealActivity(m) {
         const yesAsk = m.yes_ask || 0;
