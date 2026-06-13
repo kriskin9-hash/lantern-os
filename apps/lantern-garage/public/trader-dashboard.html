@@ -125,6 +125,10 @@
     <div class="panel-title">Market Status</div>
     <div id="mktStatus"></div>
   </div>
+  <div class="fpanel">
+    <div class="panel-title">Kalshi Odds · CIO <a href="/kalshi-terminal.html" style="float:right;font-size:9px;color:#4a9eff;text-decoration:none">Terminal →</a></div>
+    <div id="kalshiStats"></div>
+  </div>
 </div>
 
 </div><!-- /layout -->
@@ -427,6 +431,25 @@ async function loadOrders(){
   }catch(e){}
 }
 
+async function loadKalshi(){
+  try{
+    const r = await fetch('/api/trading/kalshi/markets');
+    const d = await r.json();
+    const el = document.getElementById('kalshiStats');
+    const games = d.games||[];
+    if(!games.length){
+      el.innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:var(--text2)">No Kalshi data yet — collector building trajectories…</div>';
+      return;
+    }
+    const head = `<div style="font-family:var(--mono);font-size:8px;color:var(--text2);margin-bottom:6px">${d.snapshotRounds||0} snapshot(s) · ${d.marketCount||0} markets · upd ${(d.updatedAt||'').slice(11,16)} UTC</div>`;
+    el.innerHTML = head + games.slice(0,12).map(g=>{
+      const sides = (g.sides||[]).map(s=>`<span style="color:var(--text)">${s.team} <b>${s.yesPct}%</b></span>`).join(' <span style="color:var(--text2)">/</span> ');
+      const when = (g.close||'').slice(5,16).replace('T',' ');
+      return `<div class="mkt-row"><span class="mkt-label" style="font-size:8px">${when}</span><span class="mkt-val">${sides}</span></div>`;
+    }).join('');
+  }catch(e){ console.warn('kalshi load failed', e); }
+}
+
 // ── Full refresh (every 30s) ──────────────────────────────────────────────────
 async function fullRefresh(){
   await Promise.all([loadZones(), loadWatchlistPrices(), loadPortfolio(), loadMarketStatus()]);
@@ -438,9 +461,11 @@ function startDashboard(){
   fullRefresh();
   loadAgentLog();
   loadOrders();
+  loadKalshi();
   setInterval(fullRefresh,  30000);
   setInterval(loadAgentLog, 5000);
   setInterval(loadOrders,   60000);
+  setInterval(loadKalshi,   30000);
 }
 document.addEventListener('DOMContentLoaded', startDashboard);
 

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kalshi Terminal — Lantern OS</title>
+<style>
+  :root{
+    --bg0:#0a0c10;--bg1:#12151c;--bg2:#1a1f29;--border:#262d3a;
+    --text:#e8eaf0;--text2:#8b93a7;--green:#00d4aa;--red:#ff5f6d;
+    --amber:#f5a623;--blue:#4a9eff;--mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg0);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:13px}
+  a{color:var(--blue);text-decoration:none}
+  .topbar{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--bg1);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .brand{font-weight:700;letter-spacing:.04em}
+  .chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--bg2);border:1px solid var(--border);color:var(--text2)}
+  .chip b{color:var(--text)}
+  .chip.live{background:rgba(255,95,109,.15);border-color:var(--red);color:var(--red)}
+  .chip.dry{background:rgba(0,212,170,.12);border-color:var(--green);color:var(--green)}
+  .layout{display:grid;grid-template-columns:280px 1fr 320px;gap:1px;background:var(--border);height:calc(100vh - 41px)}
+  .col{background:var(--bg0);overflow-y:auto;padding:10px}
+  .panel-title{font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin:4px 0 8px}
+  input,select,button{font-family:var(--mono);font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px}
+  button{cursor:pointer}
+  button:hover{border-color:var(--blue)}
+  button.buy{background:rgba(0,212,170,.15);border-color:var(--green);color:var(--green)}
+  button.sell{background:rgba(255,95,109,.15);border-color:var(--red);color:var(--red)}
+  .mkt-row{display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px}
+  .mkt-row:hover{background:var(--bg2)}
+  .mkt-row.sel{background:var(--bg2);border-left:2px solid var(--blue)}
+  .ob-row{display:grid;grid-template-columns:1fr 1fr;font-family:var(--mono);font-size:11px;gap:2px}
+  .ob-yes{color:var(--green);text-align:right;padding:2px 6px;background:rgba(0,212,170,.06)}
+  .ob-no{color:var(--red);padding:2px 6px;background:rgba(255,95,109,.06)}
+  .field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+  .field label{font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase}
+  .row{display:flex;gap:6px}
+  .row>*{flex:1}
+  .card{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:10px}
+  .kv{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;padding:3px 0}
+  .kv .k{color:var(--text2)}
+  .banner{padding:8px 10px;border-radius:5px;font-family:var(--mono);font-size:11px;margin-bottom:10px}
+  .banner.dry{background:rgba(0,212,170,.1);border:1px solid var(--green);color:var(--green)}
+  .banner.live{background:rgba(255,95,109,.12);border:1px solid var(--red);color:var(--red)}
+  .muted{color:var(--text2);font-family:var(--mono);font-size:10px}
+  .pos{color:var(--green)}.neg{color:var(--red)}
+  #orderResult{font-family:var(--mono);font-size:10px;white-space:pre-wrap;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="brand">Kalshi Terminal</span>
+  <span class="chip" id="cEnv">env —</span>
+  <span class="chip" id="cBal">balance —</span>
+  <span class="chip" id="cCreds">creds —</span>
+  <span class="chip" id="cMode">mode —</span>
+  <span class="chip" id="cExch">exchange —</span>
+  <a href="/trader-dashboard.html" style="margin-left:auto;font-size:11px">← Trader Dashboard</a>
+</div>
+
+<div class="layout">
+  <!-- Markets -->
+  <div class="col">
+    <div class="panel-title">Markets</div>
+    <div class="row" style="margin-bottom:8px">
+      <select id="series">
+        <option value="KXMLBGAME">MLB Game</option>
+        <option value="KXMLBSPREAD">MLB Spread</option>
+        <option value="KXMLBTOTAL">MLB Total</option>
+        <option value="">All (search)</option>
+      </select>
+      <button onclick="loadMarkets()">↻</button>
+    </div>
+    <input id="search" placeholder="filter ticker…" style="width:100%;margin-bottom:8px" oninput="renderMarkets()">
+    <div id="marketList"></div>
+  </div>
+
+  <!-- Market detail + order entry -->
+  <div class="col">
+    <div class="panel-title">Order Book — <span id="selTicker">select a market</span></div>
+    <div id="banner"></div>
+    <div class="card">
+      <div class="ob-row" style="font-size:9px;color:var(--text2);border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:3px">
+        <span style="text-align:right">YES (¢ / size)</span><span>NO (¢ / size)</span>
+      </div>
+      <div id="orderbook"><div class="muted">—</div></div>
+    </div>
+
+    <div class="panel-title">Order Entry</div>
+    <div class="card">
+      <div class="row">
+        <div class="field"><label>Ticker</label><input id="oTicker" placeholder="KXMLB…"></div>
+        <div class="field"><label>Side</label><select id="oSide"><option value="yes">YES</option><option value="no">NO</option></select></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Type</label><select id="oType"><option value="limit">limit</option><option value="market">market</option></select></div>
+        <div class="field"><label>Count</label><input id="oCount" type="number" value="1" min="1"></div>
+        <div class="field"><label>Limit (¢)</label><input id="oLimit" type="number" value="50" min="1" max="99"></div>
+      </div>
+      <div class="row">
+        <button class="buy" onclick="placeOrder('buy')">BUY</button>
+        <button class="sell" onclick="placeOrder('sell')">SELL</button>
+      </div>
+      <div id="orderResult" class="muted"></div>
+    </div>
+  </div>
+
+  <!-- Portfolio -->
+  <div class="col">
+    <div class="panel-title">Portfolio</div>
+    <div class="card" id="balCard"><div class="muted">—</div></div>
+    <div class="panel-title">Positions</div>
+    <div class="card" id="positions"><div class="muted">—</div></div>
+    <div class="panel-title">Open Orders</div>
+    <div class="card" id="openOrders"><div class="muted">—</div></div>
+    <div class="panel-title">Recent Fills</div>
+    <div class="card" id="fills"><div class="muted">—</div></div>
+  </div>
+</div>
+
+<script>
+const API = '/api/trading/kalshi';
+let markets = [];
+let conn = {};
+
+async function j(path, opts){ try{ const r=await fetch(API+path, opts); return await r.json(); }catch(e){ return {error:e.message}; } }
+const c = (v)=> (v==null?'—':v);
+
+async function loadConnection(){
+  conn = await j('/connection');
+  document.getElementById('cEnv').innerHTML = 'env <b>'+c(conn.env)+'</b>';
+  document.getElementById('cCreds').innerHTML = 'creds <b style="color:'+(conn.credentials?'var(--green)':'var(--red)')+'">'+(conn.credentials?'connected':'none')+'</b>';
+  document.getElementById('cExch').innerHTML = 'exchange <b>'+(conn.exchangeActive?'active':'—')+'</b>';
+  const live = conn.canTradeLive;
+  const mode = document.getElementById('cMode');
+  mode.className = 'chip ' + (live?'live':'dry');
+  mode.innerHTML = live ? 'LIVE TRADING' : 'DRY-RUN';
+  const b = document.getElementById('banner');
+  b.className = 'banner ' + (live?'live':'dry');
+  b.innerHTML = live
+    ? '⚠ LIVE: orders WILL hit the exchange (trading enabled, kill-switch off).'
+    : 'DRY-RUN: orders are planned & logged, never sent. To go live: set KALSHI_TRADING_ENABLED=1 and remove data/kalshi/LIVE-KILL-SWITCH'
+      + (conn.killSwitch?' · kill-switch ACTIVE':'') + (conn.tradingEnabled?'':' · trading disabled');
+}
+
+async function loadBalance(){
+  const d = await j('/balance');
+  const el = document.getElementById('balCard');
+  if(d.error){ el.innerHTML = '<div class="muted">'+d.error+'</div>'; document.getElementById('cBal').innerHTML='balance <b>—</b>'; return; }
+  const usd = d.balance_dollars!=null ? '$'+d.balance_dollars : '$'+((d.balance||0)/100).toFixed(2);
+  document.getElementById('cBal').innerHTML = 'balance <b>'+usd+'</b>';
+  el.innerHTML = '<div class="kv"><span class="k">Cash</span><span>'+usd+'</span></div>'
+    + '<div class="kv"><span class="k">Portfolio value</span><span>$'+(((d.portfolio_value||0))/100).toFixed(2)+'</span></div>';
+}
+
+async function loadMarkets(){
+  const s = document.getElementById('series').value;
+  const q = s ? ('?series_ticker='+s+'&status=open&limit=100') : '?status=open&limit=100';
+  const d = await j('/live-markets'+q);
+  markets = (d.markets)||[];
+  renderMarkets();
+}
+function renderMarkets(){
+  const f = document.getElementById('search').value.toUpperCase();
+  const rows = markets.filter(m=>!f || (m.ticker||'').toUpperCase().includes(f));
+  document.getElementById('marketList').innerHTML = rows.slice(0,80).map(m=>{
+    const yes = m.yes_ask!=null ? m.yes_ask+'¢' : '—';
+    return '<div class="mkt-row" onclick="selectMarket(\''+m.ticker+'\')"><span>'+m.ticker.replace('KXMLB','')+'</span><span style="color:var(--green)">'+yes+'</span></div>';
+  }).join('') || '<div class="muted">no markets</div>';
+}
+
+async function selectMarket(ticker){
+  document.getElementById('selTicker').textContent = ticker;
+  document.getElementById('oTicker').value = ticker;
+  document.querySelectorAll('.mkt-row').forEach(r=>r.classList.toggle('sel', r.textContent.includes(ticker.replace('KXMLB',''))));
+  const d = await j('/orderbook?ticker='+encodeURIComponent(ticker)+'&depth=8');
+  const ob = (d.orderbook)||{};
+  const yes = (ob.yes||[]), no = (ob.no||[]);
+  const n = Math.max(yes.length, no.length, 1);
+  let html='';
+  for(let i=0;i<n;i++){
+    const y = yes[i] ? yes[i][0]+'¢ × '+yes[i][1] : '';
+    const nn = no[i] ? no[i][0]+'¢ × '+no[i][1] : '';
+    html += '<div class="ob-row"><span class="ob-yes">'+y+'</span><span class="ob-no">'+nn+'</span></div>';
+  }
+  document.getElementById('orderbook').innerHTML = html || '<div class="muted">no book</div>';
+}
+
+async function placeOrder(action){
+  const o = {
+    ticker: document.getElementById('oTicker').value.trim(),
+    side: document.getElementById('oSide').value,
+    action,
+    type: document.getElementById('oType').value,
+    count: Number(document.getElementById('oCount').value)||1,
+    limitCents: Number(document.getElementById('oLimit').value)||50,
+  };
+  if(!o.ticker){ document.getElementById('orderResult').textContent='enter a ticker'; return; }
+  const res = await j('/order', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+  const el = document.getElementById('orderResult');
+  if(res.mode==='dry_run'){
+    el.innerHTML = '<span style="color:var(--green)">DRY-RUN planned</span> — '+(res.wouldBlock||[]).join('; ')+'\n'+JSON.stringify(res.order);
+  } else if(res.mode==='live'){
+    el.innerHTML = '<span style="color:var(--red)">LIVE submitted</span> status '+res.status+'\n'+JSON.stringify(res.result);
+    loadBalance(); loadPortfolio();
+  } else {
+    el.textContent = JSON.stringify(res);
+  }
+}
+
+async function loadPortfolio(){
+  const pos = await j('/positions');
+  const pl = (pos.market_positions)||(pos.positions)||[];
+  document.getElementById('positions').innerHTML = pos.error ? '<div class="muted">'+pos.error+'</div>'
+    : (pl.length ? pl.map(p=>'<div class="kv"><span class="k">'+(p.ticker||'')+'</span><span>'+(p.position||p.quantity||0)+'</span></div>').join('') : '<div class="muted">no positions</div>');
+
+  const ord = await j('/portfolio-orders?status=resting');
+  const ol = (ord.orders)||[];
+  document.getElementById('openOrders').innerHTML = ord.error ? '<div class="muted">'+ord.error+'</div>'
+    : (ol.length ? ol.map(o=>'<div class="kv"><span class="k">'+(o.ticker||'')+' '+(o.side||'')+'</span><button onclick="cancel(\''+o.order_id+'\')" style="font-size:9px;padding:2px 6px">cancel</button></div>').join('') : '<div class="muted">no open orders</div>');
+
+  const fl = await j('/fills?limit=8');
+  const fills = (fl.fills)||[];
+  document.getElementById('fills').innerHTML = fl.error ? '<div class="muted">'+fl.error+'</div>'
+    : (fills.length ? fills.map(f=>'<div class="kv"><span class="k">'+(f.ticker||'')+' '+(f.side||'')+'</span><span>'+(f.count||0)+'@'+(f.yes_price||f.no_price||'?')+'¢</span></div>').join('') : '<div class="muted">no fills</div>');
+}
+
+async function cancel(orderId){
+  await j('/order/cancel', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId})});
+  loadPortfolio();
+}
+
+function init(){
+  loadConnection(); loadBalance(); loadMarkets(); loadPortfolio();
+  setInterval(loadConnection, 15000);
+  setInterval(loadBalance, 20000);
+  setInterval(loadPortfolio, 15000);
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

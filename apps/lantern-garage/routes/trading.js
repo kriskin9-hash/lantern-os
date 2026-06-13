@@ -451,6 +451,78 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/kalshi/markets
+  // Returns the CIO collector's recorded Kalshi odds (read-only, from snapshots)
+  if (url.pathname === '/api/trading/kalshi/markets' && req.method === 'GET') {
+    try {
+      const stats = require('../lib/kalshi-stats').getKalshiStats();
+      sendJson(res, stats, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Kalshi stats unavailable', details: error.message }, 503);
+    }
+    return true;
+  }
+
+  // ── Full Kalshi v2 API surface (for the on-dashboard terminal) ────────────
+  // Read endpoints are public; portfolio + orders are RSA-signed & gated.
+  if (url.pathname.startsWith('/api/trading/kalshi/') &&
+      url.pathname !== '/api/trading/kalshi/events' &&
+      url.pathname !== '/api/trading/kalshi/markets') {
+    const kalshi = require('../lib/kalshi-api');
+    const q = Object.fromEntries(url.searchParams.entries());
+    try {
+      // GET — connection & safety snapshot
+      if (url.pathname === '/api/trading/kalshi/connection' && req.method === 'GET') {
+        return sendJson(res, await kalshi.getConnection(), 200), true;
+      }
+      // GET — live market data (pass-through query: series_ticker, status, limit, event_ticker)
+      if (url.pathname === '/api/trading/kalshi/live-markets' && req.method === 'GET') {
+        const r = await kalshi.getMarkets(q);
+        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/events-list' && req.method === 'GET') {
+        const r = await kalshi.getEvents(q);
+        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+      }
+      // GET — order book for one market  (?ticker=...&depth=...)
+      if (url.pathname === '/api/trading/kalshi/orderbook' && req.method === 'GET') {
+        const r = await kalshi.getOrderbook(q.ticker, q.depth ? Number(q.depth) : 10);
+        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+      }
+      // GET — authenticated portfolio (balance / positions / orders / fills)
+      if (url.pathname === '/api/trading/kalshi/balance' && req.method === 'GET') {
+        const r = await kalshi.getBalance();
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/positions' && req.method === 'GET') {
+        const r = await kalshi.getPositions(q);
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/portfolio-orders' && req.method === 'GET') {
+        const r = await kalshi.getOrders(q);
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/fills' && req.method === 'GET') {
+        const r = await kalshi.getFills(q);
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      // POST — place order (dry-run / kill-switch gated inside placeOrder)
+      if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
+        const body = await collectRequestBody(req);
+        const o = body ? JSON.parse(body) : {};
+        return sendJson(res, await kalshi.placeOrder(o), 200), true;
+      }
+      // POST — cancel order  { orderId }
+      if (url.pathname === '/api/trading/kalshi/order/cancel' && req.method === 'POST') {
+        const body = await collectRequestBody(req);
+        const { orderId } = body ? JSON.parse(body) : {};
+        return sendJson(res, await kalshi.cancelOrder(orderId), 200), true;
+      }
+    } catch (error) {
+      return sendJson(res, { error: 'kalshi_api_error', details: error.message }, 502), true;
+    }
+  }
+
   // GET /api/trading/alpaca/account
   // Returns Alpaca paper trading account
   if (url.pathname === '/api/trading/alpaca/account' && req.method === 'GET') {
