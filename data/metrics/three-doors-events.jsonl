@@ -9,3 +9,4 @@
 {"timestamp":"2026-06-10T07:25:24.754Z","event":"door_choice","payload":{"label":"A","name":"The Throne Door","sceneKey":"little-crown"}}
 {"timestamp":"2026-06-10T07:25:25.401Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"image"}}
 {"timestamp":"2026-06-11T09:31:15.293Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-12T22:42:12.599Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}

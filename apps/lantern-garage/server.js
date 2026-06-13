@@ -92,6 +92,7 @@ const routes = [
   require("./routes/surfaces"),
   require("./routes/self-edit"),
   require("./routes/personal-cube"),
+  require("./routes/mesh"),
 ];
 
 async function route(req, res) {
