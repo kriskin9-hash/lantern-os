@@ -91,6 +91,7 @@ const routes = [
   require("./routes/leaderboard"),
   require("./routes/surfaces"),
   require("./routes/self-edit"),
+  require("./routes/creator"),
 ];
 
 async function route(req, res) {
