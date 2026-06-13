@@ -538,7 +538,21 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}${csfContext ? "Symbolic memory:\n" + csfContext + "\n\n" : ""}${tradingContext ? "Trading data:\n" + tradingContext + "\n\n" : ""}${groundingContext ? groundingContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-4 sentences). ${tradingContext ? "Give practical, literal advice grounded in the trading data above." : "Never diagnose or command."}`;
 
-  const rp = String(requestedProvider || "").toLowerCase().trim();
+  let rp = String(requestedProvider || "").toLowerCase().trim();
+
+  // ── Keystone FT: Auto-route Keystone agent to trained keystone-ft provider ──
+  if (agent.id === "keystone" && !rp) {
+    // Check if ft-result.json exists to enable keystone-ft
+    try {
+      const ftPath = require("path").resolve(__dirname, "../../data/training/ft-result.json");
+      if (require("fs").existsSync(ftPath)) {
+        rp = "keystone-ft";
+        console.log("[dream-chat] Keystone agent → auto-routing to keystone-ft (LoRA-tuned)");
+      }
+    } catch (e) {
+      console.log("[dream-chat] ft-result.json not found, using normal provider chain for Keystone");
+    }
+  }
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;

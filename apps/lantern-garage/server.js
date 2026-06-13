@@ -29,6 +29,8 @@ const { unifiedAgentGreet, unifiedAgentHealth, unifiedAgentInspect } = require("
 const { handleStreamChat } = require("./lib/stream-chat");
 const { refreshAllPcsf } = require("./lib/pcsf-refresh");
 const { getRoutingSnapshot, refreshProviderCache } = require("./lib/provider-cache");
+const { JobQueue } = require("./lib/job-queue");
+const { JobWorker } = require("./lib/job-worker");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -43,6 +45,11 @@ const cloudMirrorUrls = process.env.LANTERN_CLOUD_MIRROR_URLS || "";
 const openaiApiKey = process.env.OPENAI_API_KEY || "";
 const maxConversationTextLength = 4000;
 const maxDreamerTextLength = 2000;
+
+// Initialize Creator Suite job queue and worker
+const jobQueue = new JobQueue(repoRoot);
+const jobWorker = new JobWorker(jobQueue, repoRoot);
+jobWorker.start(2000); // Poll every 2 seconds for new jobs
 
 // Shared dependency bundle passed to every route module
 const deps = {
@@ -60,6 +67,7 @@ const deps = {
   dreamChatReply, AGENT_PERSONAS, DREAM_DOORS, selectAgent,
   unifiedAgentGreet, unifiedAgentHealth, unifiedAgentInspect,
   handleStreamChat,
+  jobQueue, jobWorker,
   repoRoot, publicRoot,
   conversationLogPath, flatRagHousePath, flatRagHouseManifestPath,
   operatorNotesPath, cloudMirrorsPath, cloudMirrorUrls,
