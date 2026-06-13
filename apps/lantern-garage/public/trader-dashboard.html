@@ -10,7 +10,8 @@
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   :root{
     --bg0:#0a0c0f;--bg1:#111318;--bg2:#181c22;--bg3:#1f242d;
-    --border:#252b35;--text0:#e8eaf0;--text1:#9aa0ad;--text2:#5c6370;
+    /* --text2 raised from #5c6370 (3.1:1) to clear WCAG AA 4.5:1 on dark bg */
+    --border:#252b35;--text0:#e8eaf0;--text1:#9aa0ad;--text2:#868fa0;
     --green:#00d4aa;--red:#ff5f6d;--amber:#f5a623;--blue:#4a9eff;
     --purple:#a78bfa;--gold:#f5a623;
     --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
@@ -21,6 +22,9 @@
   .header{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
   .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
   .main{overflow-y:auto;padding:12px;background:var(--bg0)}
+  .main-heading{font-family:var(--sans);font-size:13px;font-weight:500;color:var(--text1);margin-bottom:10px}
+  .grid-empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px;gap:6px;text-align:center;color:var(--text1);font-size:13px;border:1px dashed var(--border);border-radius:8px;background:var(--bg1)}
+  .grid-empty .sub{font-size:11px;color:var(--text2);max-width:360px}
   .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:1px;max-height:180px}
   /* ── Header ── */
   .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.08em;white-space:nowrap}
@@ -128,8 +132,11 @@
 </div>
 
 <!-- Main: ticker cards -->
-<div class="main">
-  <div class="cards-grid" id="cardsGrid"></div>
+<div class="main" role="region" aria-label="Stock watchlist — price and zone charts">
+  <h1 class="main-heading">Watchlist · price &amp; zone charts</h1>
+  <div class="cards-grid" id="cardsGrid" aria-live="polite" aria-busy="true">
+    <div class="grid-empty">Loading market data…<span class="sub">Charts for each watched stock will appear here.</span></div>
+  </div>
 </div>
 
 <!-- Footer -->
@@ -364,6 +371,12 @@ function renderCards(){
     const order={open:0,watching:1,quiet:2};
     return order[tickerState(zonesData[a])] - order[tickerState(zonesData[b])];
   });
+  grid.setAttribute('aria-busy','false');
+  if(!sorted.length){
+    grid.innerHTML = '<div class="grid-empty">No stocks to show right now.'
+      + '<span class="sub">The trading engine isn\'t sending data yet — charts will appear here automatically once it\'s running.</span></div>';
+    return;
+  }
   grid.innerHTML = sorted.map(t => buildCard(t, zonesData[t]||{})).join('');
   sorted.forEach(t => renderZoneLadder(t, zonesData[t]||{}, getCurrentPrice(t)));
 }
