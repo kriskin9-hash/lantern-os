@@ -51,6 +51,14 @@
   .conv-fill{height:100%;border-radius:4px}
   .conv-num{font-family:var(--mono);font-size:11px;color:var(--text2);min-width:54px;text-align:right}
   .reason{font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:7px;min-height:13px}
+  /* exit card ribbon */
+  .ribbon{font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:8px;
+    background:rgba(255,95,109,.15);border:1px solid var(--red);color:var(--red);
+    margin-bottom:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:600}
+  .ribbon.profit{background:rgba(0,212,170,.12);border-color:var(--green);color:var(--green)}
+  /* exit cards: darker bg + distinct border for sell urgency */
+  .card.exit{background:linear-gradient(160deg,#1a1f29,#12151c);border-color:#3a3a4a}
+  .card.exit .fav{background:rgba(0,0,0,.4)}
   /* context odds */
   .sides{display:flex;gap:10px;margin-top:auto}
   .side{flex:1;border:1px solid var(--border);border-radius:9px;padding:7px;text-align:center;background:var(--bg0)}
@@ -179,23 +187,37 @@ function cardInner(card){
   const noPct=100-(card.yesPct||0);
   const cd=fmtCountdown(card);
   const fav=card.favSide;
+  const isExit=card.kind==='exit';
+  // exit cards: red for stop-loss/flatten, green for take-profit
+  const favClass=isExit?(card.exitTag==='TAKE-PROFIT'?'yes':'no'):fav;
+  const ribbonClass=isExit&&card.exitTag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
+  const ribbon=isExit?`<div class="${ribbonClass}">⚠ SELL NOW · ${card.exitTag}${card.pnlPct!=null?' '+(card.pnlPct>=0?'+':'')+card.pnlPct+'%':''}</div>`:'';
+  const tag=isExit?'High-priority exit':'Favorable now';
+  const act=isExit
+    ? `● SELL ${card.favLabel||fav.toUpperCase()}`
+    : `${fav==='yes'?'▲':'▼'} BUY ${card.favLabel||fav.toUpperCase()}`;
+  const px=isExit
+    ? `@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · ${card.qty||1} contract${(card.qty||1)>1?'s':''}`
+    : `@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · 1 contract`;
+  const convLabel=isExit?'priority':'conv';
   return `
-    <div class="stamp take">TAKE</div><div class="stamp pass">PASS</div>
-    <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span><span>now-slice</span></div>
+    <div class="stamp take">${isExit?'SELL':'TAKE'}</div><div class="stamp pass">PASS</div>
+    ${ribbon}
+    <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span><span>${isExit?'position':'now-slice'}</span></div>
     <div class="card-q">${card.title||card.ticker}</div>
-    <div class="fav ${fav}">
-      <div class="fav-tag">Favorable now</div>
-      <div class="fav-act">${fav==='yes'?'▲':'▼'} BUY ${card.favLabel||fav.toUpperCase()}</div>
-      <div class="fav-px">@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · 1 contract</div>
+    <div class="fav ${favClass}">
+      <div class="fav-tag">${tag}</div>
+      <div class="fav-act">${act}</div>
+      <div class="fav-px">${px}</div>
       <div class="conv-row">
         <div class="conv-bar"><div class="conv-fill" style="width:${card.conviction}%;background:${convColor(card.conviction)}"></div></div>
-        <div class="conv-num">${card.conviction}% conv</div>
+        <div class="conv-num">${card.conviction}% ${convLabel}</div>
       </div>
       <div class="reason">${card.reason||''}</div>
     </div>
     <div class="sides">
-      <div class="side yes"><div class="lbl">${card.yesLabel||'YES'}</div><div class="pct">${card.yesPct}%</div></div>
-      <div class="side no"><div class="lbl">${card.noLabel||'NO'}</div><div class="pct">${noPct}%</div></div>
+      <div class="side yes"><div class="lbl">${card.yesLabel||'YES'}</div><div class="pct">${card.yesPct==null?'—':card.yesPct+'%'}</div></div>
+      <div class="side no"><div class="lbl">${card.noLabel||'NO'}</div><div class="pct">${card.yesPct==null?'—':noPct+'%'}</div></div>
     </div>`;
 }
 
@@ -210,8 +232,12 @@ function render(){
   document.getElementById('progress').textContent = remaining>0 ? `${remaining} of ${deck.length} · soonest first` : '';
   if(idx>=deck.length){ stage.innerHTML=''; document.getElementById('end').style.display='flex'; return; }
   let html='';
-  if(deck[idx+1]) html+=`<div class="card peek">${cardInner(deck[idx+1])}</div>`;
-  html+=`<div class="card front" id="front">${cardInner(deck[idx])}</div>`;
+  if(deck[idx+1]){
+    const peekExit=deck[idx+1].kind==='exit'?' exit':'';
+    html+=`<div class="card peek${peekExit}">${cardInner(deck[idx+1])}</div>`;
+  }
+  const frontExit=deck[idx].kind==='exit'?' exit':'';
+  html+=`<div class="card front${frontExit}" id="front">${cardInner(deck[idx])}</div>`;
   stage.innerHTML=html;
   attachSwipe(document.getElementById('front'));
 }
@@ -260,11 +286,14 @@ async function act(dir,fromSwipe){
   if(busy||idx>=deck.length) return;
   if(dir==='pass'){ if(!fromSwipe) return flyOut('pass'); idx++; render(); return; }
   if(dir==='take' && !fromSwipe) return flyOut('take');
-  // take favorable position from the CURRENT now-slice
+  // take favorable position (buy) OR close held position (sell)
   busy=true;
   const card=deck[idx];
   const side=card.favSide;
-  const o={ticker:card.ticker,side,action:'buy',type:'limit',count:1,limitCents:card.favAsk||50};
+  const isExit=card.kind==='exit';
+  const action=isExit?'sell':'buy';
+  const qty=isExit?(card.qty||1):1;
+  const o={ticker:card.ticker,side,action,type:'limit',count:qty,limitCents:card.favAsk||50};
   const res=await j('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
   showResult(res,card);
   idx++; busy=false; render();
