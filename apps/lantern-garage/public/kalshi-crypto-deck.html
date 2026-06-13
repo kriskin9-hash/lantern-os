@@ -313,9 +313,8 @@
 </div>
 
 <script>
-let cardIndex = 0;
+let currentCard = null;
 let allCards = [];
-let autoRotateTimer = null;
 
 function isCryptoMarket(m) {
   const title = (m.title || '').toUpperCase();
@@ -482,30 +481,31 @@ async function loadAllCards() {
 
     document.getElementById('market-count').textContent = allCards.length || '0';
 
-    if (allCards.length === 0) {
-      document.getElementById('deck').innerHTML = '<div class="empty">No crypto intraday markets (24h window)</div>';
-      return;
+    // If we have cards, pick the best one to show (highest urgency/conviction)
+    // Otherwise keep the current card or show loading
+    if (allCards.length > 0) {
+      currentCard = allCards[0];  // Pick first (already sorted by conviction)
+      document.getElementById('next-close').textContent = currentCard.minsToClose + 'm';
+      renderCard();
+    } else {
+      // No cards available yet - show loading state, don't clear the current card
+      if (!currentCard) {
+        document.getElementById('deck').innerHTML = '<div class="loading">Loading crypto markets...</div>';
+      }
     }
-
-    const soonest = allCards[0];
-    document.getElementById('next-close').textContent = soonest.minsToClose + 'm';
-
-    renderCard(0);
-    startAutoRotate();
   } catch (error) {
     console.error('Error loading markets:', error);
     document.getElementById('deck').innerHTML = '<div class="empty">Error: ' + error.message + '</div>';
   }
 }
 
-function renderCard(idx) {
-  if (idx < 0 || idx >= allCards.length) {
-    idx = 0;
+function renderCard() {
+  if (!currentCard) {
+    document.getElementById('deck').innerHTML = '<div class="loading">Loading crypto markets...</div>';
+    return;
   }
 
-  cardIndex = idx;
-  const card = allCards[idx];
-
+  const card = currentCard;
   const isExit = card.kind === 'exit';
   const isCritical = card.urgencyLevel === 'critical' || card.exitTag === 'STOP-LOSS';
   const isHot = card.urgencyLevel === 'hot' || card.exitTag === 'TAKE-PROFIT';
@@ -560,7 +560,7 @@ function renderCard(idx) {
       </div>
 
       <div class="action-buttons">
-        <button class="btn ${actionClass}" onclick="act(${idx})">
+        <button class="btn ${actionClass}" onclick="act()">
           ${actionLabel} @ ${card.favAsk}¢
         </button>
         <button class="btn skip" onclick="skip()">
@@ -571,14 +571,15 @@ function renderCard(idx) {
 
     ${allCards.length > 1 ? `
       <div style="text-align: center; color: var(--text3); font-size: 12px; margin-top: 16px;">
-        ${idx + 1} / ${allCards.length}
+        1 / ${allCards.length}
       </div>
     ` : ''}
   `;
 }
 
-async function act(idx) {
-  const card = allCards[idx];
+async function act() {
+  if (!currentCard) return;
+  const card = currentCard;
   const action = card.kind === 'exit' ? 'sell' : 'buy';
 
   try {
@@ -596,7 +597,6 @@ async function act(idx) {
     const result = await orderRes.json();
     console.log('Order result:', result);
 
-    // Show confirmation and skip to next card
     if (result.mode === 'dry_run') {
       console.log(`DRY-RUN: ${action.toUpperCase()} ${card.ticker} @ ${card.favAsk}¢`);
     } else if (result.status === 'success' || result.order_id) {
@@ -610,26 +610,15 @@ async function act(idx) {
 }
 
 function skip() {
-  cardIndex++;
-  if (cardIndex >= allCards.length) {
-    cardIndex = 0;
-  }
-  renderCard(cardIndex);
-}
-
-function startAutoRotate() {
-  if (autoRotateTimer) clearInterval(autoRotateTimer);
-  autoRotateTimer = setInterval(() => {
-    if (allCards.length > 0) {
-      cardIndex++;
-      if (cardIndex >= allCards.length) cardIndex = 0;
-      renderCard(cardIndex);
-    }
-  }, 2000);  // 2s rotation
+  if (!currentCard || allCards.length === 0) return;
+  const currentIdx = allCards.indexOf(currentCard);
+  const nextIdx = (currentIdx + 1) % allCards.length;
+  currentCard = allCards[nextIdx];
+  renderCard();
 }
 
 loadAllCards();
-setInterval(loadAllCards, 2000);  // 2s refresh
+setInterval(loadAllCards, 6000);  // Refresh every 6s, keep only active card
 </script>
 
 </body>
