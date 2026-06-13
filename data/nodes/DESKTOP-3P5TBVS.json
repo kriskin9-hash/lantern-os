@@ -3,11 +3,11 @@
   "nodeName": "Lantern (DESKTOP-3P5TBVS)",
   "platform": "win32",
   "arch": "x64",
-  "uptime": 150.5919956,
+  "uptime": 421.3501006,
   "agents": [],
   "workerCount": 1,
-  "registeredAt": "2026-06-13T04:43:15.280Z",
-  "lastSeen": "2026-06-13T04:43:15.280Z",
+  "registeredAt": "2026-06-13T05:03:05.134Z",
+  "lastSeen": "2026-06-13T05:03:05.134Z",
   "address": "127.0.0.1",
   "port": 4177
 }

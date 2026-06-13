@@ -397,21 +397,28 @@ async function updateAllTabs(data) {
     document.getElementById('q-success').textContent = dashboardUI.formatPercent(data.queue.successRate || 0);
   }
 
-  // Update agent lanes
-  if (data.agents && data.agents.slots) {
+  // Update agent lanes - show personas with active counts
+  if (data.agents) {
     const lanesList = document.getElementById('agent-lanes-list');
-    if (data.agents.slots.length === 0) {
-      lanesList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No agents configured</div>';
-    } else {
-      lanesList.innerHTML = data.agents.slots.map(slot => `
+    if (data.agents.personas && data.agents.personas.length > 0) {
+      const slotStats = data.agents.slots || { active: 0, total: 0 };
+      lanesList.innerHTML = `
         <div class="ops-list-item">
-          <span class="label">${slot.id}</span>
-          <span class="value">
-            <span class="ops-status-dot ${slot.status || 'idle'}"></span>
-            ${slot.status === 'working' ? `⏱️ Task` : '✓ Ready'}
-          </span>
+          <span class="label">🤖 Active Agents</span>
+          <span class="value">${slotStats.active}/${slotStats.total}</span>
+        </div>
+        <div class="ops-list-item">
+          <span class="label">🔆 Personas Online</span>
+          <span class="value">${data.agents.personas.length}</span>
+        </div>
+      ` + data.agents.personas.slice(0, 6).map(p => `
+        <div class="ops-list-item">
+          <span class="label">${p.symbol} ${p.name}</span>
+          <span class="value" style="font-size:11px;">${p.role}</span>
         </div>
       `).join('');
+    } else {
+      lanesList.innerHTML = '<div style="color:var(--muted);font-size:12px;">No agents available</div>';
     }
   }
 
@@ -431,6 +438,46 @@ async function updateAllTabs(data) {
     }
   } catch (err) {
     console.warn('Could not load pending queue:', err);
+  }
+
+  // Update active work (in_progress items)
+  try {
+    const inProgress = await dashboardAPI.getQueuePending(10); // Reuse API with different endpoint
+    const activeWorkDiv = document.getElementById('active-work');
+    // Fetch actual in_progress items via direct API call
+    const resp = await fetch('/api/queue/list/in_progress');
+    const inProgData = await resp.json();
+    if (inProgData.items && inProgData.items.length > 0) {
+      activeWorkDiv.innerHTML = inProgData.items.slice(0, 3).map(item => `
+        <div class="ops-list-item">
+          <span class="label">Issue #${item.issueNumber}</span>
+          <span class="value" style="color:var(--accent);">${item.title || 'Untitled'}</span>
+        </div>
+      `).join('');
+    } else {
+      activeWorkDiv.innerHTML = '<div style="color:var(--muted);font-size:12px;">No active work</div>';
+    }
+  } catch (err) {
+    document.getElementById('active-work').innerHTML = '<div style="color:var(--muted);font-size:12px;">No active work</div>';
+  }
+
+  // Update recent completions (completed items)
+  try {
+    const resp = await fetch('/api/queue/list/completed');
+    const completedData = await resp.json();
+    const recentWorkDiv = document.getElementById('recent-work');
+    if (completedData.items && completedData.items.length > 0) {
+      recentWorkDiv.innerHTML = completedData.items.slice(0, 3).map(item => `
+        <div class="ops-list-item">
+          <span class="label">Issue #${item.issueNumber}</span>
+          <span class="value" style="color:var(--success);">${item.title || 'Untitled'}</span>
+        </div>
+      `).join('');
+    } else {
+      recentWorkDiv.innerHTML = '<div style="color:var(--muted);font-size:12px;">No completed work</div>';
+    }
+  } catch (err) {
+    document.getElementById('recent-work').innerHTML = '<div style="color:var(--muted);font-size:12px;">No completed work</div>';
   }
 
   // Update Agent Status tab

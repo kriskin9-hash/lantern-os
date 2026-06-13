@@ -27,8 +27,17 @@ function getQueueStats(repoRoot) {
   ['pending', 'assigned', 'completed', 'failed'].forEach(status => {
     const statusDir = path.join(baseDir, status);
     if (fs.existsSync(statusDir)) {
-      const files = fs.readdirSync(statusDir).filter(f => f.endsWith('.json'));
-      stats[status] = files.length;
+      // Look for JSONL files and count entries
+      const jsonlFiles = fs.readdirSync(statusDir).filter(f => f.endsWith('.jsonl'));
+      jsonlFiles.forEach(file => {
+        try {
+          const content = fs.readFileSync(path.join(statusDir, file), 'utf8');
+          const lines = content.trim().split('\n').filter(l => l.length > 0);
+          stats[status] += lines.length;
+        } catch (e) {
+          // Skip malformed files
+        }
+      });
     }
   });
 

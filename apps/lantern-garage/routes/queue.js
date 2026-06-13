@@ -86,8 +86,19 @@ module.exports = async function queueRoutes(req, res, url, deps) {
 
       let items = [];
       if (fs.existsSync(queuePath)) {
-        const files = fs.readdirSync(queuePath).filter((f) => f.endsWith(".json"));
-        items = files.map((f) => JSON.parse(fs.readFileSync(path.join(queuePath, f), "utf8")));
+        // Read JSONL files
+        const files = fs.readdirSync(queuePath).filter((f) => f.endsWith(".jsonl"));
+        files.forEach((f) => {
+          const content = fs.readFileSync(path.join(queuePath, f), "utf8");
+          const lines = content.trim().split("\n").filter((l) => l.length > 0);
+          lines.forEach((line) => {
+            try {
+              items.push(JSON.parse(line));
+            } catch (e) {
+              // Skip malformed lines
+            }
+          });
+        });
       }
 
       sendJson(res, {
