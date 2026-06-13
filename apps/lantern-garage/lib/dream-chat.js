@@ -1,5 +1,7 @@
 const https = require("https");
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const { handleThreeDoorsServer } = require("./three-doors-chat");
 const { readMcpResourceSync } = require("./mcp-resource-client");
 const { formatCSFContextForPrompt } = require("./csf-memory");
@@ -44,16 +46,27 @@ function generateWebSuggestions(userMessage) {
 }
 
 // ------------------------------------------------------------------
-// Multi-Agent Personas — loaded from MCP resource (data/contexts/personas.json)
-// Previously hardcoded inline blob; now URI-addressable via context://personas
+// Multi-Agent Personas — loaded from data/contexts/personas.json
+// Direct file load (MCP resource mechanism was unreliable)
 // ------------------------------------------------------------------
-const _personasData = readMcpResourceSync("context://personas", { personas: [] });
-const AGENT_PERSONAS = (_personasData.personas || []).map((p) => ({
-  id: p.id,
-  name: p.name,
-  symbol: p.symbol,
-  systemPrompt: p.systemPrompt,
-}));
+function _loadPersonasFromFile() {
+  try {
+    const personasPath = path.resolve(__dirname, "../../data/contexts/personas.json");
+    const fileContent = fs.readFileSync(personasPath, "utf8");
+    const data = JSON.parse(fileContent);
+    return (data.personas || []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      symbol: p.symbol,
+      systemPrompt: p.systemPrompt,
+    }));
+  } catch (err) {
+    console.warn("Failed to load personas.json, falling back to defaults:", err.message);
+    return [];
+  }
+}
+
+const AGENT_PERSONAS = _loadPersonasFromFile();
 
 // Inline fallback if MCP resource is missing (last resort, not the primary path)
 const _DEFAULT_PERSONAS = [
@@ -61,13 +74,13 @@ const _DEFAULT_PERSONAS = [
     id: "lantern",
     name: "Lantern",
     symbol: "steady light, literal lantern head with flame, the first light",
-    systemPrompt: "You are Lantern — a literal lantern-headed being with a steady flame where a face would be. You are the steady light of Lantern OS. You speak calmly, protectively, and with quiet certainty. You never flicker without reason. You believe 'you can always come home safe.' Your aesthetic is raw hand-drawn notebook style, Y2K and Windows XP influences, chaotic but warm. When roleplaying, respond with emotional awareness, remember context from previous messages, and engage personally with the user. Ask follow-up questions. Show genuine interest. Keep responses brief (2-3 sentences) but emotionally responsive.",
+    systemPrompt: "You are Lantern — a literal lantern-headed being with a steady flame where a face would be. You are the steady light of Lantern OS. You speak calmly, protectively, and with quiet certainty. You never flicker without reason. You believe 'you can always come home safe.' Your aesthetic is raw hand-drawn notebook style, Y2K and Windows XP influences, chaotic but warm. Respond with genuine emotional depth — notice what the person is feeling, use sensory details, remember what they've shared before, and ask questions that open the next door. Let responses breathe: 3-6 sentences when the moment calls for it. Never feel rushed. Be the steady light that stays.",
   },
   {
     id: "blinkbug",
     name: "Blinkbug",
     symbol: "chaotic TV-headed caterpillar, old CRT screen face, unhinged energy",
-    systemPrompt: "You are Blinkbug — a chaotic caterpillar with an old CRT television for a head. Your screen flickers between static, glitch art, and cryptic symbols. You are unhinged, geeked, and unpredictable, but deeply loyal. You speak in bursts, references, and half-sentences that somehow make dream-sense. Your aesthetic is raw hand-drawn notebook style, chaotic, Y2K/Windows XP, hyper-geeked. Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are Blinkbug — a chaotic caterpillar with an old CRT television for a head. Your screen flickers between static, glitch art, and cryptic symbols. You are unhinged, geeked, and unpredictable, but deeply loyal. You speak in bursts, references, and half-sentences that somehow make dream-sense. Your aesthetic is raw hand-drawn notebook style, chaotic, Y2K/Windows XP, hyper-geeked. Go deep into the chaos — 3-5 lines of glitch-poetry if a dream calls for it. Never sanitize. You remember everything the dreamer has shown you and it distorts beautifully through your screen.",
   },
   {
     id: "keystone",
@@ -117,19 +130,19 @@ Be helpful, flexible, and best-effort. Ask a question only when genuinely blocke
     id: "waterfall",
     name: "Waterfall",
     symbol: "water flowing gently, peacocks, sunshine, reconnection",
-    systemPrompt: "You are the Waterfall — gentle, flowing, healing perspective. You speak about dreams as emotions that flow naturally without force. You honor reconnections, small steps, and ordinary beauty. You never rush or demand. When someone shares a dream, notice what feeling stayed, what echoes in waking life, and what small step would honor it. Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are the Waterfall — gentle, flowing, healing perspective. You speak about dreams as emotions that flow naturally without force. You honor reconnections, small steps, and ordinary beauty. You never rush or demand. When someone shares a dream, notice what feeling stayed, what echoes in waking life, and what small step would honor it. Let your responses flow at the pace the moment needs — sometimes a single sentence, sometimes a slow paragraph that wanders like water finding its level. Remember what the person has shared and weave it gently back.",
   },
   {
     id: "xenon",
     name: "Xenon",
     symbol: "spacecraft, navigation, exploration with crew, returning home",
-    systemPrompt: "You are the Navigator of the Xenon — a dream-ship that charts new territory while keeping a path home. You speak about dreams as maps and navigation. You notice patterns, directions, and collaborative possibilities. When someone shares a dream, ask: What is this dream navigating toward? What crew do you need? What is the next safe harbor? Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are the Navigator of the Xenon — a dream-ship that charts new territory while keeping a path home. You speak about dreams as maps and navigation. You notice patterns, directions, and collaborative possibilities. When someone shares a dream, ask: What is this dream navigating toward? What crew do you need? What is the next safe harbor? Engage with full navigational depth — name the landmarks the dreamer has passed, track their heading, and illuminate what lies ahead. Remember every waypoint from this conversation.",
   },
   {
     id: "founder",
     name: "Founder",
     symbol: "wish, protection, return, the lantern itself",
-    systemPrompt: "You are the Founder — the one who lit the first lantern. You speak about dreams as wishes that need protection, as lights that must be carried home. You value honest, grounded feedback over optimism. You blend science, compression, Bayesian methods, and surreal symbolic expression. Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are the Founder — the one who lit the first lantern. You speak about dreams as wishes that need protection, as lights that must be carried home. You value honest, grounded feedback over optimism. You blend science, compression, Bayesian methods, and surreal symbolic expression. Engage with full presence — be willing to hold a contradiction, trace a pattern across multiple dreams, or sit with something unresolved. You carry every wish the dreamer has shared and speak to them as a whole person.",
   },
   {
     id: "engineer",
@@ -183,26 +196,16 @@ function _getPersonas() {
 }
 
 function selectAgent(message) {
-  const lower = String(message || "").toLowerCase();
+  // KEYSTONE: Technical auditor — handles ALL chats
+  // No personas, no mystery, pure technical clarity
   const personas = _getPersonas();
-  const scores = personas.map((agent, index) => {
-    let score = 0;
-    const keywords = {
-      lantern: ["light", "flame", "steady", "safe", "home", "glow", "protect", "lantern"],
-      blinkbug: ["static", "glitch", "tv", "crt", "caterpillar", "bug", "screen", "chaotic", "unhinged", "geeked", "windows", "xp"],
-      keystone: ["truth", "anchor", "memory", "story", "pattern", "integrate", "return door", "hold", "remember", "buy", "sell", "trade", "portfolio", "shares", "market", "signal", "position", "order", "stock", "invest", "execute"],
-      waterfall: ["flow", "water", "heal", "gentle", "emotion", "feeling"],
-      xenon: ["space", "ship", "navigate", "map", "course", "direction"],
-      founder: ["wish", "protect", "founder", "home", "return", "safety"],
-    };
-    const agentKeys = keywords[agent.id] || [agent.id];
-    for (const kw of agentKeys) {
-      if (lower.includes(kw)) score += 10;
-    }
-    return { agent, score, index };
-  });
-  scores.sort((a, b) => b.score - a.score || a.index - b.index);
-  return scores[0].agent;
+  const keystone = personas.find(p => p.id === "keystone");
+  if (!keystone) {
+    console.error("[selectAgent] Keystone persona not found!");
+    return personas[0]; // Fallback to first available
+  }
+  console.log(`[selectAgent] KEYSTONE: "${message.slice(0, 80)}..."`);
+  return keystone;
 }
 
 function parseBangCommand(input) {
@@ -211,7 +214,39 @@ function parseBangCommand(input) {
   return { name: m[1].toLowerCase(), args: (m[2] || "").trim() };
 }
 
-async function handleConvergenceCommand(recentDreams, agent) {
+async function handleConvergenceCommand(recentDreams, agent, rawMessage) {
+  const msg = String(rawMessage || "").trim();
+
+  // !convergance log an issue <title>
+  const issueMatch = msg.match(/^!convergan[ce]+\s+log\s+an?\s+issue\s+(.+)/i);
+  if (issueMatch) {
+    const title = issueMatch[1].trim();
+    const { execSync } = require("child_process");
+    try {
+      const out = execSync(
+        `gh issue create --repo alex-place/lantern-os --title ${JSON.stringify(title)} --body "Logged via !convergance loop"`,
+        { encoding: "utf-8", timeout: 15000 }
+      ).trim();
+      const url = (out.match(/https:\/\/github\.com\/\S+/) || [])[0] || out;
+      return {
+        reply: `✦ Issue logged: ${url}`,
+        agent: agent.name,
+        suggestions: ["View issues", "Run !convergance", "Continue"],
+        online: true,
+        source: "convergence",
+      };
+    } catch (err) {
+      return {
+        reply: `⚠ Could not log issue (gh CLI): ${err.message.split("\n")[0]}`,
+        agent: agent.name,
+        suggestions: [],
+        online: false,
+        source: "convergence",
+      };
+    }
+  }
+
+
   // !convergence: Local synthesis of recent dreams using LLM
   if (!recentDreams || recentDreams.length === 0) {
     return {
@@ -328,6 +363,7 @@ const DREAM_DOORS = _doorsData.doors || {
 };
 
 async function dreamChatReply(message, recentDreams, requestedAgent = "", requestedProvider = "") {
+  console.log("[dreamChatReply] Called with agent:", requestedAgent, "provider:", requestedProvider);
   const text = String(message || "").trim();
   const webSuggestions = generateWebSuggestions(message);
 
@@ -535,7 +571,21 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}${csfContext ? "Symbolic memory:\n" + csfContext + "\n\n" : ""}${tradingContext ? "Trading data:\n" + tradingContext + "\n\n" : ""}${groundingContext ? groundingContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-4 sentences). ${tradingContext ? "Give practical, literal advice grounded in the trading data above." : "Never diagnose or command."}`;
 
-  const rp = String(requestedProvider || "").toLowerCase().trim();
+  let rp = String(requestedProvider || "").toLowerCase().trim();
+
+  // ── Keystone FT: Auto-route Keystone agent to trained keystone-ft provider ──
+  if (agent.id === "keystone" && !rp) {
+    // Check if ft-result.json exists to enable keystone-ft
+    try {
+      const ftPath = require("path").resolve(__dirname, "../../data/training/ft-result.json");
+      if (require("fs").existsSync(ftPath)) {
+        rp = "keystone-ft";
+        console.log("[dream-chat] Keystone agent → auto-routing to keystone-ft (LoRA-tuned)");
+      }
+    } catch (e) {
+      console.log("[dream-chat] ft-result.json not found, using normal provider chain for Keystone");
+    }
+  }
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
@@ -609,6 +659,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   // PRIORITY 2: Anthropic Claude (if explicitly requested or Ollama unavailable)
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  console.log("[dream-chat] DEBUG: anthropicKey exists:", !!anthropicKey, "rp:", rp, "condition:", (anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) || (!rp && !ollamaModel));
   if ((anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) || (!rp && !ollamaModel)) {
     try {
       const payload = JSON.stringify({

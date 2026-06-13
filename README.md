@@ -142,10 +142,16 @@ Or for a one-shot start:
 npm start --prefix apps/lantern-garage
 ```
 
-Open:
+Open locally:
 
 ```text
 http://127.0.0.1:4177
+```
+
+Or access publicly (via Cloudflare Tunnel):
+
+```text
+https://lantern-os.net
 ```
 
 The longer local setup, optional MCP server, optional Discord bot, and validation commands are listed below.
@@ -339,6 +345,10 @@ convergence receipt
 
 Lantern OS includes an MCP server for local tool and agent integration.
 
+**Access:**
+- **Local (development):** `http://127.0.0.1:8771`
+- **Public (production via Cloudflare Tunnel):** `https://mcp.lantern-os.net`
+
 The MCP path is used to verify:
 
 | Runtime Surface | Purpose |
@@ -350,6 +360,22 @@ The MCP path is used to verify:
 | Receipts | Records proof of runtime state and task results. |
 
 The orchestrator dependency currently centers on named agent slots such as Claude, Codex, Gemini, and GPT, each of which must register, discover tools, bind context, and remain callable through the operator-controlled dispatch path.
+
+OAuth2-protected MCP endpoint available at `https://mcp.lantern-os.net/oauth` with support for Google, GitHub, and Discord authentication.
+
+---
+
+## Public Deployment (Cloudflare Tunnel)
+
+Lantern OS can be accessed publicly via **Cloudflare Tunnel** without port forwarding or router changes:
+
+| URL | Service |
+|-----|---------|
+| `https://lantern-os.net` | Dream Journal chat UI + API |
+| `https://mcp.lantern-os.net` | MCP server (public) |
+| `https://mcp.lantern-os.net/oauth` | MCP server (OAuth2 protected) |
+
+For setup details, see [`docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md`](docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md).
 
 ---
 
@@ -377,7 +403,9 @@ python -m pip install -r requirements.txt
 node apps/lantern-garage/server.js
 ```
 
-Open `http://127.0.0.1:4177`.
+Open locally: `http://127.0.0.1:4177`
+
+Or access publicly: `https://lantern-os.net`
 
 ### Configure AI Providers (Optional)
 
@@ -391,11 +419,12 @@ Supported providers: Gemini, Claude, OpenAI, Grok, Ollama (local).
 
 ### Optional Services
 
-| Service | Command | Port |
-|---|---|---|
-| MCP server | `python src/mcp_server/server.py` | 8771 |
-| Convergence loop | `python src/convergence_io_engine.py loop` | — |
-| Discord bot | `python src/discord_lounge_bot/bot.py` | — |
+| Service | Command | Port | Public Route |
+|---|---|---|---|
+| MCP server | `python src/mcp_server/server.py` | 8771 | `https://mcp.lantern-os.net` |
+| OAuth2 MCP | `python src/mcp_server/server_oauth.py` | 8772 | `https://mcp.lantern-os.net/oauth` |
+| Convergence loop | `python src/convergence_io_engine.py loop` | — | — |
+| Discord bot | `python src/discord_lounge_bot/bot.py` | — | — |
 
 ### Full Stack Startup
 
@@ -475,6 +504,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Update-InternalHou
 | [caad/dollhouse-csf-upgrade.md](caad/dollhouse-csf-upgrade.md) | CADD intake flow for CSF archives |
 | [docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md](docs/PUBLIC-REPORT-EVIDENCE-BOUNDARY.md) | Evidence and claim-labeling guidance for reports |
 | [docs/REPO-CONTRACT.md](docs/REPO-CONTRACT.md) | Repository scope and cleanup contract |
+| [docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md](docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md) | Public deployment via Cloudflare Tunnel (HTTPS, no port forwarding) |
 
 ---
 

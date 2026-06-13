@@ -512,12 +512,22 @@ class LoungeState:
     _pool: dict[str, list[LoungeTrack]] = field(default_factory=dict)
 
 
+# Memory limits to prevent unbounded growth
+_MAX_QUEUE_SIZE = 50
+_MAX_CATALOG_TRACKS = 200
+_MAX_GUILD_STATES = 100
+
 _LOUNGE_STATES: dict[int, LoungeState] = {}
 _LOUNGE_CATALOG: dict[str, list[LoungeTrack]] = {}
 
 
 def _lounge_state(guild_id: int) -> LoungeState:
     if guild_id not in _LOUNGE_STATES:
+        # LRU eviction if too many guild states
+        if len(_LOUNGE_STATES) >= _MAX_GUILD_STATES:
+            # Remove oldest state (first key in dict)
+            oldest_guild = next(iter(_LOUNGE_STATES))
+            del _LOUNGE_STATES[oldest_guild]
         _LOUNGE_STATES[guild_id] = LoungeState()
     return _LOUNGE_STATES[guild_id]
 
@@ -527,7 +537,10 @@ def _lounge_refill(state: LoungeState, mode: str) -> None:
     if not pool:
         return
     random.shuffle(pool)
-    state.queue.extend(pool)
+    # Limit queue size to prevent unbounded growth
+    remaining_slots = _MAX_QUEUE_SIZE - len(state.queue)
+    if remaining_slots > 0:
+        state.queue.extend(pool[:remaining_slots])
 
 
 # ── Lounge: catalog resolution ─────────────────────────────────────────────────
@@ -581,6 +594,9 @@ def _lounge_build_catalog() -> dict[str, list[LoungeTrack]]:
         tracks: list[LoungeTrack] = []
         for ident in ids:
             tracks.extend(_lounge_resolve_item(ident, mode))
+        # Limit catalog size to prevent unbounded memory growth
+        if len(tracks) > _MAX_CATALOG_TRACKS:
+            tracks = tracks[:_MAX_CATALOG_TRACKS]
         catalog[mode] = tracks
         print(f"  [lounge] mode={mode}: {len(tracks)} tracks total")
     return catalog

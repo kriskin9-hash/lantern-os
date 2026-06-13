@@ -209,7 +209,7 @@ docker-compose -f docker-compose.dream-journal.yml logs -f
 
 ### Health Check
 ```bash
-curl http://localhost:5000/health
+curl http://127.0.0.1:4177/health
 ```
 
 ---
@@ -316,8 +316,8 @@ If you were using the unified container:
 
 4. **Verify:**
    ```bash
-   curl http://localhost:5000/health
-   curl http://localhost:5000/dreams/stats
+   curl http://127.0.0.1:4177/health
+   curl http://127.0.0.1:4177/dreams/stats
    ```
 
 5. **Cleanup:**

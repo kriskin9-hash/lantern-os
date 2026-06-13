@@ -1,8 +1,15 @@
 # Dream Journal API - Complete Endpoint Reference
 
 ## Base URL
+
+**Local (Development):**
 ```
-http://localhost:5000
+http://127.0.0.1:4177
+```
+
+**Public (Production via Cloudflare Tunnel):**
+```
+https://lantern-os.net
 ```
 
 ---
@@ -14,7 +21,7 @@ Returns service information and available endpoints.
 
 **Request:**
 ```bash
-curl http://localhost:5000/
+curl http://127.0.0.1:4177/
 ```
 
 **Response (200 OK):**
@@ -42,7 +49,7 @@ Service health check. Used by Docker health checks and load balancers.
 
 **Request:**
 ```bash
-curl http://localhost:5000/health
+curl http://127.0.0.1:4177/health
 ```
 
 **Response (200 OK):**
@@ -68,7 +75,7 @@ Log a new dream to the journal.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:5000/dreams/log \
+curl -X POST http://127.0.0.1:4177/api/dream/chat \
   -H "Content-Type: application/json" \
   -d '{
     "content": "I was flying through clouds with strange music playing",
@@ -116,7 +123,7 @@ Retrieve recent dreams from the journal.
 
 **Request:**
 ```bash
-curl "http://localhost:5000/dreams/recent?limit=10"
+curl "http://127.0.0.1:4177/dreams/recent?limit=10"
 ```
 
 **Query Parameters:**
@@ -149,13 +156,13 @@ curl "http://localhost:5000/dreams/recent?limit=10"
 **Examples:**
 ```bash
 # Get last 5 dreams
-curl "http://localhost:5000/dreams/recent?limit=5"
+curl "http://127.0.0.1:4177/dreams/recent?limit=5"
 
 # Get last 20 dreams
-curl "http://localhost:5000/dreams/recent?limit=20"
+curl "http://127.0.0.1:4177/dreams/recent?limit=20"
 
 # Get all dreams (no limit)
-curl "http://localhost:5000/dreams/recent?limit=1000"
+curl "http://127.0.0.1:4177/dreams/recent?limit=1000"
 ```
 
 **Performance:**
@@ -170,7 +177,7 @@ Retrieve a specific dream by ID.
 
 **Request:**
 ```bash
-curl "http://localhost:5000/dreams/dream_20260602_153757"
+curl "http://127.0.0.1:4177/dreams/dream_20260602_153757"
 ```
 
 **Response (200 OK):**
@@ -205,7 +212,7 @@ Generate an LLM interpretation prompt for a dream.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:5000/dreams/mirror-prompt \
+curl -X POST http://127.0.0.1:4177/dreams/mirror-prompt \
   -H "Content-Type: application/json" \
   -d '{
     "dream_id": "dream_20260602_153757"
@@ -229,7 +236,7 @@ curl -X POST http://localhost:5000/dreams/mirror-prompt \
 **Usage with Claude/Grok:**
 ```bash
 # Get prompt
-PROMPT=$(curl -s -X POST http://localhost:5000/dreams/mirror-prompt \
+PROMPT=$(curl -s -X POST http://127.0.0.1:4177/dreams/mirror-prompt \
   -H "Content-Type: application/json" \
   -d '{"dream_id": "dream_20260602_153757"}' | jq -r '.prompt')
 
@@ -250,7 +257,7 @@ Get statistics about the dream journal.
 
 **Request:**
 ```bash
-curl http://localhost:5000/dreams/stats
+curl http://127.0.0.1:4177/dreams/stats
 ```
 
 **Response (200 OK):**
@@ -282,7 +289,7 @@ Agent-runtime endpoint for local dream mirroring (requires Ollama/local agent).
 
 **Request:**
 ```bash
-curl -X POST http://localhost:5000/dreams/agent/mirror \
+curl -X POST http://127.0.0.1:4177/dreams/agent/mirror \
   -H "Content-Type: application/json" \
   -d '{
     "content": "I was flying through clouds with strange music playing"
@@ -342,7 +349,7 @@ Option 3 - Alternative field:
 
 ```bash
 # 1. Log a dream
-DREAM_ID=$(curl -s -X POST http://localhost:5000/dreams/log \
+DREAM_ID=$(curl -s -X POST http://127.0.0.1:4177/dreams/log \
   -H "Content-Type: application/json" \
   -d '{
     "content": "Exploring a crystal cave with bioluminescent creatures",
@@ -355,22 +362,22 @@ DREAM_ID=$(curl -s -X POST http://localhost:5000/dreams/log \
 echo "Logged dream: $DREAM_ID"
 
 # 2. Retrieve it
-curl "http://localhost:5000/dreams/$DREAM_ID" | jq .
+curl "http://127.0.0.1:4177/dreams/$DREAM_ID" | jq .
 
 # 3. Get recent dreams
-curl "http://localhost:5000/dreams/recent?limit=5" | jq .
+curl "http://127.0.0.1:4177/dreams/recent?limit=5" | jq .
 ```
 
 ### Example 2: Generate Interpretation
 
 ```bash
 # 1. Get a recent dream
-DREAM=$(curl -s "http://localhost:5000/dreams/recent?limit=1" | jq '.dreams[0]')
+DREAM=$(curl -s "http://127.0.0.1:4177/dreams/recent?limit=1" | jq '.dreams[0]')
 
 DREAM_ID=$(echo $DREAM | jq -r '.id')
 
 # 2. Generate prompt
-PROMPT=$(curl -s -X POST http://localhost:5000/dreams/mirror-prompt \
+PROMPT=$(curl -s -X POST http://127.0.0.1:4177/dreams/mirror-prompt \
   -H "Content-Type: application/json" \
   -d "{\"dream_id\": \"$DREAM_ID\"}" | jq -r '.prompt')
 
@@ -382,7 +389,7 @@ echo "$PROMPT"
 
 ```bash
 # Run every hour to track lucidity trends
-curl http://localhost:5000/dreams/stats | jq '{
+curl http://127.0.0.1:4177/dreams/stats | jq '{
   total: .total_dreams,
   avg_lucidity: .avg_lucidity,
   date: now | strftime("%Y-%m-%d %H:%M:%S")
@@ -395,7 +402,7 @@ curl http://localhost:5000/dreams/stats | jq '{
 import requests
 import json
 
-BASE_URL = "http://localhost:5000"
+BASE_URL = "http://127.0.0.1:4177"
 
 # Log dream
 dream_data = {

@@ -148,6 +148,10 @@ class MemoryRecord:
         return cls(**d)
 
 
+# Memory limits to prevent unbounded growth
+_MAX_INDEX_SIZE = 100_000
+
+
 class MemoryEngine:
     """Local-first cube-partitioned memory store."""
 
@@ -224,9 +228,17 @@ class MemoryEngine:
     def _update_index(self, record: MemoryRecord) -> None:
         """Add a record to keyword/entity indexes."""
         for kw in record.keywords:
-            self._keyword_index[kw.lower()].add(record.memory_id)
+            kw_lower = kw.lower()
+            # Skip index update if already at max size
+            if len(self._keyword_index[kw_lower]) >= _MAX_INDEX_SIZE:
+                continue
+            self._keyword_index[kw_lower].add(record.memory_id)
         for ent in record.entities:
-            self._entity_index[ent.lower()].add(record.memory_id)
+            ent_lower = ent.lower()
+            # Skip index update if already at max size
+            if len(self._entity_index[ent_lower]) >= _MAX_INDEX_SIZE:
+                continue
+            self._entity_index[ent_lower].add(record.memory_id)
 
     def _save_index(self) -> None:
         """Persist indexes to JSON for fast cold starts."""
