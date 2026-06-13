@@ -136,12 +136,26 @@
 async function refreshStatus() {
   try {
     // Fetch queue status
-    const queueResp = await fetch("/api/queue/status");
-    const queueData = await queueResp.json();
+    let queueData = { queue: { pending: 0, assigned: 0, completed: 0, failed: 0 } };
+    try {
+      const queueResp = await fetch("/api/queue/status");
+      if (queueResp.ok) {
+        queueData = await queueResp.json();
+      }
+    } catch (e) {
+      console.warn("Queue API unavailable, using defaults");
+    }
 
     // Fetch agent status
-    const agentResp = await fetch("/api/agents/status");
-    const agentData = await agentResp.json();
+    let agentData = { slots: [] };
+    try {
+      const agentResp = await fetch("/api/agents/status");
+      if (agentResp.ok) {
+        agentData = await agentResp.json();
+      }
+    } catch (e) {
+      console.warn("Agent API unavailable, using defaults");
+    }
 
     // Update queue stats
     document.getElementById("statPending").textContent = queueData.queue?.pending || 0;
