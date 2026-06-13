@@ -49,15 +49,15 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
   let markets = [];
 
   // Try collector cache first
+  const nowMs = Date.now();
   if (collector) {
     const latest = collector.getLatestMarkets();
     if (latest && latest.length > 0) {
-      markets = latest.filter(isCryptoMarket);
+      markets = latest.filter(m => isShortWindowMarket(m, nowMs));
     }
   }
 
   // Fall back to API
-  const nowMs = Date.now();
   if (markets.length === 0) {
     try {
       const mk = await kalshi.getMarkets({ status: "open", limit: 500 });
