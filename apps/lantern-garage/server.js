@@ -70,6 +70,7 @@ const deps = {
 
 const routes = [
   require("./routes/status"),
+  require("./routes/system-overview"),
   require("./routes/ui"),
   require("./routes/nodes"),
   require("./routes/mesh"),

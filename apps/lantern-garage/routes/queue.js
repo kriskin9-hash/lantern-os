@@ -102,8 +102,9 @@ module.exports = async function queueRoutes(req, res, url, deps) {
     }
   }
 
-  // ── GET /api/agents/status ──
-  if (url.pathname === "/api/agents/status" && req.method === "GET") {
+  // ── GET /api/queue/agents ──
+  // Returns agent slot status specific to queue management (not Tesseract fleet data)
+  if (url.pathname === "/api/queue/agents" && req.method === "GET") {
     sendJson(res, {
       slots: [
         { id: "claude", status: "idle", currentWork: null, completedCount: 0, failedCount: 0 },
