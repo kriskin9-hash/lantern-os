@@ -158,6 +158,29 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     }
     try {
       const scan = await traderAgent.scanMarket();
+      if (!scan.error) {
+        const signals = Array.isArray(scan.signals) ? scan.signals : [];
+        const logEntries = [
+          {
+            id: `scan_${scan.timestamp}_summary`,
+            agent: 'scanner',
+            action: `Scanned ${scan.watchlist_count ?? '?'} tickers — ${signals.length} signal${signals.length === 1 ? '' : 's'}`,
+            symbol: '',
+            timestamp: scan.timestamp,
+          },
+          ...signals.filter((s) => s && s.symbol).map((s) => ({
+            id: `scan_${scan.timestamp}_${s.symbol}`,
+            agent: s.agent || 'scanner',
+            action: s.direction || s.action || s.status || 'signal',
+            symbol: s.symbol,
+            confidence: s.confidence,
+            timestamp: scan.timestamp,
+          })),
+        ];
+        tradingMemory.recordNewSignals({ logs: logEntries }).catch((e) => {
+          console.error('[Trading] /zones agent-log write failed:', e.message);
+        });
+      }
       sendJson(res, { zones: scan.zones || {} }, 200);
     } catch (error) {
       console.error('[Trading] /zones error:', error.message);
@@ -218,17 +241,14 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   // Recent agent activity log (from local memory or CSF)
   if (url.pathname === '/api/trading/agent-log' && req.method === 'GET') {
     try {
-      // Query recent records from CSF memory (via trading-memory.js)
-      const records = queryRecentTradingRecords(20);
-      // Filter to signal/log type records
-      const logs = records
-        .filter(r => r.data && (r.data.type === 'signal' || r.data.type === 'log'))
-        .map(r => ({
-          time: r.timestamp ? new Date(r.timestamp).toLocaleTimeString() : '',
-          type: r.data.type || 'system',
-          agent: r.data.agent || 'trader',
-          body: r.data.reason || r.data.body || JSON.stringify(r.data).slice(0, 90)
-        }));
+      // Query recent signal records from CSF memory (via trading-memory.js)
+      const records = queryRecentTradingRecords(20, 'signal');
+      const logs = records.map(r => ({
+        time: r.created_at ? new Date(r.created_at).toLocaleTimeString() : '',
+        type: 'signal',
+        agent: r.content.agent || 'trader',
+        body: r.content.action || JSON.stringify(r.content).slice(0, 90)
+      }));
       sendJson(res, logs, 200);
     } catch (error) {
       console.error('[Trading] /agent-log error:', error.message);
@@ -242,19 +262,17 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   if (url.pathname === '/api/trading/orders' && req.method === 'GET') {
     try {
       // Query recent order records from CSF memory
-      const records = queryRecentTradingRecords(50);
-      const orders = records
-        .filter(r => r.data && r.data.type === 'order')
-        .map(r => ({
-          id: r.data.id || r.id || '',
-          symbol: r.data.symbol || '',
-          side: r.data.side || '',
-          qty: r.data.qty || 0,
-          type: r.data.order_type || 'market',
-          status: r.data.status || 'unknown',
-          filled_at: r.data.filled_at || '',
-          filled_avg: r.data.filled_avg_price || 0
-        }));
+      const records = queryRecentTradingRecords(50, 'order');
+      const orders = records.map(r => ({
+        id: r.content.order_id || '',
+        symbol: r.content.symbol || '',
+        side: r.content.side || '',
+        qty: r.content.qty || 0,
+        type: (r.content.raw && r.content.raw.order_type) || 'market',
+        status: r.content.status || 'unknown',
+        filled_at: r.content.filled_at || '',
+        filled_avg: r.content.price || 0
+      }));
       sendJson(res, orders, 200);
     } catch (error) {
       console.error('[Trading] /orders error:', error.message);
