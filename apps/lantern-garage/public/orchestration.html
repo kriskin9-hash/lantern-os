@@ -146,15 +146,15 @@ async function refreshStatus() {
       console.warn("Queue API unavailable, using defaults");
     }
 
-    // Fetch agent status
+    // Fetch agent status (queue-specific slot data)
     let agentData = { slots: [] };
     try {
-      const agentResp = await fetch("/api/agents/status");
+      const agentResp = await fetch("/api/queue/agents");
       if (agentResp.ok) {
         agentData = await agentResp.json();
       }
     } catch (e) {
-      console.warn("Agent API unavailable, using defaults");
+      console.warn("Queue agents API unavailable, using defaults");
     }
 
     // Update queue stats
