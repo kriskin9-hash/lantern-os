@@ -178,13 +178,26 @@ def action_get_market_status(args):
             equity = 0
             day_pnl_pct = 0
 
+        # SPY 1-day / 5-day % change
+        spy_1d = 0.0
+        spy_5d = 0.0
+        try:
+            spy_bars = alpaca.get_bars('SPY', '1Day', limit=6).df
+            closes = spy_bars['close']
+            if len(closes) >= 2:
+                spy_1d = (closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2] * 100
+            if len(closes) >= 2:
+                spy_5d = (closes.iloc[-1] - closes.iloc[0]) / closes.iloc[0] * 100
+        except:
+            pass
+
         return {
             'market_open': market_open,
             'vix': vix,
             'vix_regime': vix_regime,
             'market': 'BULLISH' if day_pnl_pct > 0 else 'BEARISH' if day_pnl_pct < 0 else 'NEUTRAL',
-            'spy_1d': 0.0,
-            'spy_5d': 0.0,
+            'spy_1d': round(float(spy_1d), 2),
+            'spy_5d': round(float(spy_5d), 2),
             'day_pnl_pct': day_pnl_pct,
             'day_pnl_usd': equity - last_equity if 'last_equity' in locals() else 0,
             'equity': equity,
