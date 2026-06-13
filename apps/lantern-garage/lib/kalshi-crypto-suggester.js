@@ -7,14 +7,11 @@
 
 const kalshi = require("./kalshi-api");
 
-function isCryptoMarket(m) {
-  const title = (m.title || "").toUpperCase();
-  const event = (m.event_ticker || "").toUpperCase();
-  return (
-    title.includes("BTC") || title.includes("ETH") || title.includes("SOL") ||
-    title.includes("XRP") || title.includes("DOGE") || title.includes("ADA") ||
-    event.includes("CRYPTO") || event.includes("BTC") || event.includes("ETH")
-  );
+function isShortWindowMarket(m, nowMs) {
+  // Include ANY market closing in 1-6 hours (convergence window)
+  const closeMs = new Date(m.close_time).getTime();
+  const minsToClose = Math.round((closeMs - nowMs) / 60000);
+  return minsToClose > 0 && minsToClose <= 360; // 0-6 hours
 }
 
 function scoreIntraday(m, nowMs) {
@@ -60,20 +57,19 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
   }
 
   // Fall back to API
+  const nowMs = Date.now();
   if (markets.length === 0) {
     try {
       const mk = await kalshi.getMarkets({ status: "open", limit: 500 });
-      markets = (mk.data && mk.data.markets || []).filter(isCryptoMarket);
+      markets = (mk.data && mk.data.markets || []).filter(m => isShortWindowMarket(m, nowMs));
     } catch (e) {
       return { count: 0, cards: [], error: e.message };
     }
   }
 
   if (markets.length === 0) {
-    return { count: 0, cards: [], note: "No crypto markets available" };
+    return { count: 0, cards: [], note: "No markets closing in next 6 hours" };
   }
-
-  const nowMs = Date.now();
   const cards = [];
 
   for (const m of markets) {
