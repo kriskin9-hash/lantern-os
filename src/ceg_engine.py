@@ -1,10 +1,12 @@
 """
-CEG Engine — Convergence Execution Graph (v0.3)
+CEG Engine — Convergence Execution Graph (v0.4)
 
-Implements the formal execution substrate from issue #388:
+Implements the formal execution substrate from issues #388 (v0.3) and #390 (v0.4):
   G = (V, E, D, τ, S, H)
+  S(t) = (G, R, M, P)
+  S(t+1) = δ(S(t), event)
 
-Modules:
+Modules (v0.3):
   - Node taxonomy (Intent, Resource, Constraint, Authority, Memory, Trace)
   - CEG graph engine with typed edges
   - ExecutionContract compiler
@@ -12,6 +14,14 @@ Modules:
   - TimeDilationField (per-node D(v) = f(uncertainty, cost_pressure, confidence))
   - HotSwapRegistry (σ: v_old → v_new with rollback and AAPF trace events)
   - AAPFTrace (causal execution log — fully reconstructable)
+
+New in v0.4 (#390):
+  - UIProjectionNode: view_type, filter, render_policy
+  - EdgeType: derives_from, projects_to, swaps_to
+  - FeatureState enum: inactive / scheduled / active / suspended
+  - SwapHysteresis: ε threshold + cooldown + stability score
+  - NAP constraint evaluation step in CEGExecutor
+  - Memory update step in CEGExecutor
 """
 
 from __future__ import annotations
@@ -32,12 +42,20 @@ AAPF_LOG = REPO_ROOT / "data" / "agent-fleet" / "ceg-aapf.jsonl"
 # ── Node taxonomy ────────────────────────────────────────────────────────────
 
 class NodeType(str, Enum):
-    INTENT      = "intent"
-    RESOURCE    = "resource"
-    CONSTRAINT  = "constraint"
-    AUTHORITY   = "authority"
-    MEMORY      = "memory"
-    TRACE       = "trace"
+    INTENT         = "intent"
+    RESOURCE       = "resource"
+    CONSTRAINT     = "constraint"
+    AUTHORITY      = "authority"
+    MEMORY         = "memory"
+    TRACE          = "trace"
+    UI_PROJECTION  = "ui_projection"   # v0.4
+
+
+class FeatureState(str, Enum):                 # v0.4
+    INACTIVE   = "inactive"
+    SCHEDULED  = "scheduled"   # PCSF-eligible but not yet executing
+    ACTIVE     = "active"      # currently executing
+    SUSPENDED  = "suspended"   # swapped out
 
 
 class ResourceKind(str, Enum):
@@ -48,10 +66,13 @@ class ResourceKind(str, Enum):
 
 
 class EdgeType(str, Enum):
-    REQUIRES    = "requires"
-    ENABLES     = "enables"
-    BLOCKS      = "blocks"
-    EXECUTES_ON = "executes_on"
+    REQUIRES      = "requires"
+    ENABLES       = "enables"
+    BLOCKS        = "blocks"
+    EXECUTES_ON   = "executes_on"
+    DERIVES_FROM  = "derives_from"   # v0.4 — memory/context provenance
+    PROJECTS_TO   = "projects_to"    # v0.4 — graph → UI projection
+    SWAPS_TO      = "swaps_to"       # v0.4 — hot-swap successor link
 
 
 @dataclass
@@ -83,6 +104,14 @@ class CEGNode:
     content: Optional[Any] = None
     provenance: str = ""
     access_policy: str = "open"
+
+    # UIProjectionNode fields (v0.4)
+    view_type: str = ""
+    view_filter: Optional[str] = None
+    render_policy: str = "standard"    # "standard" | "compact" | "hidden"
+
+    # Feature state (v0.4)
+    feature_state: FeatureState = FeatureState.INACTIVE
 
     # Runtime dilation field (set by TimeDilationField)
     dilation: float = 1.0
@@ -312,15 +341,52 @@ class SwapEvent:
     rollback_state: Optional[Dict[str, Any]] = None
 
 
+class SwapHysteresis:                              # v0.4 — stability condition
+    """
+    Prevents oscillatory provider switching.
+    swap_allowed(v) only if:
+        improvement_score > ε
+        AND cooldown_elapsed
+        AND stability(v) > threshold
+    """
+
+    def __init__(self, epsilon: float = 0.05,
+                 cooldown_s: float = 30.0,
+                 stability_threshold: float = 0.4) -> None:
+        self.epsilon = epsilon
+        self.cooldown_s = cooldown_s
+        self.stability_threshold = stability_threshold
+        self._last_swap: Dict[str, float] = {}   # node_id → unix timestamp
+        self._swap_counts: Dict[str, int] = {}
+
+    def allowed(self, old: CEGNode, new: CEGNode) -> Tuple[bool, str]:
+        improvement = new.health - old.health + (old.cost_per_call - new.cost_per_call)
+        if improvement <= self.epsilon:
+            return False, f"improvement {improvement:.3f} ≤ ε {self.epsilon}"
+        elapsed = time.monotonic() - self._last_swap.get(old.id, 0.0)
+        if elapsed < self.cooldown_s:
+            return False, f"cooldown {self.cooldown_s - elapsed:.1f}s remaining"
+        stability = 1.0 / max(1, self._swap_counts.get(old.id, 0))
+        if stability < self.stability_threshold:
+            return False, f"stability {stability:.2f} < threshold {self.stability_threshold}"
+        return True, ""
+
+    def record_swap(self, node_id: str) -> None:
+        self._last_swap[node_id] = time.monotonic()
+        self._swap_counts[node_id] = self._swap_counts.get(node_id, 0) + 1
+
+
 class HotSwapRegistry:
     """
     σ: v_old → v_new — runtime node replacement preserving semantic continuity.
     H = { candidate_set, swap_policy, trigger_rules, rollback_state }
     """
 
-    def __init__(self, graph: CEG, trace: "AAPFTrace") -> None:
+    def __init__(self, graph: CEG, trace: "AAPFTrace",
+                 hysteresis: Optional[SwapHysteresis] = None) -> None:
         self._graph = graph
         self._trace = trace
+        self._hysteresis = hysteresis or SwapHysteresis()
         self._swap_policy: Dict[str, Any] = {
             "health_threshold": 0.3,
             "latency_threshold_ms": 8_000,
@@ -341,7 +407,8 @@ class HotSwapRegistry:
         return None
 
     def swap(self, old_id: str, new_node: CEGNode,
-             trigger: SwapTrigger, reason: str = "") -> SwapEvent:
+             trigger: SwapTrigger, reason: str = "",
+             check_hysteresis: bool = True) -> SwapEvent:
         with self._lock:
             old = self._graph.get_node(old_id)
             ts = _ts()
@@ -349,6 +416,14 @@ class HotSwapRegistry:
                 evt = SwapEvent(ts, old_id, new_node.id, trigger, reason, success=False)
                 self._trace.emit("swap", evt.__dict__)
                 return evt
+            # v0.4: hysteresis check before executing swap
+            if check_hysteresis:
+                ok, why = self._hysteresis.allowed(old, new_node)
+                if not ok:
+                    evt = SwapEvent(ts, old_id, new_node.id, trigger,
+                                    f"hysteresis blocked: {why}", success=False)
+                    self._trace.emit("swap_blocked", evt.__dict__)
+                    return evt
             # Save rollback state
             self._rollback[new_node.id] = old
             # Semantic continuity: copy state-bearing fields
@@ -357,6 +432,7 @@ class HotSwapRegistry:
             # Execute swap
             self._graph.remove_node(old_id)
             self._graph.add_node(new_node)
+            self._hysteresis.record_swap(old_id)
             evt = SwapEvent(ts, old_id, new_node.id, trigger, reason, success=True,
                             rollback_state={"health": old.health, "cost": old.cost_per_call})
             self._trace.emit("swap", evt.__dict__)
@@ -455,12 +531,29 @@ class CEGExecutor:
             "cost_pressure": 0.3,
         }
 
+    def _evaluate_nap(self, contract: ExecutionContract) -> Optional[str]:
+        """v0.4: NAP (Non-Negotiable Absolute Policies) — hard constraint evaluation."""
+        for node in self.graph.constraint_nodes():
+            if node.predicate and not node.predicate(contract):
+                return f"NAP constraint {node.id} violated: {node.scope}"
+        return None
+
     def run(self, contract: ExecutionContract,
             step_fn: Callable[[CEGNode, ExecutionContract], Dict[str, Any]],
             max_steps: int = 10) -> Dict[str, Any]:
         """
         Execute the contract against the graph using PCSF-selected resources.
         step_fn(node, contract) → {"reply": str, "done": bool, ...}
+
+        v0.4 execution loop:
+          1. observe S(t)
+          2. update D
+          3. evaluate NAP constraints
+          4. PCSF.reoptimize()
+          5. swap if required
+          6. execute step
+          7. emit trace
+          8. update memory M
         """
         root_id = self.trace.emit("execution_start", {
             "intent": contract.intent[:120],
@@ -471,7 +564,16 @@ class CEGExecutor:
         results: List[Dict[str, Any]] = []
         last_id = root_id
 
+        memory: Dict[str, Any] = {}   # v0.4: M — ephemeral memory updated per step
+
         for step in range(max_steps):
+            # v0.4 step 3: NAP hard constraint evaluation
+            violation = self._evaluate_nap(contract)
+            if violation:
+                self.trace.emit("nap_violation", {"violation": violation,
+                                                   "step": step}, causal_parent=last_id)
+                return {"error": f"NAP: {violation}", "steps": step}
+
             path = self.pcsf.reoptimize(self.graph, contract, self.dilation, self._state)
 
             if not path.feasible or not path.nodes:
@@ -521,6 +623,12 @@ class CEGExecutor:
             results.append(result)
             last_id = step_id
 
+            # v0.4 step 8: update memory M from result
+            if result.get("memory"):
+                memory.update(result["memory"])
+                self.trace.emit("memory_update", {"keys": list(result["memory"].keys()),
+                                                   "step": step}, causal_parent=step_id)
+
             if result.get("done"):
                 break
 
@@ -530,6 +638,7 @@ class CEGExecutor:
         }, causal_parent=last_id)
 
         return {"results": results, "steps": len(results),
+                "memory": memory,
                 "graph_snapshot": self.graph.snapshot()}
 
 
