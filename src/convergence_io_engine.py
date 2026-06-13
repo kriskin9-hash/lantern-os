@@ -767,6 +767,7 @@ class ConvergenceLoop:
         self.results: List[PhaseResult] = []
         self.artifacts: Dict[str, Any] = {}
         self._phase_cache: Dict[str, PhaseResult] = {}
+        self._phase_cache_max = 1000  # Limit cache size to prevent unbounded growth
         self._repo_hash: Optional[str] = None
         self._previous_receipt_path = self.repo_root / "manifests" / "evidence" / "convergence-latest.json"
         self._status_cube: Optional[Any] = None
@@ -865,6 +866,12 @@ class ConvergenceLoop:
                     any_fail = True
                 if key in self._CACHEABLE_PHASES:
                     self._phase_cache[key] = result
+                    # LRU eviction if cache exceeds max size
+                    if len(self._phase_cache) > self._phase_cache_max:
+                        # Remove oldest 10% of entries
+                        keys_to_remove = list(self._phase_cache.keys())[:len(self._phase_cache) // 10]
+                        for k in keys_to_remove:
+                            del self._phase_cache[k]
 
                 # Record phase performance to leaderboard
                 if self._perf_bridge:
