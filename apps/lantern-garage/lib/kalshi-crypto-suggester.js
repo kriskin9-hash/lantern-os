@@ -114,7 +114,7 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
       favSide,
       favLabel: favSide === "yes" ? "YES" : "NO",
       favAsk: favSide === "yes" ? yesAsk : noAsk,
-      conviction: Math.round(Math.min(99, 40 + (urgency || 0) / 2)),
+      conviction: Math.round(Math.min(99, 40 + (score || 0) / 3)),
       reason,
       minsToClose,
       close: m.close_time,
