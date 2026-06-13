@@ -269,25 +269,20 @@ if (fs.existsSync(aiTraderStartupScript)) {
 let cloudflaredProcess = null;
 const enableCloudflare = process.env.LANTERN_CLOUDFLARE_TUNNEL !== "false";
 if (enableCloudflare) {
-  const cloudflareConfigPath = path.join(repoRoot, "cloudflare-config.yml");
-  if (fs.existsSync(cloudflareConfigPath)) {
-    cloudflaredProcess = spawn("cloudflared", ["tunnel", "run", "lantern-os", "--config", cloudflareConfigPath], {
-      stdio: "inherit",
-      cwd: repoRoot,
-      env: { ...process.env },
-    });
-    cloudflaredProcess.on("error", (err) => {
-      console.error(`[Cloudflare Tunnel] Failed to start: ${err.message}`);
-      console.log("[Cloudflare Tunnel] Install with: choco install cloudflare-warp");
-    });
-    cloudflaredProcess.on("exit", (code) => {
-      console.log(`[Cloudflare Tunnel] exited with code ${code}`);
-    });
-    console.log(`[Cloudflare Tunnel] Starting (lantern-os)...`);
-  } else {
-    console.log("[Cloudflare Tunnel] Config not found. Create cloudflare-config.yml for public access.");
-    console.log("[Cloudflare Tunnel] See: docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md");
-  }
+  // Use tunnel run without explicit name to let cloudflared use ~/.cloudflared/config.yml
+  cloudflaredProcess = spawn("cloudflared", ["tunnel", "run"], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    env: { ...process.env },
+  });
+  cloudflaredProcess.on("error", (err) => {
+    console.error(`[Cloudflare Tunnel] Failed to start: ${err.message}`);
+    console.log("[Cloudflare Tunnel] Install with: choco install cloudflare-warp");
+  });
+  cloudflaredProcess.on("exit", (code) => {
+    console.log(`[Cloudflare Tunnel] exited with code ${code}`);
+  });
+  console.log(`[Cloudflare Tunnel] Starting (reading from ~/.cloudflared/config.yml)...`);
 } else {
   console.log("[Cloudflare Tunnel] Disabled (set LANTERN_CLOUDFLARE_TUNNEL=true to enable)");
 }
