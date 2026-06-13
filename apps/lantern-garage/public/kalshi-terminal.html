@@ -3,241 +3,264 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kalshi Terminal — Lantern OS</title>
+<title>Kalshi Swipe — Lantern OS</title>
 <style>
   :root{
-    --bg0:#0a0c10;--bg1:#12151c;--bg2:#1a1f29;--border:#262d3a;
-    --text:#e8eaf0;--text2:#8b93a7;--green:#00d4aa;--red:#ff5f6d;
-    --amber:#f5a623;--blue:#4a9eff;--mono:'IBM Plex Mono',ui-monospace,monospace;
+    --bg0:#0a0c10;--bg1:#12151c;--bg2:#1a1f29;--border:#2a313d;
+    --text:#e8eaf0;--text2:#a4adbf;--text3:#7b8498;
+    --green:#00d4aa;--red:#ff5f6d;--amber:#f5a623;--blue:#4a9eff;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg0);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:13px}
+  body{margin:0;background:var(--bg0);color:var(--text);font-family:system-ui,-apple-system,sans-serif;
+    font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
   a{color:var(--blue);text-decoration:none}
-  .topbar{display:flex;align-items:center;gap:14px;padding:8px 16px;background:var(--bg1);border-bottom:1px solid var(--border);flex-wrap:wrap}
+  /* topbar */
+  .topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--bg1);
+    border-bottom:1px solid var(--border);flex-wrap:wrap}
   .brand{font-weight:700;letter-spacing:.04em}
-  .chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--bg2);border:1px solid var(--border);color:var(--text2)}
+  .chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--bg2);
+    border:1px solid var(--border);color:var(--text2)}
   .chip b{color:var(--text)}
   .chip.live{background:rgba(255,95,109,.15);border-color:var(--red);color:var(--red)}
   .chip.dry{background:rgba(0,212,170,.12);border-color:var(--green);color:var(--green)}
-  .layout{display:grid;grid-template-columns:280px 1fr 320px;gap:1px;background:var(--border);height:calc(100vh - 41px)}
-  .col{background:var(--bg0);overflow-y:auto;padding:10px}
-  .panel-title{font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin:4px 0 8px}
-  input,select,button{font-family:var(--mono);font-size:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 8px}
-  button{cursor:pointer}
-  button:hover{border-color:var(--blue)}
-  button.buy{background:rgba(0,212,170,.15);border-color:var(--green);color:var(--green)}
-  button.sell{background:rgba(255,95,109,.15);border-color:var(--red);color:var(--red)}
-  .mkt-row{display:flex;justify-content:space-between;padding:6px 8px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px}
-  .mkt-row:hover{background:var(--bg2)}
-  .mkt-row.sel{background:var(--bg2);border-left:2px solid var(--blue)}
-  .ob-row{display:grid;grid-template-columns:1fr 1fr;font-family:var(--mono);font-size:11px;gap:2px}
-  .ob-yes{color:var(--green);text-align:right;padding:2px 6px;background:rgba(0,212,170,.06)}
-  .ob-no{color:var(--red);padding:2px 6px;background:rgba(255,95,109,.06)}
-  .field{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
-  .field label{font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase}
-  .row{display:flex;gap:6px}
-  .row>*{flex:1}
-  .card{background:var(--bg1);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:10px}
-  .kv{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;padding:3px 0}
-  .kv .k{color:var(--text2)}
-  .banner{padding:8px 10px;border-radius:5px;font-family:var(--mono);font-size:11px;margin-bottom:10px}
-  .banner.dry{background:rgba(0,212,170,.1);border:1px solid var(--green);color:var(--green)}
-  .banner.live{background:rgba(255,95,109,.12);border:1px solid var(--red);color:var(--red)}
-  .muted{color:var(--text2);font-family:var(--mono);font-size:10px}
-  .pos{color:var(--green)}.neg{color:var(--red)}
-  #orderResult{font-family:var(--mono);font-size:10px;white-space:pre-wrap;margin-top:8px}
+  .note{font-size:11px;color:var(--text3);text-align:center;padding:6px 16px}
+  /* deck */
+  .deck{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;padding:8px 16px 0;min-height:0}
+  .stage{position:relative;width:min(440px,94vw);height:min(520px,62vh)}
+  .card{position:absolute;inset:0;background:linear-gradient(160deg,var(--bg2),var(--bg1));
+    border:1px solid var(--border);border-radius:18px;padding:20px;display:flex;flex-direction:column;
+    box-shadow:0 18px 50px rgba(0,0,0,.45);will-change:transform;touch-action:none;cursor:grab;user-select:none}
+  .card.peek{transform:scale(.94) translateY(14px);filter:brightness(.7);z-index:1;pointer-events:none}
+  .card.front{z-index:2}
+  .card-top{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);
+    font-size:10px;color:var(--text3);letter-spacing:.04em}
+  .card-q{font-size:21px;font-weight:600;line-height:1.25;margin:14px 0 6px}
+  .sides{display:flex;gap:10px;margin:8px 0 14px}
+  .side{flex:1;border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;background:var(--bg0)}
+  .side .lbl{font-size:11px;color:var(--text2);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .side .pct{font-family:var(--mono);font-size:26px;font-weight:600}
+  .side .ask{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:2px}
+  .side.yes .pct{color:var(--green)} .side.no .pct{color:var(--red)}
+  .side.rec{border-color:currentColor;box-shadow:0 0 0 1px currentColor inset}
+  .side.yes.rec{color:var(--green)} .side.no.rec{color:var(--red)}
+  /* CIO read */
+  .cio{margin-top:auto}
+  .cio-head{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);
+    font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.12em;margin-bottom:5px}
+  .pick{font-weight:700}.pick.yes{color:var(--green)}.pick.no{color:var(--red)}
+  .conv-bar{height:7px;border-radius:4px;background:var(--bg0);overflow:hidden;border:1px solid var(--border)}
+  .conv-fill{height:100%;border-radius:4px}
+  .reason{font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:6px;min-height:13px}
+  /* swipe stamps */
+  .stamp{position:absolute;top:22px;font-family:var(--mono);font-weight:800;font-size:30px;
+    letter-spacing:.08em;padding:4px 12px;border-radius:8px;border:3px solid;opacity:0;transform:rotate(-12deg)}
+  .stamp.yes{left:20px;color:var(--green);border-color:var(--green)}
+  .stamp.no{right:20px;color:var(--red);border-color:var(--red);transform:rotate(12deg)}
+  /* actions */
+  .actions{display:flex;gap:18px;align-items:center;justify-content:center;padding:16px}
+  .abtn{width:62px;height:62px;border-radius:50%;border:2px solid var(--border);background:var(--bg1);
+    color:var(--text);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:transform .1s,border-color .1s}
+  .abtn:hover{transform:scale(1.08)}
+  .abtn.no{border-color:var(--red);color:var(--red)}
+  .abtn.yes{border-color:var(--green);color:var(--green)}
+  .abtn.skip{width:48px;height:48px;font-size:18px;color:var(--text3)}
+  .abtn .sub{position:absolute}
+  .alabel{font-family:var(--mono);font-size:9px;color:var(--text3);text-align:center;margin-top:-8px;padding-bottom:8px}
+  .alabels{display:flex;gap:18px;justify-content:center}
+  .alabels span{width:62px;text-align:center}
+  .alabels span.s{width:48px}
+  /* progress + end */
+  .progress{font-family:var(--mono);font-size:10px;color:var(--text3);text-align:center;padding:2px}
+  .end{text-align:center;color:var(--text2);font-size:15px;display:none;flex-direction:column;gap:12px;align-items:center}
+  .reload{font-family:var(--mono);font-size:12px;padding:8px 16px;border-radius:6px;border:1px solid var(--blue);
+    background:rgba(74,158,255,.12);color:var(--blue);cursor:pointer}
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(80px);
+    background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;
+    font-family:var(--mono);font-size:11px;max-width:90vw;opacity:0;transition:.25s;z-index:50;white-space:pre-wrap}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.dry{border-color:var(--green)} .toast.live{border-color:var(--red)} .toast.err{border-color:var(--amber)}
 </style>
 </head>
 <body>
 <div class="topbar">
-  <span class="brand">Kalshi Terminal</span>
+  <span class="brand">Kalshi Swipe</span>
   <span class="chip" id="cEnv">env —</span>
   <span class="chip" id="cBal">balance —</span>
   <span class="chip" id="cCreds">creds —</span>
   <span class="chip" id="cMode">mode —</span>
   <span class="chip" id="cExch">exchange —</span>
-  <a href="/trader-dashboard.html" style="margin-left:auto;font-size:11px">← Trader Dashboard</a>
+  <a href="/trader-dashboard.html" style="margin-left:auto;font-size:11px">← Dashboard</a>
 </div>
+<div class="note" id="note">Swipe right = bet YES (green) · left = bet NO (red) · down = pass. Practice mode — nothing is sent live.</div>
 
-<div class="layout">
-  <!-- Markets -->
-  <div class="col">
-    <div class="panel-title">Markets</div>
-    <div class="row" style="margin-bottom:8px">
-      <select id="series">
-        <option value="KXMLBGAME">MLB Game</option>
-        <option value="KXMLBSPREAD">MLB Spread</option>
-        <option value="KXMLBTOTAL">MLB Total</option>
-        <option value="">All (search)</option>
-      </select>
-      <button onclick="loadMarkets()">↻</button>
-    </div>
-    <input id="search" placeholder="filter ticker…" style="width:100%;margin-bottom:8px" oninput="renderMarkets()">
-    <div id="marketList"></div>
-  </div>
-
-  <!-- Market detail + order entry -->
-  <div class="col">
-    <div class="panel-title">Order Book — <span id="selTicker">select a market</span></div>
-    <div id="banner"></div>
-    <div class="card">
-      <div class="ob-row" style="font-size:9px;color:var(--text2);border-bottom:1px solid var(--border);padding-bottom:3px;margin-bottom:3px">
-        <span style="text-align:right">YES (¢ / size)</span><span>NO (¢ / size)</span>
-      </div>
-      <div id="orderbook"><div class="muted">—</div></div>
-    </div>
-
-    <div class="panel-title">Order Entry</div>
-    <div class="card">
-      <div class="row">
-        <div class="field"><label>Ticker</label><input id="oTicker" placeholder="KXMLB…"></div>
-        <div class="field"><label>Side</label><select id="oSide"><option value="yes">YES</option><option value="no">NO</option></select></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>Type</label><select id="oType"><option value="limit">limit</option><option value="market">market</option></select></div>
-        <div class="field"><label>Count</label><input id="oCount" type="number" value="1" min="1"></div>
-        <div class="field"><label>Limit (¢)</label><input id="oLimit" type="number" value="50" min="1" max="99"></div>
-      </div>
-      <div class="row">
-        <button class="buy" onclick="placeOrder('buy')">BUY</button>
-        <button class="sell" onclick="placeOrder('sell')">SELL</button>
-      </div>
-      <div id="orderResult" class="muted"></div>
-    </div>
-  </div>
-
-  <!-- Portfolio -->
-  <div class="col">
-    <div class="panel-title">Portfolio</div>
-    <div class="card" id="balCard"><div class="muted">—</div></div>
-    <div class="panel-title">Positions</div>
-    <div class="card" id="positions"><div class="muted">—</div></div>
-    <div class="panel-title">Open Orders</div>
-    <div class="card" id="openOrders"><div class="muted">—</div></div>
-    <div class="panel-title">Recent Fills</div>
-    <div class="card" id="fills"><div class="muted">—</div></div>
+<div class="deck">
+  <div class="stage" id="stage"></div>
+  <div class="end" id="end">
+    <div>Deck cleared 🎉</div>
+    <div style="font-size:12px;color:var(--text3)">You've been through every market.</div>
+    <button class="reload" onclick="loadDeck()">↻ Reload deck</button>
   </div>
 </div>
+<div class="progress" id="progress"></div>
+<div class="actions">
+  <button class="abtn no" id="bNo" aria-label="Bet NO" onclick="act('no')">✗</button>
+  <button class="abtn skip" id="bSkip" aria-label="Pass" onclick="act('skip')">↓</button>
+  <button class="abtn yes" id="bYes" aria-label="Bet YES" onclick="act('yes')">✓</button>
+</div>
+<div class="alabels"><span>Bet NO</span><span class="s">Pass</span><span>Bet YES</span></div>
+
+<div class="toast" id="toast"></div>
 
 <script>
-const API = '/api/trading/kalshi';
-let markets = [];
-let conn = {};
+const API='/api/trading/kalshi';
+let conn={}, deck=[], idx=0, busy=false;
 
-async function j(path, opts){ try{ const r=await fetch(API+path, opts); return await r.json(); }catch(e){ return {error:e.message}; } }
-const c = (v)=> (v==null?'—':v);
+async function j(path,opts){ try{const r=await fetch(API+path,opts);return await r.json();}catch(e){return{error:e.message};} }
+const c=v=>v==null?'—':v;
 
 async function loadConnection(){
-  conn = await j('/connection');
-  document.getElementById('cEnv').innerHTML = 'env <b>'+c(conn.env)+'</b>';
-  document.getElementById('cCreds').innerHTML = 'creds <b style="color:'+(conn.credentials?'var(--green)':'var(--red)')+'">'+(conn.credentials?'connected':'none')+'</b>';
-  document.getElementById('cExch').innerHTML = 'exchange <b>'+(conn.exchangeActive?'active':'—')+'</b>';
-  const live = conn.canTradeLive;
-  const mode = document.getElementById('cMode');
-  mode.className = 'chip ' + (live?'live':'dry');
-  mode.innerHTML = live ? 'LIVE TRADING' : 'DRY-RUN';
-  const b = document.getElementById('banner');
-  b.className = 'banner ' + (live?'live':'dry');
-  b.innerHTML = live
-    ? '⚠ LIVE: orders WILL hit the exchange (trading enabled, kill-switch off).'
-    : 'DRY-RUN: orders are planned & logged, never sent. To go live: set KALSHI_TRADING_ENABLED=1 and remove data/kalshi/LIVE-KILL-SWITCH'
-      + (conn.killSwitch?' · kill-switch ACTIVE':'') + (conn.tradingEnabled?'':' · trading disabled');
+  conn=await j('/connection');
+  cEnv.innerHTML='env <b>'+c(conn.env)+'</b>';
+  cCreds.innerHTML='creds <b style="color:'+(conn.credentials?'var(--green)':'var(--red)')+'">'+(conn.credentials?'connected':'none')+'</b>';
+  cExch.innerHTML='exchange <b>'+(conn.exchangeActive?'active':'—')+'</b>';
+  const live=conn.canTradeLive, m=document.getElementById('cMode');
+  m.className='chip '+(live?'live':'dry'); m.innerHTML=live?'LIVE':'DRY-RUN';
+  document.getElementById('note').textContent = live
+    ? '⚠ LIVE: a swipe WILL send a real order. Right=YES, left=NO, down=pass.'
+    : 'Swipe right = bet YES (green) · left = bet NO (red) · down = pass. Practice mode — nothing is sent live.';
 }
-
 async function loadBalance(){
-  const d = await j('/balance');
-  const el = document.getElementById('balCard');
-  if(d.error){ el.innerHTML = '<div class="muted">'+d.error+'</div>'; document.getElementById('cBal').innerHTML='balance <b>—</b>'; return; }
-  const usd = d.balance_dollars!=null ? '$'+d.balance_dollars : '$'+((d.balance||0)/100).toFixed(2);
-  document.getElementById('cBal').innerHTML = 'balance <b>'+usd+'</b>';
-  el.innerHTML = '<div class="kv"><span class="k">Cash</span><span>'+usd+'</span></div>'
-    + '<div class="kv"><span class="k">Portfolio value</span><span>$'+(((d.portfolio_value||0))/100).toFixed(2)+'</span></div>';
+  const d=await j('/balance');
+  cBal.innerHTML='balance <b>'+(d.error?'—':'$'+(d.balance_dollars!=null?d.balance_dollars:((d.balance||0)/100).toFixed(2)))+'</b>';
 }
 
-async function loadMarkets(){
-  const s = document.getElementById('series').value;
-  const q = s ? ('?series_ticker='+s+'&status=open&limit=100') : '?status=open&limit=100';
-  const d = await j('/live-markets'+q);
-  markets = (d.markets)||[];
-  renderMarkets();
-}
-function renderMarkets(){
-  const f = document.getElementById('search').value.toUpperCase();
-  const rows = markets.filter(m=>!f || (m.ticker||'').toUpperCase().includes(f));
-  document.getElementById('marketList').innerHTML = rows.slice(0,80).map(m=>{
-    const yes = m.yes_ask!=null ? m.yes_ask+'¢' : '—';
-    return '<div class="mkt-row" onclick="selectMarket(\''+m.ticker+'\')"><span>'+m.ticker.replace('KXMLB','')+'</span><span style="color:var(--green)">'+yes+'</span></div>';
-  }).join('') || '<div class="muted">no markets</div>';
+async function loadDeck(){
+  document.getElementById('end').style.display='none';
+  const d=await j('/suggestions?limit=60');
+  deck=(d.cards)||[]; idx=0;
+  if(d.note) document.getElementById('note').setAttribute('title', d.note);
+  render();
 }
 
-async function selectMarket(ticker){
-  document.getElementById('selTicker').textContent = ticker;
-  document.getElementById('oTicker').value = ticker;
-  document.querySelectorAll('.mkt-row').forEach(r=>r.classList.toggle('sel', r.textContent.includes(ticker.replace('KXMLB',''))));
-  const d = await j('/orderbook?ticker='+encodeURIComponent(ticker)+'&depth=8');
-  const ob = (d.orderbook)||{};
-  const yes = (ob.yes||[]), no = (ob.no||[]);
-  const n = Math.max(yes.length, no.length, 1);
+function convColor(v){ return v>=66?'var(--green)':v>=45?'var(--amber)':'var(--text3)'; }
+
+function cardHTML(card,front){
+  const noPct=100-(card.yesPct||0);
+  const recYes=card.side==='yes', recNo=card.side==='no';
+  const when=(card.close||'').slice(5,16).replace('T',' ');
+  return `<div class="card ${front?'front':'peek'}" ${front?'id="front"':''}>
+    <div class="stamp yes">YES</div><div class="stamp no">NO</div>
+    <div class="card-top"><span>${when||'—'}</span><span>${card.depth||0} rounds</span></div>
+    <div class="card-q">${card.title||card.ticker}</div>
+    <div class="sides">
+      <div class="side yes ${recYes?'rec':''}"><div class="lbl">${card.yesLabel||'YES'}</div>
+        <div class="pct">${card.yesPct}%</div><div class="ask">buy ${card.yesCents!=null?card.yesCents+'¢':'—'}</div></div>
+      <div class="side no ${recNo?'rec':''}"><div class="lbl">${card.noLabel||'NO'}</div>
+        <div class="pct">${noPct}%</div><div class="ask">buy ${card.noCents!=null?card.noCents+'¢':'—'}</div></div>
+    </div>
+    <div class="cio">
+      <div class="cio-head"><span>CIO read</span><span class="pick ${card.side}">${recYes?'▲ lean YES':'▼ lean NO'} · ${card.conviction}%</span></div>
+      <div class="conv-bar"><div class="conv-fill" style="width:${card.conviction}%;background:${convColor(card.conviction)}"></div></div>
+      <div class="reason">${card.reason||''}</div>
+    </div>
+  </div>`;
+}
+
+function render(){
+  const stage=document.getElementById('stage');
+  const remaining=deck.length-idx;
+  document.getElementById('progress').textContent = remaining>0 ? `${remaining} of ${deck.length} markets` : '';
+  if(idx>=deck.length){
+    stage.innerHTML='';
+    document.getElementById('end').style.display='flex';
+    return;
+  }
   let html='';
-  for(let i=0;i<n;i++){
-    const y = yes[i] ? yes[i][0]+'¢ × '+yes[i][1] : '';
-    const nn = no[i] ? no[i][0]+'¢ × '+no[i][1] : '';
-    html += '<div class="ob-row"><span class="ob-yes">'+y+'</span><span class="ob-no">'+nn+'</span></div>';
-  }
-  document.getElementById('orderbook').innerHTML = html || '<div class="muted">no book</div>';
+  if(deck[idx+1]) html+=cardHTML(deck[idx+1],false);
+  html+=cardHTML(deck[idx],true);
+  stage.innerHTML=html;
+  attachSwipe(document.getElementById('front'));
 }
 
-async function placeOrder(action){
-  const o = {
-    ticker: document.getElementById('oTicker').value.trim(),
-    side: document.getElementById('oSide').value,
-    action,
-    type: document.getElementById('oType').value,
-    count: Number(document.getElementById('oCount').value)||1,
-    limitCents: Number(document.getElementById('oLimit').value)||50,
+// ── swipe / drag ─────────────────────────────────────────────────────────────
+function attachSwipe(el){
+  if(!el) return;
+  let startX=0,startY=0,dx=0,dy=0,drag=false;
+  const yesStamp=el.querySelector('.stamp.yes'), noStamp=el.querySelector('.stamp.no');
+  const down=e=>{drag=true;startX=(e.touches?e.touches[0]:e).clientX;startY=(e.touches?e.touches[0]:e).clientY;el.style.cursor='grabbing';el.style.transition='none';};
+  const move=e=>{
+    if(!drag)return;
+    const p=e.touches?e.touches[0]:e;
+    dx=p.clientX-startX; dy=p.clientY-startY;
+    el.style.transform=`translate(${dx}px,${dy}px) rotate(${dx*0.05}deg)`;
+    yesStamp.style.opacity=Math.max(0,Math.min(1,dx/110));
+    noStamp.style.opacity=Math.max(0,Math.min(1,-dx/110));
   };
-  if(!o.ticker){ document.getElementById('orderResult').textContent='enter a ticker'; return; }
-  const res = await j('/order', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
-  const el = document.getElementById('orderResult');
-  if(res.mode==='dry_run'){
-    el.innerHTML = '<span style="color:var(--green)">DRY-RUN planned</span> — '+(res.wouldBlock||[]).join('; ')+'\n'+JSON.stringify(res.order);
-  } else if(res.mode==='live'){
-    el.innerHTML = '<span style="color:var(--red)">LIVE submitted</span> status '+res.status+'\n'+JSON.stringify(res.result);
-    loadBalance(); loadPortfolio();
-  } else {
-    el.textContent = JSON.stringify(res);
+  const up=()=>{
+    if(!drag)return; drag=false; el.style.cursor='grab'; el.style.transition='transform .25s ease';
+    if(dx>120) flyOut('yes'); else if(dx<-120) flyOut('no');
+    else if(dy>140) flyOut('skip');
+    else { el.style.transform=''; yesStamp.style.opacity=0; noStamp.style.opacity=0; }
+    dx=dy=0;
+  };
+  el.addEventListener('mousedown',down); window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  el.addEventListener('touchstart',down,{passive:true}); el.addEventListener('touchmove',move,{passive:true}); el.addEventListener('touchend',up);
+}
+
+function flyOut(dir){
+  const el=document.getElementById('front'); if(!el) return;
+  const x=dir==='yes'?700:dir==='no'?-700:0, y=dir==='skip'?700:0;
+  el.style.transition='transform .3s ease,opacity .3s'; el.style.opacity='0';
+  el.style.transform=`translate(${x}px,${y}px) rotate(${x*0.04}deg)`;
+  setTimeout(()=>act(dir,true),180);
+}
+
+// ── action: green/red/skip ───────────────────────────────────────────────────
+async function act(dir,fromSwipe){
+  if(busy||idx>=deck.length) return;
+  const card=deck[idx];
+  if(dir==='skip'){ idx++; render(); return; }
+  if(!fromSwipe){ // button press → animate then this runs again via flyOut; just animate
+    return flyOut(dir);
   }
+  busy=true;
+  const side=dir; // 'yes' | 'no'
+  const limitCents = side==='yes' ? (card.yesCents||50) : (card.noCents||50);
+  const o={ticker:card.ticker,side,action:'buy',type:'limit',count:1,limitCents};
+  const res=await j('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+  showResult(res,card,side);
+  idx++; busy=false; render();
+  if(res.mode==='live') loadBalance();
 }
 
-async function loadPortfolio(){
-  const pos = await j('/positions');
-  const pl = (pos.market_positions)||(pos.positions)||[];
-  document.getElementById('positions').innerHTML = pos.error ? '<div class="muted">'+pos.error+'</div>'
-    : (pl.length ? pl.map(p=>'<div class="kv"><span class="k">'+(p.ticker||'')+'</span><span>'+(p.position||p.quantity||0)+'</span></div>').join('') : '<div class="muted">no positions</div>');
-
-  const ord = await j('/portfolio-orders?status=resting');
-  const ol = (ord.orders)||[];
-  document.getElementById('openOrders').innerHTML = ord.error ? '<div class="muted">'+ord.error+'</div>'
-    : (ol.length ? ol.map(o=>'<div class="kv"><span class="k">'+(o.ticker||'')+' '+(o.side||'')+'</span><button onclick="cancel(\''+o.order_id+'\')" style="font-size:9px;padding:2px 6px">cancel</button></div>').join('') : '<div class="muted">no open orders</div>');
-
-  const fl = await j('/fills?limit=8');
-  const fills = (fl.fills)||[];
-  document.getElementById('fills').innerHTML = fl.error ? '<div class="muted">'+fl.error+'</div>'
-    : (fills.length ? fills.map(f=>'<div class="kv"><span class="k">'+(f.ticker||'')+' '+(f.side||'')+'</span><span>'+(f.count||0)+'@'+(f.yes_price||f.no_price||'?')+'¢</span></div>').join('') : '<div class="muted">no fills</div>');
+function showResult(res,card,side){
+  const t=document.getElementById('toast');
+  const lbl=side==='yes'?(card.yesLabel||'YES'):(card.noLabel||'NO');
+  if(res.mode==='dry_run'){
+    t.className='toast dry show';
+    t.textContent=`DRY-RUN · ${lbl} ${card.ticker.replace('KXMLBGAME-','')}\nplanned, not sent (${(res.wouldBlock||[]).join('; ')})`;
+  } else if(res.mode==='live'){
+    t.className='toast live show'; t.textContent=`LIVE · ${lbl} submitted (status ${res.status})`;
+  } else { t.className='toast err show'; t.textContent=JSON.stringify(res).slice(0,140); }
+  clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3200);
 }
 
-async function cancel(orderId){
-  await j('/order/cancel', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId})});
-  loadPortfolio();
-}
+// keyboard
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight') act('yes');
+  else if(e.key==='ArrowLeft') act('no');
+  else if(e.key==='ArrowDown'||e.key===' ') { e.preventDefault(); act('skip'); }
+});
 
 function init(){
-  loadConnection(); loadBalance(); loadMarkets(); loadPortfolio();
-  setInterval(loadConnection, 15000);
-  setInterval(loadBalance, 20000);
-  setInterval(loadPortfolio, 15000);
+  loadConnection(); loadBalance(); loadDeck();
+  setInterval(loadConnection,20000); setInterval(loadBalance,30000);
 }
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
 </html>

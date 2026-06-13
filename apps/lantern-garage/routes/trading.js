@@ -475,6 +475,12 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (url.pathname === '/api/trading/kalshi/connection' && req.method === 'GET') {
         return sendJson(res, await kalshi.getConnection(), 200), true;
       }
+      // GET — CIO suggestion deck (the "Tinder of trading" cards)
+      if (url.pathname === '/api/trading/kalshi/suggestions' && req.method === 'GET') {
+        const suggest = require('../lib/kalshi-suggest');
+        const limit = q.limit ? Number(q.limit) : 60;
+        return sendJson(res, await suggest.getSuggestions({ limit }), 200), true;
+      }
       // GET — live market data (pass-through query: series_ticker, status, limit, event_ticker)
       if (url.pathname === '/api/trading/kalshi/live-markets' && req.method === 'GET') {
         const r = await kalshi.getMarkets(q);
