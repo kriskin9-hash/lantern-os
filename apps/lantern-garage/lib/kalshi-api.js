@@ -29,7 +29,7 @@ const LEDGER = path.join(KALSHI_DIR, "kalshi-live-ledger.jsonl");
 const KILL_SWITCH = path.join(KALSHI_DIR, "LIVE-KILL-SWITCH");
 
 const ENV = (process.env.KALSHI_ENV || "prod").toLowerCase();
-const HOST = ENV === "demo" ? "demo-api.kalshi.co" : "api.elections.kalshi.com";
+const HOST = ENV === "demo" ? "demo-api.kalshi.co" : "external-api.kalshi.com";
 const BASE = "/trade-api/v2";
 
 // ── credentials (user-supplied via env; never entered here) ──────────────────
