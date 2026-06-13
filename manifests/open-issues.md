@@ -399,12 +399,29 @@ Documentation: See `docs/DASHBOARD-CONSOLIDATION.md`
    - Status: fixed.
    - Commit: `5cc0342` (merge) + `.gitignore` update.
 
+## Fixed in Current Loop (2026-06-09)
+
+1. `PCSF-UNTRACKED-001`: PCSF state files (`data/pcsf/*.json`) showed as modified.
+   - Fix: `.gitignore` already covers `data/pcsf/*.json`; no tracked runtime state files.
+   - Status: fixed.
+
+2. `SPRAWL-INTEGRATIONS-001`: Top-level `integrations/` directory flagged by convergence manager.
+   - Fix: directory is intentional — contains `human-flourishing-frameworks/` app.py and export_snapshot.py. HFF is a core integration with explicit validation job (`hff-integration-exists`).
+   - Status: resolved; `integrations/` is an allowed top-level directory by design.
+
+3. `VALIDATION-RING-001`: `flourishing.js` route had no test coverage.
+   - Fix: added `tests/test_flourishing.js` with 8 tests covering all HFF endpoints.
+   - Validation ring result: 10/10 consensus passed (was 9/10).
+   - Status: fixed.
+
 ## Active Gaps (Current Loop)
 
-1. `SPRAWL-INTEGRATIONS-001`: Top-level `integrations/` directory flagged by convergence manager.
-   - Status: candidate. Either move into allowed directory or add to `ALLOWED_TOP` if intentional.
-   - Next: operator decision.
+1. `GEMINI-GROUNDING-001`: Gemini grounding with Google Search not verified.
+   - Detected by: agent slot `dream_journal/gemini_grounding_test` (priority 7, queued)
+   - Status: queued. Requires paid Gemini API key with grounding enabled.
+   - Next: operator adds `GEMINI_API_KEY` to `.env`, sets `GEMINI_GROUNDING=true`, runs verification.
 
-2. `PCSF-UNTRACKED-001`: PCSF state files (`data/pcsf/*.json`) show as modified in convergence scan.
-   - Status: held. Runtime state files; should not be committed. Verify `.gitignore` covers `data/pcsf/` or add exclusion.
-   - Next: add `data/pcsf/*.json` to `.gitignore` if not present.
+2. `VOICE-STT-001`: Backend Vosk STT fallback not implemented.
+   - Detected by: agent slot `dream_journal/voice_server_stt` (priority 8, queued)
+   - Status: queued. Needs Vosk model installation + POST /api/dream/transcribe route.
+   - Next: install Vosk, add transcribe route to dream.js, create test.
