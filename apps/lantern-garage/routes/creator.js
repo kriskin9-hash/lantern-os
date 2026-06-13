@@ -2,6 +2,7 @@
 // Handles highlight analysis, variant generation, exports, and analytics
 
 const { analyzeVideoForHighlights } = require("../lib/highlight-engine");
+const { generateVariants } = require("../lib/retention-engine");
 
 module.exports = async function creatorRoutes(req, res, url, deps) {
   const { sendJson, path: pathModule, repoRoot } = deps;
@@ -77,6 +78,58 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
   }
 
   // =========================================================================
+  // POST /api/creator/variants
+  // =========================================================================
+  // Generate A/B/C retention variants from highlight timeline
+  //
+  // Request:
+  // {
+  //   "highlightTimeline": { ... from /api/creator/analyze }
+  // }
+  //
+  // Response:
+  // {
+  //   "variants": [
+  //     {
+  //       "variantId": "variant-a-hook-focused",
+  //       "hook": { "text": "WAIT FOR IT", "duration": 0.8 },
+  //       "pacing": "Fast Cut",
+  //       "endingCaption": "WORTH IT",
+  //       "captions": [...],
+  //       "estimatedCompletionRate": 0.85,
+  //       "estimatedReWatchRate": 0.72,
+  //       "estimatedViralScore": 0.78
+  //     },
+  //     { ... variant B ... },
+  //     { ... variant C ... }
+  //   ]
+  // }
+
+  if (url.pathname === "/api/creator/variants" && req.method === "POST") {
+    try {
+      const raw = await deps.collectRequestBody(req);
+      const body = JSON.parse(raw);
+
+      if (!body.highlightTimeline) {
+        sendJson(res, { error: "highlightTimeline required" }, 400);
+        return true;
+      }
+
+      const variants = generateVariants(body.highlightTimeline);
+
+      sendJson(res, {
+        success: true,
+        variantCount: variants.length,
+        variants: variants.map((v) => v.toJSON()),
+      });
+    } catch (error) {
+      console.error("[creator] variants error:", error.message);
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // =========================================================================
   // GET /api/creator/health
   // =========================================================================
   // Check if creator service is ready
@@ -84,12 +137,15 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
   if (url.pathname === "/api/creator/health" && req.method === "GET") {
     sendJson(res, {
       status: "ready",
-      service: "creator-suite-v8",
+      service: "creator-suite-v9",
       features: [
         "highlight-analysis",
         "motion-detection",
         "audio-spike-detection",
         "scene-detection",
+        "variant-generation",
+        "completion-prediction",
+        "viral-scoring",
       ],
     });
     return true;
