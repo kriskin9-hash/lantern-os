@@ -1,42 +1,19 @@
-// Creator Suite Routes
-// Handles highlight analysis, variant generation, exports, and analytics
-
-const { analyzeVideoForHighlights } = require("../lib/highlight-engine");
-const { generateVariants } = require("../lib/retention-engine");
-const { detectSafeZones } = require("../lib/safe-zone-detector");
-const { generateCaptions, generateVTT, generateSRT, generateJSON } = require("../lib/caption-engine");
+// Creator Suite Routes V9 — Full Job Queue Integration
+// All analysis, caption, and export operations queued asynchronously
 
 module.exports = async function creatorRoutes(req, res, url, deps) {
-  const { sendJson, path: pathModule, repoRoot } = deps;
+  const { sendJson, path: pathModule, repoRoot, jobQueue, collectRequestBody } = deps;
+  const fs = require("fs");
 
   // =========================================================================
   // POST /api/creator/analyze
   // =========================================================================
-  // Start highlight analysis on an uploaded video
-  //
-  // Request:
-  // {
-  //   "videoPath": "data/dreamer/videos/1234567890-video.mp4",
-  //   "options": {
-  //     "fps": 5,
-  //     "motionThreshold": 0.15,
-  //     "audioThreshold": 0.7,
-  //     "minHighlightDuration": 1.0,
-  //     "maxHighlightDuration": 30.0
-  //   }
-  // }
-  //
-  // Response:
-  // {
-  //   "success": true,
-  //   "jobId": "highlight-12345",
-  //   "videoPath": "data/dreamer/videos/1234567890-video.mp4",
-  //   "timeline": { ... }
-  // }
+  // Queue a highlight analysis job
+  // Returns immediately with job ID; analysis happens in background
 
   if (url.pathname === "/api/creator/analyze" && req.method === "POST") {
     try {
-      const raw = await deps.collectRequestBody(req);
+      const raw = await collectRequestBody(req);
       const body = JSON.parse(raw);
 
       const videoPath = body.videoPath;
@@ -45,71 +22,69 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
         return true;
       }
 
-      const fullVideoPath = pathModule.join(repoRoot, videoPath);
-
-      // Check if file exists
-      const fs = require("fs");
-      if (!fs.existsSync(fullVideoPath)) {
+      // Verify video exists
+      const fullPath = pathModule.join(repoRoot, videoPath);
+      if (!fs.existsSync(fullPath)) {
         sendJson(res, { error: "video file not found" }, 404);
         return true;
       }
 
-      // Analyze video
-      const timeline = await analyzeVideoForHighlights(fullVideoPath, body.options || {});
-
-      // Store analysis result
-      const analysisDir = pathModule.join(repoRoot, "data", "creator", "analyses");
-      if (!fs.existsSync(analysisDir)) {
-        fs.mkdirSync(analysisDir, { recursive: true });
-      }
-
-      const analysisPath = pathModule.join(analysisDir, `${Date.now()}-analysis.json`);
-      fs.writeFileSync(analysisPath, JSON.stringify(timeline.toJSON(), null, 2));
+      // Queue the job
+      const job = jobQueue.enqueue("analyze", {
+        videoPath,
+        options: body.options || {},
+      });
 
       sendJson(res, {
         success: true,
-        videoPath,
-        timeline: timeline.toJSON(),
-        analysisPath: analysisPath.replace(repoRoot, ""),
+        jobId: job.id,
+        status: job.status,
+        message: "Analysis queued. Check /api/creator/job/" + job.id + " for progress",
       });
     } catch (error) {
-      console.error("[creator] analyze error:", error.message);
+      console.error("[creator] analyze queue error:", error.message);
       sendJson(res, { error: error.message }, 500);
     }
     return true;
   }
 
   // =========================================================================
+  // GET /api/creator/job/:jobId
+  // =========================================================================
+  // Get job status and progress
+
+  if (url.pathname.startsWith("/api/creator/job/") && req.method === "GET") {
+    const jobId = url.pathname.split("/").pop();
+    const job = jobQueue.getJob(jobId);
+
+    if (!job) {
+      sendJson(res, { error: "job not found" }, 404);
+      return true;
+    }
+
+    sendJson(res, {
+      jobId: job.id,
+      type: job.type,
+      status: job.status,
+      progress: job.progress,
+      progressMessage: job.progressMessage,
+      result: job.result,
+      error: job.error,
+      createdAt: job.createdAt,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+    });
+    return true;
+  }
+
+  // =========================================================================
   // POST /api/creator/variants
   // =========================================================================
-  // Generate A/B/C retention variants from highlight timeline
-  //
-  // Request:
-  // {
-  //   "highlightTimeline": { ... from /api/creator/analyze }
-  // }
-  //
-  // Response:
-  // {
-  //   "variants": [
-  //     {
-  //       "variantId": "variant-a-hook-focused",
-  //       "hook": { "text": "WAIT FOR IT", "duration": 0.8 },
-  //       "pacing": "Fast Cut",
-  //       "endingCaption": "WORTH IT",
-  //       "captions": [...],
-  //       "estimatedCompletionRate": 0.85,
-  //       "estimatedReWatchRate": 0.72,
-  //       "estimatedViralScore": 0.78
-  //     },
-  //     { ... variant B ... },
-  //     { ... variant C ... }
-  //   ]
-  // }
+  // Queue variant generation (requires highlight timeline from analyze)
 
   if (url.pathname === "/api/creator/variants" && req.method === "POST") {
     try {
-      const raw = await deps.collectRequestBody(req);
+      const raw = await collectRequestBody(req);
       const body = JSON.parse(raw);
 
       if (!body.highlightTimeline) {
@@ -117,12 +92,16 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
         return true;
       }
 
-      const variants = generateVariants(body.highlightTimeline);
+      const job = jobQueue.enqueue("caption", {
+        highlightTimeline: body.highlightTimeline,
+        strategy: body.strategy || "gaming",
+      });
 
       sendJson(res, {
         success: true,
-        variantCount: variants.length,
-        variants: variants.map((v) => v.toJSON()),
+        jobId: job.id,
+        status: job.status,
+        message: "Variant generation queued",
       });
     } catch (error) {
       console.error("[creator] variants error:", error.message);
@@ -134,27 +113,11 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
   // =========================================================================
   // POST /api/creator/captions
   // =========================================================================
-  // Generate captions from highlight timeline with multiple export formats
-  //
-  // Request:
-  // {
-  //   "highlightTimeline": { ... },
-  //   "strategy": "auto|gaming|emotional|narrative",
-  //   "format": "vtt|srt|json"
-  // }
-  //
-  // Response:
-  // {
-  //   "success": true,
-  //   "captions": [...],
-  //   "vtt": "...",
-  //   "srt": "...",
-  //   "json": {...}
-  // }
+  // Queue caption generation
 
   if (url.pathname === "/api/creator/captions" && req.method === "POST") {
     try {
-      const raw = await deps.collectRequestBody(req);
+      const raw = await collectRequestBody(req);
       const body = JSON.parse(raw);
 
       if (!body.highlightTimeline) {
@@ -162,28 +125,18 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
         return true;
       }
 
-      const strategy = body.strategy || "auto";
-      const format = body.format || "all";
+      const job = jobQueue.enqueue("caption", {
+        highlightTimeline: body.highlightTimeline,
+        strategy: body.strategy || "gaming",
+        format: body.format || "all",
+      });
 
-      const captions = generateCaptions(body.highlightTimeline, null, strategy);
-
-      const result = {
+      sendJson(res, {
         success: true,
-        captionCount: captions.length,
-        captions: captions.map((c) => c.toJSON()),
-      };
-
-      if (format === "vtt" || format === "all") {
-        result.vtt = generateVTT(captions);
-      }
-      if (format === "srt" || format === "all") {
-        result.srt = generateSRT(captions);
-      }
-      if (format === "json" || format === "all") {
-        result.json = JSON.parse(generateJSON(captions));
-      }
-
-      sendJson(res, result);
+        jobId: job.id,
+        status: job.status,
+        message: "Caption generation queued",
+      });
     } catch (error) {
       console.error("[creator] captions error:", error.message);
       sendJson(res, { error: error.message }, 500);
@@ -194,30 +147,35 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
   // =========================================================================
   // POST /api/creator/safe-zones
   // =========================================================================
-  // Detect safe zones in video (facecam, HUD, minimap, killfeed)
-  //
-  // Request:
-  // {
-  //   "videoPath": "data/dreamer/videos/...",
-  //   "frameData": { width, height, pixels: [...] }
-  // }
+  // Queue safe zone detection
 
   if (url.pathname === "/api/creator/safe-zones" && req.method === "POST") {
     try {
-      const raw = await deps.collectRequestBody(req);
+      const raw = await collectRequestBody(req);
       const body = JSON.parse(raw);
 
-      if (!body.frameData) {
-        sendJson(res, { error: "frameData required" }, 400);
+      if (!body.videoPath) {
+        sendJson(res, { error: "videoPath required" }, 400);
         return true;
       }
 
-      const safeZoneMap = await detectSafeZones(body.videoPath, body.frameData);
+      // Verify video exists
+      const fullPath = pathModule.join(repoRoot, body.videoPath);
+      if (!fs.existsSync(fullPath)) {
+        sendJson(res, { error: "video file not found" }, 404);
+        return true;
+      }
+
+      const job = jobQueue.enqueue("analyze", {
+        videoPath: body.videoPath,
+        options: { detectSafeZones: true },
+      });
 
       sendJson(res, {
         success: true,
-        zoneCount: safeZoneMap.safeZones.length,
-        ...safeZoneMap.toJSON(),
+        jobId: job.id,
+        status: job.status,
+        message: "Safe zone detection queued",
       });
     } catch (error) {
       console.error("[creator] safe-zones error:", error.message);
@@ -227,23 +185,90 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
   }
 
   // =========================================================================
+  // POST /api/creator/export
+  // =========================================================================
+  // Queue video export with specified format
+
+  if (url.pathname === "/api/creator/export" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw);
+
+      if (!body.videoPath) {
+        sendJson(res, { error: "videoPath required" }, 400);
+        return true;
+      }
+
+      if (!body.format) {
+        sendJson(res, { error: "format required (9:16, 16:9, 1:1, 4:5)" }, 400);
+        return true;
+      }
+
+      const fullPath = pathModule.join(repoRoot, body.videoPath);
+      if (!fs.existsSync(fullPath)) {
+        sendJson(res, { error: "video file not found" }, 404);
+        return true;
+      }
+
+      const job = jobQueue.enqueue("export", {
+        videoPath: body.videoPath,
+        variant: body.variant || "balanced",
+        format: body.format,
+      });
+
+      sendJson(res, {
+        success: true,
+        jobId: job.id,
+        status: job.status,
+        message: "Export queued",
+      });
+    } catch (error) {
+      console.error("[creator] export error:", error.message);
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // =========================================================================
+  // GET /api/creator/queue
+  // =========================================================================
+  // Get queue status
+
+  if (url.pathname === "/api/creator/queue" && req.method === "GET") {
+    const stats = jobQueue.getStats();
+    const pending = jobQueue.getPending();
+
+    sendJson(res, {
+      stats,
+      pending: pending.map((j) => ({
+        id: j.id,
+        type: j.type,
+        progress: j.progress,
+        progressMessage: j.progressMessage,
+      })),
+    });
+    return true;
+  }
+
+  // =========================================================================
   // GET /api/creator/health
   // =========================================================================
-  // Check if creator service is ready
+  // Creator Suite health check
 
   if (url.pathname === "/api/creator/health" && req.method === "GET") {
+    const stats = jobQueue.getStats();
+
     sendJson(res, {
       status: "ready",
       service: "creator-suite-v9",
       features: [
         "highlight-analysis",
-        "motion-detection",
-        "audio-spike-detection",
-        "scene-detection",
         "variant-generation",
-        "completion-prediction",
-        "viral-scoring",
+        "caption-generation",
+        "safe-zone-detection",
+        "video-export",
       ],
+      queue: stats,
     });
     return true;
   }
