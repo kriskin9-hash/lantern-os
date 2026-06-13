@@ -71,6 +71,8 @@ const deps = {
 const routes = [
   require("./routes/status"),
   require("./routes/ui"),
+  require("./routes/nodes"),
+  require("./routes/mesh"),
   require("./routes/rag"),
   require("./routes/operator"),
   require("./routes/files"),
@@ -92,8 +94,6 @@ const routes = [
   require("./routes/surfaces"),
   require("./routes/self-edit"),
   require("./routes/personal-cube"),
-  require("./routes/mesh"),
-  require("./routes/nodes"),
 ];
 
 async function route(req, res) {

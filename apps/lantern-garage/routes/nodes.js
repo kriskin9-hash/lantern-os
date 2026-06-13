@@ -8,7 +8,7 @@ const path = require("path");
 const os = require("os");
 
 module.exports = async function nodesRoutes(req, res, url, deps) {
-  const { sendJson, repoRoot } = deps;
+  const { sendJson, collectRequestBody, repoRoot } = deps;
   const nodesDir = path.join(repoRoot, "data", "nodes");
 
   // Ensure nodes directory exists
@@ -52,41 +52,34 @@ module.exports = async function nodesRoutes(req, res, url, deps) {
   // Node registers itself to the mesh
   if (url.pathname === "/api/nodes/register" && req.method === "POST") {
     try {
-      let body = "";
-      req.on("data", chunk => (body += chunk.toString("utf8").slice(0, 5000)));
-      req.on("end", () => {
-        try {
-          const payload = JSON.parse(body);
-          const nodeId = payload.nodeId || os.hostname();
-          const nodeName = payload.nodeName || os.hostname();
-          const agents = payload.agents || [];
-          const workers = payload.workers || 0;
+      const raw = await collectRequestBody(req);
+      const payload = JSON.parse(raw);
+      const nodeId = payload.nodeId || os.hostname();
+      const nodeName = payload.nodeName || os.hostname();
+      const agents = payload.agents || [];
+      const workers = payload.workers || 0;
 
-          const nodeRecord = {
-            nodeId,
-            nodeName,
-            platform: os.platform(),
-            arch: os.arch(),
-            uptime: process.uptime(),
-            agents,
-            workerCount: workers,
-            registeredAt: new Date().toISOString(),
-            lastSeen: new Date().toISOString(),
-            address: req.socket.remoteAddress,
-            port: payload.port || 4177
-          };
+      const nodeRecord = {
+        nodeId,
+        nodeName,
+        platform: os.platform(),
+        arch: os.arch(),
+        uptime: process.uptime(),
+        agents,
+        workerCount: workers,
+        registeredAt: new Date().toISOString(),
+        lastSeen: new Date().toISOString(),
+        address: req.socket?.remoteAddress,
+        port: payload.port || 4177
+      };
 
-          const nodeFile = path.join(nodesDir, nodeId + ".json");
-          fs.writeFileSync(nodeFile, JSON.stringify(nodeRecord, null, 2));
+      const nodeFile = path.join(nodesDir, nodeId + ".json");
+      fs.writeFileSync(nodeFile, JSON.stringify(nodeRecord, null, 2));
 
-          sendJson(res, { ok: true, nodeId, message: "Node registered to mesh" });
-        } catch (e) {
-          sendJson(res, { error: "Invalid payload: " + e.message }, 400);
-        }
-      });
+      sendJson(res, { ok: true, nodeId, message: "Node registered to mesh" });
       return true;
     } catch (err) {
-      sendJson(res, { error: err.message }, 500);
+      sendJson(res, { error: err.message }, 400);
       return true;
     }
   }
@@ -114,7 +107,6 @@ module.exports = async function nodesRoutes(req, res, url, deps) {
   // Returns active workers/collaborators for each agent
   if (url.pathname === "/api/agents/workers" && req.method === "GET") {
     try {
-      const nodes = [];
       const agentWorkerMap = {};
       const files = fs.readdirSync(nodesDir).filter(f => f.endsWith(".json"));
 
