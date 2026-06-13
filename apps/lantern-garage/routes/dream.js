@@ -82,33 +82,6 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     return true;
   }
 
-  if (url.pathname === "/api/dream/route" && req.method === "POST") {
-    try {
-      const raw = await collectRequestBody(req);
-      const body = JSON.parse(raw || "{}");
-      const message = String(body.message || "").slice(0, maxDreamerTextLength);
-      sendJson(res, {
-        route: classifyIntent(message),
-        registry_version: "lantern.capability_registry.v1",
-        agents: CAPABILITY_REGISTRY.map(({ id, name, intents, surface, converges, blocking, input_contract, output_contract, description }) => ({
-          id,
-          name,
-          intents,
-          surface,
-          converges,
-          blocking,
-          input_contract,
-          output_contract,
-          description,
-        })),
-        generatedAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      sendJson(res, { error: error.message, route: classifyIntent("") }, 400);
-    }
-    return true;
-  }
-
   // ── Dream CRUD ────────────────────────────────────────────────────────
   if (url.pathname === "/api/dream/create" && req.method === "POST") {
     try {
