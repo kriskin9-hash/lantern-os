@@ -91,4 +91,79 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
     }
     return true;
   }
+  if (url.pathname === "/api/dreamer/upload" && req.method === "POST") {
+    try {
+      const fs = require("fs");
+      const busboy = require("busboy");
+      const user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
+
+      const videosDir = path.join(repoRoot, "data", "dreamer", "videos");
+      if (!fs.existsSync(videosDir)) {
+        fs.mkdirSync(videosDir, { recursive: true });
+      }
+
+      const bb = busboy({ headers: req.headers });
+      let fileInfo = null;
+      let fields = {};
+
+      bb.on("file", (fieldname, file, info) => {
+        const timestamp = Date.now();
+        const filename = `${timestamp}-${info.filename}`;
+        const filepath = path.join(videosDir, filename);
+        const writeStream = fs.createWriteStream(filepath);
+
+        file.pipe(writeStream);
+
+        writeStream.on("finish", () => {
+          const stats = fs.statSync(filepath);
+          fileInfo = {
+            filename: info.filename,
+            savedAs: filename,
+            mimeType: info.mimeType,
+            size: stats.size,
+            path: filepath
+          };
+        });
+
+        writeStream.on("error", (err) => {
+          console.error("Upload error:", err);
+          if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+        });
+      });
+
+      bb.on("field", (fieldname, value) => {
+        fields[fieldname] = String(value).slice(0, 1000);
+      });
+
+      bb.on("close", async () => {
+        try {
+          const entry = {
+            kind: fields.type || "video",
+            title: fields.title || "Untitled",
+            project: fields.project || "",
+            description: fields.description || "",
+            tags: fields.tags ? fields.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+            private: true,
+            file: fileInfo || null
+          };
+
+          const record = await appendDreamerEntry(user, entry);
+          sendJson(res, { saved: true, record, file: fileInfo });
+        } catch (error) {
+          sendJson(res, { error: error.message }, 400);
+        }
+      });
+
+      bb.on("error", (error) => {
+        console.error("Busboy error:", error);
+        sendJson(res, { error: error.message }, 400);
+      });
+
+      req.pipe(bb);
+    } catch (error) {
+      console.error("Upload route error:", error);
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
 };
