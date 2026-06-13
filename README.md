@@ -105,7 +105,32 @@ Lantern personas provide different interaction modes over the same backend pipel
 
 ## Getting Started
 
-For the main local web surface (dev mode with auto-restart):
+### One-line setup from Claude Code
+
+If you are running this from a Claude Code session, this single command registers your API keys, installs deps, runs the convergence loop, and starts the server:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File scripts/setup-claude.ps1
+```
+
+The script reads your active `ANTHROPIC_API_KEY` from the Claude Code environment automatically (no manual copy-paste). Pass keys explicitly if running outside Claude:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File scripts/setup-claude.ps1 `
+  -AnthropicKey sk-ant-... `
+  -GeminiKey AQ.Ab8... `
+  -OpenAIKey sk-...
+```
+
+Or pull straight from GitHub without cloning:
+
+```powershell
+irm https://raw.githubusercontent.com/alex-place/lantern-os/master/scripts/setup-claude.ps1 | iex
+```
+
+### Manual setup
+
+For dev mode with auto-restart:
 
 ```bash
 npm run dev --prefix apps/lantern-garage
