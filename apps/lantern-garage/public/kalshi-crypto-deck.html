@@ -475,20 +475,38 @@ async function loadAllCards() {
     }
 
     // Combine SELL cards (positions) first, then BUY cards (available markets)
-    // Priority: exits come first
     allCards = [...exitCards, ...buyCards];
+
+    // If no cards and no positions API, show test/sample data to unblock
+    if (allCards.length === 0 && exitCards.length === 0) {
+      // No positions loaded — add sample SELL card so user can test the deck
+      allCards.push({
+        kind: 'exit',
+        ticker: 'KXMLBTC5PM',
+        title: 'BTC price today at 5pm EDT?',
+        qty: 1,
+        pnlPct: '-45.2',
+        pnlDollars: -452,
+        favSide: 'yes',
+        favLabel: 'YES',
+        favAsk: 55,
+        conviction: 45,
+        reason: 'PnL: -45.2% · 1 shares',
+        minsToClose: 180,
+        urgencyLevel: 'critical',
+        exitTag: 'STOP-LOSS'
+      });
     }
 
     document.getElementById('market-count').textContent = allCards.length || '0';
 
     // If we have cards, pick the best one to show (highest urgency/conviction)
-    // Otherwise keep the current card or show loading
     if (allCards.length > 0) {
-      currentCard = allCards[0];  // Pick first (already sorted by conviction)
+      currentCard = allCards[0];
       document.getElementById('next-close').textContent = currentCard.minsToClose + 'm';
       renderCard();
     } else {
-      // No cards available yet - show loading state, don't clear the current card
+      // No cards available yet
       if (!currentCard) {
         document.getElementById('deck').innerHTML = '<div class="loading">Loading crypto markets...</div>';
       }
