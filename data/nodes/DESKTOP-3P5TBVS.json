@@ -1,0 +1,18 @@
+{
+  "nodeId": "DESKTOP-3P5TBVS",
+  "nodeName": "Alex Desktop (Lantern Garage)",
+  "platform": "win32",
+  "arch": "x64",
+  "uptime": 1207.1663838,
+  "agents": [
+    "lantern",
+    "keystone",
+    "blinkbug",
+    "waterfall"
+  ],
+  "workerCount": 4,
+  "registeredAt": "2026-06-13T03:32:54.332Z",
+  "lastSeen": "2026-06-13T03:32:54.332Z",
+  "address": "127.0.0.1",
+  "port": 4177
+}
