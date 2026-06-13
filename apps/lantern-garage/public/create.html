@@ -847,9 +847,10 @@ async function analyzeHighlights() {
 
   const analyzeBtn = document.getElementById('analyze-btn');
   analyzeBtn.disabled = true;
-  showStatus('Analyzing video for highlights...', 'loading');
+  showStatus('Queuing analysis job...', 'loading');
 
   try {
+    // Queue the job (returns immediately with jobId)
     const response = await fetch('/api/creator/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -867,51 +868,124 @@ async function analyzeHighlights() {
 
     if (response.ok) {
       const result = await response.json();
-      currentHighlightTimeline = result.timeline;
+      const jobId = result.jobId;
 
-      // Display results
-      const panel = document.getElementById('highlights-panel');
-      const content = document.getElementById('highlights-content');
+      showStatus('Queued! Waiting for analysis to start...', 'loading');
 
-      let html = `<div class="result-stat">
-        <span class="stat-label">Duration:</span>
-        <span class="stat-value">${result.timeline.duration.toFixed(1)}s</span>
-      </div>`;
-      html += `<div class="result-stat">
-        <span class="stat-label">Highlights Found:</span>
-        <span class="stat-value">${result.timeline.highlights.length}</span>
-      </div>`;
-
-      if (result.timeline.topHighlights && result.timeline.topHighlights.length > 0) {
-        html += `<div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;">`;
-        result.timeline.topHighlights.slice(0, 3).forEach((hl, idx) => {
-          html += `<div class="result-item">
-            <strong>#${idx + 1}</strong> ${hl.start.toFixed(1)}s - ${hl.end.toFixed(1)}s
-            <div style="font-size: 0.8rem; color: var(--accent); margin-top: 4px;">
-              Score: ${(hl.score * 100).toFixed(0)}% — ${hl.reason}
-            </div>
-          </div>`;
-        });
-        html += `</div>`;
-      }
-
-      content.innerHTML = html;
-      panel.classList.add('show');
-
-      showStatus('✓ Analysis complete! ' + result.timeline.highlights.length + ' highlights found', 'success');
-
-      // Enable variant generation
-      document.getElementById('variants-btn').disabled = false;
-      document.getElementById('captions-btn').disabled = false;
+      // Start polling for job progress
+      pollJobProgress(jobId, 'highlights');
     } else {
       const error = await response.json();
-      showStatus(`✗ Analysis failed: ${error.error}`, 'error');
+      showStatus(`✗ Failed to queue job: ${error.error}`, 'error');
     }
   } catch (err) {
     showStatus(`✗ Error: ${err.message}`, 'error');
   } finally {
     analyzeBtn.disabled = false;
   }
+}
+
+async function pollJobProgress(jobId, panelType) {
+  const maxAttempts = 300; // 2.5 minutes max (300 * 500ms)
+  let attempts = 0;
+
+  const pollInterval = setInterval(async () => {
+    attempts++;
+
+    try {
+      const response = await fetch(`/api/creator/job/${jobId}`);
+      if (!response.ok) return;
+
+      const job = await response.json();
+
+      // Update status message with progress
+      showStatus(`${job.progressMessage} (${job.progress}%)`, 'loading');
+
+      // Display progress
+      const panel = document.getElementById(`${panelType}-panel`);
+      const content = document.getElementById(`${panelType}-content`);
+
+      if (job.status === 'processing' || job.status === 'pending') {
+        // Show progress bar
+        let html = `<div style="margin-bottom: 12px;">
+          <div style="font-size: 0.85rem; margin-bottom: 6px;">
+            <strong>${job.progressMessage}</strong>
+          </div>
+          <div style="background: var(--surface2); height: 24px; border-radius: 4px; overflow: hidden;">
+            <div style="background: linear-gradient(90deg, var(--accent), #4caf82); height: 100%; width: ${job.progress}%; transition: width 0.3s; display: flex; align-items: center; justify-content: center;">
+              <span style="font-size: 0.7rem; color: white; font-weight: 600;">${job.progress}%</span>
+            </div>
+          </div>
+        </div>`;
+        content.innerHTML = html;
+        panel.classList.add('show');
+      } else if (job.status === 'complete') {
+        clearInterval(pollInterval);
+
+        // Display results
+        displayJobResults(job, panelType);
+        showStatus(`✓ ${job.type} complete!`, 'success');
+      } else if (job.status === 'failed') {
+        clearInterval(pollInterval);
+        showStatus(`✗ Job failed: ${job.error}`, 'error');
+      }
+
+      // Timeout after max attempts
+      if (attempts >= maxAttempts) {
+        clearInterval(pollInterval);
+        showStatus('✗ Job timeout', 'error');
+      }
+    } catch (err) {
+      console.error('Poll error:', err);
+    }
+  }, 500); // Poll every 500ms
+}
+
+function displayJobResults(job, panelType) {
+  const panel = document.getElementById(`${panelType}-panel`);
+  const content = document.getElementById(`${panelType}-content`);
+
+  if (!job.result) {
+    content.innerHTML = '<div class="result-item">No results available</div>';
+    panel.classList.add('show');
+    return;
+  }
+
+  let html = '';
+
+  if (panelType === 'highlights' && job.result.timeline) {
+    const timeline = job.result.timeline;
+    currentHighlightTimeline = timeline;
+
+    html = `<div class="result-stat">
+      <span class="stat-label">Duration:</span>
+      <span class="stat-value">${timeline.duration.toFixed(1)}s</span>
+    </div>`;
+    html += `<div class="result-stat">
+      <span class="stat-label">Highlights Found:</span>
+      <span class="stat-value">${timeline.highlights.length}</span>
+    </div>`;
+
+    if (timeline.topHighlights && timeline.topHighlights.length > 0) {
+      html += `<div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;">`;
+      timeline.topHighlights.slice(0, 3).forEach((hl, idx) => {
+        html += `<div class="result-item">
+          <strong>#${idx + 1}</strong> ${hl.start.toFixed(1)}s - ${hl.end.toFixed(1)}s
+          <div style="font-size: 0.8rem; color: var(--accent); margin-top: 4px;">
+            Score: ${(hl.score * 100).toFixed(0)}% — ${hl.reason}
+          </div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Enable variant/caption buttons
+    document.getElementById('variants-btn').disabled = false;
+    document.getElementById('captions-btn').disabled = false;
+  }
+
+  content.innerHTML = html;
+  panel.classList.add('show');
 }
 
 async function generateVariants() {
@@ -922,7 +996,7 @@ async function generateVariants() {
 
   const variantsBtn = document.getElementById('variants-btn');
   variantsBtn.disabled = true;
-  showStatus('Generating A/B/C variants...', 'loading');
+  showStatus('Queuing variant generation...', 'loading');
 
   try {
     const response = await fetch('/api/creator/variants', {
@@ -933,40 +1007,10 @@ async function generateVariants() {
 
     if (response.ok) {
       const result = await response.json();
-
-      const panel = document.getElementById('variants-panel');
-      const content = document.getElementById('variants-content');
-
-      let html = `<div class="result-stat">
-        <span class="stat-label">Variants Generated:</span>
-        <span class="stat-value">${result.variants.length}</span>
-      </div>`;
-
-      result.variants.forEach((variant) => {
-        html += `<div class="result-item" style="margin-top: 12px;">
-          <strong>${variant.variantId.toUpperCase()}</strong><br/>
-          <div style="font-size: 0.8rem; margin-top: 6px;">
-            Hook: ${variant.hook.text}<br/>
-            Pacing: ${variant.pacing}<br/>
-            <div class="result-stat" style="margin-top: 6px;">
-              <span class="stat-label">Completion Rate:</span>
-              <span class="stat-value">${(variant.estimatedCompletionRate * 100).toFixed(0)}%</span>
-            </div>
-            <div class="result-stat">
-              <span class="stat-label">Viral Score:</span>
-              <span class="stat-value">${(variant.estimatedViralScore * 100).toFixed(0)}%</span>
-            </div>
-          </div>
-        </div>`;
-      });
-
-      content.innerHTML = html;
-      panel.classList.add('show');
-
-      showStatus('✓ Generated ' + result.variants.length + ' variants', 'success');
+      pollJobProgress(result.jobId, 'variants');
     } else {
       const error = await response.json();
-      showStatus(`✗ Variant generation failed: ${error.error}`, 'error');
+      showStatus(`✗ Failed to queue: ${error.error}`, 'error');
     }
   } catch (err) {
     showStatus(`✗ Error: ${err.message}`, 'error');
@@ -983,7 +1027,7 @@ async function generateCaptions() {
 
   const captionsBtn = document.getElementById('captions-btn');
   captionsBtn.disabled = true;
-  showStatus('Generating captions...', 'loading');
+  showStatus('Queuing caption generation...', 'loading');
 
   try {
     const response = await fetch('/api/creator/captions', {
@@ -998,39 +1042,10 @@ async function generateCaptions() {
 
     if (response.ok) {
       const result = await response.json();
-
-      const panel = document.getElementById('captions-panel');
-      const content = document.getElementById('captions-content');
-
-      let html = `<div class="result-stat">
-        <span class="stat-label">Total Captions:</span>
-        <span class="stat-value">${result.captionCount}</span>
-      </div>`;
-
-      html += `<div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;">`;
-      result.captions.slice(0, 5).forEach((caption) => {
-        html += `<div class="result-item">
-          <strong>${caption.text}</strong><br/>
-          <span style="font-size: 0.8rem; color: var(--muted);">
-            ${caption.startTime.toFixed(2)}s - ${caption.endTime.toFixed(2)}s
-          </span>
-        </div>`;
-      });
-      html += `</div>`;
-
-      if (result.captionCount > 5) {
-        html += `<div class="result-item" style="margin-top: 8px; text-align: center; color: var(--muted);">
-          +${result.captionCount - 5} more captions...
-        </div>`;
-      }
-
-      content.innerHTML = html;
-      panel.classList.add('show');
-
-      showStatus('✓ Generated ' + result.captionCount + ' captions (VTT, SRT, JSON ready)', 'success');
+      pollJobProgress(result.jobId, 'captions');
     } else {
       const error = await response.json();
-      showStatus(`✗ Caption generation failed: ${error.error}`, 'error');
+      showStatus(`✗ Failed to queue: ${error.error}`, 'error');
     }
   } catch (err) {
     showStatus(`✗ Error: ${err.message}`, 'error');
@@ -1040,70 +1055,31 @@ async function generateCaptions() {
 }
 
 async function detectSafeZones() {
-  if (!currentEntry) {
+  if (!currentEntry || !currentEntry.file?.path) {
     showStatus('✗ Please upload a video first', 'error');
     return;
   }
 
   const safezonesBtn = document.getElementById('safezones-btn');
   safezonesBtn.disabled = true;
-  showStatus('Detecting safe zones...', 'loading');
+  showStatus('Queuing safe zone detection...', 'loading');
 
   try {
-    // For demo: send minimal frame data (in production: extract actual frame)
     const response = await fetch('/api/creator/safe-zones', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        videoPath: currentEntry.file?.path,
-        frameData: {
-          width: 1920,
-          height: 1080,
-          pixels: null // In production: extract frame data
-        }
+        videoPath: currentEntry.file.path,
+        frameData: { width: 1920, height: 1080 }
       })
     });
 
     if (response.ok) {
       const result = await response.json();
-
-      const panel = document.getElementById('safezones-panel');
-      const content = document.getElementById('safezones-content');
-
-      let html = `<div class="result-stat">
-        <span class="stat-label">Safe Zones Found:</span>
-        <span class="stat-value">${result.zoneCount}</span>
-      </div>`;
-
-      html += `<div style="margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px;">`;
-      result.safeZones.forEach((zone) => {
-        html += `<div class="result-item">
-          <strong>${zone.type.toUpperCase()}</strong><br/>
-          <span style="font-size: 0.8rem; color: var(--muted);">
-            Confidence: ${(zone.confidence * 100).toFixed(0)}%
-          </span>
-        </div>`;
-      });
-      html += `</div>`;
-
-      if (result.safeCropRegions && result.safeCropRegions.length > 0) {
-        html += `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-          <strong style="font-size: 0.85rem;">Safe Crop Options:</strong>`;
-        result.safeCropRegions.slice(0, 3).forEach((crop) => {
-          html += `<div class="result-item">
-            ${crop.format || 'Custom'}: ${(crop.width * 100).toFixed(0)}% × ${(crop.height * 100).toFixed(0)}%
-          </div>`;
-        });
-        html += `</div>`;
-      }
-
-      content.innerHTML = html;
-      panel.classList.add('show');
-
-      showStatus('✓ Detected ' + result.zoneCount + ' safe zones', 'success');
+      pollJobProgress(result.jobId, 'safezones');
     } else {
       const error = await response.json();
-      showStatus(`✗ Safe zone detection failed: ${error.error}`, 'error');
+      showStatus(`✗ Failed to queue: ${error.error}`, 'error');
     }
   } catch (err) {
     showStatus(`✗ Error: ${err.message}`, 'error');
