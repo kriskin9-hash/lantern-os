@@ -636,7 +636,31 @@ async function handleStreamChat(req, url, res) {
 
 
   const sendToken = (token) => sse.sendToken(res, token);
+  const sendRoute = (route) => sse.sendRoute(res, route);
+  const sendReceipt = (receipt) => sse.sendReceipt(res, receipt);
   const sendDone = (source, extra = {}) => sse.sendDone(res, source, { ...extra, routeLabel });
+
+  // Emit route event with actual routing decision from server
+  sendRoute({
+    agent: agent.id || agent.name || "keystone",
+    agentName: agent.name || "Keystone",
+    intent: converganceIntent,
+    surface: surfaceMode,
+    requiresConvergence: routeDecision.requires_convergence || false,
+    label: routeLabel,
+  });
+
+  // Helper to generate PCSF receipt metadata
+  const buildPcsfReceipt = (provider, model, isOnline) => ({
+    generatedAt: new Date().toISOString(),
+    capacityClass: isOnline ? "live" : "offline",
+    provider,
+    model: model || "unknown",
+    metered: !["ollama", "local"].includes(provider),
+    privacyBoundary: ["ollama", "local"].includes(provider) ? "internal" : "external",
+    claimBoundary: "live",
+  });
+
   // Human-readable error translator — turns internal codes into plain language
   function humanError(err) {
     const msg = String(err?.message || err || "");
@@ -861,7 +885,9 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions };
+          const ollamaReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
+          sendReceipt(ollamaReceipt);
+          const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions, receipt: ollamaReceipt };
           if (imageEntryId) meta.image = { entryId: imageEntryId, status: "generating" };
           sendDone("ollama", meta);
           return;
@@ -902,7 +928,9 @@ async function handleStreamChat(req, url, res) {
           text: cleanText.slice(0, maxConversationTextLength),
         }).catch(() => {});
         recordProviderSuccess("keystone-ft");
-        sendDone("keystone-ft", { agent: "Keystone FT", provider: "keystone-ft", online: true, cleanText, suggestions });
+        const keystoneFtReceipt = buildPcsfReceipt("keystone-ft", "keystone-ft-claude", true);
+        sendReceipt(keystoneFtReceipt);
+        sendDone("keystone-ft", { agent: "Keystone FT", provider: "keystone-ft", online: true, cleanText, suggestions, receipt: keystoneFtReceipt });
         return;
       }
       throw new Error("keystone-ft returned no tokens");
@@ -991,7 +1019,9 @@ async function handleStreamChat(req, url, res) {
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("gemini");
-      sendDone("gemini", { agent: doneAgentName, provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions });
+      const geminiReceipt = buildPcsfReceipt("gemini", process.env.GEMINI_MODEL || "gemini-2.0-flash", true);
+      sendReceipt(geminiReceipt);
+      sendDone("gemini", { agent: doneAgentName, provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions, receipt: geminiReceipt });
       return;
     } catch (err) {
       recordProviderFailure("gemini", err.message);
@@ -1076,7 +1106,9 @@ async function handleStreamChat(req, url, res) {
       }).catch(() => {});
       recordProviderSuccess("anthropic");
       recordProviderSuccessRouter("anthropic"); // Also log to provider-router for performance tracking
-      sendDone("anthropic", { agent: doneAgentName, provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
+      const anthropicReceipt = buildPcsfReceipt("anthropic", process.env.ANTHROPIC_MODEL || "claude-opus", true);
+      sendReceipt(anthropicReceipt);
+      sendDone("anthropic", { agent: doneAgentName, provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions, receipt: anthropicReceipt });
       return;
     } catch (err) {
       const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
@@ -1150,7 +1182,9 @@ async function handleStreamChat(req, url, res) {
       }).catch(() => {});
       recordProviderSuccess("openai");
       recordProviderSuccessRouter("openai"); // Also log to provider-router
-      sendDone("openai", { agent: doneAgentName, provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
+      const openaiReceipt = buildPcsfReceipt("openai", process.env.OPENAI_MODEL || "gpt-4-turbo", true);
+      sendReceipt(openaiReceipt);
+      sendDone("openai", { agent: doneAgentName, provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions, receipt: openaiReceipt });
       return;
     } catch (err) {
       const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
@@ -1200,7 +1234,9 @@ async function handleStreamChat(req, url, res) {
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
-      sendDone("grok", { agent: doneAgentName, provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
+      const grokReceipt = buildPcsfReceipt("grok", process.env.XAI_MODEL || "grok-2", true);
+      sendReceipt(grokReceipt);
+      sendDone("grok", { agent: doneAgentName, provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions, receipt: grokReceipt });
       return;
     } catch (err) {
       recordProviderFailure("xai", err.message);
@@ -1241,7 +1277,9 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText, suggestions });
+          const ollamaConnectorReceipt = buildPcsfReceipt("ollama", "unified-agent", true);
+          sendReceipt(ollamaConnectorReceipt);
+          sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText, suggestions, receipt: ollamaConnectorReceipt });
           return;
         }
       } catch (err) {
@@ -1313,7 +1351,9 @@ async function handleStreamChat(req, url, res) {
           text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
         recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions });
+        const ollamaHttpReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
+        sendReceipt(ollamaHttpReceipt);
+        sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions, receipt: ollamaHttpReceipt });
         return;
       }
     } catch (err) {
