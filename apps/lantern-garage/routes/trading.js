@@ -479,8 +479,33 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (url.pathname === '/api/trading/kalshi/suggestions' && req.method === 'GET') {
         const suggest = require('../lib/kalshi-suggest');
         const limit = q.limit ? Number(q.limit) : 60;
-        return sendJson(res, await suggest.getSuggestions({ limit }), 200), true;
+        const collector = deps.kalshiCollector || null;
+        return sendJson(res, await suggest.getSuggestions({ limit, collector }), 200), true;
       }
+
+      // GET — Convergence-optimized games (ideal time window + conviction + momentum)
+      if (url.pathname === '/api/trading/kalshi/convergence-ranked' && req.method === 'GET') {
+        const suggest = require('../lib/kalshi-suggest');
+        const scorer = require('../lib/kalshi-convergence-scorer');
+        const limit = q.limit ? Number(q.limit) : 12;
+        const collector = deps.kalshiCollector || null;
+        const suggestions = await suggest.getSuggestions({ limit: 200, collector });
+        const ranked = scorer.rankByConvergence(suggestions.cards || [], limit);
+        return sendJson(res, {
+          count: ranked.length,
+          note: 'Games ranked by convergence fitness: ideal time window (1-6h) + high conviction + strong momentum',
+          cards: ranked
+        }, 200), true;
+      }
+
+      // GET — Crypto intraday markets (15m, 1h, daily predictions)
+      if (url.pathname === '/api/trading/kalshi/crypto-intraday' && req.method === 'GET') {
+        const cryptoSuggest = require('../lib/kalshi-crypto-suggester');
+        const limit = q.limit ? Number(q.limit) : 20;
+        const collector = deps.kalshiCollector || null;
+        return sendJson(res, await cryptoSuggest.getCryptoSuggestions({ limit, collector }), 200), true;
+      }
+
       // GET — live market data (pass-through query: series_ticker, status, limit, event_ticker)
       if (url.pathname === '/api/trading/kalshi/live-markets' && req.method === 'GET') {
         const r = await kalshi.getMarkets(q);
@@ -747,6 +772,27 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/kalshi/collector-status
+  // Get tight-band collector status and latest snapshot
+  if (url.pathname === '/api/trading/kalshi/collector-status' && req.method === 'GET') {
+    try {
+      const collector = deps.kalshiCollector;
+      const latest = collector ? collector.getLatest() : null;
+      sendJson(res, {
+        running: !!collector,
+        lastSnapshot: latest ? {
+          generatedAt: latest.generatedAt,
+          marketCount: latest.markets?.length || 0,
+          exitCount: latest.exitCount || 0,
+          markets: latest.markets?.slice(0, 5), // First 5 for preview
+        } : null,
+      }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Collector status check failed', details: error.message }, 500);
+    }
+    return true;
+  }
+
   // GET /api/trading/settings
   // Get API key status (shows which are configured, no secrets exposed)
   // IBKR is always true — configured via Claude Code MCP (read-only market data)
@@ -817,6 +863,59 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       }, 200);
     } catch (error) {
       sendJson(res, { error: 'Settings update failed', details: error.message }, 400);
+    }
+    return true;
+  }
+
+  // ── Crypto Collector Routes ──────────────────────────────────────────────────
+  // Real-time crypto pricing and news from Kalshi markets + CoinGecko
+
+  // GET /api/trading/crypto/prices
+  // Returns latest crypto prices (BTC, ETH, SOL, XRP, DOGE) from Kalshi prediction markets
+  if (url.pathname === '/api/trading/crypto/prices' && req.method === 'GET') {
+    try {
+      const cryptoCollector = deps.cryptoCollector;
+      if (!cryptoCollector) {
+        return sendJson(res, { error: 'Crypto collector not initialized' }, 503), true;
+      }
+      const prices = cryptoCollector.getLatestPrices();
+      sendJson(res, { timestamp: new Date().toISOString(), prices }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch crypto prices', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/crypto/news
+  // Returns latest crypto news from CoinGecko trending endpoint
+  if (url.pathname === '/api/trading/crypto/news' && req.method === 'GET') {
+    try {
+      const cryptoCollector = deps.cryptoCollector;
+      if (!cryptoCollector) {
+        return sendJson(res, { error: 'Crypto collector not initialized' }, 503), true;
+      }
+      const news = cryptoCollector.getLatestNews();
+      sendJson(res, { timestamp: new Date().toISOString(), news }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch crypto news', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/crypto/prices/historical?limit=100
+  // Returns historical crypto price snapshots (JSONL-based time series)
+  if (url.pathname === '/api/trading/crypto/prices/historical' && req.method === 'GET') {
+    try {
+      const cryptoCollector = deps.cryptoCollector;
+      if (!cryptoCollector) {
+        return sendJson(res, { error: 'Crypto collector not initialized' }, 503), true;
+      }
+      const limitParam = url.searchParams.get('limit');
+      const limit = limitParam ? Number(limitParam) : 100;
+      const prices = cryptoCollector.getHistoricalPrices(limit);
+      sendJson(res, { timestamp: new Date().toISOString(), count: prices.length, prices }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch historical prices', details: error.message }, 500);
     }
     return true;
   }
