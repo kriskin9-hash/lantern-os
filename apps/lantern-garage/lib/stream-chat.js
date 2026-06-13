@@ -10,6 +10,15 @@ const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
+const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
+const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
+const { generateDoorSceneImage } = require("./image-generation");
+const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
+const { generatePlan, generatePatch } = require("./self-edit-engine");
+const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
+const { detectTaskType } = require("./task-detector");
+const { classifyIntent } = require("./intent-router");
+const { convergeMessage } = require("./convergence-adapter");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -18,38 +27,244 @@ const maxConversationTextLength = 4000;
 // Fallback doors when AI omits the marker or provider fails
 const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
-// Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array
+// Conversation history compaction thresholds
+const FULL_FIDELITY_RECENT_TURNS = 2;
+const MID_FIDELITY_TURNS = 2;
+const MID_FIDELITY_CHAR_LIMIT = 200;
+const LOW_FIDELITY_WORD_LIMIT = 10;
+
+// Conversation history compaction: tiered summarization to reduce provider token costs.
+// Only compacts turns older than the most recent FULL_FIDELITY_RECENT_TURNS exchanges;
+// never re-compacts already-compacted text (FlowKV principle).
+function compactHistory(history) {
+  if (!Array.isArray(history) || history.length === 0) return [];
+  return history.map((h, i) => {
+    const text = String(h.text != null ? h.text : (h.content != null ? h.content : ""));
+    const role = h.role || "user";
+    if (i >= history.length - FULL_FIDELITY_RECENT_TURNS) {
+      return { role, text }; // Full fidelity
+    }
+    if (i >= history.length - FULL_FIDELITY_RECENT_TURNS - MID_FIDELITY_TURNS) {
+      const truncated = text.length > MID_FIDELITY_CHAR_LIMIT
+        ? text.slice(0, MID_FIDELITY_CHAR_LIMIT) + "…"
+        : text;
+      return { role, text: truncated };
+    }
+    // Low fidelity: first N words only
+    const words = text.trim().split(/\s+/).filter(Boolean).slice(0, LOW_FIDELITY_WORD_LIMIT).join(" ");
+    const roleLabel = role === "assistant" ? "Lantern" : "Dreamer";
+    const summary = words.length > 0 ? `[${roleLabel}: ${words}…]` : `[${roleLabel}]`;
+    return { role, text: summary };
+  });
+}
+
+// Build the provider messages array from compacted history + current message.
+// Single source of truth — all providers call this instead of inlining history.map.
+function buildProviderMessages(systemPrompt, compacted, currentMessage) {
+  return [
+    { role: "system", content: systemPrompt },
+    ...compacted.map(h => ({ role: h.role, content: h.text })),
+    { role: "user", content: currentMessage },
+  ];
+}
+
+// Parse [DOORS: A | B | C] out of the full reply and return cleaned text + doors array.
+// Local models (Ollama) sometimes use commas instead of pipes — fall back gracefully.
 function extractDoors(text) {
   // Match complete [DOORS: A | B | C] or incomplete [DOORS: A | B | C (no closing bracket)
   const match = text.match(/\[DOORS:\s*([^\]]+)\]?/i);
   if (!match) return { cleanText: text.trim(), doors: [] };
-  const doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
+  let doors = match[1].split("|").map(d => d.trim()).filter(Boolean).slice(0, 3);
+  // Fallback: if pipe-split didn't produce 3 doors, try comma-before-capital split
+  if (doors.length < 3) {
+    const commaSplit = match[1].split(/,\s*(?=[A-Z])/).map(d => d.trim()).filter(Boolean).slice(0, 3);
+    if (commaSplit.length > doors.length) doors = commaSplit;
+  }
   const cleanText = text.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trim();
   return { cleanText, doors };
 }
 
-function doorsOrFallback(text, isKeystoneDebug = false) {
-  if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
+function doorsOrFallback(text, skipDoors = false) {
+  if (skipDoors) return { cleanText: text.trim(), suggestions: [] };
   const { cleanText, doors } = extractDoors(text);
-  const finalDoors = doors.length === 3 ? doors : [...doors, ...FALLBACK_DOORS].slice(0, 3);
+  // Always return exactly 3 suggestions. Pad with fallbacks if model gave fewer than 3.
+  let finalDoors;
+  if (doors.length >= 3) {
+    finalDoors = doors.slice(0, 3);
+  } else if (doors.length > 0) {
+    finalDoors = [...doors, ...FALLBACK_DOORS].slice(0, 3);
+  } else {
+    finalDoors = FALLBACK_DOORS;
+  }
   if (doors.length > 0) {
     try { saveDoorChoice(null, finalDoors); } catch {}
   }
   return { cleanText, suggestions: finalDoors };
 }
 
+// Extract key topics from user message and generate 3 web search suggestion links
+function generateWebSuggestions(userMessage) {
+  const topicPatterns = {
+    sports: /\b(basketball|football|baseball|soccer|hockey|tennis|golf|cricket|boxing)s?\b/i,
+    trains: /\b(trains?|railways?|locomotives?|stations?|transit|rails?)\b/i,
+    recipes: /\b(recipes?|cooking|cook|meals?|dishes?|foods?|ingredients?)\b/i,
+    movies: /\b(movies?|films?|cinemas?|watch|actors?|actresses?|directors?)\b/i,
+    music: /\b(musics?|songs?|albums?|artists?|concerts?|bands?|genres?)\b/i,
+    tech: /\b(technology|software|hardware|ai|code|programming|apps?)\b/i,
+    travel: /\b(travels?|trips?|destinations?|vacations?|hotels?|flights?|tours?)\b/i,
+    science: /\b(science|research|studies?|discoveries?|experiments?|biology|physics)\b/i,
+    news: /\b(news|current|todays?|today's|latest|breaking)\b/i,
+    health: /\b(health|fitness|diets?|exercises?|wellness|nutrition)\b/i,
+  };
+
+  let matchedTopics = [];
+  for (const [topic, pattern] of Object.entries(topicPatterns)) {
+    if (pattern.test(userMessage)) {
+      matchedTopics.push(topic);
+    }
+  }
+
+  // If no patterns match, extract first meaningful word
+  if (matchedTopics.length === 0) {
+    const words = userMessage.split(/\s+/).filter(w => w.length > 4 && !/^(what|when|where|which|how|about)$/i.test(w));
+    if (words.length > 0) matchedTopics.push(words[0].toLowerCase());
+  }
+
+  const topicLabel = matchedTopics[0] || "interesting topics";
+
+  // Generate 3 search suggestion links with generic but relevant queries
+  const suggestions = [
+    { label: "Explore on Google", url: `https://www.google.com/search?q=${encodeURIComponent(topicLabel)}`, icon: "🔍" },
+    { label: "Latest on Wikipedia", url: `https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(topicLabel)}&title=Special:Search`, icon: "📖" },
+    { label: "News & Articles", url: `https://news.google.com/search?q=${encodeURIComponent(topicLabel)}`, icon: "📰" },
+  ];
+
+  return suggestions;
+}
+
+// Non-blocking image generation sidecar for Three Doors mode
+function triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh }) {
+  if (surfaceMode !== "three-doors") return null;
+  
+  const entryId = Date.now().toString();
+  generateDoorSceneImage({ cleanText, doors: suggestions, symbolMesh, entryId })
+    .then(result => {
+      // Image generation completes asynchronously; failure is non-blocking
+    })
+    .catch(err => {
+      // Image generation errors are non-blocking
+    });
+  
+  return entryId;
+}
+
+/**
+ * Analyze a convergence loop result and determine:
+ * - What categories of failures exist
+ * - Which agent profile should handle them
+ * - Proposed next actions (with UI button metadata)
+ */
+function analyzeConvergenceResult(result) {
+  const phases = result.phases || [];
+  const findings = {
+    testFailures: [],
+    docDrift: [],
+    providerFailures: [],
+    validationFailures: [],
+    otherFailures: [],
+    actions: [],
+  };
+
+  for (const p of phases) {
+    if (p.status === "pass" || p.status === "skip") continue;
+    const name = p.name || "";
+    const evidence = p.evidence || {};
+    const fail = { name, status: p.status, evidence };
+
+    if (name.includes("test") || (evidence.tests && evidence.tests.failed > 0)) {
+      findings.testFailures.push(fail);
+    } else if (name.includes("doc") || name.includes("readme") || evidence.drift) {
+      findings.docDrift.push(fail);
+    } else if (name.includes("provider") || name.includes("capacity") || name.includes("pcsf")) {
+      findings.providerFailures.push(fail);
+    } else if (name.includes("valid") || name.includes("promote") || name.includes("hold")) {
+      findings.validationFailures.push(fail);
+    } else {
+      findings.otherFailures.push(fail);
+    }
+  }
+
+  // Build proposed actions
+  if (findings.testFailures.length > 0) {
+    findings.actions.push({
+      label: "Fix test failures",
+      action: "self-edit-plan",
+      profile: "lantern-coding",
+      intent: "coding_change",
+      hint: `Address ${findings.testFailures.length} test failure(s)`,
+    });
+  }
+  if (findings.providerFailures.length > 0) {
+    findings.actions.push({
+      label: "Check provider capacity",
+      action: "self-edit-plan",
+      profile: "lantern-pcsf",
+      intent: "capacity_query",
+      hint: `Investigate ${findings.providerFailures.length} provider issue(s)`,
+    });
+  }
+  if (findings.docDrift.length > 0) {
+    findings.actions.push({
+      label: "Update docs",
+      action: "self-edit-plan",
+      profile: "keystone",
+      intent: "code_review",
+      hint: `Resolve ${findings.docDrift.length} doc drift issue(s)`,
+    });
+  }
+  if (findings.validationFailures.length > 0) {
+    findings.actions.push({
+      label: "Review validation failures",
+      action: "self-edit-plan",
+      profile: "keystone",
+      intent: "code_review",
+      hint: `Review ${findings.validationFailures.length} validation issue(s)`,
+    });
+  }
+  if (result.promotion_ready && findings.actions.length === 0) {
+    findings.actions.push({
+      label: "Promote changes",
+      action: "self-edit-pr",
+      profile: "lantern-convergance",
+      intent: "convergance_action",
+      hint: "Convergence clean — open a promotion PR",
+    });
+  }
+
+  return findings;
+}
+
 async function handleStreamChat(req, url, res) {
-  console.log("[Stream] handleStreamChat entered");
   const { collectRequestBody } = require("./http-utils");
   const parsed = await parseStreamChatRequest(req, url, {
     normalizeDreamerUser,
     collectRequestBody,
   });
-  let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
+  let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
+
+  // Surface mode: dream-chat (default) or three-doors.
+  // The game page declares itself via body.surface; bang commands can also flip it below.
+  let surfaceMode = parsed.surface === "three-doors" ? "three-doors" : "dream-chat";
 
   // Handle bang commands
   const cmd = parseBangCommand(message);
   if (cmd) {
+    // Three Doors mode
+    if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors") {
+      surfaceMode = "three-doors";
+      message = message.replace(/!(?:three-doors|threedoors|three_doors)\b/gi, "").trim() || "begin";
+    }
+
     if (cmd.name === "swarm") {
       // Parse: !swarm <mode> <job> <message...>
       // or:   !swarm <job> <message...>  (default mode = single)
@@ -77,7 +292,7 @@ async function handleStreamChat(req, url, res) {
       const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
       const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
 
-      sendToken(`Swarm ${mode} · ${job} · routing…\n\n`);
+      sendToken(`Keystone routing…\n\n`);
       const agent = selectAgent(swarmMessage);
       const systemPrompt = `${agent.systemPrompt}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic.`;
 
@@ -85,10 +300,10 @@ async function handleStreamChat(req, url, res) {
         .then((result) => {
           const words = result.text.split(" ");
           for (const word of words) sendToken(word + " ");
-          const meta = { agent: agent.name, online: true, swarm: { provider: result.provider, model: result.model, mode, job } };
+          const meta = { agent: "Keystone", provider: result.provider, online: true, swarm: { provider: result.provider, model: result.model, mode, job } };
           if (result.consensus) meta.swarm.consensus = result.consensus;
           if (result.council) meta.swarm.council = result.council;
-          sendDone(result.provider, meta);
+          sendDone("keystone", meta);
           res.end();
         })
         .catch((err) => {
@@ -99,47 +314,176 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
-    if (cmd.name === "converge") {
-      const { spawn } = require("child_process");
-      const py = spawn("python", ["src/convergence_io_engine.py", "loop"], { cwd: repoRoot });
-      let stdout = "";
-      py.stdout.on("data", (d) => { stdout += d.toString(); });
-      py.stderr.on("data", (d) => { stdout += d.toString(); });
-      py.on("close", () => {
-        try {
-          const result = JSON.parse(stdout);
-          const status = result.promotion_ready ? "✅ Converged" : "⚠️ Needs review";
-          const version = result.version?.build || result.version?.tag || "unknown";
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-          });
-          res.write(`event: token\ndata: ${JSON.stringify({ token: status + " (score: " + result.convergence_score + ")\n" })}\n\n`);
-          result.phases.forEach((p) => {
-            res.write(`event: token\ndata: ${JSON.stringify({ token: "- " + p.name + ": " + p.status + "\n" })}\n\n`);
-          });
-          res.write(`event: done\ndata: ${JSON.stringify({ done: true, agent: "Convergence", online: true, version })}\n\n`);
-          res.end();
-        } catch (exc) {
-          res.writeHead(200, {
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-          });
-          res.write(`event: token\ndata: ${JSON.stringify({ token: "Convergence output:\n" + stdout.slice(0, 2000) })}\n\n`);
-          res.write(`event: done\ndata: ${JSON.stringify({ done: true })}\n\n`);
-          res.end();
-        }
+    if (cmd.name === "search" || cmd.name === "web-search") {
+      const searchQuery = cmd.args.trim() || message.replace(/!\w+\s*/, "").trim();
+      if (!searchQuery) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "search_query_required", message: "Usage: !search <query>" }));
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
       });
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`🔍 Searching: "${searchQuery}"\n\n`);
+      try {
+        const result = await webSearchMcp(searchQuery, 5);
+        if (result.success && result.results) {
+          sendToken(`Found ${result.result_count || result.results.length} results:\n\n`);
+          for (const r of result.results) {
+            sendToken(`${r.rank}. **${r.title}**\n   ${r.url}\n   ${r.snippet || ""}\n\n`);
+          }
+          sendDone("web_search", { agent: "WebSearch", online: true, query: searchQuery, resultCount: result.result_count });
+        } else {
+          sendToken(`Search failed: ${result.error || "unknown error"}\n`);
+          sendDone("web_search", { agent: "WebSearch", online: false, error: result.error });
+        }
+      } catch (e) {
+        sendToken(`Search error: ${e.message}\n`);
+        sendDone("web_search", { agent: "WebSearch", online: false, error: e.message });
+      }
+      res.end();
       return;
     }
 
-    res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
-    res.end(JSON.stringify({ error: "unsupported_command", command: cmd.name }));
-    return;
+    if (cmd.name === "doors" || cmd.name === "door") {
+      const { spawn } = require("child_process");
+      const doorTypes = cmd.args || "elephant garden cosmic";
+      
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`◈ Generating mystical doors…\n\n`);
+      sendToken(`Door types: ${doorTypes}\n`);
+      sendToken(`Style: Abstract, dreamlike, not cartoonish\n\n`);
+      
+      const py = spawn("python", ["scripts/generate-door-images.py", "generate"], { cwd: repoRoot });
+      let stdout = "";
+      let stderr = "";
+      
+      py.stdout.on("data", (d) => {
+        stdout += d.toString();
+        sendToken(d.toString());
+      });
+      
+      py.stderr.on("data", (d) => {
+        stderr += d.toString();
+        sendToken(`⚠️ ${d.toString()}`);
+      });
+      
+      py.on("close", (code) => {
+        if (code === 0) {
+          sendToken(`\n✅ Door images generated successfully!\n`);
+          sendToken(`Check: data/images/three-doors/\n`);
+          sendDone("doors", { agent: "DoorGenerator", online: true, count: 3 });
+        } else {
+          sendToken(`\n❌ Generation failed (exit ${code})\n`);
+          sendToken(`Make sure Stable Diffusion is running: python -m launch --api\n`);
+          sendDone("doors", { agent: "DoorGenerator", online: false, error: stderr });
+        }
+        res.end();
+      });
+      
+      py.on("error", (err) => {
+        sendToken(`\n❌ Failed to spawn generator: ${err.message}\n`);
+        sendDone("doors", { agent: "DoorGenerator", online: false, error: err.message });
+        res.end();
+      });
+      
+      return;
+    }
+
+    if (cmd.name === "converge" || cmd.name === "convergance") {
+      // Route the task to Keystone via the normal LLM chain (same as !three-doors fallthrough).
+      // Keystone's system prompt handles dev/GitHub tasks directly.
+      const taskContent = (cmd.args || "").trim() || message.replace(/^!\S+\s*/, "").trim();
+      message = taskContent
+        ? `[Convergence task] ${taskContent}`
+        : message.replace(/^!\S+\s*/, "").trim() || message;
+      requestedAgent = requestedAgent || "keystone";
+      // fall through to normal SSE chat routing below
+    }
+
+    if (cmd.name === "self-edit" || cmd.name === "selfedit" || cmd.name === "code") {
+      const requestText = cmd.args.trim() || message.replace(/^!\S+\s*/, "").trim();
+      if (!requestText) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "self_edit_request_required", message: "Usage: !self-edit <what to change>" }));
+        return;
+      }
+
+      sse.writeStreamHeaders(res);
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+
+      sendToken(`◈ Self-Edit Mode\n\n`);
+      sendToken(`Request: ${requestText}\n`);
+      sendToken(`Generating plan…\n\n`);
+
+      (async () => {
+        try {
+          const plan = await generatePlan(repoRoot, requestText, [], history || []);
+          sendToken(`Plan: ${plan.summary}\n`);
+          sendToken(`Risk: ${plan.riskLevel}\n`);
+          sendToken(`Files: ${plan.affectedFiles.join(", ")}\n\n`);
+
+          sendToken(`Generating patch…\n\n`);
+          const { diffText, files } = await generatePatch(repoRoot, plan);
+          const changedFiles = files.map((f) => f.newFile || f.oldFile).filter(Boolean);
+          sendToken(`Changed files: ${changedFiles.join(", ")}\n`);
+          sendToken(`\n--- Patch Preview ---\n${diffText.slice(0, 1500)}${diffText.length > 1500 ? "\n…(truncated)" : ""}\n`);
+
+          const actions = [
+            { label: "Apply patch + run tests", action: "self-edit-apply", hint: plan.summary, plan, diffText },
+            { label: "Open draft PR", action: "self-edit-pr", hint: plan.summary, plan, diffText },
+          ];
+
+          sendDone("self-edit", {
+            agent: "SelfEdit",
+            online: true,
+            plan,
+            diffText,
+            changedFiles,
+            actions,
+          });
+          res.end();
+        } catch (err) {
+          sse.sendError(res, `Self-edit failed: ${err.message}`);
+          sendDone("failed", { error: err.message });
+          res.end();
+        }
+      })();
+      return;
+    }
+
+    // Three Doors variants: start fresh game if no history, else strip command and continue
+    if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors"
+        || cmd.name === "converge" || cmd.name === "convergance") {
+      if (cmd.name === "converge" || cmd.name === "convergance") { /* already handled above */ }
+      if (history && history.length > 0) {
+        // Game already in progress — strip the bang command, keep any surrounding text
+        const stripped = message.replace(/!(?:three-doors|threedoors|three_doors)\b/gi, "").trim();
+        message = stripped || "continue";
+      }
+      // fall through to normal SSE chat routing below
+    } else {
+      res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+      res.end(JSON.stringify({ error: "unsupported_command", command: cmd.name }));
+      return;
+    }
   }
 
   sse.writeStreamHeaders(res);
@@ -156,16 +500,24 @@ async function handleStreamChat(req, url, res) {
     return { ...d, text: `[${d.kind || 'dream'} — ${d.tags?.[0] || 'untitled'}]`, _fidelity: 'placeholder' }; // Placeholder
   });
 
-  const agent = requestedAgent
-    ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
-    : selectAgent(message);
+  // Dream Chat is Keystone-only: the desk agent is always Keystone.
+  // Personas (Lantern et al.) live in the Three Doors game surface, where the
+  // game may request a specific guide via body.agent (defaults to Lantern).
+  const agent = surfaceMode === "three-doors"
+    ? (AGENT_PERSONAS.find((a) => a.id === (requestedAgent || "lantern"))
+        || AGENT_PERSONAS.find((a) => a.id === "lantern")
+        || selectAgent(message))
+    : (AGENT_PERSONAS.find((a) => a.id === "keystone") || selectAgent(message));
 
   // ── Keystone debug mode ───────────────────────────────────────────────
   // When Keystone is selected, bypass persona/doors and talk raw to the model
   // about app dev, repo state, and convergence. Direct API access from the UX.
-  const isKeystoneDebug = agent.id === "keystone" && mcpFlag;
+  const isKeystoneDebug = agent.id === "keystone" && (mcpFlag || message.startsWith("[Convergence task]"));
 
-  const dreamContext = recentDreams.length > 0
+  // Name reported in done events — Keystone at the desk, the persona (Lantern) in the game
+  const doneAgentName = agent.name || "Keystone";
+
+  let dreamContext = recentDreams.length > 0
     ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
         `${i + 1}. ${String(d.text || d.content || "").slice(0, 200)}`
       ).join("\n")}`
@@ -180,9 +532,11 @@ async function handleStreamChat(req, url, res) {
     return Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 8).map(([k]) => k);
   })();
 
-  // Include prior conversation turns so the model has full context
-  const historyContext = history.length > 0
-    ? `\nPrior conversation turns:\n${history.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
+  // Compact history once; providers reuse this via buildProviderMessages.
+  // historyContext is kept for Keystone debug prompt only — not injected into dream system prompt.
+  const compacted = compactHistory(history);
+  const historyContext = compacted.length > 0
+    ? `\nPrior conversation turns:\n${compacted.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
   // Co-occurrence pairs: symbols that appear together in the same entry strengthen the edge
@@ -209,18 +563,104 @@ async function handleStreamChat(req, url, res) {
   // Keystone debug prompt — raw dev access, no persona, no doors
   const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
+  // ── Web Search Grounding ───────────────────────────────────────────
+  let groundingContext = "";
+  if (!isKeystoneDebug && needsGrounding(message)) {
+    const searchQuery = extractSearchQuery(message);
+    if (searchQuery) {
+      try {
+        const searchResult = await webSearchMcp(searchQuery, 5);
+        if (searchResult.success && searchResult.results) {
+          groundingContext = formatGroundingContext(searchResult.results, searchQuery);
+        }
+      } catch (e) {
+        console.error("[web-search] Grounding failed (non-fatal):", e.message);
+      }
+    }
+  }
+
   // CSF long-term memory + door state (query-time relevance filtered)
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
+  // ── Convergance OS routing (runs before systemPrompt so intent drives prompt + label) ──
+  let converganceDecision = null;
+  try {
+    converganceDecision = await converganceRoute(message, {
+      requestedProvider,
+      forceProfile: surfaceMode === "three-doors" ? "lantern-csf-dream" : undefined,
+    });
+  } catch (e) {
+    console.error("[Convergance] Router error (non-fatal):", e.message);
+  }
+
+  // ── RP lives in the Three Doors game only. Dream Chat is always plain Keystone;
+  // roleplay requests in chat get pointed at /three-doors-game.html instead.
+  const isRpMode = surfaceMode === "three-doors";
+
+  const routeDecision = classifyIntent(message);
+
+  // ── Route label (sent in every done event; shown below each assistant bubble) ─
+  const converganceIntent = converganceDecision?.intent || routeIntent || routeDecision.intent || "general";
+  const ROUTE_LABEL_MAP = {
+    code: "Keystone · code via convergence",
+    strategy: "Keystone · strategy via convergence",
+    trading: "Keystone · market route",
+    memory_export: "Keystone · CSF memory export",
+    dream_analysis: "Keystone · dream analysis",
+    rp_game: "Three Doors · RP game",
+    coding_change: "Keystone · code / GitHub route",
+    technical_debug: "Keystone · debug route",
+    code_review: "Keystone · review route",
+    convergance_action: "Convergence · loop route",
+    capacity_query: "Keystone · capacity query",
+    dream_chat: "Keystone · chat",
+    three_doors: "Three Doors · RP game",
+  };
+  const routeLabel = isKeystoneDebug
+    ? "Keystone · direct debug"
+    : requestedProvider === "keystone-ft"
+      ? "Keystone FT · memory route"
+      : surfaceMode === "three-doors"
+        ? `${agent.name || "Lantern"} · Three Doors`
+        : (ROUTE_LABEL_MAP[converganceIntent] || "Keystone · router");
+
+  // Plain Keystone desk prompt — no persona voice, no doors. Dream Chat is Keystone-only.
+  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Lantern OS. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. If the user asks for roleplay, Lantern, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html) — that is where Lantern guides.\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${historyContext}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}`;
+    : isRpMode
+      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
+      : ROUTER_PROMPT;
 
-  console.log(`[Stream] systemPrompt: ${systemPrompt.length} chars, csfBlock: ${csfBlock.length} chars, message: "${message.slice(0, 60)}"`);
 
   const sendToken = (token) => sse.sendToken(res, token);
-  const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
+  const sendRoute = (route) => sse.sendRoute(res, route);
+  const sendReceipt = (receipt) => sse.sendReceipt(res, receipt);
+  const sendDone = (source, extra = {}) => sse.sendDone(res, source, { ...extra, routeLabel });
+
+  // Emit route event with actual routing decision from server
+  sendRoute({
+    agent: agent.id || agent.name || "keystone",
+    agentName: agent.name || "Keystone",
+    intent: converganceIntent,
+    surface: surfaceMode,
+    requiresConvergence: routeDecision.requires_convergence || false,
+    label: routeLabel,
+  });
+
+  // Helper to generate PCSF receipt metadata
+  const buildPcsfReceipt = (provider, model, isOnline) => ({
+    generatedAt: new Date().toISOString(),
+    capacityClass: isOnline ? "live" : "offline",
+    provider,
+    model: model || "unknown",
+    metered: !["ollama", "local"].includes(provider),
+    privacyBoundary: ["ollama", "local"].includes(provider) ? "internal" : "external",
+    claimBoundary: "live",
+  });
+
   // Human-readable error translator — turns internal codes into plain language
   function humanError(err) {
     const msg = String(err?.message || err || "");
@@ -278,18 +718,18 @@ async function handleStreamChat(req, url, res) {
   const sendError = (msg) => sse.sendError(res, msg);
   const sendFail = (reason) => {
     sendError(humanError(reason));
-    sendDone("failed", { agent: agent.name, online: false });
+    sendDone("failed", { agent: doneAgentName, online: false });
   };
   const sendLocalFallback = (reason) => {
     sendError(`local_fallback: ${reason}`);
-    sendDone("offline", { agent: agent.name, online: false });
+    sendDone("offline", { agent: doneAgentName, online: false });
   };
 
   // No provider available — stream a clear error instead of static persona replies
   const streamLocalFallback = async (reason) => {
     const errorText = humanError(reason || "no_provider_configured");
     sendError(errorText);
-    sendDone("offline", { agent: agent.name, online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
+    sendDone("offline", { agent: doneAgentName, online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
   };
 
   await appendConversationEntry({
@@ -298,6 +738,9 @@ async function handleStreamChat(req, url, res) {
     role: "operator",
     text: message.slice(0, maxConversationTextLength),
   }).catch(() => {});
+
+  // Generate 3 web suggestions based on user query topics
+  const webSuggestions = generateWebSuggestions(message);
 
   // Snapshot provider availability from the 60s PCSF cache (avoids per-request env re-reads)
   const providerState = getProviderState();
@@ -311,72 +754,191 @@ async function handleStreamChat(req, url, res) {
 
   let fullReply = "";
 
+  // converganceDecision already computed above (before systemPrompt)
+
+  if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
+    sendToken(`Routing to ${routeLabel}...\n`);
+    const convResult = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
+      timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 8000),
+    });
+    if (convResult.reply && !convResult.error) {
+      await appendConversationEntry({
+        recordedAt: new Date().toISOString(),
+        surface: "dream-chat-stream",
+        role: "lantern",
+        text: String(convResult.reply).slice(0, maxConversationTextLength),
+      }).catch(() => {});
+      sendToken(convResult.reply);
+      sendDone("convergence", {
+        agent: convResult.agent || routeDecision.agent,
+        online: true,
+        route: routeDecision,
+      });
+      return;
+    }
+    // Convergence unavailable or timed out — fall through to direct LLM providers
+    sendToken("(Convergence unavailable — answering directly)\n\n");
+  }
+
+  // ── Keystone: Task-aware provider selection using performance leaderboard ──
+  let primaryProviderHint = null;
+  try {
+    const taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+    const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(message, taskType, requestedProvider);
+    primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
+    console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);
+  } catch (e) {
+    console.error("[provider-router] Selection error (non-fatal):", e.message);
+    // Continue with default fallback if router fails
+  }
+
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
-  // When no specific cloud provider is requested, try Ollama first for lower
-  // latency, zero cost, and offline resilience. Cloud providers are fallbacks.
+  // When no specific cloud provider is requested, try all local Ollama models in sequence
+  // for lower latency, zero cost, and offline resilience. Cloud providers are fallbacks.
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-  const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
+  
+  // Model chain: task-specific ordering with fallbacks
+  const OLLAMA_MODEL_CHAIN = {
+    // CSF/dream tasks: custom model first, then general models
+    csf: [
+      "lantern-csf-dream",
+      "mistral",
+      "qwen2.5-coder",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ],
+    // Coding tasks: coder model first
+    coding: [
+      "qwen2.5-coder",
+      "lantern-csf-dream",
+      "mistral",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ],
+    // Creative/dream tasks: custom CSF model first
+    creative: [
+      "lantern-csf-dream",
+      "mistral",
+      "qwen2.5-coder",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ],
+    // Default: balanced chain
+    default: [
+      "lantern-csf-dream",
+      "qwen2.5-coder",
+      "mistral",
+      "hf.co/PantheonUnbound/Satyr-V0.1-4B:Q4_K_M"
+    ]
+  };
+  
+  // Select model chain based on intent or use default
+  const intent = converganceDecision?.intent || "default";
+  const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
+  
   const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
-  console.log(`[Stream] Ollama gate: ollamaLocalFirst=${ollamaLocalFirst}, message=${!!message}, isKeystoneDebug=${isKeystoneDebug}, requestedProvider="${requestedProvider}"`);
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
-    console.log(`[Stream] Trying Ollama at ${ollamaBase} model=${ollamaModel}`);
-    try {
-      const payload = JSON.stringify({
-        model: ollamaModel,
-        stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...history.map(h => ({ role: h.role, content: h.text })),
-          { role: "user", content: message },
-        ],
-      });
-      const ollamaUrl = new URL(ollamaBase);
-      await new Promise((resolve, reject) => {
-        const req2 = http.request({
-          hostname: ollamaUrl.hostname,
-          port: ollamaUrl.port || 11434,
-          path: "/api/chat",
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-        }, (upstream) => {
-          if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
-          let buf = "";
-          upstream.on("data", (chunk) => {
-            buf += chunk.toString();
-            const lines = buf.split("\n");
-            buf = lines.pop();
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const parsed = JSON.parse(line);
-                if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
-              } catch {}
-            }
-          });
-          upstream.on("end", () => resolve());
-          upstream.on("error", reject);
+    
+    for (const ollamaModel of modelChain) {
+      try {
+        const payload = JSON.stringify({
+          model: ollamaModel,
+          stream: true,
+          messages: buildProviderMessages(systemPrompt, compacted, message),
         });
-        req2.on("error", reject);
-        req2.setTimeout(120000, () => { req2.destroy(); reject(new Error("ollama_timeout")); });
-        req2.write(payload);
-        req2.end();
+        const ollamaUrl = new URL(ollamaBase);
+        await new Promise((resolve, reject) => {
+          const req2 = http.request({
+            hostname: ollamaUrl.hostname,
+            port: ollamaUrl.port || 11434,
+            path: "/api/chat",
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          }, (upstream) => {
+            if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
+            let buf = "";
+            upstream.on("data", (chunk) => {
+              buf += chunk.toString();
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                  const parsed = JSON.parse(line);
+                  if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
+                } catch {}
+              }
+            });
+            upstream.on("end", () => resolve());
+            upstream.on("error", reject);
+          });
+          req2.on("error", reject);
+          req2.setTimeout(120000, () => { req2.destroy(); reject(new Error("ollama_timeout")); });
+          req2.write(payload);
+          req2.end();
+        });
+        
+        if (fullReply) {
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+          const imageEntryId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
+          await appendConversationEntry({
+            recordedAt: new Date().toISOString(),
+            surface: "dream-chat-stream",
+            role: "lantern",
+            text: cleanText.slice(0, maxConversationTextLength),
+          }).catch(() => {});
+          recordProviderSuccess("ollama");
+          const ollamaReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
+          sendReceipt(ollamaReceipt);
+          const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions, receipt: ollamaReceipt };
+          if (imageEntryId) meta.image = { entryId: imageEntryId, status: "generating" };
+          sendDone("ollama", meta);
+          return;
+        }
+      } catch (err) {
+        fullReply = "";
+        continue; // Try next model in chain
+      }
+    }
+    
+  }
+
+  // Provider 0b: Keystone FT managed agent (Haiku + memory store) — explicit request only.
+  // Streams via the unified Python connector; the Python side tries the managed
+  // sessions API (memory-augmented) and falls back to the messages API itself.
+  if (message && requestedProvider === "keystone-ft") {
+    try {
+      let sseDone = false;
+      let sseErr = null;
+      const sseStream = unifiedAgentStreamSSE(message, agent.id, "keystone-ft", dreamContext);
+      sseStream.onData((parsed) => {
+        if (parsed.token) { fullReply += parsed.token; sendToken(parsed.token); }
+        if (parsed.done) { sseDone = true; }
       });
+      sseStream.onError((err) => { sseErr = err; sseDone = true; });
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (sseDone) { clearInterval(check); resolve(); }
+        }, 50);
+      });
+      if (sseErr) throw sseErr;
       if (fullReply) {
-        console.log(`[Stream] Ollama local-first OK (${fullReply.length} chars, model: ${ollamaModel})`);
-        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
           role: "lantern",
           text: cleanText.slice(0, maxConversationTextLength),
         }).catch(() => {});
-        recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+        recordProviderSuccess("keystone-ft");
+        const keystoneFtReceipt = buildPcsfReceipt("keystone-ft", "keystone-ft-claude", true);
+        sendReceipt(keystoneFtReceipt);
+        sendDone("keystone-ft", { agent: "Keystone FT", provider: "keystone-ft", online: true, cleanText, suggestions, receipt: keystoneFtReceipt });
         return;
       }
+      throw new Error("keystone-ft returned no tokens");
     } catch (err) {
-      console.log(`[Stream] Ollama local-first failed: ${err.message} — falling through to cloud`);
-      fullReply = "";
+      recordProviderFailure("keystone-ft", err.message);
+      sendError(`Keystone FT failed: ${err.message}. Check ANTHROPIC_API_KEY and data/training/ft-result.json.`);
+      sendFail(err.message);
+      return;
     }
   }
 
@@ -398,8 +960,9 @@ async function handleStreamChat(req, url, res) {
       // Disable with GEMINI_GROUNDING=false if needed
       const isGroundable = geminiModel.startsWith("gemini-3");
       const groundingEnabled = process.env.GEMINI_GROUNDING !== "false" && isGroundable;
+      const searchInstruction = groundingEnabled ? "\n\nYou have access to live web search. Use it to find current information, verify facts, or answer questions about recent events when relevant." : "";
       const geminiPayloadBase = {
-        contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\n${message}` }] }],
+        contents: [{ role: "user", parts: [{ text: `${systemPrompt}${searchInstruction}\n\n${message}` }] }],
         generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
       };
       if (groundingEnabled) {
@@ -448,8 +1011,7 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
-      console.log(`[Stream] Gemini fullReply (${fullReply.length} chars): ${fullReply.slice(-200)}`);
-      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -457,10 +1019,11 @@ async function handleStreamChat(req, url, res) {
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("gemini");
-      sendDone("gemini", { agent: agent.name, online: true, cleanText: geminiClean, suggestions: geminiDoors });
+      const geminiReceipt = buildPcsfReceipt("gemini", process.env.GEMINI_MODEL || "gemini-2.0-flash", true);
+      sendReceipt(geminiReceipt);
+      sendDone("gemini", { agent: doneAgentName, provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions, receipt: geminiReceipt });
       return;
     } catch (err) {
-      console.log(`[Stream] Gemini ${geminiModel} failed: ${err.message}`);
       recordProviderFailure("gemini", err.message);
       // On 429/quota, try next model in chain before emitting error
       const is429 = err.message.includes("429") || err.message.includes("quota");
@@ -479,9 +1042,9 @@ async function handleStreamChat(req, url, res) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && message && (!requestedProvider || requestedProvider === "claude" || requestedProvider === "anthropic" || requestedProvider === "claude-sonnet")) {
     try {
-      let claudeModel = "claude-3-5-haiku-20241022";
+      let claudeModel = "claude-haiku-4-5-20251001";
       if (requestedProvider === "claude-sonnet") {
-        claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-3-5-sonnet-20241022";
+        claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-4-6";
       } else {
         claudeModel = process.env.ANTHROPIC_MODEL || claudeModel;
       }
@@ -490,7 +1053,7 @@ async function handleStreamChat(req, url, res) {
         max_tokens: 1024,
         stream: true,
         system: systemPrompt,
-        messages: [...history.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
+        messages: [...compacted.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
       });
       await new Promise((resolve, reject) => {
         const req2 = https.request({
@@ -534,7 +1097,7 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -542,11 +1105,15 @@ async function handleStreamChat(req, url, res) {
         text: anthropicClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("anthropic");
-      sendDone("anthropic", { agent: agent.name, online: true, cleanText: anthropicClean, suggestions: anthropicDoors });
+      recordProviderSuccessRouter("anthropic"); // Also log to provider-router for performance tracking
+      const anthropicReceipt = buildPcsfReceipt("anthropic", process.env.ANTHROPIC_MODEL || "claude-opus", true);
+      sendReceipt(anthropicReceipt);
+      sendDone("anthropic", { agent: doneAgentName, provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions, receipt: anthropicReceipt });
       return;
     } catch (err) {
-      console.log(`[Stream] Claude failed: ${err.message}`);
+      const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
       recordProviderFailure("anthropic", err.message);
+      recordProviderFailureRouter("anthropic", errorCode); // Also log to provider-router
       if (requestedProvider) {
         sendError(humanError(err));
         await streamLocalFallback(err.message);
@@ -563,11 +1130,7 @@ async function handleStreamChat(req, url, res) {
       const payload = JSON.stringify({
         model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
         stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...history.map(h => ({ role: h.role, content: h.text })),
-          { role: "user", content: message },
-        ],
+        messages: buildProviderMessages(systemPrompt, compacted, message),
       });
 
       await new Promise((resolve, reject) => {
@@ -610,7 +1173,7 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -618,11 +1181,15 @@ async function handleStreamChat(req, url, res) {
         text: openaiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("openai");
-      sendDone("openai", { agent: agent.name, online: true, cleanText: openaiClean, suggestions: openaiDoors });
+      recordProviderSuccessRouter("openai"); // Also log to provider-router
+      const openaiReceipt = buildPcsfReceipt("openai", process.env.OPENAI_MODEL || "gpt-4-turbo", true);
+      sendReceipt(openaiReceipt);
+      sendDone("openai", { agent: doneAgentName, provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions, receipt: openaiReceipt });
       return;
     } catch (err) {
-      console.log(`[Stream] OpenAI failed: ${err.message}`);
+      const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
       recordProviderFailure("openai", err.message);
+      recordProviderFailureRouter("openai", errorCode); // Also log to provider-router
       if (requestedProvider) {
         sendError(humanError(err));
         sendFail(err.message);
@@ -639,11 +1206,7 @@ async function handleStreamChat(req, url, res) {
       const xaiModel = process.env.XAI_MODEL || "grok-4.3";
       const payload = JSON.stringify({
         model: xaiModel, stream: true,
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...history.map(h => ({ role: h.role, content: h.text })),
-          { role: "user", content: message },
-        ],
+        messages: buildProviderMessages(systemPrompt, compacted, message),
       });
       await new Promise((resolve, reject) => {
         const req2 = require("https").request({
@@ -668,10 +1231,12 @@ async function handleStreamChat(req, url, res) {
         req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
         req2.write(payload); req2.end();
       });
-      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
-      sendDone("grok", { agent: agent.name, online: true, cleanText: xaiClean, suggestions: xaiDoors });
+      const grokReceipt = buildPcsfReceipt("grok", process.env.XAI_MODEL || "grok-2", true);
+      sendReceipt(grokReceipt);
+      sendDone("grok", { agent: doneAgentName, provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions, receipt: grokReceipt });
       return;
     } catch (err) {
       recordProviderFailure("xai", err.message);
@@ -704,7 +1269,7 @@ async function handleStreamChat(req, url, res) {
         });
         if (sseErr) throw sseErr;
         if (fullReply) {
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
@@ -712,7 +1277,9 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          sendDone("ollama", { agent: agent.name, online: true, cleanText, suggestions });
+          const ollamaConnectorReceipt = buildPcsfReceipt("ollama", "unified-agent", true);
+          sendReceipt(ollamaConnectorReceipt);
+          sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText, suggestions, receipt: ollamaConnectorReceipt });
           return;
         }
       } catch (err) {
@@ -776,7 +1343,7 @@ async function handleStreamChat(req, url, res) {
         req2.end();
       });
       if (ollamaOk) {
-        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
@@ -784,7 +1351,9 @@ async function handleStreamChat(req, url, res) {
           text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
         recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: agent.name, online: true, cleanText: ollamaClean, suggestions: ollamaDoors });
+        const ollamaHttpReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
+        sendReceipt(ollamaHttpReceipt);
+        sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions, receipt: ollamaHttpReceipt });
         return;
       }
     } catch (err) {

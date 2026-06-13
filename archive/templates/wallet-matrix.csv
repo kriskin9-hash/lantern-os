@@ -1,9 +1,0 @@
-asset,network,wallet_app,address_or_xpub_or_watch_id,custody,secret_location,read_only_monitor,off_ramp_path,kyc_needs,first_test_txid,notes
-BTC,Bitcoin,Sparrow/Core/watch-only,bc1... or xpub,self-custody,offline only,Esplora or self-hosted explorer,exchange or broker,usually yes,,watch-only preferred
-ETH,Ethereum,Rabby/MetaMask/watch-only,0x...,self-custody,offline or hardware wallet,JSON-RPC eth_getBalance or eth_call,exchange or broker,exchange-dependent,,claim risk lane only; no ETH mining
-XMR,Monero,Monero GUI/CLI/Feather,XMR address,self-custody,offline only,wallet RPC/node/manual,exchange availability varies,often yes,,off-ramp support can vary materially
-LTC,Litecoin,Wallet of choice,ltc1... or legacy,self-custody,offline only,explorer or watch-only,exchange or broker,usually yes,,Scrypt ASIC lane only
-DOGE,Dogecoin,Core/light wallet,D...,self-custody,offline only,explorer or watch-only,exchange or broker,usually yes,,desktop mining rejected
-RVN,Ravencoin,RVN wallet,R...,self-custody,offline only,explorer or watch-only,exchange-specific,exchange-dependent,,GPU experiment lane
-ETC,Ethereum Classic,EVM wallet,0x...,self-custody,offline or hardware wallet,JSON-RPC or explorer,exchange or broker,exchange-dependent,,ETChash experiment
-KAS,Kaspa,Kaspa wallet,kaspa:...,self-custody,offline only,explorer or watch-only,exchange-dependent,exchange-dependent,,ASIC-only validation lane

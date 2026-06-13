@@ -21,7 +21,7 @@ def read(path: str) -> str:
 def test_landing_page_is_clean_sales_page() -> None:
     html = read("apps/lantern-garage/public/index.html")
     # Title and branding
-    assert "Dream Journal" in html
+    assert "Journal" in html
     assert "Lantern OS" in html
     # CTA panels
     assert "dream-chat.html" in html
@@ -77,7 +77,7 @@ def test_server_routes_are_modular() -> None:
 def test_dream_chat_has_provider_settings() -> None:
     html = read("apps/lantern-garage/public/dream-chat.html")
     # Settings drawer present
-    assert "settings-drawer" in html
+    assert "settings-modal" in html
     assert "settings-btn" in html
     # All 4 providers wired
     assert "ANTHROPIC_API_KEY" in html

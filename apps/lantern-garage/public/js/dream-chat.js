@@ -4,11 +4,48 @@
   const statusDot = document.getElementById("status-dot");
   const statusLabel = document.getElementById("status-label");
   const emptyState = document.getElementById("empty-state");
-  const agentSelect = document.getElementById("agent-select");
   const providerSelect = document.getElementById("provider-select");
   const mcpToggle = document.getElementById("mcp-toggle");
-  let keystoneMcpEnabled = false;
+  let directModeEnabled = false;
+  let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
+  // ── ROUTE INTENT DETECTION ────────────────────────────────────────────────
+  // Returns a route intent string used to select the backend agent/surface.
+  // RP is opt-in only — general chat, code work, and GitHub work use the router.
+  const RP_OPT_IN_RE = /open.*three[-_]?doors|roleplay|role[-\s]?play|continue the scene|\bas (lantern|blinkbug|waterfall|xenon|founder)\b/i;
+  const CODING_TRIGGERS = [
+    "make changes", "make a change", "change the code", "edit the code",
+    "modify the code", "integrate this", "wire this", "wire into",
+    "add to repo", "add to the repo", "commit to", "push to",
+    "prep a pr", "prepare a pr", "create a pr", "open a pr", "fix the pr",
+    "fix latest pr", "scan the pr", "scan latest pr", "review the pr",
+    "merge the pr", "handoff to claude code", "handoff to claude",
+    "make a handoff", "claude code", "use claude code", "coding agent",
+    "code change", "code changes", "repo change", "repo changes",
+    "git change", "github change", "bug fix", "fix the bug", "fix bug",
+    "fix this bug", "refactor", "improve the code", "add tests",
+    "add a test", "fix the test", "implement", "implementation",
+    "deploy", "deployment", "pull request", "open pr", "create pr",
+  ];
+
+  function detectRouteIntent(msg) {
+    const lower = (msg || "").toLowerCase().trim();
+    if (RP_OPT_IN_RE.test(msg)) return "dream_chat";
+    if (CODING_TRIGGERS.some(t => lower.includes(t))) return "coding_change";
+    if (/\b(debug|error|broken|crash|not working|not responding)\b/i.test(lower)) return "technical_debug";
+    return "general";
+  }
+
+  // Agent is contextual — Lantern is default, others triggered by name in message
+  function detectAgent(msg) {
+    const lower = (msg || "").toLowerCase();
+    if (lower.includes("keystone") || lower.includes("debug")) return "keystone";
+    if (lower.includes("blinkbug") || lower.includes("glitch")) return "blinkbug";
+    if (lower.includes("waterfall") || lower.includes("gentle")) return "waterfall";
+    if (lower.includes("xenon") || lower.includes("navigate")) return "xenon";
+    if (lower.includes("founder") || lower.includes("wish")) return "founder";
+    return "lantern";
+  }
 
   // Telemetry shim (logs to console; replace with real telemetry if needed)
   const TELEMETRY = {
@@ -50,52 +87,45 @@
       const elapsed = Math.round((Date.now() - this.sessionStart) / 1000);
       const mins = Math.floor(elapsed / 60).toString().padStart(2, "0");
       const secs = (elapsed % 60).toString().padStart(2, "0");
-      document.getElementById("dbg-session").textContent = `${mins}:${secs}`;
-      document.getElementById("dbg-messages").textContent = this.messagesSent;
-      document.getElementById("dbg-tokens").textContent = this.tokensReceived;
+      const sessionEl = document.getElementById("dbg-session");
+      if (sessionEl) sessionEl.textContent = `${mins}:${secs}`;
+      const msgEl = document.getElementById("dbg-messages");
+      if (msgEl) msgEl.textContent = this.messagesSent;
+      const tokenEl = document.getElementById("dbg-tokens");
+      if (tokenEl) tokenEl.textContent = this.tokensReceived;
       const errEl = document.getElementById("dbg-errors");
-      errEl.textContent = this.errors;
-      errEl.className = "debug-val " + (this.errors > 0 ? "err" : "ok");
+      if (errEl) {
+        errEl.textContent = this.errors;
+        errEl.className = "debug-val " + (this.errors > 0 ? "err" : "ok");
+      }
       const fbEl = document.getElementById("dbg-fallbacks");
-      fbEl.textContent = this.fallbacks;
-      fbEl.className = "debug-val " + (this.fallbacks > 0 ? "warn" : "ok");
+      if (fbEl) {
+        fbEl.textContent = this.fallbacks;
+        fbEl.className = "debug-val " + (this.fallbacks > 0 ? "warn" : "ok");
+      }
       const avg = this.latencies.length > 0
         ? Math.round(this.latencies.reduce((a, b) => a + b, 0) / this.latencies.length) + " ms"
         : "—";
-      document.getElementById("dbg-latency").textContent = avg;
-      document.getElementById("dbg-provider").textContent = this.lastProvider || "—";
-      document.getElementById("dbg-agent").textContent = this.lastAgent || "—";
+      const latEl = document.getElementById("dbg-latency");
+      if (latEl) latEl.textContent = avg;
+      const provEl = document.getElementById("dbg-provider");
+      if (provEl) provEl.textContent = this.lastProvider || "—";
+      const agentEl = document.getElementById("dbg-agent");
+      if (agentEl) agentEl.textContent = this.lastAgent || "—";
     },
   };
   setInterval(() => analytics.render(), 1000);
   function toggleDebug() {
-    document.getElementById("debug-panel").classList.toggle("open");
+    const panel = document.getElementById("debug-panel");
+    if (panel) panel.classList.toggle("open");
   }
 
   function toggleKeystoneMcp() {
-    keystoneMcpEnabled = !keystoneMcpEnabled;
-    mcpToggle.classList.toggle("active", keystoneMcpEnabled);
-    document.querySelector(".app").classList.toggle("mcp-mode", keystoneMcpEnabled);
-    document.querySelector(".input-area").classList.toggle("mcp-mode", keystoneMcpEnabled);
-    if (keystoneMcpEnabled) {
-      lockAgentToKeystone();
-    } else {
-      restoreAgentSelector();
-    }
-  }
-
-  function lockAgentToKeystone() {
-    if (!originalAgents.length) return;
-    const keystone = originalAgents.find(a => a.id === "keystone");
-    if (keystone) {
-      agentSelect.innerHTML = `<option value="${keystone.id}">${keystone.name}</option>`;
-      agentSelect.value = keystone.id;
-    }
-  }
-
-  function restoreAgentSelector() {
-    if (!originalAgents.length) return;
-    agentSelect.innerHTML = originalAgents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+    directModeEnabled = !directModeEnabled;
+    keystoneMcpEnabled = directModeEnabled; // legacy compat
+    mcpToggle.classList.toggle("active", directModeEnabled);
+    document.querySelector(".app").classList.toggle("mcp-mode", directModeEnabled);
+    document.querySelector(".input-area").classList.toggle("mcp-mode", directModeEnabled);
   }
   document.addEventListener("keydown", (e) => {
     if (e.key === "d" && !e.ctrlKey && !e.metaKey && !e.altKey && e.target.tagName !== "TEXTAREA" && e.target.tagName !== "INPUT") {
@@ -138,11 +168,9 @@
         const data = await r.json();
         agents = data.agents || [];
         originalAgents = agents;
-        agentSelect.innerHTML = agents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
-        if (data.default) agentSelect.value = data.default;
-        if (keystoneMcpEnabled) lockAgentToKeystone();
-        statusDot.className = "dot online";
-        statusLabel.textContent = "online";
+        originalAgents = agents;
+        if (statusDot) statusDot.className = "dot online";
+        if (statusLabel) statusLabel.textContent = "online";
         TELEMETRY.log("agents", `Loaded ${agents.length} agents`);
         return;
       }
@@ -150,8 +178,8 @@
     } catch (err) {
       TELEMETRY.error("agents", `Failed to load agents: ${err.message}`, { serverBase });
     }
-    statusDot.className = "dot";
-    statusLabel.textContent = "offline";
+    if (statusDot) statusDot.className = "dot";
+    if (statusLabel) statusLabel.textContent = "offline";
   }
   loadAgents();
 
@@ -290,8 +318,19 @@
       scrollToBottom();
       return;
     }
+    // Special handling for Kingdome of Hearts game
+    const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts)\b/i);
+    if (kingdomeMatch) {
+      if (emptyState) emptyState.style.display = "none";
+      inputEl.value = "";
+      analytics.messagesSent++;
+      analytics.record("send", "Kingdome of Hearts game started");
+      startThreeDoors();
+      return;
+    }
+
     // Allow backend-streaming bang commands through; reject truly unknown ones
-    const STREAMING_BANGS = ["swarm", "converge"];
+    const STREAMING_BANGS = ["swarm", "converge", "convergance", "self-edit", "selfedit", "code", "review"];
     const bangMatch = text.match(/^!(\S+)/);
     if (bangMatch) {
       const cmdName = bangMatch[1].toLowerCase();
@@ -309,7 +348,7 @@
     appendUserBubble(text);
     inputEl.value = "";
     analytics.messagesSent++;
-    analytics.lastAgent = agents.find((a) => a.id === agentSelect.value)?.name || agentSelect.value;
+    analytics.lastAgent = directModeEnabled ? "Direct" : detectAgent(text);
     analytics.record("send", text.slice(0, 40));
     analytics._msgStart = Date.now();
     streamAgentResponse(text);
@@ -319,24 +358,26 @@
     conversationHistory.push({ role: "user", text });
     const row = document.createElement("div");
     row.className = "msg-row user";
-    row.innerHTML = `<div class="msg-label">You</div><div class="bubble">${escapeHtml(text)}</div>`;
+    row.innerHTML = `<div class="msg-label">You · ${fmtTime(new Date())}</div><div class="bubble">${escapeHtml(text)}</div>`;
     messagesEl.appendChild(row);
     scrollToBottom();
   }
 
   // ── Stream agent response ───────────────────────────────────────────────────
-  function streamAgentResponse(message) {
+  async function streamAgentResponse(message) {
+    stopSpeaking();
     isStreaming = true;
     sendBtn.disabled = true;
     setThinking(true);
 
-    const agentName = agents.find((a) => a.id === agentSelect.value)?.name || "Agent";
+    const agentName = directModeEnabled ? "Model" : (agents.find((a) => a.id === detectAgent(message))?.name || "Lantern");
+    const msgTime = new Date();
     const row = document.createElement("div");
     row.className = "msg-row agent";
 
     const label = document.createElement("div");
     label.className = "msg-label";
-    label.textContent = agentName;
+    label.textContent = `${agentName} · ${fmtTime(msgTime)}`;
 
     const bubble = document.createElement("div");
     bubble.className = "bubble";
@@ -353,14 +394,18 @@
     let fullText = "";
     let hasTokens = false;
     const provider = providerSelect.value;
-    const agent = agentSelect.value;
     // POST with history for multi-turn context; history excludes current message (already appended)
     const historyToSend = conversationHistory.slice(0, -1).slice(-6); // last 6 turns before this message
 
     fetch(`${serverBase}/api/dream/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, provider: provider || undefined, agent: agent || undefined, history: historyToSend, mcp: keystoneMcpEnabled }),
+      body: JSON.stringify({
+        message,
+        provider: provider || undefined,
+        history: historyToSend,
+        mcp: directModeEnabled,
+      }),
     })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -372,6 +417,8 @@
         let buf = "";
 
         let streamFinished = false;
+        let routeInfo = null;
+        let receiptInfo = null;
         function processLines(lines) {
           for (const line of lines) {
             if (!line.startsWith("data:")) continue;
@@ -379,12 +426,27 @@
             if (!raw) continue;
             try {
               const evt = JSON.parse(raw);
+              if (evt.type === "route") {
+                routeInfo = evt;
+                // Show routing card with info from actual server-side routing decision
+                if (!document.querySelector(".route-card")) {
+                  const rc = document.createElement("div");
+                  rc.className = "route-card";
+                  rc.textContent = evt.label || `${evt.agentName} · ${evt.surface}`;
+                  bubble.insertBefore(rc, cursor);
+                }
+              }
+              if (evt.type === "receipt") {
+                receiptInfo = evt;
+              }
               if (evt.type === "token" && evt.text) {
                 if (!hasTokens) { hasTokens = true; setThinking(false); }
                 fullText += evt.text;
+                streamTtsBuf += evt.text;
+                streamTtsFlush(false);
                 analytics.tokensReceived++;
                 cursor.remove();
-                // Hide [DOORS:...] tag from the user during streaming
+                // Strip [DOORS:...] tag during streaming; chips rendered on done
                 const visibleText = fullText.replace(/\[DOORS:[^\]]*\]?/i, "").replace(/\n{3,}/g, "\n\n").trimEnd();
                 bubble.textContent = visibleText;
                 bubble.appendChild(cursor);
@@ -401,7 +463,15 @@
                 if (evt.cleanText && evt.cleanText !== fullText) {
                   bubble.textContent = evt.cleanText;
                 }
-                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, evt.suggestions, evt.image_prompt);
+                // Parse [DOORS: A name | B name | C name] from full text if backend didn't extract
+                let suggestions = evt.suggestions;
+                if (!suggestions || suggestions.length === 0) {
+                  const doorsMatch = fullText.match(/\[DOORS:\s*([^\]]+)\]/i);
+                  if (doorsMatch) {
+                    suggestions = doorsMatch[1].split("|").map(s => s.trim().replace(/^[ABC]\s+/i, "").trim()).filter(Boolean);
+                  }
+                }
+                finishStream(row, bubble, cursor, displayText, evt.source, evt.error, suggestions, evt.image_prompt, evt.webSuggestions, evt.actions, evt.routeLabel);
               }
             } catch { /* skip malformed */ }
           }
@@ -413,7 +483,7 @@
               if (buf.trim()) processLines([buf]);
               if (!streamFinished) {
                 if (!hasTokens) bubble.textContent = "No response received.";
-                finishStream(row, bubble, cursor, fullText, "done", undefined, undefined);
+                finishStream(row, bubble, cursor, fullText, "done", undefined, undefined, undefined, undefined, undefined);
               }
               return;
             }
@@ -422,7 +492,7 @@
             buf = lines.pop();
             processLines(lines);
             read();
-          }).catch(() => { if (!streamFinished) finishStream(row, bubble, cursor, fullText, "error"); });
+          }).catch(() => { if (!streamFinished) finishStream(row, bubble, cursor, fullText, "error", undefined, undefined, undefined, undefined, undefined); });
         }
         read();
       })
@@ -430,11 +500,11 @@
         setThinking(false);
         bubble.textContent = "Failed to reach the server.";
         cursor.remove();
-        finishStream(row, bubble, cursor, "", "error");
+        finishStream(row, bubble, cursor, "", "error", undefined, undefined, undefined, undefined, undefined);
       });
   }
 
-  function finishStream(row, bubble, cursor, text, source, error, suggestions, imagePrompt) {
+  function finishStream(row, bubble, cursor, text, source, error, suggestions, imagePrompt, webSuggestions, actions, routeLabel) {
     cursor.remove();
     if (!text && !error) {
       bubble.textContent = bubble.textContent || "…";
@@ -449,17 +519,28 @@
     if (isFallback) analytics.fallbacks++;
     analytics.record(isFallback ? "fallback" : "done", `${source}${latency ? " @ " + latency + "ms" : ""}`);
 
-    if (source === "failed" || source === "unavailable" || source === "error" || error) {
-      const badge = document.createElement("div");
-      badge.className = "source-badge offline";
-      badge.textContent = error ? error : source;
-      row.appendChild(badge);
-    } else if (source) {
-      const badge = document.createElement("div");
-      badge.className = `source-badge ${source}`;
-      const names = { anthropic: "Claude", openai: "ChatGPT", gemini: "Gemini", grok: "Grok", ollama: "Ollama" };
-      badge.textContent = `❆ ${names[source] || source}`;
-      row.appendChild(badge);
+    {
+      const provNames = { anthropic: "Claude", openai: "ChatGPT", gemini: "Gemini", grok: "Grok", ollama: "Ollama" };
+      const turn = conversationHistory.filter(m => m.role === "assistant").length;
+      const latStr = latency ? `${(latency / 1000).toFixed(1)}s` : null;
+      const isErr = source === "failed" || source === "unavailable" || source === "error" || !!error;
+      // Route signature — who/what the user is talking to
+      if (routeLabel) {
+        const sig = document.createElement("div");
+        sig.className = "msg-route-sig";
+        sig.setAttribute("aria-label", `Active route: ${routeLabel}`);
+        sig.textContent = routeLabel;
+        row.appendChild(sig);
+      }
+      const footer = document.createElement("div");
+      footer.className = `msg-footer${isErr ? " offline" : source ? ` ${source}` : ""}`;
+      const parts = [];
+      if (isErr) parts.push(error || source || "error");
+      else if (source) parts.push(`❆ ${provNames[source] || source}`);
+      if (latStr) parts.push(latStr);
+      if (turn) parts.push(`turn ${turn}`);
+      footer.textContent = parts.join(" · ");
+      row.appendChild(footer);
     }
 
     // Render contextual suggestion chips from dream memory
@@ -484,6 +565,42 @@
         chips.appendChild(btn);
       });
       row.appendChild(chips);
+    }
+
+    // Render web suggestions (3 clickable links to explore topics)
+    if (Array.isArray(webSuggestions) && webSuggestions.length > 0) {
+      const webChips = document.createElement("div");
+      webChips.className = "web-suggestions";
+      webChips.style.marginTop = "8px";
+      webChips.style.display = "flex";
+      webChips.style.gap = "6px";
+      webChips.style.flexWrap = "wrap";
+      webSuggestions.forEach(ws => {
+        const link = document.createElement("a");
+        link.href = ws.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.className = "web-suggestion";
+        link.style.fontSize = "0.85em";
+        link.style.padding = "4px 10px";
+        link.style.borderRadius = "4px";
+        link.style.backgroundColor = "#e8f4f8";
+        link.style.color = "#0066cc";
+        link.style.textDecoration = "none";
+        link.style.border = "1px solid #b3d9e6";
+        link.style.cursor = "pointer";
+        link.textContent = `${ws.icon} ${ws.label}`;
+        link.onmouseover = () => {
+          link.style.backgroundColor = "#d0eaf0";
+          link.style.borderColor = "#7db5cc";
+        };
+        link.onmouseout = () => {
+          link.style.backgroundColor = "#e8f4f8";
+          link.style.borderColor = "#b3d9e6";
+        };
+        webChips.appendChild(link);
+      });
+      row.appendChild(webChips);
     }
 
     // ── Three Doors banner (disabled — appendDoorsBanner not yet implemented) ──
@@ -520,7 +637,7 @@
     }
 
     // Keystone MCP: extract code blocks as executable commands
-    if (keystoneMcpEnabled && agentSelect.value === "keystone" && text) {
+    if (directModeEnabled && text) {
       const codeBlocks = text.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/g) || [];
       codeBlocks.forEach(block => {
         const cmd = block.replace(/```(?:bash|powershell|sh)?\n?/, "").replace(/```$/, "").trim();
@@ -558,12 +675,205 @@
       });
     }
 
+    // Convergence / self-edit action buttons
+    if (Array.isArray(actions) && actions.length > 0) {
+      const actionRow = document.createElement("div");
+      actionRow.className = "suggestions";
+      actionRow.style.marginTop = "8px";
+      actions.forEach((a) => {
+        const btn = document.createElement("button");
+        btn.className = "suggestion";
+        btn.style.cssText = "margin-top:4px;border-color:#e2c97e;color:#e2c97e;";
+        btn.textContent = `⚡ ${a.label}`;
+        btn.onclick = async () => {
+          if (isStreaming) return;
+          btn.disabled = true;
+          btn.textContent = "Working…";
+          try {
+            if (a.action === "self-edit-apply") {
+              // Direct apply from !self-edit action
+              const diffText = a.diffText;
+              const testsToRun = (a.plan && a.plan.testsToRun) ? a.plan.testsToRun : [];
+              const ar = await fetch(`${serverBase}/api/self-edit/apply`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ diffText, testsToRun }),
+              });
+              const ad = await ar.json();
+              const applyRow = document.createElement("div");
+              applyRow.className = "msg-row agent";
+              const applyText = ad.ok
+                ? `Applied: ${ad.applied.changed.join(", ")}\nTests: ${ad.tests.map(t => `${t.ok ? "✓" : "✗"} ${t.cmd}`).join("\n")}\nDiff stat:\n${ad.diffStat}`
+                : `Apply failed: ${ad.error}`;
+              applyRow.innerHTML = `<div class="msg-label">Self-Edit · Apply</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(applyText)}</div>`;
+              messagesEl.appendChild(applyRow);
+              if (ad.ok && ad.allTestsOk) {
+                const prBtn = document.createElement("button");
+                prBtn.className = "suggestion";
+                prBtn.style.cssText = "margin-top:4px;border-color:#e2c97e;color:#e2c97e;";
+                prBtn.textContent = "Open draft PR";
+                prBtn.onclick = async () => {
+                  prBtn.disabled = true;
+                  prBtn.textContent = "Opening…";
+                  try {
+                    const plan = a.plan;
+                    const prr = await fetch(`${serverBase}/api/self-edit/pr`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ title: plan.summary, body: plan.summary, branch: plan.branchHint, diffText: a.diffText }),
+                    });
+                    const prd = await prr.json();
+                    const prRow = document.createElement("div");
+                    prRow.className = "msg-row agent";
+                    const prText = prd.ok ? `Branch: ${prd.branch}\nPR: ${prd.prUrl || "created"}` : `PR failed: ${prd.error}`;
+                    prRow.innerHTML = `<div class="msg-label">Self-Edit · PR</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(prText)}</div>`;
+                    messagesEl.appendChild(prRow);
+                    scrollToBottom();
+                  } catch (e) { prBtn.textContent = `✗ ${e.message}`; }
+                };
+                messagesEl.lastChild.appendChild(prBtn);
+              }
+              scrollToBottom();
+              btn.textContent = `✓ ${a.label}`;
+            } else if (a.action === "self-edit-plan") {
+              // Trigger a plan via self-edit endpoint
+              const r = await fetch(`${serverBase}/api/self-edit/plan`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ request: a.hint || a.label, history: conversationHistory.slice(-6) }),
+              });
+              const d = await r.json();
+              const planText = d.ok ? `Plan: ${d.plan.summary}\nFiles: ${d.plan.affectedFiles.join(", ")}\nRisk: ${d.plan.riskLevel}` : `Plan failed: ${d.error}`;
+              const outRow = document.createElement("div");
+              outRow.className = "msg-row agent";
+              outRow.innerHTML = `<div class="msg-label">Self-Edit · Plan</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(planText)}</div>`;
+              messagesEl.appendChild(outRow);
+              // If plan succeeded, offer patch generation
+              if (d.ok) {
+                const patchBtn = document.createElement("button");
+                patchBtn.className = "suggestion";
+                patchBtn.style.cssText = "margin-top:4px;border-color:#4caf82;color:#4caf82;";
+                patchBtn.textContent = "Generate patch";
+                patchBtn.onclick = async () => {
+                  patchBtn.disabled = true;
+                  patchBtn.textContent = "Generating…";
+                  try {
+                    const pr = await fetch(`${serverBase}/api/self-edit/patch`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ plan: d.plan }),
+                    });
+                    const pd = await pr.json();
+                    const patchRow = document.createElement("div");
+                    patchRow.className = "msg-row agent";
+                    const patchText = pd.ok ? `Changed: ${pd.changedFiles.join(", ")}\n\n${pd.diffText.slice(0, 1200)}${pd.diffText.length > 1200 ? "\n…(truncated)" : ""}` : `Patch failed: ${pd.error}`;
+                    patchRow.innerHTML = `<div class="msg-label">Self-Edit · Patch</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(patchText)}</div>`;
+                    messagesEl.appendChild(patchRow);
+                    if (pd.ok) {
+                      const applyBtn = document.createElement("button");
+                      applyBtn.className = "suggestion";
+                      applyBtn.style.cssText = "margin-top:4px;border-color:#4caf82;color:#4caf82;";
+                      applyBtn.textContent = "Apply patch + run tests";
+                      applyBtn.onclick = async () => {
+                        applyBtn.disabled = true;
+                        applyBtn.textContent = "Applying…";
+                        try {
+                          const ar = await fetch(`${serverBase}/api/self-edit/apply`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ diffText: pd.diffText, testsToRun: d.plan.testsToRun }),
+                          });
+                          const ad = await ar.json();
+                          const applyRow = document.createElement("div");
+                          applyRow.className = "msg-row agent";
+                          const applyText = ad.ok
+                            ? `Applied: ${ad.applied.changed.join(", ")}\nTests: ${ad.tests.map(t => `${t.ok ? "✓" : "✗"} ${t.cmd}`).join("\n")}\nDiff stat:\n${ad.diffStat}`
+                            : `Apply failed: ${ad.error}`;
+                          applyRow.innerHTML = `<div class="msg-label">Self-Edit · Apply</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(applyText)}</div>`;
+                          messagesEl.appendChild(applyRow);
+                          if (ad.ok && ad.allTestsOk) {
+                            const prBtn = document.createElement("button");
+                            prBtn.className = "suggestion";
+                            prBtn.style.cssText = "margin-top:4px;border-color:#e2c97e;color:#e2c97e;";
+                            prBtn.textContent = "Open draft PR";
+                            prBtn.onclick = async () => {
+                              prBtn.disabled = true;
+                              prBtn.textContent = "Opening…";
+                              try {
+                                const prr = await fetch(`${serverBase}/api/self-edit/pr`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ title: d.plan.summary, body: d.plan.summary, branch: d.plan.branchHint, diffText: pd.diffText }),
+                                });
+                                const prd = await prr.json();
+                                const prRow = document.createElement("div");
+                                prRow.className = "msg-row agent";
+                                const prText = prd.ok ? `Branch: ${prd.branch}\nPR: ${prd.prUrl || "created"}` : `PR failed: ${prd.error}`;
+                                prRow.innerHTML = `<div class="msg-label">Self-Edit · PR</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(prText)}</div>`;
+                                messagesEl.appendChild(prRow);
+                                scrollToBottom();
+                              } catch (e) { prBtn.textContent = `✗ ${e.message}`; }
+                            };
+                            messagesEl.lastChild.appendChild(prBtn);
+                          }
+                          scrollToBottom();
+                        } catch (e) { applyBtn.textContent = `✗ ${e.message}`; }
+                      };
+                      messagesEl.lastChild.appendChild(applyBtn);
+                    }
+                    scrollToBottom();
+                  } catch (e) { patchBtn.textContent = `✗ ${e.message}`; }
+                };
+                outRow.appendChild(patchBtn);
+              }
+              scrollToBottom();
+              btn.textContent = `✓ ${a.label}`;
+            } else if (a.action === "self-edit-pr") {
+              // Open draft PR — supports both convergence-derived and direct self-edit actions
+              const hasPlan = !!(a.plan && a.plan.summary);
+              const title = hasPlan ? a.plan.summary : (a.hint || "Auto PR");
+              const branch = hasPlan ? a.plan.branchHint : undefined;
+              const diffText = a.diffText || "";
+              const r = await fetch(`${serverBase}/api/self-edit/status`, { method: "GET" });
+              const sd = await r.json();
+              if (sd.isMaster && !branch) {
+                const outRow = document.createElement("div");
+                outRow.className = "msg-row agent";
+                outRow.innerHTML = `<div class="msg-label">Self-Edit</div><div class="bubble">Cannot open PR from master. Create a feature branch first.</div>`;
+                messagesEl.appendChild(outRow);
+                scrollToBottom();
+                btn.textContent = `✗ ${a.label}`;
+                return;
+              }
+              const prr = await fetch(`${serverBase}/api/self-edit/pr`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, body: a.hint || "", branch: branch || sd.branch, diffText }),
+              });
+              const prd = await prr.json();
+              const prRow = document.createElement("div");
+              prRow.className = "msg-row agent";
+              const prText = prd.ok ? `Branch: ${prd.branch}\nPR: ${prd.prUrl || "created"}` : `PR failed: ${prd.error}`;
+              prRow.innerHTML = `<div class="msg-label">Self-Edit · PR</div><div class="bubble" style="font-family:monospace;font-size:0.78rem;white-space:pre-wrap;">${escapeHtml(prText)}</div>`;
+              messagesEl.appendChild(prRow);
+              scrollToBottom();
+              btn.textContent = `✓ ${a.label}`;
+            }
+          } catch (e) {
+            btn.textContent = `✗ ${a.label}`;
+          }
+        };
+        actionRow.appendChild(btn);
+      });
+      row.appendChild(actionRow);
+    }
+
     isStreaming = false;
     sendBtn.disabled = false;
     setThinking(false);
     scrollToBottom();
-    // TTS — speak the clean reply after stream completes
-    if (text && source !== "failed" && source !== "error") speakText(text);
+    // TTS — flush remainder and wrap bubble for word highlighting
+    if (text && source !== "failed" && source !== "error") streamTtsFinish(text, bubble);
   }
 
   function appendErrorNotice(row, msg) {
@@ -589,6 +899,10 @@
 
   function escapeHtml(s) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function fmtTime(d) {
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   }
 
   // ── Settings drawer ─────────────────────────────────────────────────────
@@ -835,6 +1149,7 @@
   let ctfPaletteOpen = false;
 
   function buildCtfPalette() {
+    if (!ctfPopup) return;
     ctfPopup.innerHTML = "";
     for (const [word, sym] of Object.entries(CTF)) {
       const btn = document.createElement("button");
@@ -854,46 +1169,50 @@
   }
 
   function toggleCtfPalette() {
+    if (!ctfPopup) return;
     ctfPaletteOpen = !ctfPaletteOpen;
     ctfPopup.classList.toggle("hidden", !ctfPaletteOpen);
     if (ctfPaletteOpen && !ctfPopup.children.length) buildCtfPalette();
-    document.getElementById("ctf-btn").style.color = ctfPaletteOpen ? "var(--accent)" : "";
+    const ctfBtn = document.getElementById("ctf-btn");
+    if (ctfBtn) ctfBtn.style.color = ctfPaletteOpen ? "var(--accent)" : "";
   }
 
   // Auto-suggest CTF as you type
-  inputEl.addEventListener("input", () => {
-    const words = inputEl.value.split(/\s+/);
-    const last = words[words.length - 1];
-    if (last.length >= 3 && !ctfPaletteOpen) {
-      const matches = ctfLookup(last);
-      if (matches.length > 0) {
-        ctfPopup.classList.remove("hidden");
-        ctfPopup.innerHTML = "";
-        matches.forEach(({ word, sym }) => {
-          const btn = document.createElement("button");
-          btn.className = "ctf-sym";
-          btn.textContent = `${sym} ${word}`;
-          btn.onclick = () => {
-            const ws = inputEl.value.split(/\s+/);
-            ws[ws.length - 1] = sym;
-            inputEl.value = ws.join(" ") + " ";
-            inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
-            ctfPopup.classList.add("hidden");
-            inputEl.focus();
-          };
-          ctfPopup.appendChild(btn);
-        });
-        return;
+  if (ctfPopup) {
+    inputEl.addEventListener("input", () => {
+      const words = inputEl.value.split(/\s+/);
+      const last = words[words.length - 1];
+      if (last.length >= 3 && !ctfPaletteOpen) {
+        const matches = ctfLookup(last);
+        if (matches.length > 0) {
+          ctfPopup.classList.remove("hidden");
+          ctfPopup.innerHTML = "";
+          matches.forEach(({ word, sym }) => {
+            const btn = document.createElement("button");
+            btn.className = "ctf-sym";
+            btn.textContent = `${sym} ${word}`;
+            btn.onclick = () => {
+              const ws = inputEl.value.split(/\s+/);
+              ws[ws.length - 1] = sym;
+              inputEl.value = ws.join(" ") + " ";
+              inputEl.selectionStart = inputEl.selectionEnd = inputEl.value.length;
+              ctfPopup.classList.add("hidden");
+              inputEl.focus();
+            };
+            ctfPopup.appendChild(btn);
+          });
+          return;
+        }
       }
-    }
-    if (!ctfPaletteOpen) ctfPopup.classList.add("hidden");
-  });
-
-  document.addEventListener("click", (e) => {
-    if (!ctfPopup.contains(e.target) && e.target.id !== "ctf-btn" && e.target !== inputEl) {
       if (!ctfPaletteOpen) ctfPopup.classList.add("hidden");
-    }
-  });
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!ctfPopup.contains(e.target) && e.target.id !== "ctf-btn" && e.target !== inputEl) {
+        if (!ctfPaletteOpen) ctfPopup.classList.add("hidden");
+      }
+    });
+  }
 
   // ════════════════════════════════════════════════════════════════
   //  Voice — STT (Web Speech API) + TTS
@@ -953,9 +1272,120 @@
 
   let ttsAudio = null;
 
+  // --- Streaming TTS state ---
+  let streamTtsBuf = "";
+  let streamTtsQueue = [];
+  let streamTtsBusy = false;
+  let ttsWordBubble = null;
+  let streamTtsSentenceOffset = 0; // cumulative char offset into bubble text as sentences complete
+  const SENT_RE = /[^.!?…\n]+(?:[.!?…]+\s*|\n{2,})/g;
+
+  function streamTtsReset() {
+    streamTtsBuf = "";
+    streamTtsQueue = [];
+    streamTtsBusy = false;
+    ttsWordBubble = null;
+    streamTtsSentenceOffset = 0;
+    clearTtsHighlight();
+  }
+
+  function streamTtsFlush(force) {
+    if (!window.speechSynthesis) return;
+    const matches = streamTtsBuf.match(SENT_RE);
+    if (!matches) return;
+    const last = matches[matches.length - 1];
+    const consumed = streamTtsBuf.lastIndexOf(last) + last.length;
+    const sentences = force
+      ? matches.concat(streamTtsBuf.slice(consumed).trim() ? [streamTtsBuf.slice(consumed).trim()] : [])
+      : matches;
+    streamTtsBuf = force ? "" : streamTtsBuf.slice(consumed);
+    for (const s of sentences) {
+      const t = s.trim().replace(/\[DOORS:[^\]]*\]?/gi, "").trim();
+      if (t) streamTtsQueue.push(t);
+    }
+    streamTtsDrain();
+  }
+
+  function streamTtsDrain() {
+    if (streamTtsBusy || streamTtsQueue.length === 0) return;
+    const prefs = JSON.parse(localStorage.getItem("lantern_tts_prefs") || "{}");
+    const text = streamTtsQueue.shift();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = prefs.rate ?? 0.88;
+    utt.pitch = prefs.pitch ?? 1.05;
+    const voices = window.speechSynthesis.getVoices();
+    if (prefs.voiceURI) {
+      const pick = voices.find(v => v.voiceURI === prefs.voiceURI);
+      if (pick) utt.voice = pick;
+    } else {
+      const fallback = voices.find(v => /samantha|karen|moira|fiona|victoria|female/i.test(v.name))
+                  || voices.find(v => v.lang === "en-GB" || v.lang === "en-AU");
+      if (fallback) utt.voice = fallback;
+    }
+    utt.onboundary = (e) => {
+      if (e.name === "word" && ttsWordBubble) highlightTtsWord(streamTtsSentenceOffset + e.charIndex);
+    };
+    utt.onend = () => {
+      streamTtsBusy = false;
+      streamTtsSentenceOffset += text.length + 1;
+      clearTtsHighlight();
+      streamTtsDrain();
+    };
+    utt.onerror = () => { streamTtsBusy = false; streamTtsDrain(); };
+    streamTtsBusy = true;
+    window.speechSynthesis.speak(utt);
+  }
+
+  function wrapBubbleWords(bubble) {
+    const text = bubble.textContent;
+    bubble.textContent = "";
+    for (const part of text.split(/(\s+)/)) {
+      if (!part) continue;
+      if (/\S/.test(part)) {
+        const span = document.createElement("span");
+        span.className = "tts-word";
+        span.textContent = part;
+        bubble.appendChild(span);
+      } else {
+        bubble.appendChild(document.createTextNode(part));
+      }
+    }
+    ttsWordBubble = bubble;
+  }
+
+  function highlightTtsWord(charIndex) {
+    if (!ttsWordBubble) return;
+    const spans = ttsWordBubble.querySelectorAll(".tts-word");
+    let pos = 0;
+    for (const span of spans) {
+      const len = span.textContent.length + 1; // +1 for space
+      if (charIndex >= pos && charIndex < pos + len) {
+        span.classList.add("tts-active");
+      } else {
+        span.classList.remove("tts-active");
+      }
+      pos += len;
+    }
+  }
+
+  function clearTtsHighlight() {
+    if (!ttsWordBubble) return;
+    ttsWordBubble.querySelectorAll(".tts-active").forEach(s => s.classList.remove("tts-active"));
+  }
+
+  function streamTtsFinish(text, bubble) {
+    if (!text || !window.speechSynthesis) return;
+    // Flush any leftover buffer
+    streamTtsFlush(true);
+    // Wrap bubble words for highlighting of queued/remaining utterances
+    if (bubble && !ttsWordBubble) wrapBubbleWords(bubble);
+    streamTtsDrain();
+  }
+
   function stopSpeaking() {
     if (ttsAudio) { ttsAudio.pause(); ttsAudio = null; }
     if (window.speechSynthesis) window.speechSynthesis.cancel();
+    streamTtsReset();
   }
 
   async function speakText(text) {
@@ -1071,4 +1501,101 @@
   initVoice();
   loadVoiceSettings();
 
+  // ── Kingdome of Hearts Game Integration ────────────────────────────────
+  let doorsGameState = null;
+  let doorsUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+  async function startThreeDoors() {
+    console.log("[Kingdome] Starting game...");
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">🚪 Kingdome of Hearts</div><div class="bubble"><b>Opening the first door...</b></div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: doorsUserId, action: "start" }),
+      });
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (data.error) {
+        row.querySelector(".bubble").textContent = `⚠️ Error: ${data.error}`;
+        return;
+      }
+
+      doorsGameState = data;
+      renderDoorsScene(row, data);
+    } catch (error) {
+      console.error("[Kingdome] Error:", error);
+      row.querySelector(".bubble").textContent = `❌ Failed to start game: ${error.message}`;
+    }
+  }
+
+  function renderDoorsScene(row, scene) {
+    const bubble = row.querySelector(".bubble");
+    const html = `
+      <div style="margin: 8px 0;">
+        <div style="margin-bottom: 12px; line-height: 1.6; color: #e2e8f0;">${scene.text}</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+          ${(scene.doors || [])
+            .map((door) => `
+            <button onclick="window.chooseDoorsPath('${door.label}')"
+              style="padding: 8px 12px; background: #4c1d95; border: 1px solid #7c3aed; color: #c4b5fd; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; font-weight: 500;"
+              onmouseover="this.style.background='#6d28d9'; this.style.borderColor='#a78bfa';"
+              onmouseout="this.style.background='#4c1d95'; this.style.borderColor='#7c3aed';">
+              ${door.label}. ${door.name}
+            </button>
+          `)
+            .join("")}
+        </div>
+        ${scene.image_prompt ? `
+          <div style="background: #1e1b4b; border-left: 3px solid #7c3aed; padding: 8px; border-radius: 4px; margin-top: 12px; font-size: 11px; color: #a78bfa; max-height: 80px; overflow-y: auto;">
+            <div style="font-weight: 600; margin-bottom: 4px;">📸 Stable Diffusion Prompt:</div>
+            <div style="font-family: monospace; line-height: 1.4; color: #c4b5fd;">${scene.image_prompt}</div>
+          </div>
+        ` : ""}
+        ${scene.fox_present ? `<div style="color: #fbbf24; font-size: 12px; margin-top: 8px; font-style: italic;">🦊 The fox is here.</div>` : ""}
+      </div>
+    `;
+    bubble.innerHTML = html;
+  }
+
+  window.chooseDoorsPath = async (doorLabel) => {
+    if (!doorsGameState) return;
+
+    const row = document.createElement("div");
+    row.className = "msg-row agent";
+    row.innerHTML = `<div class="msg-label">🚪 Choosing door ${doorLabel}...</div><div class="bubble"><em>traversing...</em></div>`;
+    messagesEl.appendChild(row);
+    scrollToBottom();
+
+    try {
+      const r = await fetch(`${serverBase}/api/dream/doors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: doorsUserId, action: "choose", choice: doorLabel }),
+      });
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      if (data.error) {
+        row.querySelector(".bubble").textContent = `⚠️ ${data.error}`;
+        return;
+      }
+
+      doorsGameState = data;
+      renderDoorsScene(row, data);
+    } catch (error) {
+      console.error("[Kingdome] Choice error:", error);
+      row.querySelector(".bubble").textContent = `❌ Failed: ${error.message}`;
+    }
+  };
+
+  window.startThreeDoors = startThreeDoors;
 

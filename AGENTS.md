@@ -29,7 +29,7 @@ This repo is designed for agentic-first workflows. Every agent (Claude, Gemini, 
 # Health check — is the server running? What's the state?
 python src/convergence_io_engine.py health
 
-# What needs fixing? Run the 12-phase convergence loop
+# What needs fixing? Run the 20-phase tesseract convergence loop
 python src/convergence_io_engine.py loop
 
 # Ask the AI (uses Gemini/Claude via the provider chain)
@@ -151,7 +151,89 @@ See [`QUICKSTART.md`](QUICKSTART.md) for the full operator-facing guide.
 - `super_jarvis_fleet` (36 slots, currently `activeSlots = 0`)
 - `kalshi_bridge`
 
+---
+
+## Tesseract Convergence Loop (2026-06-09 Upgrade)
+
+The convergence loop has been upgraded from 12 phases to 20 phases with tesseract integration:
+
+**New Phases (12-14):**
+- **Phase 12: navigate_status_cube** — 4D Status Cube navigation (x: location, y: lane, z: boundary, t: timeline)
+- **Phase 13: project_future_states** — Future state projection from past/present (comet-leap integration)
+- **Phase 14: update_bayesian_beliefs** — Bayesian belief system updates (health, animal, ecosystem, economy, culture)
+
+**Status Cube Axes:**
+- **x**: location (repo, apps, skills, scripts)
+- **y**: lane (control, report, dollhouse, wallet, device, product)
+- **z**: boundary (proven, candidate, held, blocked)
+- **t**: timeline (evidence receipts, validation history)
+
+**Bayesian Belief Dimensions:**
+- **health**: HFF sensors, HFF API
+- **animal**: HFF world model tracking
+- **ecosystem**: HFF integration
+- **economy**: Wallet ledger, cash loop
+- **culture**: Lore, three doors
+
+**External Grounding (inspired by ArXiv 2601.05280v2):**
+Zenil et al. prove that recursive self-training without persistent external signal (αt → 0) leads to entropy decay and variance drift. The convergence loop uses this as a design principle — not a quantitative recipe. The repo does not instrument αt, so collapse risk cannot be quantified.
+
+**Documentation:**
+- See [`docs/TESSERACT-CONVERGENCE-LOOP.md`](docs/TESSERACT-CONVERGENCE-LOOP.md) for full details
+- See [`docs/CONVERGENCE-LOOP.md`](docs/CONVERGENCE-LOOP.md) for original 12-step method
+
 Never claim a skill or fleet slot is active unless confirmed by implementation or status file.
+
+---
+
+## Quality Gates & Automated Hooks (Critical)
+
+All agent commits are subject to **four automated quality checks** via git pre-commit hooks. See [`docs/HOOKS.md`](docs/HOOKS.md) for full reference.
+
+### Four-Layer Validation (Automatic on Every Commit)
+
+| Validator | Enforces | Skip with |
+|-----------|----------|-----------|
+| **Version/Changelog** | Code changed → version bump → changelog entry | `SKIP_VERSION_CHECK=1` |
+| **Deployment Readiness** | Server change → deployment.json with rollback plan | `SKIP_DEPLOY_CHECK=1` |
+| **Auto-Update Safety** | Version bump → migration scripts, backwards compatibility | `SKIP_UPDATE_CHECK=1` |
+| **AGENTS.md** | Agent commit → update this file with metadata, runbook, capabilities | `SKIP_AGENT_CHECK=1` |
+
+### Agent Documentation (for `claude/*`, `gemini/*`, etc. branches)
+
+When committing to an agent branch, update AGENTS.md with:
+
+```markdown
+## [Agent Name]
+
+**Status:** active  
+**Model:** claude-opus  
+**Lane:** claude/  
+**Owner:** [Your name]  
+
+### Capabilities
+- Feature engineering
+- Documentation writing
+- Code review
+
+### Runbook / Behavior
+How this agent operates...
+
+### Constraints
+- Max 1 open PR per lane
+- Focus area: [describe]
+```
+
+**Exception:** If your change is docs-only or doesn't touch code, skip with `SKIP_AGENT_CHECK=1`.
+
+### Emergency Bypass (Rare)
+
+For true emergencies only:
+```bash
+SKIP_ALL_CHECKS=1 git commit -m "EMERGENCY: critical hotfix"
+```
+
+**See [`docs/HOOKS.md`](docs/HOOKS.md) for complete reference, examples, and troubleshooting.**
 
 ---
 
@@ -165,6 +247,19 @@ This repo enforces a **single workstream**: only one open feature PR at a time.
 - **Emergency bypass:** `SKIP_MONOWORKSTREAM=1 git commit ...` or `SKIP_MONOWORKSTREAM=1 git push ...`
 
 **Note:** Multiple agents running concurrently via `.claude/agent-slots.json` is a core design feature, not a monoworkstream violation. The rule applies to Git branches / PRs, not to active agent slots.
+
+---
+
+## Task Intake: GitHub Issues ARE the Queue (Critical)
+
+Full doctrine: [docs/AGENT-SWARM-OPERATIONS.md](docs/AGENT-SWARM-OPERATIONS.md)
+
+- **No issue, no work.** Agents only work GitHub issues labeled `agent-task` plus a stream label (`convergence-io` or `dream-journal`). Unlabeled issues are invisible to agents.
+- **Pull top-of-queue by priority** (`p0` → `p1` → `p2`) **within your lane's assigned stream.** Never browse for work, never invent tasks, never reorder the queue.
+- **Lane → stream routing:** `claude/` → dream-journal; `gemini/` + `codex/` → convergence-io; other lanes are human-assigned flex.
+- **Definition of done is mechanical:** acceptance criteria met, the issue's test command passes, PR references the issue number, CSF session note ingested to `csf/ingest/`.
+- **Agents never:** add/remove issue labels, set priorities, edit `.claude/agent-slots.json`, or merge PRs. Humans do all routing and merging.
+- New tasks enter via the issue forms in `.github/ISSUE_TEMPLATE/` (blank issues are disabled).
 
 ---
 

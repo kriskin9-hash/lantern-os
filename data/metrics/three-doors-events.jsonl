@@ -1,0 +1,12 @@
+{"timestamp":"2026-06-10T06:29:43.674Z","event":"door_choice","payload":{"label":"A","name":"The Storybook Door","sceneKey":"kingdome-garden"}}
+{"timestamp":"2026-06-10T06:29:46.766Z","event":"door_choice","payload":{"label":"A","name":"The Lucky Door","sceneKey":"cloverfield"}}
+{"timestamp":"2026-06-10T06:29:49.138Z","event":"door_choice","payload":{"label":"A","name":"The Bright Branch","sceneKey":"future-doors"}}
+{"timestamp":"2026-06-10T06:29:51.681Z","event":"door_choice","payload":{"label":"A","name":"System Restore","sceneKey":"xp-door"}}
+{"timestamp":"2026-06-10T06:29:54.236Z","event":"door_choice","payload":{"label":"A","name":"The Mirror Door","sceneKey":"xenon-convergence"}}
+{"timestamp":"2026-06-10T06:29:54.333Z","event":"image_load","payload":{"sceneKey":"xenon-convergence","source":"image"}}
+{"timestamp":"2026-06-10T06:29:56.444Z","event":"door_choice","payload":{"label":"A","name":"The Gallery of Walked Doors","sceneKey":"sigil-city"}}
+{"timestamp":"2026-06-10T06:29:58.819Z","event":"door_choice","payload":{"label":"A","name":"The Garden Gate","sceneKey":"fog-door-return"}}
+{"timestamp":"2026-06-10T07:25:24.754Z","event":"door_choice","payload":{"label":"A","name":"The Throne Door","sceneKey":"little-crown"}}
+{"timestamp":"2026-06-10T07:25:25.401Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"image"}}
+{"timestamp":"2026-06-11T09:31:15.293Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-12T22:42:12.599Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}

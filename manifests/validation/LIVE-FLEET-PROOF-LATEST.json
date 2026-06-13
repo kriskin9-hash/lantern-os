@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-06-10T11:13:00+00:00",
+  "orchestratorBaseUrl": "http://127.0.0.1:4177",
+  "mcpHealth": {
+    "url": "http://127.0.0.1:8771/health",
+    "reachable": false,
+    "status": "not_observed"
+  },
+  "toolsVisible": [
+    "health_check",
+    "inspect",
+    "converge",
+    "batch",
+    "loop",
+    "validate-ring",
+    "watch",
+    "daemon",
+    "start-workers"
+  ],
+  "healthServer": "http://127.0.0.1:5000/health",
+  "workerPoolTarget": 64,
+  "activeWorkers": [
+    {"id": "agent_001", "name": "Dream Journal", "type": "dream_journal", "status": "idle"},
+    {"id": "agent_002", "name": "Audit Verification", "type": "audit_verify", "status": "idle"},
+    {"id": "agent_003", "name": "Bayesian Model", "type": "bayesian", "status": "idle"},
+    {"id": "agent_004", "name": "Lucid Dreaming", "type": "lucid", "status": "idle"},
+    {"id": "agent_005", "name": "Statistics Monitor", "type": "stats", "status": "idle"},
+    {"id": "agent_006", "name": "Dream Journal Anthropic", "type": "dream_journal_anthropic", "status": "idle"},
+    {"id": "agent_007", "name": "Dream Journal OpenAI", "type": "dream_journal_openai", "status": "idle"},
+    {"id": "agent_008", "name": "Dream Journal Gemini", "type": "dream_journal_gemini", "status": "idle"},
+    {"id": "agent_009", "name": "Dream Journal Ollama", "type": "dream_journal_ollama", "status": "idle"},
+    {"id": "agent_010", "name": "Dream Journal DeepSeek", "type": "dream_journal_deepseek", "status": "idle"},
+    {"id": "agent_011", "name": "Dream Journal Groq", "type": "dream_journal_groq", "status": "idle"},
+    {"id": "agent_012", "name": "Dream Journal Azure", "type": "dream_journal_azure", "status": "idle"},
+    {"id": "agent_013", "name": "Dream Journal Generic", "type": "dream_journal_generic", "status": "idle"},
+    {"id": "agent_014", "name": "Dream Journal Comet Leap", "type": "dream_journal_comet", "status": "idle"}
+  ],
+  "idleWorkers": 14,
+  "queuedJobs": 0,
+  "failedWorkers": 0,
+  "ringSlotsAssigned": 36,
+  "ringSlotsHealthy": 14,
+  "consensusReceipts": {
+    "latestRun": "2026-06-10T11:13:04.344997+00:00",
+    "jobsProcessed": 5,
+    "consensusPassed": 5,
+    "consensusFailed": 0,
+    "chainTip": "8b43d035007b1dac"
+  },
+  "claimBoundary": "live_workers_observed_local_orchestrator",
+  "envReadyProfiles": 5,
+  "envMissingProfiles": 5,
+  "note": "14 slot workers are running as daemon threads. Health server active on port 5000. 5 of 10 provider profiles have env keys. Lantern Garage web server healthy."
+}

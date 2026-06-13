@@ -15,16 +15,18 @@ if (-not (Test-Path (Join-Path $sourceDir "pre-commit"))) {
     throw "Source hooks not found at scripts/hooks/"
 }
 
-Copy-Item (Join-Path $sourceDir "pre-commit") (Join-Path $hooksDir "pre-commit") -Force
-Copy-Item (Join-Path $sourceDir "commit-msg") (Join-Path $hooksDir "commit-msg") -Force
-Copy-Item (Join-Path $sourceDir "pre-push")   (Join-Path $hooksDir "pre-push")   -Force
+Copy-Item (Join-Path $sourceDir "pre-commit")  (Join-Path $hooksDir "pre-commit")  -Force
+Copy-Item (Join-Path $sourceDir "commit-msg")  (Join-Path $hooksDir "commit-msg")  -Force
+Copy-Item (Join-Path $sourceDir "pre-push")    (Join-Path $hooksDir "pre-push")    -Force
+Copy-Item (Join-Path $sourceDir "post-merge")  (Join-Path $hooksDir "post-merge")  -Force
 
 Write-Host "Per-agent workstream hooks installed to .git/hooks/"
 Write-Host ""
 Write-Host "Rules enforced:"
-Write-Host "  - pre-commit:  blocks new branch if this agent (claude/gemini/codex/devin/grok) already has an open PR"
+Write-Host "  - pre-commit:  blocks new branch if agent has an open PR (master/dev exempt)"
 Write-Host "  - commit-msg:  blocks slop messages (empty, too short, WIP, placeholder, etc.)"
-Write-Host "  - pre-push:    same per-agent check on push + master protection"
+Write-Host "  - pre-push:    per-agent check + master protection + STALENESS BLOCK (>50 behind master)"
+Write-Host "  - post-merge:  after merging to master, lists all branches > 10 commits stale"
 Write-Host ""
 Write-Host "Each agent prefix gets one concurrent PR lane."
 Write-Host "Human branches (no agent prefix) share one lane."

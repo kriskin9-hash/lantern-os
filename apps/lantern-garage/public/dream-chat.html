@@ -3,427 +3,284 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#ff424d">
+  <meta name="theme-color" content="#06b6d4">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
-  <title>Dream Journal — Lantern OS</title>
-  <link rel="stylesheet" href="css/dream-chat.css">
+  <link rel="stylesheet" href="/css/site.css">
+  <link rel="stylesheet" href="/css/dream-chat.css">
+  <link rel="stylesheet" href="/css/dream-chat-ui.css">
+  <title>Journal</title>
 </head>
 <body>
 <div class="app">
-  <header>
-    <a href="/" class="back-link" title="Back to home" style="text-decoration:none;color:var(--muted);font-size:1.1rem;margin-right:4px;">←</a>
-    <div class="logo">🔮</div>
-    <div class="title-block">
-      <h1>Dream Journal</h1>
-      <a href="/repo/CHANGELOG.MD" target="_blank" id="app-version" style="font-size:0.78rem;color:var(--muted);text-decoration:none;cursor:pointer;">Lantern OS · private · local</a>
-    </div>
-    <div class="selector-row">
-      <select id="agent-select" title="Agent" aria-label="Select agent">
-        <option value="lantern" selected>Lantern</option>
-      </select>
-      <select id="provider-select" title="Provider" aria-label="Select AI provider">
-        <option value="">Auto</option>
-        <option value="claude">Claude</option>
-        <option value="openai">OpenAI</option>
-        <option value="gemini">Gemini</option>
-        <option value="grok">Grok</option>
-        <option value="ollama">Ollama</option>
-      </select>
-      <button class="mcp-toggle" id="mcp-toggle" title="Toggle Keystone MCP mode" onclick="toggleKeystoneMcp()">🔧 MCP</button>
-    </div>
-    <button class="settings-btn" id="logdream-btn" title="Log a dream" onclick="openLogDream()" style="margin-left:4px;">✦</button>
-    <button class="settings-btn" id="settings-btn" title="Provider settings" onclick="openSettings()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
-    </button>
-    <button class="theme-toggle" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()" style="margin-left:4px;">🌙</button>
-    <div class="status-dot">
-      <div class="dot" id="status-dot"></div>
-      <span id="status-label">connecting…</span>
-    </div>
-  </header>
+  <div class="app-main">
 
-  <!-- Settings drawer -->
-  <div class="settings-overlay" id="settings-overlay" onclick="closeSettings()"></div>
-  <div class="settings-drawer" id="settings-drawer">
-    <div class="drawer-header">
-      <h2>AI Providers &amp; Discord</h2>
-      <button class="drawer-close" onclick="closeSettings()">×</button>
-    </div>
-    <div class="drawer-body">
-      <p class="drawer-hint">Add an API key to enable live AI responses. Keys are saved locally to your <code>.env</code> file and never leave your machine.</p>
-
-      <!-- Claude -->
-      <div class="provider-card" id="card-claude">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#1a1535">✦</div>
-          <span class="provider-name">Claude <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by Anthropic</span></span>
-          <span class="provider-status missing" id="status-claude">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-claude" type="password" placeholder="Anthropic API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('claude','ANTHROPIC_API_KEY','key-claude')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('claude','ANTHROPIC_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-claude"></span>
-        </div>
+    <!-- Header -->
+    <nav class="site-nav">
+      <a class="nav-brand" href="/">
+        <img src="/mandala.svg" alt="" aria-hidden="true" style="width:24px;height:24px;vertical-align:middle">
+        <span style="font-size:18px;font-weight:600">Lantern OS</span>
+      </a>
+      <div class="nav-links">
+        <a href="/dream-chat.html" class="active" style="font-size:16px;padding:12px 16px">💬 Chat</a>
+        <a href="/three-doors-game.html" style="font-size:16px;padding:12px 16px">🚪 Explore</a>
+        <a href="/flourishing" style="font-size:16px;padding:12px 16px">📊 Dashboard</a>
       </div>
-
-      <!-- Gemini -->
-      <div class="provider-card" id="card-gemini">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#0d1f2d">🌐</div>
-          <span class="provider-name">Gemini <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by Google</span></span>
-          <span class="provider-status missing" id="status-gemini">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-gemini" type="password" placeholder="Gemini API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('gemini','GEMINI_API_KEY','key-gemini')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('gemini','GEMINI_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-gemini"></span>
-        </div>
+      <div class="nav-actions">
+        <button class="nav-btn" id="voice-btn" onclick="
+          if (!window.voiceMode) window.voiceMode = false;
+          window.voiceMode = !window.voiceMode;
+          this.style.opacity = window.voiceMode ? '1' : '0.5';
+          this.style.background = window.voiceMode ? 'rgba(161,139,250,0.2)' : 'transparent';
+          this.style.border = window.voiceMode ? '2px solid #a78bfa' : 'none';
+          const voiceInputBtn = document.getElementById('voice-input-btn');
+          if (voiceInputBtn) voiceInputBtn.style.display = window.voiceMode ? 'block' : 'none';
+        " title="Voice Mode" style="font-size:20px;padding:8px 12px">🎙️</button>
+        <button class="nav-btn" id="settings-btn" onclick="openSettings()" title="Settings" style="font-size:20px;padding:8px 12px">⚙️</button>
       </div>
+    </nav>
 
-      <!-- ChatGPT / OpenAI -->
-      <div class="provider-card" id="card-openai">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#0d1f1a">◈</div>
-          <span class="provider-name">ChatGPT <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by OpenAI</span></span>
-          <span class="provider-status missing" id="status-openai">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-openai" type="password" placeholder="OpenAI API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('openai','OPENAI_API_KEY','key-openai')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('openai','OPENAI_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-openai"></span>
-        </div>
-      </div>
-
-      <!-- Grok -->
-      <div class="provider-card" id="card-grok">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#1a1410">𝕏</div>
-          <span class="provider-name">Grok <span style="font-weight:400;color:var(--muted);font-size:0.78rem">by xAI</span></span>
-          <span class="provider-status missing" id="status-grok">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-grok" type="password" placeholder="xAI API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('grok','XAI_API_KEY','key-grok')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://console.x.ai/" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('grok','XAI_API_KEY')">Remove</button>
-          <span class="save-feedback" id="fb-grok"></span>
-        </div>
-      </div>
-
-      <!-- Discord Bot -->
-      <div class="provider-card" id="card-discord">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#2c2f33">🎮</div>
-          <span class="provider-name">Discord Bot <span style="font-weight:400;color:var(--muted);font-size:0.78rem">Lantern Lounge</span></span>
-          <span class="provider-status missing" id="status-discord-token">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-discord-token" type="password" placeholder="Discord bot token" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('discord-token','DISCORD_BOT_TOKEN','key-discord-token')">Save</button>
-        </div>
-        <div class="provider-key-row" style="margin-top:8px;">
-          <input class="provider-key-input" id="key-discord-guild" type="text" placeholder="Guild ID (numeric)" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('discord-guild','LANTERN_DISCORD_GUILD_ID','key-discord-guild')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <button class="provider-clear" onclick="clearKey('discord-token','DISCORD_BOT_TOKEN')">Remove Token</button>
-          <button class="provider-clear" onclick="clearKey('discord-guild','LANTERN_DISCORD_GUILD_ID')">Remove Guild</button>
-          <span class="save-feedback" id="fb-discord-token"></span>
-          <span class="save-feedback" id="fb-discord-guild"></span>
-        </div>
-      </div>
-
-      <!-- Voice & Speech -->
-      <div class="voice-card" id="card-voice">
-        <h3>🎙 Voice &amp; Speech</h3>
-        <div class="voice-row">
-          <label>Voice</label>
-          <select class="voice-select" id="voice-select" onchange="saveVoiceSettings()" aria-label="Voice selection">
-            <option value="">Default system voice</option>
-          </select>
-        </div>
-        <div class="voice-row">
-          <label>Rate</label>
-          <input class="voice-slider" id="voice-rate" type="range" min="0.5" max="2.0" step="0.05" value="0.88" aria-label="Speech rate" oninput="document.getElementById('voice-rate-val').textContent = this.value; saveVoiceSettings();">
-          <span class="voice-value" id="voice-rate-val">0.88</span>
-        </div>
-        <div class="voice-row">
-          <label>Pitch</label>
-          <input class="voice-slider" id="voice-pitch" type="range" min="0.5" max="2.0" step="0.05" value="1.05" aria-label="Speech pitch" oninput="document.getElementById('voice-pitch-val').textContent = this.value; saveVoiceSettings();">
-          <span class="voice-value" id="voice-pitch-val">1.05</span>
-        </div>
-        <div class="voice-row">
-          <label>TTS ID</label>
-          <input class="voice-select" id="voice-tts-id" type="text" placeholder="ElevenLabs voice ID" onchange="saveVoiceSettings()" style="font-size:0.78rem;">
-        </div>
-        <p class="drawer-hint" style="font-size:0.7rem;margin:0;">Used for server TTS (ElevenLabs → OpenAI). Leave empty for browser-only fallback.</p>
-        <div class="voice-row">
-          <button class="voice-test-btn" onclick="testVoice()">Test voice</button>
-          <span class="save-feedback" id="fb-voice"></span>
-        </div>
-      </div>
-
-      <!-- ElevenLabs TTS -->
-      <div class="provider-card" id="card-elevenlabs">
-        <div class="provider-top">
-          <div class="provider-icon" style="background:#1a1020">🎙</div>
-          <span class="provider-name">ElevenLabs <span style="font-weight:400;color:var(--muted);font-size:0.78rem">TTS provider</span></span>
-          <span class="provider-status missing" id="status-elevenlabs">not set</span>
-        </div>
-        <div class="provider-key-row">
-          <input class="provider-key-input" id="key-elevenlabs" type="password" placeholder="ElevenLabs API key" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('elevenlabs','ELEVENLABS_API_KEY','key-elevenlabs')">Save</button>
-        </div>
-        <div class="provider-key-row" style="margin-top:8px;">
-          <input class="provider-key-input" id="key-elevenlabs-voice" type="text" placeholder="Voice ID" autocomplete="off" spellcheck="false">
-          <button class="provider-save-btn" onclick="saveKey('elevenlabs-voice','ELEVENLABS_VOICE_ID','key-elevenlabs-voice')">Save</button>
-        </div>
-        <div class="provider-actions">
-          <a class="provider-getkey" href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">Get key →</a>
-          <button class="provider-clear" onclick="clearKey('elevenlabs','ELEVENLABS_API_KEY')">Remove Key</button>
-          <button class="provider-clear" onclick="clearKey('elevenlabs-voice','ELEVENLABS_VOICE_ID')">Remove Voice</button>
-          <span class="save-feedback" id="fb-elevenlabs"></span>
-          <span class="save-feedback" id="fb-elevenlabs-voice"></span>
+    <!-- Chat area -->
+    <div class="chat-container" id="messages" role="log" aria-label="Conversation messages" aria-live="polite">
+      <div class="empty-state" id="empty-state">
+        <div style="text-align:center;padding:40px 20px">
+          <div style="font-size:48px;margin-bottom:12px">🏮</div>
+          <h1 style="font-size:26px;font-weight:600;margin-bottom:6px;color:var(--text)">Keystone Desk</h1>
+          <p style="font-size:14px;color:var(--muted);max-width:340px;margin:0 auto 28px;line-height:1.5">Ask anything. Speak or type. Keystone helps you get answers.</p>
+          <div class="starter-chips">
+            <button class="starter-chip" onclick="fillPrompt('Help me understand what to do today')">What should I do?</button>
+            <button class="starter-chip" onclick="fillPrompt('What work needs to be done?')">What work is there?</button>
+            <button class="starter-chip" onclick="fillPrompt('Tell me a story')">Tell me a story</button>
+            <button class="starter-chip" onclick="fillPrompt('Help me learn something new')">Teach me</button>
+            <button class="starter-chip" onclick="fillAndSend('!explore')">Play game ↗</button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Log Dream drawer -->
-  <div class="logdream-overlay" id="logdream-overlay" onclick="closeLogDream()"></div>
-  <div class="logdream-drawer" id="logdream-drawer">
-    <div class="drawer-header">
-      <h2>Log Dream</h2>
-      <button class="drawer-close" onclick="closeLogDream()">×</button>
+    <!-- Input area -->
+    <div class="input-container">
+      <div class="input-wrapper">
+        <button id="voice-input-btn" onclick="startVoiceInput()" title="Speak" style="display:none;background:none;border:none;font-size:24px;padding:8px 12px;cursor:pointer;opacity:0.5">🎙️</button>
+        <textarea id="input" class="input-field" placeholder="Write something, ask a question…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+        <button class="send-button" id="send-btn" onclick="sendMessage()" title="Send">↑</button>
+      </div>
     </div>
-    <div class="logdream-body" id="logdream-body">
-      <p class="drawer-hint">Capture a structured dream entry. All fields are optional except the story.</p>
+
+  </div><!-- /.app-main -->
+
+  <!-- Observer side panel (hidden by default for simplicity) -->
+  <aside class="observer-panel collapsed hidden" id="observer-panel" style="display:none">
+    <div class="observer-panel-header">
+      <span class="observer-panel-title">◈ Observer</span>
+      <button class="observer-panel-close" onclick="toggleObserver()" title="Close">×</button>
+    </div>
+    <div class="observer-panel-body">
+      <div>
+        <div class="obs-section-title">Mood Arc</div>
+        <div class="obs-value" id="obs-mood-arc">—</div>
+        <div class="obs-arc-bar"><div class="obs-arc-fill" id="obs-mood-fill" style="width:50%"></div></div>
+      </div>
+      <div>
+        <div class="obs-section-title">Recurring Symbols</div>
+        <div class="obs-symbol-list" id="obs-symbols">—</div>
+      </div>
+      <div>
+        <div class="obs-section-title">Last Delta</div>
+        <div class="obs-value" id="obs-last-delta">—</div>
+      </div>
+      <div>
+        <div class="obs-section-title">Convergence</div>
+        <div class="obs-value" id="obs-convergence">—</div>
+        <div class="obs-arc-bar"><div class="obs-arc-fill" id="obs-conv-fill" style="width:0%"></div></div>
+      </div>
+      <div>
+        <div class="obs-section-title">Dilation Ratio</div>
+        <div class="obs-value" id="obs-dilation">1.0×</div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+      <div>
+        <div class="obs-section-title">Current Priorities</div>
+        <div id="priorities-panel">
+          <div style="font-size:11px;color:var(--muted)">Loading…</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Performance Monitor -->
+<div class="perf-monitor" id="perf-monitor" style="display:none">
+  <div class="perf-row"><span class="perf-label">Tokens:</span><span class="perf-value" id="perf-tokens">0</span></div>
+  <div class="perf-row"><span class="perf-label">Cost:</span><span class="perf-value" id="perf-cost">$0</span></div>
+  <div class="perf-row"><span class="perf-label">Latency:</span><span class="perf-value" id="perf-latency">0ms</span></div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay" id="settings-modal" onclick="if(event.target===event.currentTarget) closeSettings()">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Settings</h2>
+      <button class="modal-close" onclick="closeSettings()">×</button>
+    </div>
+    <div class="modal-body">
 
       <div class="form-group">
-        <label for="ld-title">Title</label>
-        <input type="text" id="ld-title" placeholder="e.g. The flying library">
+        <label class="form-label">AI Provider</label>
+        <select id="provider-select" class="form-input">
+          <option value="">Auto (pick best)</option>
+          <option value="claude">Claude</option>
+          <option value="openai">ChatGPT</option>
+          <option value="gemini">Gemini</option>
+          <option value="grok">Grok</option>
+          <option value="ollama">Local (Ollama)</option>
+          <option value="keystone-ft">Keystone FT (Haiku + Memory)</option>
+        </select>
       </div>
 
       <div class="form-group">
-        <label for="ld-text">Dream / Story <span style="color:var(--danger)">*</span></label>
-        <textarea id="ld-text" placeholder="What happened…" rows="4"></textarea>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ld-kind">Kind</label>
-          <select id="ld-kind">
-            <option value="dream">Dream</option>
-            <option value="note">Note</option>
-            <option value="place">Place</option>
-            <option value="character">Character</option>
-            <option value="event">Event</option>
-            <option value="lore">Lore</option>
-            <option value="symbol">Symbol</option>
-            <option value="mirror">Mirror</option>
-          </select>
+        <label class="form-label">API Keys</label>
+        <div class="setting-card">
+          <span class="setting-card-icon">✦</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">Claude</div>
+            <div class="setting-card-status" id="status-claude">Not configured</div>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="ld-mood">Mood</label>
-          <input type="text" id="ld-mood" placeholder="e.g. curious, anxious">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ld-lucidity">Lucidity <span class="range-val" id="ld-lucidity-val">0%</span></label>
-          <input type="range" id="ld-lucidity" min="0" max="100" value="0" style="width:100%;accent-color:var(--accent);" oninput="document.getElementById('ld-lucidity-val').textContent=this.value+'%'">
-        </div>
-        <div class="form-group">
-          <label for="ld-clarity">Clarity <span class="range-val" id="ld-clarity-val">50%</span></label>
-          <input type="range" id="ld-clarity" min="0" max="100" value="50" style="width:100%;accent-color:var(--accent);" oninput="document.getElementById('ld-clarity-val').textContent=this.value+'%'">
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="ld-technique">Technique</label>
-          <input type="text" id="ld-technique" placeholder="e.g. MILD, WILD, WBTB">
-        </div>
-        <div class="form-group">
-          <label>Sleep Window</label>
-          <input type="text" id="ld-window" placeholder="e.g. 23:00–06:30">
-        </div>
-      </div>
-
-      <div class="checkbox-row">
-        <input type="checkbox" id="ld-dreamsign">
-        <label for="ld-dreamsign" style="margin:0;font-size:0.85rem;color:var(--text);">Mark as dreamsign (recurring pattern)</label>
-      </div>
-
-      <div class="checkbox-row">
-        <input type="checkbox" id="ld-recurring">
-        <label for="ld-recurring" style="margin:0;font-size:0.85rem;color:var(--text);">Recurring dream</label>
+        <input type="password" id="key-claude" class="form-input" placeholder="ANTHROPIC_API_KEY" onchange="saveKey('claude','ANTHROPIC_API_KEY','key-claude')">
+        <a href="https://console.anthropic.com" target="_blank" style="font-size:0.75rem;color:var(--muted)">Get key →</a>
       </div>
 
       <div class="form-group">
-        <label>Emotions</label>
-        <input type="text" id="ld-emotions" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('emotions',this.value);this.value='';}">
-        <div class="tag-chips" id="chips-emotions"></div>
+        <div class="setting-card">
+          <span class="setting-card-icon">🌐</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">Gemini</div>
+            <div class="setting-card-status" id="status-gemini">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-gemini" class="form-input" placeholder="GEMINI_API_KEY" onchange="saveKey('gemini','GEMINI_API_KEY','key-gemini')">
+        <a href="https://aistudio.google.com" target="_blank" style="font-size:0.75rem;color:var(--muted)">Get key →</a>
       </div>
 
       <div class="form-group">
-        <label>Tags</label>
-        <input type="text" id="ld-tags" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('tags',this.value);this.value='';}">
-        <div class="tag-chips" id="chips-tags"></div>
+        <div class="setting-card">
+          <span class="setting-card-icon">◈</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">ChatGPT</div>
+            <div class="setting-card-status" id="status-openai">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-openai" class="form-input" placeholder="OPENAI_API_KEY" onchange="saveKey('openai','OPENAI_API_KEY','key-openai')">
+        <a href="https://platform.openai.com" target="_blank" style="font-size:0.75rem;color:var(--muted)">Get key →</a>
       </div>
 
       <div class="form-group">
-        <label>Symbols / CTF Glyphs</label>
-        <input type="text" id="ld-symbols" placeholder="Type and press Enter…" onkeydown="if(event.key==='Enter'){event.preventDefault();addTagChip('symbols',this.value);this.value='';}">
-        <div class="tag-chips" id="chips-symbols"></div>
+        <div class="setting-card">
+          <span class="setting-card-icon">𝕏</span>
+          <div class="setting-card-info">
+            <div class="setting-card-title">Grok</div>
+            <div class="setting-card-status" id="status-grok">Not configured</div>
+          </div>
+        </div>
+        <input type="password" id="key-grok" class="form-input" placeholder="XAI_API_KEY" onchange="saveKey('grok','XAI_API_KEY','key-grok')">
+        <a href="https://console.x.ai" target="_blank" style="font-size:0.75rem;color:var(--muted)">Get key →</a>
       </div>
 
-      <div class="logdream-actions">
-        <button class="secondary" onclick="closeLogDream()">Cancel</button>
-        <button onclick="saveLogDream()">Save Entry</button>
+      <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
+
+      <div class="form-group">
+        <label class="form-label">Connectors</label>
+        <div class="connector-grid">
+          <div class="connector-card">
+            <span class="connector-card-icon">🔌</span>
+            <div class="connector-card-info">
+              <div class="connector-card-title">MCP Server</div>
+              <div class="connector-card-meta">OAuth 2.0 · Port 8772</div>
+            </div>
+            <span class="connector-card-status pending" id="mcp-status">Disconnected</span>
+            <button class="connector-btn primary" id="mcp-btn" onclick="connectMcp()">Connect</button>
+          </div>
+          <div class="connector-card">
+            <span class="connector-card-icon">🔍</span>
+            <div class="connector-card-info">
+              <div class="connector-card-title">Web Search</div>
+              <div class="connector-card-meta">DuckDuckGo · No key needed</div>
+            </div>
+            <span class="connector-card-status ok" id="search-status">Ready</span>
+            <button class="connector-btn" onclick="testWebSearch()">Test</button>
+          </div>
+          <div class="connector-card">
+            <span class="connector-card-icon">✦</span>
+            <div class="connector-card-info">
+              <div class="connector-card-title">Claude</div>
+              <div class="connector-card-meta">API Key</div>
+            </div>
+            <span class="connector-card-status err" id="conn-status-claude">No key</span>
+            <button class="connector-btn" onclick="focusKey('key-claude')">Add Key</button>
+          </div>
+          <div class="connector-card">
+            <span class="connector-card-icon">🌐</span>
+            <div class="connector-card-info">
+              <div class="connector-card-title">Gemini</div>
+              <div class="connector-card-meta">API Key</div>
+            </div>
+            <span class="connector-card-status err" id="conn-status-gemini">No key</span>
+            <button class="connector-btn" onclick="focusKey('key-gemini')">Add Key</button>
+          </div>
+          <div class="connector-card">
+            <span class="connector-card-icon">◈</span>
+            <div class="connector-card-info">
+              <div class="connector-card-title">ChatGPT</div>
+              <div class="connector-card-meta">API Key</div>
+            </div>
+            <span class="connector-card-status err" id="conn-status-openai">No key</span>
+            <button class="connector-btn" onclick="focusKey('key-openai')">Add Key</button>
+          </div>
+          <div class="connector-card">
+            <span class="connector-card-icon">𝕏</span>
+            <div class="connector-card-info">
+              <div class="connector-card-title">Grok</div>
+              <div class="connector-card-meta">API Key</div>
+            </div>
+            <span class="connector-card-status err" id="conn-status-grok">No key</span>
+            <button class="connector-btn" onclick="focusKey('key-grok')">Add Key</button>
+          </div>
+        </div>
       </div>
-      <p class="drawer-hint" id="ld-feedback" style="text-align:center;min-height:1.2em;"></p>
-    </div>
-  </div>
 
-  <div class="messages" id="messages">
-    <div class="empty-state" id="empty-state">
-      <div class="moon-door moon-heartbeat" aria-hidden="true">🌙</div>
-      <h2>What's on your mind?</h2>
-      <p>Share a dream, a game session, something you're building, or just how you're doing.</p>
-    </div>
-  </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
 
-  <div class="input-area">
-    <div class="input-row">
-      <input
-        type="text"
-        id="input"
-        placeholder="What's on your mind?"
-        autocomplete="off"
-        spellcheck="true"
-      />
-      <button class="voice-btn" id="voice-btn" title="Hold to speak (or click to toggle)" onclick="toggleVoice()">🎙</button>
-      <button class="voice-btn" id="ctf-btn" title="CTF symbol palette" onclick="toggleCtfPalette()" style="font-size:14px;">✦</button>
-      <button class="send-btn" id="send-btn" onclick="sendMessage()" title="Send">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="22" y1="2" x2="11" y2="13"/>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-        </svg>
-      </button>
+      <div class="form-group">
+        <label class="form-label">Context Modes</label>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-search" checked onchange="updateContext()">
+            <span>Web Search (MCP)</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-memory" checked onchange="updateContext()">
+            <span>CSF Memory / Symbols</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-trading" onchange="updateContext()">
+            <span>Trading Context (IBKR)</span>
+          </label>
+          <label style="display:flex;gap:8px;align-items:center">
+            <input type="checkbox" id="ctx-perf" onchange="togglePerfMonitor()">
+            <span>Performance Monitor</span>
+          </label>
+        </div>
+      </div>
+
     </div>
-    <div class="ctf-popup hidden" id="ctf-popup"></div>
-    <p class="input-hint" id="input-hint">Enter to send · ⌘ voice · ⌘ K</p>
   </div>
 </div>
 
-<!-- Debug / Analytics Panel -->
-<button class="debug-toggle" id="debug-toggle" title="Toggle analytics (D)" onclick="toggleDebug()">📊</button>
-<div class="debug-panel" id="debug-panel">
-  <h3>Analytics</h3>
-  <div class="debug-row"><span class="debug-label">Session</span><span class="debug-val" id="dbg-session">—</span></div>
-  <div class="debug-row"><span class="debug-label">Messages</span><span class="debug-val" id="dbg-messages">0</span></div>
-  <div class="debug-row"><span class="debug-label">Tokens</span><span class="debug-val" id="dbg-tokens">0</span></div>
-  <div class="debug-row"><span class="debug-label">Errors</span><span class="debug-val" id="dbg-errors">0</span></div>
-  <div class="debug-row"><span class="debug-label">Fallbacks</span><span class="debug-val" id="dbg-fallbacks">0</span></div>
-  <div class="debug-row"><span class="debug-label">Avg latency</span><span class="debug-val" id="dbg-latency">—</span></div>
-  <div class="debug-row"><span class="debug-label">Last provider</span><span class="debug-val" id="dbg-provider">—</span></div>
-  <div class="debug-row"><span class="debug-label">Agent</span><span class="debug-val" id="dbg-agent">—</span></div>
-  <div class="debug-log" id="debug-log"></div>
-</div>
-
-<script src="js/dream-chat.js"></script>
+<script src="js/dream-chat.js?v=20260612"></script>
+<script src="/js/theme-toggle.js"></script>
+<script src="/js/dream-chat-ui.js"></script>
 <script src="js/convergance-sync.js"></script>
-<script src="js/update-checker.js"></script>
-<p style="text-align:center;opacity:0.5;font-size:0.72rem;margin:12px 0;"><span data-version-badge="Lantern OS ">Lantern OS</span> · private · local</p>
-<!-- Version badge auto-loader -->
-<script>
-(function() {
-  const base = window.location.origin;
-  fetch(base + '/version.json?t=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
-    .then(v => {
-      if (!v || !v.version) return;
-      const version = String(v.version).replace(/^v/i, '');
-      document.querySelectorAll('[data-version-badge]').forEach(el => {
-        const prefix = el.dataset.versionBadge || '';
-        el.textContent = prefix + 'v' + version;
-        el.style.cursor = 'pointer';
-        el.title = 'View changelog';
-        el.onclick = function() { window.open('/repo/CHANGELOG.MD', '_blank'); };
-      });
-      const appVer = document.getElementById('app-version');
-      if (appVer) appVer.textContent = 'Lantern OS v' + version + ' · private · local';
-    })
-    .catch(() => {});
-})();
-</script>
-<script>
-  /* ── Theme toggle ── */
-  (function() {
-    const html = document.documentElement;
-    const btn = document.getElementById('theme-toggle');
-    const stored = localStorage.getItem('lantern-theme');
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initial = stored || (prefersDark ? 'dark' : 'light');
-    html.setAttribute('data-theme', initial);
-    if (btn) btn.textContent = initial === 'dark' ? '🌙' : '☀️';
-  })();
-  function toggleTheme() {
-    const html = document.documentElement;
-    const btn = document.getElementById('theme-toggle');
-    const current = html.getAttribute('data-theme') || 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
-    html.setAttribute('data-theme', next);
-    localStorage.setItem('lantern-theme', next);
-    if (btn) btn.textContent = next === 'dark' ? '🌙' : '☀️';
-  }
-</script>
-<script>
-/* Moon heartbeat — pings /api/health and adjusts animation speed by latency */
-(function() {
-  var LAG = 600, CRITICAL = 1500, INTERVAL = 4000;
-  function beat() {
-    var moons = document.querySelectorAll('.moon-heartbeat');
-    if (!moons.length) return;
-    var t = Date.now();
-    fetch('/api/health', { cache: 'no-store', signal: AbortSignal.timeout(3000) })
-      .then(function(r) {
-        var ms = Date.now() - t;
-        moons.forEach(function(m) {
-          m.classList.remove('lag', 'critical');
-          if (ms > CRITICAL) m.classList.add('critical');
-          else if (ms > LAG)  m.classList.add('lag');
-        });
-      })
-      .catch(function() {
-        document.querySelectorAll('.moon-heartbeat').forEach(function(m) {
-          m.classList.remove('lag'); m.classList.add('critical');
-        });
-      });
-  }
-  setInterval(beat, INTERVAL);
-  beat();
-})();
-</script>
 </body>
 </html>

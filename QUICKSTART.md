@@ -4,12 +4,47 @@ Get every service running in under 5 minutes.
 
 ---
 
+## Dual Boot Quickstart (Recommended)
+
+**Start both stable release and dev server simultaneously:**
+
+```powershell
+make quickstart
+```
+
+Or directly:
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File start-dual-servers.ps1
+```
+
+**What this does:**
+- **Port 4177**: Stable tagged release (checks out master, pulls latest)
+- **Port 4178**: Development version (your current working branch)
+- Opens Chrome to http://127.0.0.1:4177/dream-chat.html
+
+**Dual boot means:** You can test stable releases while developing on the same machine without conflicts.
+
+---
+
 ## Prerequisites
+
+**First, read the provider documentation:** See [**PROVIDERS.md**](PROVIDERS.md) for inventory of all 10 AI providers, configuration, and current status.
 
 ```bash
 node --version   # v18+ recommended
 python --version # v3.10+ recommended
 ```
+
+**Local must be on master, synced with remote:**
+
+```bash
+git checkout master
+git pull origin master
+```
+
+All local dev and autostart boots run from the `master` branch. Feature branches are for PRs only — never run the server from a feature branch. Always merge upstream before starting.
+
+**Versioning:** Version auto-bumps on each commit (patch), with timestamp on build. Check `apps/lantern-garage/version.json` for build ID and timestamp.
 
 Install dependencies:
 
@@ -17,6 +52,21 @@ Install dependencies:
 npm install --prefix apps/lantern-garage
 python -m pip install -r requirements.txt
 ```
+
+**New user setup (one-time):**
+
+1. Copy `.env.example` → `.env` and fill in your keys:
+   ```
+   DISCORD_BOT_TOKEN=your_bot_token
+   LANTERN_DISCORD_GUILD_ID=your_server_id
+   ANTHROPIC_API_KEY=sk-ant-...   # or GEMINI_API_KEY / OPENAI_API_KEY
+   ```
+2. Install ffmpeg for voice/music (optional, enables `!lounge` / `!dreams` / `!focus`):
+   ```powershell
+   winget install Gyan.FFmpeg
+   ```
+3. Start everything: `npm run dev --prefix apps/lantern-garage`
+   — the server auto-starts the Discord bot when token keys are set.
 
 ---
 
@@ -64,6 +114,12 @@ npm run dev --prefix apps/lantern-garage
 
 Open `http://127.0.0.1:4177` — the Dream Journal chat UI.
 
+**Discord bot starts automatically** when `DISCORD_BOT_TOKEN` and `LANTERN_DISCORD_GUILD_ID`
+are set in `.env`. No separate terminal needed — the server spawns it as a child process.
+
+The bot includes the Sinatra Lounge voice player and binaural beats.
+Voice requires ffmpeg: `winget install Gyan.FFmpeg` (one-time, Windows).
+
 **Optional services (separate terminals):**
 
 ```bash
@@ -72,9 +128,6 @@ python src/mcp_server/server.py
 
 # Convergence loop (one-shot)
 python src/convergence_io_engine.py loop
-
-# Discord bot (requires DISCORD_BOT_TOKEN in .env.local)
-python src/discord_lounge_bot/bot.py
 ```
 
 **What you get:**

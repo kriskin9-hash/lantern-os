@@ -1,11 +1,13 @@
-// Three Doors game integration for Dream Chat
-// Detects !threedoors, !three-doors, "play three doors", "door game" etc.
+// Kingdome of Hearts game integration for Dream Chat
+// Detects !threedoors, !three-doors, !kingdome, "play three doors", "door game" etc.
 // Calls the shared Python engine via POST /api/dream/doors
 
 const THREE_DOORS_TRIGGERS = [
   "!threedoors", "!three-doors", "!three doors",
+  "!kingdome", "!kingdome-of-hearts", "!kingdome of hearts",
   "play three doors", "start three doors", "three doors game",
   "door game", "!doors", "!door game",
+  "play kingdome", "start kingdome", "kingdome game",
 ];
 
 function isThreeDoorsTrigger(text) {
@@ -19,7 +21,7 @@ function isDoorChoice(text) {
   if (/^[abc]$/.test(lower)) return lower;
   const m = lower.match(/(?:door|choose|pick)\s+([abc])/);
   if (m) return m[1];
-  const nameMatch = lower.match(/(?:the\s+)?(burrow|sunken bell|little crown|root|ember|stream|deep|echo|surface|throne|hollow|star)\s+door/);
+  const nameMatch = lower.match(/(?:the\s+)?(burrow|sunken bell|little crown|root|ember|stream|deep|echo|surface|throne|hollow|star|storybook|cloverfield|fog|lucky|today|tomorrow)\s+door/);
   if (nameMatch) return nameMatch[1];
   return null;
 }
@@ -49,7 +51,7 @@ async function callDoorsApi(body) {
 }
 
 function formatThreeDoorsResponse(data) {
-  if (data.error) return { type: "text", content: `Three Doors error: ${data.error}` };
+  if (data.error) return { type: "text", content: `Kingdome of Hearts error: ${data.error}` };
 
   const lines = [data.text];
   lines.push("");

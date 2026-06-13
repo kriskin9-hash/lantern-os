@@ -82,6 +82,77 @@ app = FastAPI(title="Lantern OS MCP Server", version="1.0.0")
 _FLEET_STATUS_PATH = REPO_ROOT / "data" / "status" / "super-jarvis-fleet.json"
 _AGENTS_CONFIG_PATH = REPO_ROOT / "config" / "agents.json"
 
+# ── MCP Resources — large files exposed as URI-addressable contexts ──
+# Refactored from blob reads (fs.readFileSync) to MCP resource URIs.
+# Connectors should reference these by URI instead of embedding full text.
+_RESOURCES_REGISTRY = {
+    "pcsf://model":        REPO_ROOT / "data" / "pcsf" / "model.pcsf.json",
+    "pcsf://agent":        REPO_ROOT / "data" / "pcsf" / "agent.pcsf.json",
+    "pcsf://settings":     REPO_ROOT / "data" / "pcsf" / "settings.pcsf.json",
+    "pcsf://narrator":     REPO_ROOT / "data" / "pcsf" / "narrator.pcsf.json",
+    "pcsf://provider":     REPO_ROOT / "data" / "pcsf" / "provider.pcsf.json",
+    "pcsf://health":       REPO_ROOT / "data" / "pcsf" / "health.pcsf.json",
+    "rag://house":         REPO_ROOT / "data" / "internal-rag-house" / "LANTERN-OS-INTERNAL-HOUSE-RAG.flat.md",
+    "rag://manifest":      REPO_ROOT / "data" / "internal-rag-house" / "RAG-HOUSE-MANIFEST.json",
+    "rag://readme":        REPO_ROOT / "data" / "internal-rag-house" / "README.md",
+    "context://personas":  REPO_ROOT / "data" / "contexts" / "personas.json",
+    "context://doors":     REPO_ROOT / "data" / "contexts" / "doors.json",
+    "context://doors-instruction": REPO_ROOT / "data" / "contexts" / "doors-instruction.md",
+    "context://keystone-debug":    REPO_ROOT / "data" / "contexts" / "keystone-debug.md",
+}
+
+
+def _resolve_resource(uri: str) -> Optional[Path]:
+    """Resolve an MCP resource URI to a filesystem path. Returns None if not found."""
+    # Exact match first
+    if uri in _RESOURCES_REGISTRY:
+        return _RESOURCES_REGISTRY[uri]
+    # Directory listing for csf://memory and journal://entries
+    if uri == "csf://memory":
+        return REPO_ROOT / "data" / "csf_memory"
+    if uri == "journal://entries":
+        return REPO_ROOT / "data" / "dream_journal"
+    return None
+
+
+def _read_resource(uri: str) -> Optional[Dict[str, Any]]:
+    """Read an MCP resource by URI. Returns dict with contents, mimeType, text, or blob."""
+    path = _resolve_resource(uri)
+    if not path:
+        return None
+    if not path.exists():
+        return None
+
+    # Directory listing
+    if path.is_dir():
+        files = sorted([p.name for p in path.iterdir() if p.is_file()])[:50]
+        return {
+            "uri": uri,
+            "mimeType": "application/json",
+            "text": json.dumps({"uri": uri, "type": "directory", "files": files}, indent=2),
+        }
+
+    # Single file
+    suffix = path.suffix.lower()
+    mime = {
+        ".json": "application/json",
+        ".md": "text/markdown",
+        ".txt": "text/plain",
+        ".yaml": "application/yaml",
+        ".yml": "application/yaml",
+    }.get(suffix, "text/plain")
+
+    try:
+        text = path.read_text(encoding="utf-8")
+        return {
+            "uri": uri,
+            "mimeType": mime,
+            "text": text,
+        }
+    except Exception as exc:
+        logger.warning("Failed to read resource %s: %s", uri, exc)
+        return None
+
 def _load_fleet_status() -> Dict[str, Any]:
     """Load fleet status from data/status/super-jarvis-fleet.json.
     Returns honest counts: designed slots from config, active slots from status file.
@@ -366,6 +437,73 @@ def _tool_update_lantern_os(restart: bool = True) -> Dict[str, Any]:
     return {"ok": all_ok, "steps": steps, "version": new_version, "restart_scheduled": restart_scheduled}
 
 
+def _tool_web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
+    """Search the web via DuckDuckGo (no API key required). Returns title, URL, and snippet for each result."""
+    import urllib.request
+    import urllib.parse
+    import re
+
+    try:
+        url = "https://lite.duckduckgo.com/lite/"
+        data = urllib.parse.urlencode({"q": query, "kl": "us-en"}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+
+        results = []
+        link_pattern = re.compile(
+            r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        snippet_pattern = re.compile(
+            r'<td[^>]+class="result__snippet"[^>]*>(.*?)</td>',
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        links = link_pattern.findall(html)
+        snippets = snippet_pattern.findall(html)
+
+        for i, (href, title_raw) in enumerate(links[:max_results]):
+            title = re.sub(r"<[^>]+>", "", title_raw).strip()
+            if href.startswith("//"):
+                href = "https:" + href
+            elif href.startswith("/"):
+                href = "https://duckduckgo.com" + href
+            snippet = re.sub(r"<[^>]+>", "", snippets[i]).strip() if i < len(snippets) else ""
+            results.append({
+                "rank": i + 1,
+                "title": title,
+                "url": href,
+                "snippet": snippet,
+            })
+
+        return {
+            "success": True,
+            "query": query,
+            "results": results,
+            "result_count": len(results),
+            "source": "duckduckgo-lite",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as exc:
+        logger.exception("Web search failed")
+        return {
+            "success": False,
+            "query": query,
+            "error": str(exc),
+            "hint": "DuckDuckGo lite search failed. Check network connectivity.",
+        }
+
+
 # ── JSON-RPC Dispatch ──
 
 TOOLS_REGISTRY = {
@@ -381,6 +519,7 @@ TOOLS_REGISTRY = {
     "mesh_donate": _tool_mesh_donate,
     "mesh_prune": _tool_mesh_prune,
     "update_lantern_os": _tool_update_lantern_os,
+    "web_search": _tool_web_search,
 }
 
 
@@ -403,6 +542,7 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
                 "capabilities": {
                     "tools": {},
                     "logging": {},
+                    "resources": {},
                 },
             },
         }
@@ -484,6 +624,46 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
                 },
             }
 
+    if method == "resources/list":
+        resources = []
+        for uri, rpath in _RESOURCES_REGISTRY.items():
+            resources.append({
+                "uri": uri,
+                "name": uri.split("://")[-1],
+                "mimeType": _read_resource(uri,).get("mimeType", "text/plain") if _read_resource(uri,) else "text/plain",
+                "size": rpath.stat().st_size if rpath.exists() else 0,
+            })
+        # Add directory resources
+        for uri in ("csf://memory", "journal://entries"):
+            resources.append({
+                "uri": uri,
+                "name": uri.split("://")[-1],
+                "mimeType": "application/json",
+                "size": 0,
+            })
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {"resources": resources},
+        }
+
+    if method == "resources/read":
+        uri = params.get("uri", "")
+        resource = _read_resource(uri)
+        if not resource:
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {"code": -32002, "message": f"Resource '{uri}' not found"},
+            }
+        return {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "contents": [{"uri": uri, **resource}],
+            },
+        }
+
     return {
         "jsonrpc": "2.0",
         "id": req_id,
@@ -516,6 +696,40 @@ async def health():
 async def mesh_topology():
     """Expose mesh topology as a plain HTTP endpoint (no SSE required)."""
     return await _mesh.get_topology()
+
+
+@app.get("/resource")
+async def resource_list():
+    """List all available MCP resources as plain HTTP JSON (no SSE required)."""
+    resources = []
+    for uri, rpath in _RESOURCES_REGISTRY.items():
+        resources.append({
+            "uri": uri,
+            "name": uri.split("://")[-1],
+            "mimeType": _read_resource(uri).get("mimeType", "text/plain") if _read_resource(uri) else "text/plain",
+            "size": rpath.stat().st_size if rpath.exists() else 0,
+        })
+    for uri in ("csf://memory", "journal://entries"):
+        resources.append({
+            "uri": uri,
+            "name": uri.split("://")[-1],
+            "mimeType": "application/json",
+            "size": 0,
+        })
+    return {"resources": resources}
+
+
+@app.get("/resource/{uri:path}")
+async def resource_read(uri: str):
+    """Read a single MCP resource by URI as plain HTTP (no SSE required).
+    URI scheme separator : is encoded as %3A by most clients; we accept both.
+    """
+    # Decode common encodings
+    decoded = uri.replace("%3A", ":").replace("%2F", "/")
+    resource = _read_resource(decoded)
+    if not resource:
+        raise HTTPException(status_code=404, detail=f"Resource '{decoded}' not found")
+    return resource
 
 
 @app.get("/sse")
@@ -566,7 +780,7 @@ async def root():
     return {
         "name": "Lantern OS MCP Server",
         "version": "1.0.0",
-        "endpoints": ["/sse", "/messages", "/health", "/mesh/topology"],
+        "endpoints": ["/sse", "/messages", "/health", "/mesh/topology", "/resource"],
         "tools": list(TOOLS_REGISTRY.keys()),
         "mesh": {
             "founder_id": mesh["founder_id"],

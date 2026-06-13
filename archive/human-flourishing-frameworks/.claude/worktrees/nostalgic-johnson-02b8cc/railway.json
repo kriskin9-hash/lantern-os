@@ -1,8 +1,0 @@
-{
-  "build": {
-    "builder": "dockerfile"
-  },
-  "deploy": {
-    "port": 8000
-  }
-}

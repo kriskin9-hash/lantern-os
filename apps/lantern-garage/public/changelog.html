@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#7c6af7">
   <title>Changelog — Lantern OS</title>
+  <link rel="stylesheet" href="/css/site.css">
   <link rel="stylesheet" href="css/dream-chat.css">
   <style>
     .changelog-page { max-width: 780px; margin: 0 auto; padding: 0 24px 80px; }
@@ -37,37 +38,33 @@
     .version-body table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin: 8px 0 16px; }
     .version-body th, .version-body td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
     .version-body th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; }
-    .pill.live { background: rgba(52,211,153,0.15); color: var(--green); }
-    .pill.held { background: var(--surface2); color: var(--muted); }
-    .pill.optional { background: var(--accent-dim); color: var(--accent); }
-    .nav-bar {
-      display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px;
-    }
-    .nav-bar a {
-      color: var(--muted); text-decoration: none; font-size: 0.82rem; font-weight: 500;
-      padding: 6px 12px; border-radius: 8px; transition: all 0.15s;
-    }
-    .nav-bar a:hover { color: var(--text); background: var(--surface); }
-    .nav-bar a.active { color: var(--accent); background: var(--accent-dim); }
     .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
     .error { text-align: center; padding: 60px 20px; color: var(--danger); }
   </style>
 </head>
 <body>
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/dream-chat.html">Journal</a>
+    <a href="/three-doors-game.html">Explore</a>
+    <a href="/flourishing">Dashboard</a>
+    <a href="/knowledgecenter.html">Help</a>
+    <a href="#" class="active">Changelog</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
+  </div>
+</nav>
+
 <div class="app">
   <div class="changelog-page">
-    <div class="nav-bar">
-      <a href="/dream-chat.html">Dream Journal</a>
-      <a href="/knowledgecenter.html">Knowledge Center</a>
-      <a href="/index.html">Home</a>
-      <a href="/repo/CHANGELOG.MD" target="_blank">Raw MD</a>
-      <a href="#" class="active">Changelog</a>
-    </div>
-
     <div class="changelog-header">
       <h1>Changelog</h1>
-      <a href="/index.html">← Back to Lantern OS</a>
     </div>
 
     <div id="changelog-content">
@@ -173,5 +170,15 @@
     });
 })();
 </script>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
+  </div>
+</footer>
+
+<script src="/js/theme-toggle.js"></script>
 </body>
 </html>

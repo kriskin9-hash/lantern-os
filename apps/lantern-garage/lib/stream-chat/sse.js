@@ -22,6 +22,14 @@ function sendError(res, text) {
   writeData(res, { type: "error", text });
 }
 
+function sendRoute(res, route) {
+  writeData(res, { type: "route", ...route });
+}
+
+function sendReceipt(res, receipt) {
+  writeData(res, { type: "receipt", ...receipt });
+}
+
 function sendDone(res, source, extra = {}) {
   writeData(res, { type: "done", source, ...extra });
   res.end();
@@ -32,5 +40,7 @@ module.exports = {
   writeData,
   sendToken,
   sendError,
+  sendRoute,
+  sendReceipt,
   sendDone,
 };

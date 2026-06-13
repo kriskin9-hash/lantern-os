@@ -1,7 +1,0 @@
-# Minimal requirements for Dream Journal Flask API
-# Strips AI, Discord, speech, and other heavy dependencies
-
-Flask==3.0.0
-Werkzeug==3.0.1
-openai>=2.26.0,<3
-openai-agents>=0.17.0

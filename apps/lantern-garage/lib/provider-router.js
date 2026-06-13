@@ -1,0 +1,307 @@
+/**
+ * Unified Provider Router
+ * Single source of truth for all LLM provider selection and fallback logic.
+ * Replaces scattered fallback chains in stream-chat.js and dream-chat.js.
+ */
+
+const http = require("http");
+const https = require("https");
+const path = require("path");
+const { appendJsonlQueued } = require("./file-queue");
+
+const CACHE_TTL_MS = 60_000;
+const PROVIDER_CALL_LOG_PATH = path.resolve(__dirname, "..", "..", "data", "provider-calls.jsonl");
+
+// Provider configuration with fallback chains by task type
+const PROVIDER_CHAINS = {
+  coding: [
+    { provider: "ollama", models: ["qwen2.5-coder", "deepseek"] },
+    { provider: "mistral", models: ["mistral-large-latest"] },
+    { provider: "anthropic", models: ["claude-opus-4-8", "claude-sonnet-4-6"] },
+    { provider: "openai", models: ["gpt-4-turbo", "gpt-4o-mini"] },
+    { provider: "deepseek", models: ["deepseek-chat"] },
+  ],
+
+  reasoning: [
+    { provider: "anthropic", models: ["claude-opus-4-8", "claude-sonnet-4-6"] },
+    { provider: "openai", models: ["gpt-4-turbo"] },
+    { provider: "gemini", models: ["gemini-2.5-pro"] },
+    { provider: "deepseek", models: ["deepseek-chat"] },
+    { provider: "mistral", models: ["mistral-large-latest"] },
+  ],
+
+  creative: [
+    { provider: "ollama", models: ["lantern-csf-dream"] },
+    { provider: "mistral", models: ["mistral-large-latest"] },
+    { provider: "openai", models: ["gpt-4o"] },
+    { provider: "gemini", models: ["gemini-2.5-flash"] },
+    { provider: "cohere", models: ["command-r-plus"] },
+  ],
+
+  default: [
+    { provider: "ollama", models: ["lantern-csf-dream", "qwen2.5-coder"] },
+    { provider: "gemini", models: ["gemini-2.5-flash"] },
+    { provider: "anthropic", models: ["claude-sonnet-4-6"] },
+    { provider: "openai", models: ["gpt-4o-mini"] },
+    { provider: "mistral", models: ["mistral-large-latest"] },
+  ],
+};
+
+// Provider health state (fleet-wide, shared across all requests)
+const _providerState = {};
+let _lastHealthCheck = 0;
+
+/**
+ * Select which provider + model to use for a request
+ * @param {string} message - User message
+ * @param {string} taskType - "coding"|"reasoning"|"creative"|"default"
+ * @param {string} requestedProvider - Override provider if specified
+ * @returns {Promise<{provider, model, chain}>}
+ */
+async function selectProvider(message, taskType = "default", requestedProvider = null) {
+  // If user explicitly requested a provider, try that first
+  if (requestedProvider) {
+    const matched = findProviderChain(requestedProvider);
+    if (matched) {
+      return {
+        provider: matched.provider,
+        model: matched.models[0],
+        chain: matched.models.slice(1),
+        reason: `explicit_request:${requestedProvider}`,
+      };
+    }
+  }
+
+  // Use task type to select chain
+  const chain = PROVIDER_CHAINS[taskType] || PROVIDER_CHAINS.default;
+
+  // Find first healthy provider in chain
+  for (const step of chain) {
+    if (isProviderHealthy(step.provider)) {
+      return {
+        provider: step.provider,
+        model: step.models[0],
+        chain: step.models.slice(1),
+        reason: `task_type:${taskType}`,
+      };
+    }
+  }
+
+  // If all providers in chain are unhealthy, log warning and use first anyway
+  console.warn(`[provider-router] All providers unhealthy for ${taskType}, using fallback`);
+  const fallback = chain[0];
+  return {
+    provider: fallback.provider,
+    model: fallback.models[0],
+    chain: fallback.models.slice(1),
+    reason: `fallback:all_unhealthy`,
+  };
+}
+
+/**
+ * Call a specific LLM provider with intelligent fallback
+ * @param {string} provider
+ * @param {string} model
+ * @param {object} payload - Provider-specific payload (messages, system prompt, etc.)
+ * @param {string} taskType - For context/logging
+ * @param {object} context - {agent, recentDreams, csfContext, etc.}
+ * @returns {Promise<{content, provider, model, attempt, fallbackReason, latencyMs, tokensUsed, cost}>}
+ */
+async function callProvider(provider, model, payload, taskType = "default", context = {}) {
+  const startTime = Date.now();
+  let attempt = 1;
+  let lastError = null;
+
+  const chain = PROVIDER_CHAINS[taskType] || PROVIDER_CHAINS.default;
+  const providerStep = chain.find((s) => s.provider === provider);
+  const modelsToTry = providerStep ? [...providerStep.models] : [model];
+
+  // Try models in sequence within this provider
+  for (const tryModel of modelsToTry) {
+    try {
+      const result = await _callProviderImpl(provider, tryModel, payload, context);
+      const latencyMs = Date.now() - startTime;
+
+      // Log successful call
+      await _logProviderCall({
+        provider,
+        model: tryModel,
+        attempt,
+        status: "success",
+        latencyMs,
+        taskType,
+        tokensUsed: result.tokensUsed || 0,
+        cost: result.cost || 0,
+      });
+
+      // Record success in provider state
+      recordProviderSuccess(provider);
+
+      return {
+        content: result.content,
+        provider,
+        model: tryModel,
+        attempt,
+        fallbackReason: null,
+        latencyMs,
+        tokensUsed: result.tokensUsed || 0,
+        cost: result.cost || 0,
+      };
+    } catch (err) {
+      lastError = err;
+      const latencyMs = Date.now() - startTime;
+
+      // Log failed attempt
+      await _logProviderCall({
+        provider,
+        model: tryModel,
+        attempt,
+        status: "failure",
+        errorCode: err.code || err.message.split(" ")[0],
+        latencyMs,
+        taskType,
+      });
+
+      // Record failure in provider state
+      recordProviderFailure(provider, err.code || "unknown");
+
+      attempt++;
+    }
+  }
+
+  // All models in this provider failed, try next provider in chain
+  const nextProviderStep = chain.find(
+    (s, idx) => idx > chain.findIndex((s) => s.provider === provider)
+  );
+
+  if (nextProviderStep) {
+    console.log(`[provider-router] Fallback: ${provider} failed, trying ${nextProviderStep.provider}`);
+    return await callProvider(nextProviderStep.provider, nextProviderStep.models[0], payload, taskType, context);
+  }
+
+  // All providers exhausted
+  throw new Error(
+    `[provider-router] All providers failed for ${taskType}. Last error: ${lastError?.message || "unknown"}`
+  );
+}
+
+/**
+ * Actual provider API call (delegates to provider-specific code)
+ * NOTE: Streaming implementations stay in stream-chat.js for now
+ * This is used for sync chat and testing
+ * @private
+ */
+async function _callProviderImpl(provider, model, payload, context) {
+  // For now, sync calls are not implemented here
+  // Stream-chat.js has the streaming implementations
+  // This stub ensures the routing logic works
+  throw new Error(`Sync call not implemented for ${provider}. Use stream-chat.js for streaming.`);
+}
+
+/**
+ * Check if a provider is healthy (not rate-limited, not auth failed, etc.)
+ */
+function isProviderHealthy(provider) {
+  const state = _providerState[provider];
+  if (!state) return true; // Unknown = assume healthy
+
+  // Provider is blocked due to rate limit, skip it
+  if (state.blockedUntil && Date.now() < state.blockedUntil) {
+    return false;
+  }
+
+  // Provider has no API key
+  if (state.noKey) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Record a successful provider call (for health tracking)
+ */
+function recordProviderSuccess(provider) {
+  if (!_providerState[provider]) {
+    _providerState[provider] = {};
+  }
+  _providerState[provider].lastSuccess = Date.now();
+  _providerState[provider].consecutiveFailures = 0;
+}
+
+/**
+ * Record a provider failure (rate limit, auth error, etc.)
+ */
+function recordProviderFailure(provider, errorCode) {
+  if (!_providerState[provider]) {
+    _providerState[provider] = {};
+  }
+
+  _providerState[provider].lastFailure = Date.now();
+  _providerState[provider].lastError = errorCode;
+  _providerState[provider].consecutiveFailures = (_providerState[provider].consecutiveFailures || 0) + 1;
+
+  // Handle rate limits
+  if (errorCode === "429" || errorCode === "quota_exceeded") {
+    _providerState[provider].blockedUntil = Date.now() + 60_000; // Block for 60s
+  }
+
+  // Handle auth failures
+  if (errorCode === "401" || errorCode === "403" || errorCode === "invalid_api_key") {
+    _providerState[provider].noKey = true;
+  }
+
+  // After 5 consecutive failures, temporarily block
+  if (_providerState[provider].consecutiveFailures >= 5) {
+    _providerState[provider].blockedUntil = Date.now() + 30_000;
+  }
+}
+
+/**
+ * Get current provider health status (for debugging/observability)
+ */
+function getProviderStatus() {
+  return { ..._providerState };
+}
+
+/**
+ * Log a provider call for metrics and debugging
+ * @private
+ */
+async function _logProviderCall(entry) {
+  try {
+    await appendJsonlQueued(PROVIDER_CALL_LOG_PATH, {
+      timestamp: new Date().toISOString(),
+      ...entry,
+    });
+  } catch (err) {
+    console.error("[provider-router] Failed to log provider call:", err.message);
+  }
+}
+
+/**
+ * Find a provider chain by name/alias
+ * @private
+ */
+function findProviderChain(providerName) {
+  const name = providerName.toLowerCase();
+  for (const chain of Object.values(PROVIDER_CHAINS)) {
+    const found = chain.find(
+      (step) =>
+        step.provider === name ||
+        step.provider.startsWith(name) ||
+        step.models.some((m) => m.includes(name))
+    );
+    if (found) return found;
+  }
+  return null;
+}
+
+module.exports = {
+  selectProvider,
+  callProvider,
+  isProviderHealthy,
+  recordProviderSuccess,
+  recordProviderFailure,
+  getProviderStatus,
+};

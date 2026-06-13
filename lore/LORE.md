@@ -115,6 +115,11 @@ The sandbox preserves meaning without making it proof, pressure, permission, or 
 
 ---
 
+## Canonical Naming
+
+- **"Kingdome of Hearts"** (with the *dome*) is the canonical spelling for the Dream Journal / Three Doors game concept.
+- **"Kingdom of Hearts"** is legacy wording unless quoting historical source material.
+
 ## Key Files
 
 - `lore/LORE.md` (this file) ΓÇö Principles and safe exploration framework

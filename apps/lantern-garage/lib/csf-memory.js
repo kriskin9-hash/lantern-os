@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { readFileViaMcp } = require("./mcp-resource-client");
 
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
@@ -7,9 +8,18 @@ const CSF_MEMORY_PATH = path.join(repoRoot, "data", "csf_memory");
 const CSF_INGEST_PATH = path.join(repoRoot, "csf", "ingest");
 const DREAM_JOURNAL_PATH = path.join(repoRoot, "data", "dream_journal");
 const DOOR_STATE_PATH = path.join(DREAM_JOURNAL_PATH, "door_state.json");
+const RAG_HOUSE_PATH = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 
 let _cache = { memories: null, ingest: null, ts: 0 };
 const CACHE_TTL_MS = 10_000;
+
+// Helper: read a file via MCP resource client, falling back to fs.readFileSync
+function _readText(filePath) {
+  const result = readFileViaMcp(filePath);
+  if (result && result.text) return result.text;
+  if (!fs.existsSync(filePath)) return "";
+  try { return fs.readFileSync(filePath, "utf8"); } catch { return ""; }
+}
 
 function readMemoryRecords(limit = 20) {
   const records = [];
@@ -17,7 +27,8 @@ function readMemoryRecords(limit = 20) {
   const files = fs.readdirSync(CSF_MEMORY_PATH, { recursive: true })
     .filter(f => String(f).endsWith(".jsonl"));
   for (const file of files) {
-    const lines = fs.readFileSync(path.join(CSF_MEMORY_PATH, file), "utf8").trim().split("\n").filter(Boolean);
+    const text = _readText(path.join(CSF_MEMORY_PATH, file));
+    const lines = text.trim().split("\n").filter(Boolean);
     for (const line of lines) {
       try { records.push(JSON.parse(line)); } catch {}
     }
@@ -33,7 +44,7 @@ function readIngestDocs(limit = 3) {
     .sort().reverse()
     .slice(0, limit)
     .map(f => {
-      const content = fs.readFileSync(path.join(CSF_INGEST_PATH, String(f)), "utf8").trim();
+      const content = _readText(path.join(CSF_INGEST_PATH, String(f))).trim();
       return { name: String(f), content: content.slice(0, 400) };
     });
 }
@@ -59,7 +70,8 @@ function queryMemories(message, limit = 3) {
     return { record: r, score };
   });
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.record);
+  // Always return top-N records regardless of score so CSF context is never empty
+  return scored.slice(0, limit).map(s => s.record);
 }
 
 // Query-filtered ingest docs: only return docs relevant to the message
@@ -71,14 +83,16 @@ function queryIngestDocs(message, limit = 2) {
     score: Math.max(relevanceScore(d.name, message), relevanceScore(d.content, message)),
   }));
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.doc);
+  // Always return top-N docs so context is never empty
+  return scored.slice(0, limit).map(s => s.doc);
 }
 
 // Query dream journal entries for relevant context
 function queryDreamEntries(message, limit = 3) {
   const journalFile = path.join(DREAM_JOURNAL_PATH, `dreams_${new Date().toISOString().slice(0, 7)}.jsonl`);
-  if (!fs.existsSync(journalFile)) return [];
-  const lines = fs.readFileSync(journalFile, "utf8").trim().split("\n").filter(Boolean);
+  const text = _readText(journalFile);
+  if (!text) return [];
+  const lines = text.trim().split("\n").filter(Boolean);
   const entries = [];
   for (const line of lines) {
     try { entries.push(JSON.parse(line)); } catch {}
@@ -91,14 +105,13 @@ function queryDreamEntries(message, limit = 3) {
       return { entry: e, score: relevanceScore(combined, message) };
     });
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter(s => s.score > 0).slice(0, limit).map(s => s.entry);
+  return scored.slice(0, limit).map(s => s.entry);
 }
 
 function loadDoorState() {
   try {
-    if (fs.existsSync(DOOR_STATE_PATH)) {
-      return JSON.parse(fs.readFileSync(DOOR_STATE_PATH, "utf8"));
-    }
+    const text = _readText(DOOR_STATE_PATH);
+    if (text) return JSON.parse(text);
   } catch {}
   return { doors: [], lastChoice: null, history: [] };
 }
@@ -121,6 +134,32 @@ function saveDoorChoice(doorText, allDoors) {
   });
   if (state.history.length > 50) state.history = state.history.slice(-50);
   saveDoorState(state);
+}
+
+// Query RAG house knowledge base — returns relevant records by keyword matching
+function queryRagHouse(message, limit = 2) {
+  try {
+    const text = _readText(RAG_HOUSE_PATH);
+    if (!text) return [];
+    const house = JSON.parse(text);
+    if (!house?.ragRecords || !Array.isArray(house.ragRecords)) return [];
+
+    const scored = house.ragRecords.map(r => ({
+      ...r,
+      score: Math.max(
+        relevanceScore(r.content || "", message),
+        relevanceScore(r.title || "", message),
+        relevanceScore((r.tags || []).join(" "), message)
+      ),
+    }));
+
+    return scored
+      .filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+  } catch {
+    return [];
+  }
 }
 
 // Old broad context loader (cached, for backwards compat)
@@ -171,6 +210,24 @@ function formatCSFContextForPrompt(message) {
     parts.push(`Doors: ${last3 || "none yet"}`);
   }
 
+  // RAG house knowledge base — relevant external records
+  if (message) {
+    const ragRecords = queryRagHouse(message, 2);
+    if (ragRecords.length > 0) {
+      const ragText = ragRecords.map(r =>
+        `- ${r.title || "Knowledge"}: ${(r.content || "").slice(0, 150)}`
+      ).join("\n");
+      parts.push(`Knowledge base (RAG):\n${ragText}`);
+    }
+  }
+
+  // CSF delta layer — recurring symbols, mood arc, convergence trend
+  try {
+    const { formatDeltaContextForPrompt } = require("./csf-delta-store");
+    const deltaCtx = formatDeltaContextForPrompt(message);
+    if (deltaCtx) parts.push(deltaCtx);
+  } catch { /* non-fatal */ }
+
   return parts.join("\n\n");
 }
 
@@ -180,6 +237,7 @@ module.exports = {
   queryMemories,
   queryIngestDocs,
   queryDreamEntries,
+  queryRagHouse,
   loadDoorState,
   saveDoorState,
   saveDoorChoice,

@@ -1,4 +1,0 @@
-﻿Lantern Keystone Wish - Local Text Mode
-Memory File: anchors + wishes loaded.
-I operate only from local text files.
-No external API calls.

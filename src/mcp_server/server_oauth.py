@@ -167,6 +167,79 @@ def _tool_get_status() -> Dict[str, Any]:
     }
 
 
+def _tool_web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
+    """Search the web via DuckDuckGo (no API key required). Returns title, URL, and snippet for each result."""
+    import urllib.request
+    import urllib.parse
+    import re
+
+    try:
+        # DuckDuckGo lite HTML endpoint — no JS, no API key
+        url = "https://lite.duckduckgo.com/lite/"
+        data = urllib.parse.urlencode({"q": query, "kl": "us-en"}).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/html",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+
+        results = []
+        # DuckDuckGo lite result pattern: <a class="result__a" href="...">title</a>
+        # followed by <td class="result__snippet">snippet</td>
+        link_pattern = re.compile(
+            r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+            re.IGNORECASE | re.DOTALL,
+        )
+        snippet_pattern = re.compile(
+            r'<td[^>]+class="result__snippet"[^>]*>(.*?)</td>',
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        links = link_pattern.findall(html)
+        snippets = snippet_pattern.findall(html)
+
+        for i, (href, title_raw) in enumerate(links[:max_results]):
+            # Clean title: strip tags
+            title = re.sub(r"<[^>]+>", "", title_raw).strip()
+            # Resolve relative URLs
+            if href.startswith("//"):
+                href = "https:" + href
+            elif href.startswith("/"):
+                href = "https://duckduckgo.com" + href
+            # Get snippet if available
+            snippet = re.sub(r"<[^>]+>", "", snippets[i]).strip() if i < len(snippets) else ""
+            results.append({
+                "rank": i + 1,
+                "title": title,
+                "url": href,
+                "snippet": snippet,
+            })
+
+        return {
+            "success": True,
+            "query": query,
+            "results": results,
+            "result_count": len(results),
+            "source": "duckduckgo-lite",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as exc:
+        logger.exception("Web search failed")
+        return {
+            "success": False,
+            "query": query,
+            "error": str(exc),
+            "hint": "DuckDuckGo lite search failed. Check network connectivity.",
+        }
+
+
 def _tool_render_report_pdf(
     title: str,
     content: str,
@@ -232,6 +305,7 @@ TOOLS_REGISTRY = {
     "boot_check": _tool_boot_check,
     "list_skills": _tool_list_skills,
     "get_status": _tool_get_status,
+    "web_search": _tool_web_search,
     "render_report_pdf": _tool_render_report_pdf,
 }
 

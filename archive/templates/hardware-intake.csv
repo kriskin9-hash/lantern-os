@@ -1,2 +1,0 @@
-host_name,os,cpu_name,cpu_cores,cpu_threads,ram_gb,gpu_name,gpu_vram_gb,gpu_driver,nvidia_smi_power_draw_w,asic_model,asic_algorithm,asic_hashrate,asic_power_w,power_usd_per_kwh,heat_noise_limit,run_24x7,wallet_ready,off_ramp_ready,notes
-ALEX-DESKTOP-01,Windows 11 Pro 24H2,AMD Ryzen 7 5800X,8,16,32,NVIDIA RTX 3070,8,replace-me,220,none,none,0,0,0.16,garage-only,no,no,no,Example row only; replace with measured local inventory

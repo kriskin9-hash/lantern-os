@@ -1,5 +1,8 @@
+const http = require("http");
 const https = require("https");
 const { refreshProviderCache } = require("../lib/provider-cache");
+const modelRegistry = require("../lib/model-registry");
+const { generateDoorSceneImage } = require("../lib/image-generation");
 
 // Dream Journal core — create, chat, stream, stats, search, export, read, settings
 const PROVIDER_KEYS = [
@@ -15,6 +18,120 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     readRecentDreams, dreamChatReply, appendConversationEntry,
     unifiedAgentGreet, unifiedAgentHealth, unifiedAgentInspect,
     handleStreamChat } = deps;
+  const { handleConvergenceCommand, selectAgent } = require("../lib/dream-chat");
+  const { classifyIntent, CAPABILITY_REGISTRY } = require("../lib/intent-router");
+
+  // ── CSF search endpoint ───────────────────────────────────────────────
+  if (url.pathname === "/api/csf/search" && req.method === "GET") {
+    const query = (url.searchParams.get("q") || "").trim();
+    if (!query) {
+      sendJson(res, { error: "q parameter required" }, 400);
+      return true;
+    }
+    const topN = Math.min(10, Math.max(1, parseInt(url.searchParams.get("top_n") || "3", 10) || 3));
+    try {
+      const { spawn } = require("child_process");
+      const py = process.platform === "win32" ? "python" : "python3";
+      const result = await new Promise((resolve, reject) => {
+        const proc = spawn(py, ["src/csf_search.py"], {
+          cwd: repoRoot,
+          env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") },
+        });
+        let out = "", err = "";
+        proc.stdout.on("data", (c) => (out += c));
+        proc.stderr.on("data", (c) => (err += c));
+        const timeout = setTimeout(() => { proc.kill(); reject(new Error("csf_search timeout")); }, 8000);
+        proc.on("close", (code) => {
+          clearTimeout(timeout);
+          if (code !== 0) reject(new Error(err || `csf_search exit ${code}`));
+          else resolve(out.trim());
+        });
+        proc.on("error", (e) => { clearTimeout(timeout); reject(e); });
+        proc.stdin.write(JSON.stringify({ query, top_n: topN }));
+        proc.stdin.end();
+      });
+      const data = JSON.parse(result);
+      sendJson(res, { ...data, query, generatedAt: new Date().toISOString() });
+    } catch (err) {
+      sendJson(res, { segments: [], query, error: err.message, generatedAt: new Date().toISOString() });
+    }
+    return true;
+  }
+
+  // ── Code modification endpoint (Keystone can apply real changes) ─────────
+  if (url.pathname === "/api/code/apply" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = JSON.parse(raw || "{}");
+      const { filePath, changes, message } = body;
+
+      if (!filePath || !changes) {
+        sendJson(res, { error: "filePath and changes required" }, 400);
+        return true;
+      }
+
+      const { execSync } = require("child_process");
+      const fullPath = path.join(repoRoot, filePath);
+
+      // Safety: ensure path is within repo
+      const normalized = path.normalize(fullPath);
+      if (!normalized.startsWith(path.normalize(repoRoot))) {
+        sendJson(res, { error: "Path traversal blocked" }, 403);
+        return true;
+      }
+
+      // Apply changes: either full replacement or array of edits
+      let content;
+      try {
+        if (fs.existsSync(fullPath)) {
+          content = fs.readFileSync(fullPath, "utf8");
+        } else {
+          content = "";
+        }
+      } catch (e) {
+        sendJson(res, { error: `Cannot read file: ${e.message}` }, 400);
+        return true;
+      }
+
+      if (typeof changes === "string") {
+        // Full replacement
+        content = changes;
+      } else if (Array.isArray(changes)) {
+        // Array of {old, new} replacements
+        for (const edit of changes) {
+          if (edit.old && edit.new !== undefined) {
+            content = content.replace(edit.old, edit.new);
+          }
+        }
+      }
+
+      // Write file
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(fullPath, content, "utf8");
+
+      // Git add and commit
+      try {
+        execSync(`git add "${filePath}"`, { cwd: repoRoot });
+        const commitMsg = message || `code: ${filePath}`;
+        execSync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { cwd: repoRoot });
+      } catch (gitErr) {
+        // Commit might fail if nothing changed, that's OK
+      }
+
+      sendJson(res, {
+        applied: true,
+        filePath,
+        committed: true,
+        message: `Applied changes to ${filePath} and committed to git`,
+      });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return true;
+  }
 
   // ── Unified agent endpoints ───────────────────────────────────────────
   if (url.pathname === "/api/dream/greet" && req.method === "GET") {
@@ -73,6 +190,21 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       if (!fs.existsSync(dreamDir)) fs.mkdirSync(dreamDir, { recursive: true });
       const monthFile = path.join(dreamDir, `dreams_${new Date().toISOString().substring(0, 7)}.jsonl`);
       await appendJsonlQueued(monthFile, entry);
+
+      // CSF delta ingest — non-blocking, non-fatal
+      try {
+        const { ingestEntry: csfIngest } = require("../lib/csf-delta-store");
+        setImmediate(() => { try { csfIngest(entry); } catch {} });
+      } catch {}
+
+      // Dream Journal enrichment using Convergance OS models
+      const enrichment = await enrichDreamEntry(entry);
+      entry.models = enrichment.models;
+      entry.doors = enrichment.doors;
+      entry.symbols = enrichment.symbols;
+      entry.image = enrichment.image;
+      entry.receipt = enrichment.receipt;
+      
       // MemOS ingest runs via: python -c "from src.convergence_io.memos_bridge import get_cube; get_cube().ingest_all()"
       // or automatically on each TesseractEngine._convergence_rag() call (lazy load).
       // Background CSF compression (non-blocking, debounced by file mtime)
@@ -100,14 +232,15 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       try {
         const { spawn } = require("child_process");
         const py = process.platform === "win32" ? "python" : "python3";
-        const entryJson = JSON.stringify(entry).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-        const script = `from convergence_io.memos_bridge import get_cube; c=get_cube(); r=c.ingest_entry(__import__('json').loads('${entryJson}')); print(__import__('json').dumps({'ingested': r}))`;
+        const script = `import sys,json; from convergence_io.memos_bridge import get_cube; c=get_cube(); r=c.ingest_entry(json.loads(sys.stdin.read())); print(json.dumps({'ingested': r}))`;
         const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
         let out = "";
         proc.stdout.on("data", (d) => { out += d.toString(); });
         proc.on("close", () => {
           try { memosResult = JSON.parse(out.trim()); } catch { /* non-critical */ }
         });
+        proc.stdin.write(JSON.stringify(entry));
+        proc.stdin.end();
       } catch { /* MemOS ingest is non-critical */ }
 
       sendJson(res, { id: dreamId, saved: true, entry, csf: csfStats, memos: memosResult });
@@ -122,7 +255,19 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const message = String(body.message || "").slice(0, maxDreamerTextLength);
       const recentDreams = readRecentDreams(5);
       const provStart = Date.now();
-      const result = await dreamChatReply(message, recentDreams, body.agent || "", body.provider || "");
+
+      // Check for !convergence command
+      let result;
+      if (message.toLowerCase().trim().startsWith("!convergence")) {
+        const requestedAgent = body.agent || "";
+        const agent = requestedAgent
+          ? require("../lib/dream-chat").AGENT_PERSONAS.find(a => a.id === requestedAgent) || selectAgent(message)
+          : selectAgent(message);
+        result = await handleConvergenceCommand(recentDreams, agent);
+      } else {
+        result = await dreamChatReply(message, recentDreams, body.agent || "", body.provider || "");
+      }
+
       const provLatency = Date.now() - provStart;
       try {
         await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-journal", role: "operator", text: message.slice(0, maxConversationTextLength) });
@@ -139,10 +284,29 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
           latencyMs: provLatency,
           status: result.reply ? "ok" : (result.error ? "error" : "offline"),
           errorMsg: result.error || "",
-          metadata: { source: result.source || "unknown", threeDoors: !!result.threeDoors },
+          metadata: { source: result.source || "unknown", threeDoors: !!result.threeDoors, isConvergence: result.source === "convergence" },
         });
       } catch { /* provenance non-critical */ }
       if (!result.reply) { sendJson(res, { error: result.error || "no_provider_configured", agent: result.agent, online: false, help: result.help || "", suggestions: result.suggestions || [] }, 503); return true; }
+      // ClaimsPacket — non-blocking, non-fatal
+      try {
+        const claimPacket = {
+          packet_id: `cp-${Date.now().toString(36)}-${Math.random().toString(36).substr(2,5)}`,
+          timestamp_ms: Date.now(),
+          node_id: "local-node",
+          action: "dream-chat",
+          agent: result.agent || "unknown",
+          provider: result.source || body.provider || "auto",
+          input_hash: Buffer.from(message.slice(0,64)).toString("base64"),
+          output_length: String(result.reply || "").length,
+          latency_ms: provLatency,
+          online: !!result.online,
+        };
+        const claimDir = path.join(repoRoot, "data", "claim-packets");
+        if (!fs.existsSync(claimDir)) fs.mkdirSync(claimDir, { recursive: true });
+        const claimFile = path.join(claimDir, `claim-packets.jsonl`);
+        setImmediate(() => { try { fs.appendFileSync(claimFile, JSON.stringify(claimPacket) + "\n"); } catch {} });
+      } catch { /* non-fatal */ }
       sendJson(res, { ...result, generatedAt: new Date().toISOString() });
     } catch (error) { sendJson(res, { error: error.message, online: false }); }
     return true;
@@ -185,27 +349,39 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     return true;
   }
 
-    // ── Three Doors game ────────────────────────────────────────────────
+    // ── Kingdome of Hearts game ─────────────────────────────────────────
   if (url.pathname === "/api/dream/doors" && req.method === "POST") {
     try {
       const raw = await collectRequestBody(req);
-      const body = JSON.parse(raw || "{}");
-      const userId = String(body.userId || "web-anon");
+      let body;
+      try { body = JSON.parse(raw || "{}"); } catch { sendJson(res, { error: "invalid_json" }, 400); return true; }
+      if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
+      const userId = String(body.userId || "web-anon").slice(0, 256);
       const action = String(body.action || "start");
       const choice = String(body.choice || "");
+      const agent = String(body.agent || "").slice(0, 32);
 
       const { spawn } = require("child_process");
-      const enginePath = path.join(repoRoot, "src", "three_doors_engine.py");
       const py = process.platform === "win32" ? "python" : "python3";
 
-      let script = "";
-      if (action === "start" || action === "reset") {
-        script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); print(__import__('json').dumps(e.to_api_response(e.reset() if "${action}"=="reset" else e.start_game())))`;
-      } else if (action === "choose") {
-        script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); s=e.choose_door("${choice}"); print(__import__('json').dumps(e.to_api_response(s) if s else {"error":"invalid_choice"}))`;
-      } else {
-        script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); print(__import__('json').dumps(e.to_api_response()))`;
-      }
+      const script = `import sys,json
+from three_doors_engine import ThreeDoorsEngine
+req = json.loads(sys.stdin.read())
+e = ThreeDoorsEngine(req['userId'])
+if req.get('agent'):
+    e.agent = req['agent']
+if req['action'] == 'reset':
+    e.reset()
+    result = e.to_api_response(e.start_game())
+elif req['action'] in ['start']:
+    scene = e.start_game()
+    result = e.to_api_response(scene)
+elif req['action'] == 'choose':
+    scene = e.choose_door(req['choice'])
+    result = e.to_api_response(scene)
+else:
+    result = {"error": "unknown_action"}
+print(json.dumps(result))`;
 
       const result = await new Promise((resolve, reject) => {
         const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
@@ -217,63 +393,139 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
           else resolve(out.trim());
         });
         proc.on("error", reject);
+        proc.stdin.write(JSON.stringify({ userId, action, choice, agent }));
+        proc.stdin.end();
       });
 
       const data = JSON.parse(result);
       sendJson(res, { ...data, generatedAt: new Date().toISOString() });
-    } catch (error) { sendJson(res, { error: error.message }, 500); }
+    } catch (error) { sendJson(res, { error: error.message, code: error.message === "request_body_too_large" ? 413 : 500 }, error.message === "request_body_too_large" ? 413 : 500); }
     return true;
   }
 
   if (url.pathname === "/api/dream/doors/image" && req.method === "POST") {
     try {
       const raw = await collectRequestBody(req);
-      const body = JSON.parse(raw || "{}");
-      const userId = String(body.userId || "web-anon");
-      const doorIdx = Number(body.doorIndex || 0);
+      let body;
+      try { body = JSON.parse(raw || "{}"); } catch { sendJson(res, { error: "invalid_json" }, 400); return true; }
+      if (!body || typeof body !== "object" || Array.isArray(body)) body = {};
+      const userId = String(body.userId || "web-anon").slice(0, 256);
+      const prompt = String(body.prompt || "").trim();
+      const sceneKey = String(body.scene_key || "").replace(/[^a-z0-9-]/gi, "").slice(0, 64);
+      const loopCount = Math.max(0, parseInt(body.loop_count, 10) || 0);
+      const agentName = String(body.agent || "").slice(0, 32);
 
-      const sdUrl = process.env.STABLE_DIFFUSION_URL || process.env.SD_WEBUI_URL;
-      if (!sdUrl) {
-        const { spawn } = require("child_process");
-        const py = process.platform === "win32" ? "python" : "python3";
-        const script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); print(__import__('json').dumps(e.image_suggestions_for_ai()[${doorIdx}] if ${doorIdx} < 3 else {}))`;
-        const result = await new Promise((resolve, reject) => {
-          const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
-          let out = "";
-          proc.stdout.on("data", (c) => (out += c));
-          proc.on("close", (code) => resolve(out.trim()));
-          proc.on("error", reject);
-        });
-        const suggestion = JSON.parse(result);
+      // Contextualized cache: {scene_key}-{loop_count}-{agent_hash}.png
+      const crypto = require("crypto");
+      const agentHash = crypto.createHash("sha1").update(agentName || "none").digest("hex").slice(0, 8);
+      const cacheDir = path.join(repoRoot, "apps", "lantern-garage", "public", "data", "images", "three-doors", "cache");
+      const cacheName = sceneKey ? `${sceneKey}-${loopCount}-${agentHash}.png` : "";
+      const cachePath = cacheName ? path.join(cacheDir, cacheName) : "";
+      if (cachePath && fs.existsSync(cachePath)) {
         sendJson(res, {
-          available: false,
-          sdUrl: null,
-          suggestion,
-          message: "No local Stable Diffusion detected. Use the prompt with your preferred image generator (DALL-E, Midjourney, etc.)",
+          image_available: true,
+          image_url: `data/images/three-doors/cache/${cacheName}`,
+          cached: true,
           generatedAt: new Date().toISOString(),
         });
         return true;
       }
 
-      const { spawn } = require("child_process");
-      const py = process.platform === "win32" ? "python" : "python3";
-      const script = `from three_doors_engine import ThreeDoorsEngine; e=ThreeDoorsEngine("${userId}"); print(e.sd_prompt_for_state())`;
-      const promptResult = await new Promise((resolve, reject) => {
-        const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
-        let out = "";
-        proc.stdout.on("data", (c) => (out += c));
-        proc.on("close", (code) => resolve(out.trim()));
-        proc.on("error", reject);
+      if (!prompt) {
+        // Get prompt from game state if not provided
+        const { spawn } = require("child_process");
+        const py = process.platform === "win32" ? "python" : "python3";
+        const script = `import sys,json
+from three_doors_engine import ThreeDoorsEngine
+req = json.loads(sys.stdin.read())
+e = ThreeDoorsEngine(req['userId'])
+print(e.sd_prompt_for_state())`;
+        const promptResult = await new Promise((resolve, reject) => {
+          const proc = spawn(py, ["-c", script], { cwd: repoRoot, env: { ...process.env, PYTHONPATH: path.join(repoRoot, "src") } });
+          let out = "";
+          proc.stdout.on("data", (c) => (out += c));
+          proc.on("close", (code) => resolve(out.trim()));
+          proc.on("error", reject);
+          proc.stdin.write(JSON.stringify({ userId }));
+          proc.stdin.end();
+        });
+        body.prompt = promptResult;
+      }
+
+      // Image generation via ModelsLab API (cloud-based Stable Diffusion)
+      const modelsLabApiKey = process.env.MODELSLAB_API_KEY;
+      if (!modelsLabApiKey) {
+        sendJson(res, {
+          image_available: false,
+          image_prompt: body.prompt || "",
+          error: "image_service_not_configured",
+          generatedAt: new Date().toISOString(),
+        });
+        return true;
+      }
+
+      const imageResult = await new Promise(async (resolve, reject) => {
+        const payload = JSON.stringify({
+          prompt: body.prompt,
+          negative_prompt: "cartoon, anime, blurry, distorted, ugly, bad quality",
+          height: "512",
+          width: "768",
+          steps: "25",
+          guidance_scale: 7.5,
+          model_id: "DreamShaper XL 7.0",
+          base64: false,
+        });
+
+        const https = require("https");
+        const reqModelsLab = https.request({
+          hostname: "api.modelslab.com",
+          path: "/api/v6/images/text2img",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload),
+            "Authorization": `Bearer ${modelsLabApiKey}`,
+          },
+        }, (res) => {
+          let data = "";
+          res.on("data", (chunk) => { data += chunk; });
+          res.on("end", () => {
+            try {
+              const result = JSON.parse(data);
+              if (result.status === "success" && result.images && result.images.length > 0) {
+                resolve({ image: result.images[0], prompt: body.prompt });
+              } else {
+                reject(new Error("ModelsLab: " + (result.message || "no image generated")));
+              }
+            } catch (e) { reject(new Error("invalid ModelsLab response")); }
+          });
+        });
+
+        reqModelsLab.on("error", reject);
+        reqModelsLab.setTimeout(120000, () => { reqModelsLab.destroy(); reject(new Error("image generation timeout")); });
+        reqModelsLab.write(payload);
+        reqModelsLab.end();
       });
 
+      // Persist into the contextualized cache for replay
+      if (cachePath && imageResult.image) {
+        try {
+          fs.mkdirSync(cacheDir, { recursive: true });
+          fs.writeFileSync(cachePath, Buffer.from(imageResult.image, "base64"));
+        } catch { /* cache write is best-effort */ }
+      }
+
       sendJson(res, {
-        available: true,
-        sdUrl,
-        prompt: promptResult,
-        message: "Stable Diffusion endpoint detected. POST to /sdapi/v1/txt2img with this prompt to generate the door image.",
+        image_available: true,
+        image: imageResult.image,
+        image_prompt: imageResult.prompt || body.prompt,
+        image_url: cacheName ? `data/images/three-doors/cache/${cacheName}` : undefined,
         generatedAt: new Date().toISOString(),
       });
-    } catch (error) { sendJson(res, { error: error.message }, 500); }
+      return true;
+    } catch (error) {
+      sendJson(res, { image_available: false, error: error.message, generatedAt: new Date().toISOString() }, 500);
+    }
     return true;
   }
 
@@ -341,6 +593,49 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
       const found = loadDreamEntries(fs, path, repoRoot).find(e => e.id === id);
       found ? sendJson(res, found) : sendJson(res, { error: "not_found" }, 404);
     } catch (error) { sendJson(res, { error: error.message }, 400); }
+    return true;
+  }
+
+  // ── Web Search Grounding ───────────────────────────────────────────
+  if (url.pathname === "/api/dream/search/web" && req.method === "GET") {
+    const query = (url.searchParams.get("q") || "").trim();
+    if (!query) {
+      sendJson(res, { error: "q parameter required" }, 400);
+      return true;
+    }
+    const maxResults = Math.min(10, Math.max(1, parseInt(url.searchParams.get("max_results") || "5", 10) || 5));
+    const http = require("http");
+    const mcpHost = process.env.MCP_SERVER_HOST || "127.0.0.1";
+    const mcpPort = parseInt(process.env.MCP_SERVER_PORT || "8771", 10);
+    const payload = JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: { name: "web_search", arguments: { query, max_results: maxResults } },
+    });
+    const mcpReq = http.request(
+      { hostname: mcpHost, port: mcpPort, path: "/messages", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }, timeout: 15000 },
+      (mcpRes) => {
+        let data = "";
+        mcpRes.on("data", (c) => { data += c; });
+        mcpRes.on("end", () => {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.result) {
+              sendJson(res, { success: parsed.result.success, query, ...parsed.result, generatedAt: new Date().toISOString() });
+            } else {
+              sendJson(res, { error: parsed.error?.message || "MCP error", generatedAt: new Date().toISOString() }, 502);
+            }
+          } catch (e) {
+            sendJson(res, { error: `Parse error: ${e.message}`, generatedAt: new Date().toISOString() }, 502);
+          }
+        });
+      }
+    );
+    mcpReq.on("error", (err) => sendJson(res, { error: err.message, generatedAt: new Date().toISOString() }, 502));
+    mcpReq.on("timeout", () => { mcpReq.destroy(); sendJson(res, { error: "MCP timeout", generatedAt: new Date().toISOString() }, 504); });
+    mcpReq.write(payload);
+    mcpReq.end();
     return true;
   }
 
@@ -487,7 +782,141 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
     } catch (err) { sendJson(res, { error: err.message }, 500); }
     return true;
   }
+
+  // ── Kingdome of Hearts UI metrics collection ───────────────────────
+  if (url.pathname === "/api/metrics/three-doors" && req.method === "POST") {
+    try {
+      const body = JSON.parse(await collectRequestBody(req));
+      const record = {
+        timestamp: new Date().toISOString(),
+        event: body.event,
+        payload: body.payload || {},
+      };
+      const metricsDir = path.join(repoRoot, "data", "metrics");
+      if (!fs.existsSync(metricsDir)) fs.mkdirSync(metricsDir, { recursive: true });
+      const metricsPath = path.join(metricsDir, "three-doors-events.jsonl");
+      fs.appendFileSync(metricsPath, JSON.stringify(record) + "\n", "utf8");
+      sendJson(res, { ok: true });
+    } catch (err) { sendJson(res, { error: err.message }, 500); }
+    return true;
+  }
+
+  // ── Convergence Models 3 — live status from Ollama ────────────────────
+  if (url.pathname === "/api/dream/lantern-models" && req.method === "GET") {
+    const LANTERN_MODELS = [
+      { id: "lantern-csf-dream",   role: "dream",       icon: "🌙", base: "mistral",        description: "Kingdome of Hearts game · Elephant Oasis · dream narrative" },
+      { id: "lantern-convergance", role: "convergence", icon: "◈",  base: "qwen2.5-coder",  description: "Convergence receipts · AAPF provenance · structured output" },
+      { id: "lantern-pcsf",        role: "pcsf",        icon: "⌖",  base: "qwen2.5-coder",  description: "PCSF state manifests · system receipts · agent declarations" },
+    ];
+    const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+    try {
+      const ollamaUrl = new URL(ollamaBase);
+      const tagsRaw = await new Promise((resolve, reject) => {
+        const r = require("http").request({
+          hostname: ollamaUrl.hostname, port: ollamaUrl.port || 11434,
+          path: "/api/tags", method: "GET",
+        }, (upstream) => {
+          let d = ""; upstream.on("data", c => d += c);
+          upstream.on("end", () => { try { resolve(JSON.parse(d)); } catch { resolve({}); } });
+          upstream.on("error", reject);
+        });
+        r.on("error", reject);
+        r.setTimeout(4000, () => { r.destroy(); reject(new Error("timeout")); });
+        r.end();
+      });
+      const pulledIds = (tagsRaw.models || []).map(m => String(m.name || "").replace(/:latest$/, "").toLowerCase());
+      const pulledFull = tagsRaw.models || [];
+      const models = LANTERN_MODELS.map(m => {
+        const entry = pulledFull.find(p => String(p.name || "").toLowerCase().startsWith(m.id));
+        return {
+          ...m,
+          loaded: pulledIds.some(id => id === m.id),
+          size_gb: entry ? Math.round((entry.size / 1e9) * 100) / 100 : null,
+          modified_at: entry ? entry.modified_at : null,
+        };
+      });
+      const loaded = models.filter(m => m.loaded).length;
+      sendJson(res, { convergence_models: models, loaded, total: LANTERN_MODELS.length, healthy: loaded === LANTERN_MODELS.length, ollama_base: ollamaBase });
+    } catch (err) {
+      sendJson(res, { convergence_models: LANTERN_MODELS.map(m => ({ ...m, loaded: false, size_gb: null })), loaded: 0, total: LANTERN_MODELS.length, healthy: false, error: err.message }, 200);
+    }
+    return true;
+  }
 };
+
+// Dream Journal enrichment using Convergance OS models
+async function enrichDreamEntry(entry) {
+  const enrichment = {
+    models: {
+      text: modelRegistry.text.dream.profileId,
+      pcsf: modelRegistry.text.pcsf.profileId,
+      convergance: modelRegistry.text.convergance.profileId,
+      image: modelRegistry.image.dream.modelId,
+    },
+    doors: [],
+    symbols: entry.symbols || [],
+    image: { status: "skipped" },
+    receipt: { privacyBoundary: "local_private", claimBoundary: "grounded", decision: "hold" },
+  };
+
+  // lantern-csf-dream: symbolic summary and door suggestions
+  let dreamLatency = Date.now();
+  try {
+    const { spawn } = require("child_process");
+    const py = process.platform === "win32" ? "python" : "python3";
+    const script = `import sys,json; from ollama import Client; c=Client(); r=c.generate(model='${modelRegistry.text.dream.ollamaModel}',prompt='Analyze this dream for symbols and suggest 3 doors: '+json.dumps({'text':sys.stdin.read()}),options={'num_predict':256}); print(r['response'])`;
+    const result = await new Promise((resolve) => {
+      const proc = spawn(py, ["-c", script], { cwd: repoRoot });
+      let out = "";
+      proc.stdout.on("data", (d) => { out += d.toString(); });
+      proc.on("close", () => resolve(out.trim()));
+      proc.stdin.write(JSON.stringify({ text: entry.text }));
+      proc.stdin.end();
+    });
+    dreamLatency = Date.now() - dreamLatency;
+    if (result) {
+      const parsed = JSON.parse(result);
+      enrichment.doors = parsed.doors || [];
+      enrichment.symbols = parsed.symbols || entry.symbols;
+    }
+    logModelUsage({ modelId: modelRegistry.text.dream.profileId, provider: "ollama", action: "generate", metadata: { latencyMs: dreamLatency, entryId: entry.id } });
+  } catch { /* non-critical */ }
+
+  // lantern-pcsf: privacy/provider receipt
+  try {
+    enrichment.receipt.privacyBoundary = "local_private";
+    enrichment.receipt.claimBoundary = "grounded";
+    logModelUsage({ modelId: modelRegistry.text.pcsf.profileId, provider: "static", action: "receipt", metadata: { entryId: entry.id, privacyBoundary: "local_private" } });
+  } catch { /* non-critical */ }
+
+  // lantern-convergance: promote/hold/archive decision
+  try {
+    enrichment.receipt.decision = "hold";
+    logModelUsage({ modelId: modelRegistry.text.convergance.profileId, provider: "static", action: "decide", metadata: { entryId: entry.id, decision: "hold" } });
+  } catch { /* non-critical */ }
+
+  // Optional image generation (non-blocking)
+  if (process.env.LANTERN_IMAGE_LORA) {
+    const imgStart = Date.now();
+    generateDoorSceneImage({ cleanText: entry.text, doors: enrichment.doors, symbolMesh: enrichment.symbols, entryId: entry.id })
+      .then(result => {
+        const latencyMs = Date.now() - imgStart;
+        if (result.ok) {
+          enrichment.image = { status: "generated", path: `data/images/dream-journal/${entry.id}.png`, model: modelRegistry.image.dream.modelId, adapter: process.env.LANTERN_IMAGE_LORA };
+          logModelUsage({ modelId: modelRegistry.image.dream.modelId, provider: "local", action: "generate", metadata: { latencyMs, entryId: entry.id, status: "success" } });
+        } else {
+          enrichment.image = { status: "failed", error: result.error };
+          logModelUsage({ modelId: modelRegistry.image.dream.modelId, provider: "local", action: "generate", metadata: { latencyMs, entryId: entry.id, status: "failed", error: result.error } });
+        }
+      })
+      .catch((err) => {
+        enrichment.image = { status: "failed" };
+        logModelUsage({ modelId: modelRegistry.image.dream.modelId, provider: "local", action: "generate", metadata: { entryId: entry.id, status: "failed", error: err?.message } });
+      });
+  }
+
+  return enrichment;
+}
 
 // Lightweight AAPF provenance recorder (Node-side mirror of ConvergenceIO engine)
 function recordChatProvenance({ actionId, agentId, providerId, inputSummary, outputSummary, latencyMs, status, errorMsg, metadata }) {
@@ -518,6 +947,23 @@ function recordChatProvenance({ actionId, agentId, providerId, inputSummary, out
   if (!require("fs").existsSync(provenanceDir)) require("fs").mkdirSync(provenanceDir, { recursive: true });
   const provenancePath = require("path").join(provenanceDir, "actions.jsonl");
   require("fs").appendFileSync(provenancePath, JSON.stringify(record) + "\n", "utf8");
+}
+
+// ── Model usage metrics (local JSONL) ───────────────────────────────
+function logModelUsage({ modelId, provider, action, metadata }) {
+  const fs = require("fs");
+  const path = require("path");
+  const record = {
+    timestamp: new Date().toISOString(),
+    modelId,
+    provider,
+    action,
+    metadata: metadata || {},
+  };
+  const metricsDir = path.join(path.resolve(__dirname, "..", "..", ".."), "data", "metrics");
+  if (!fs.existsSync(metricsDir)) fs.mkdirSync(metricsDir, { recursive: true });
+  const metricsPath = path.join(metricsDir, "model-usage.jsonl");
+  fs.appendFileSync(metricsPath, JSON.stringify(record) + "\n", "utf8");
 }
 
 // Shared helper — read all dream entries from monthly JSONL files

@@ -14,8 +14,12 @@ import os
 import random
 import sys
 import time
+import socket
 import urllib.error
 import urllib.request
+
+# Prevent urllib from hanging indefinitely on unreachable providers
+socket.setdefaulttimeout(10)
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,7 +55,7 @@ class ProviderConfig:
     base_url: Optional[str] = None
     max_tokens: int = 1024
     temperature: float = 0.7
-    timeout: float = 20.0
+    timeout: float = 8.0
     enabled: bool = True
     priority: int = 0
     fallback_to: Optional[str] = None
@@ -87,7 +91,7 @@ class ProviderConfig:
             "anthropic": "claude-haiku-4-5-20251001",
             "openai": "gpt-4.1-mini",
             "gemini": "gemini-2.5-flash",
-            "ollama": "llama3.2",
+            "ollama": os.environ.get("OLLAMA_MODEL", "qwen2.5-coder"),
             "deepseek": "deepseek-chat",
             "groq": "llama-3.1-70b-versatile",
             "azure": "gpt-4.1",
@@ -218,6 +222,28 @@ class UnifiedAgentConnector:
             cfg = ProviderConfig.from_env(name, name)
             if cfg.enabled:
                 self._providers[name] = cfg
+        # Load keystone-ft managed agent config if available
+        ft_result_path = DATA_DIR / "training" / "ft-result.json"
+        if ft_result_path.exists():
+            try:
+                with open(ft_result_path, "r", encoding="utf-8") as f:
+                    ft = json.load(f)
+                if ft.get("agent_id") and ft.get("model"):
+                    self._providers["keystone-ft"] = ProviderConfig(
+                        name="keystone-ft",
+                        provider="keystone-ft",
+                        model=ft["model"],
+                        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+                        max_tokens=2048,
+                        temperature=0.3,
+                        timeout=30.0,
+                        enabled=True,
+                        priority=10,
+                    )
+                    self._providers["keystone-ft"]._agent_id = ft["agent_id"]
+                    self._providers["keystone-ft"]._memory_store_id = ft.get("memory_store_id", "")
+            except Exception as e:
+                print(f"[warn] keystone-ft config: {e}")
         profiles_path = CONFIG_DIR / "agent-profiles.json"
         if profiles_path.exists():
             try:
@@ -299,9 +325,22 @@ class UnifiedAgentConnector:
                     req.add_header(k, v)
         return urllib.request.urlopen(req, timeout=timeout)
 
-    def stream(self, message: str, persona_id: Optional[str] = None, provider: Optional[str] = None, context: Optional[str] = None, temperature: Optional[float] = None, max_tokens: Optional[int] = None):
+    def stream(self, message: str, persona_id: Optional[str] = None, provider: Optional[str] = None, context: Optional[str] = None, temperature: Optional[float] = None, max_tokens: Optional[int] = None, fallback: bool = True):
+        """Stream a single response. If fallback=False, only tries the requested provider once."""
         persona = self._personas.get(persona_id or random.choice(list(self._personas.keys())), PERSONAS[0])
         system = self._build_system(persona, context)
+        # Singular stream: only try the explicitly requested provider
+        if not fallback and provider and provider in self._providers:
+            cfg = self._providers[provider]
+            try:
+                result = self._stream_provider(provider, cfg, system, message, temperature, max_tokens)
+                if result is not None:
+                    yield from result
+                return
+            except Exception as exc:
+                self._health[provider] = {"status": f"unhealthy: {exc}", "at": datetime.now(timezone.utc).isoformat()}
+                raise
+        # Fallback chain: try ranked providers
         providers = self._rank_providers(provider)
         last_error = ""
         for prov_name in providers:
@@ -312,8 +351,6 @@ class UnifiedAgentConnector:
             if isinstance(health, str) and health.startswith("unhealthy"):
                 continue
             try:
-                # Hooks are not used for streaming — caching/retry logic is incompatible
-                # with generators. The hook system is reserved for discrete tool calls.
                 result = self._stream_provider(prov_name, cfg, system, message, temperature, max_tokens)
                 if result is not None:
                     yield from result
@@ -326,6 +363,44 @@ class UnifiedAgentConnector:
         for word in offline_reply.split():
             yield word + " "
         return {"source": "offline", "provider": "offline", "persona": persona.id, "error": last_error or "all_providers_failed"}
+
+    def batch_stream(self, tasks: List[Dict[str, Any]]) -> Generator[Dict[str, Any], None, None]:
+        """Run multiple (message, persona, provider) units in parallel. Each yields one result dict."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        def _run_one(task: Dict[str, Any]) -> Dict[str, Any]:
+            tid = task.get("id", "unknown")
+            try:
+                out = []
+                meta = {}
+                gen = self.stream(
+                    message=task["message"],
+                    persona_id=task.get("persona"),
+                    provider=task.get("provider"),
+                    context=task.get("context"),
+                    temperature=task.get("temperature"),
+                    max_tokens=task.get("max_tokens"),
+                    fallback=False,
+                )
+                for token in gen:
+                    if isinstance(token, str):
+                        out.append(token)
+                    elif isinstance(token, dict):
+                        meta = token
+                return {
+                    "id": tid,
+                    "text": "".join(out).strip(),
+                    "provider": meta.get("provider", task.get("provider", "unknown")),
+                    "source": meta.get("source", "stream"),
+                    "persona": task.get("persona", "lantern"),
+                    "ok": True,
+                }
+            except Exception as exc:
+                return {"id": tid, "text": str(exc), "provider": task.get("provider", "unknown"), "source": "error", "ok": False, "error": str(exc)}
+
+        with ThreadPoolExecutor(max_workers=min(len(tasks), 6), thread_name_prefix="batch") as ex:
+            futures = {ex.submit(_run_one, t): t for t in tasks}
+            for future in as_completed(futures):
+                yield future.result(timeout=20)
 
     def _rank_providers(self, preferred: Optional[str]) -> List[str]:
         names = list(self._providers.keys())
@@ -402,6 +477,53 @@ class UnifiedAgentConnector:
         if cfg.api_key:
             headers["Authorization"] = f"Bearer {cfg.api_key}"
         return self._parse_sse(f"{cfg.base_url.rstrip('/')}/chat/completions", payload, cfg.timeout, lambda d: d.get("choices", [{}])[0].get("delta", {}).get("content", ""), headers)
+
+    def _stream_keystone_ft(self, cfg, system, message, temperature, max_tokens):
+        """Keystone managed agent with memory store. Falls back to standard messages API."""
+        if not cfg.api_key:
+            raise RuntimeError("No ANTHROPIC_API_KEY for keystone-ft")
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=cfg.api_key)
+            agent_id = getattr(cfg, "_agent_id", None)
+            memory_store_id = getattr(cfg, "_memory_store_id", None)
+            if agent_id and memory_store_id:
+                resources = [{
+                    "type": "memory_store",
+                    "memory_store_id": memory_store_id,
+                    "access": "read_write",
+                    "instructions": "Recall patterns from past Lantern OS engineering sessions to improve code suggestions.",
+                }]
+                session = client.beta.agents.sessions.create(
+                    agent_id=agent_id,
+                    resources=resources,
+                )
+                response = client.beta.agents.sessions.turns.create(
+                    session_id=session.id,
+                    messages=[{"role": "user", "content": message}],
+                )
+                text = ""
+                for block in (response.content if hasattr(response, "content") else []):
+                    if hasattr(block, "text"):
+                        text += block.text
+                if text:
+                    yield text
+                    return
+        except Exception as e:
+            print(f"[keystone-ft] sessions API failed ({e}), falling back to messages API")
+        # Fallback: standard messages API with keystone SYSTEM_PROMPT
+        payload = json.dumps({"model": cfg.model, "max_tokens": max_tokens or cfg.max_tokens, "stream": True, "system": system, "messages": [{"role": "user", "content": message}]}).encode()
+        yield from self._parse_sse("https://api.anthropic.com/v1/messages", payload, cfg.timeout, lambda d: d.get("delta", {}).get("text", "") if d.get("type") == "content_block_delta" else "", {"Content-Type": "application/json", "x-api-key": cfg.api_key, "anthropic-version": "2023-06-01"})
+
+    def _stream_offline(self, cfg, system, message, temperature, max_tokens):
+        """Offline provider: yields the offline reply text directly without any HTTP call."""
+        reply = f"The flame holds steady. '{message[:90]}...' You can always come home safe. What light did you bring back?"
+        words = reply.split()
+        def gen():
+            for w in words:
+                yield w + " "
+            yield {"source": "offline", "provider": "offline", "persona": "lantern"}
+        return gen()
 
     def _parse_sse(self, url: str, payload: bytes, timeout: float, extract_fn, headers: Dict[str, str]):
         req = urllib.request.Request(url, data=payload, headers=headers, method="POST")

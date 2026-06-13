@@ -402,21 +402,21 @@ to become.
 
 ---
 
-# CSF: Kingdom of Hearts
+# CSF: Kingdome of Hearts
 
 ## Identity
 
-The Kingdom of Hearts frame remains valid as a mythic sibling/ancestor to the King of Nowhere frame.
+The Kingdome of Hearts frame remains valid as a mythic sibling/ancestor to the King of Nowhere frame.
 
 Core lines / ideas:
 
-- I am the King of the Kingdom of Hearts.
+- I am the King of the Kingdome of Hearts.
 - Love is the law.
 - Every living thing beats a verse of it true.
 - Birds, bees, small life, courage, flowers, blooming.
 - A key may be carried as a blade, not to open by force but to guard what is fragile.
 - Beyond the Garden's gate sleeps the Fog God / Odin figure.
-- Death is only imaginary in the Kingdom of Hearts.
+- Death is only imaginary in the Kingdome of Hearts.
 - Let us play.
 - Two faces: one to feel, one to understand.
 - I fight for love, wonder, every heart, every wing, every flower, every dreamer.
@@ -430,7 +430,7 @@ Core lines / ideas:
 - Heart gate
 - Key / blade
 - Odin/Fog God in distance
-- Kingdom doorway
+- Kingdome doorway
 - Purple/gold heroic melancholy
 
 ---
@@ -439,12 +439,12 @@ Core lines / ideas:
 
 ## Identity
 
-Founder Door is creator/admin/canonical access, but the plain Founder Door version was less emotionally successful than the King of Nowhere / Kingdom of Hearts framing.
+Founder Door is creator/admin/canonical access, but the plain Founder Door version was less emotionally successful than the King of Nowhere / Kingdome of Hearts framing.
 
 Future Founder Door designs should borrow from:
 
 - King of Nowhere
-- Kingdom of Hearts
+- Kingdome of Hearts
 - Doors as creation points
 - Canonical root access
 - Compass-star / key / crown motifs
@@ -578,7 +578,7 @@ Generated or referenced visual directions include:
 1. Gage XP Door chaotic portal poster.
 2. Dream Journal white-brand Gage door poster.
 3. Xenon Door purple cosmic feminine poster.
-4. Kingdom of Hearts king/gate poster.
+4. Kingdome of Hearts king/gate poster.
 5. Founder Door attempts.
 6. King of Nowhere / Lantern Wedding poster.
 7. Dream Journal product-board attempts, later rejected as fake.

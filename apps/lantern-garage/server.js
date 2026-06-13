@@ -70,15 +70,29 @@ const deps = {
 
 const routes = [
   require("./routes/status"),
+  require("./routes/ui"),
   require("./routes/rag"),
   require("./routes/operator"),
   require("./routes/files"),
+  require("./routes/files-upload"),
   require("./routes/dreamer"),
   require("./routes/dream"),
+  require("./routes/dreams"),
   require("./routes/keystone"),
   require("./routes/image"),
+  require("./routes/three-doors-image-pool"),
   require("./routes/flourishing"),
+  require("./routes/claims"),
+  require("./routes/cubes"),
+  require("./routes/csf"),
+  require("./routes/training"),
+  require("./routes/trading"),
+  require("./routes/agent-performance"),
+  require("./routes/leaderboard"),
   require("./routes/surfaces"),
+  require("./routes/self-edit"),
+  require("./routes/personal-cube"),
+  require("./routes/mesh"),
 ];
 
 async function route(req, res) {
@@ -87,13 +101,13 @@ async function route(req, res) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
-      "Referrer-Policy": "no-referrer",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
       "X-Frame-Options": "DENY",
-      "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+      "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
     });
     res.end();
     return;
@@ -151,11 +165,57 @@ if (discordToken && discordGuildId) {
   console.log("[Discord Bot] Skipped (set DISCORD_BOT_TOKEN + LANTERN_DISCORD_GUILD_ID in .env.local to enable)");
 }
 
+// ── Trading Microservice (Lantern OS Native) ──
+let tradingService = null;
+const tradingServiceScript = path.join(__dirname, "start-trading-service.js");
+if (fs.existsSync(tradingServiceScript)) {
+  tradingService = spawn("node", [tradingServiceScript], {
+    stdio: "inherit",
+    cwd: __dirname,
+    env: { ...process.env, AI_TRADER_DASHBOARD_PORT: 5050 },
+  });
+  tradingService.on("error", (err) => {
+    console.error(`[Trading Service] Failed to start: ${err.message}`);
+  });
+  tradingService.on("exit", (code) => {
+    console.log(`[Trading Service] Exited with code ${code}`);
+  });
+  console.log(`[Trading Service] Starting on port 5050...`);
+} else {
+  console.warn(`[Trading Service] Script not found: ${tradingServiceScript}`);
+}
+
+// ── AI Trader Process (autonomous trading system) ──
+const aiTraderStartupScript = path.join(__dirname, "..", "..", "scripts", "start-ai-trader.js");
+let aiTraderProcess = null;
+if (fs.existsSync(aiTraderStartupScript)) {
+  aiTraderProcess = spawn("node", [aiTraderStartupScript], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    env: { ...process.env },
+  });
+  aiTraderProcess.on("error", (err) => {
+    console.error(`[AI Trader] Failed to start: ${err.message}`);
+  });
+  aiTraderProcess.on("exit", (code) => {
+    console.log(`[AI Trader] Process manager exited with code ${code}`);
+  });
+  console.log(`[AI Trader] Started process manager`);
+} else {
+  console.log(`[AI Trader] Using native Lantern OS Trading Microservice`);
+}
+
 // Graceful shutdown
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down...`);
   if (discordBot && !discordBot.killed) {
     discordBot.kill("SIGTERM");
+  }
+  if (tradingService && !tradingService.killed) {
+    tradingService.kill("SIGTERM");
+  }
+  if (aiTraderProcess && !aiTraderProcess.killed) {
+    aiTraderProcess.kill("SIGTERM");
   }
   server.close(() => {
     process.exit(0);

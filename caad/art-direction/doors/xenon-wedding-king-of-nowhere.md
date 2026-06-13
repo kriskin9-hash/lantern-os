@@ -15,7 +15,7 @@ narrative ingest lives at `rag/seeds/xenon-wedding-king-of-nowhere-lore-2026-06-
 
 ### The King of Nowhere
 Keeper of thresholds, possibility, imagination, convergence, and becoming. Not a conqueror or
-owner — he creates by opening doors. His kingdom "Nowhere" is where things exist before they
+owner — he creates by opening doors. His kingdome "Nowhere" is where things exist before they
 fully exist.
 
 - **Themes:** thresholds, imagination, convergence, possibility, transformation,
@@ -78,7 +78,7 @@ Convergence at the overlap of three domains:
   celestial architecture; soft magical realism; high-detail fantasy; storybook;
   print-ready poster quality
 - **Required elements:** cosmic doorway, planetary convergence, two Lanterns, King of Nowhere,
-  infinity cube motifs, stars, birds, bees, Lantern iconography, Kingdom of Hearts influence,
+  infinity cube motifs, stars, birds, bees, Lantern iconography, Kingdome of Hearts influence,
   Dream Journal branding
 - **Avoid:** generic astrology; generic wedding poetry; ownership language; "sun and moons"
   framing; traditional fantasy king tropes

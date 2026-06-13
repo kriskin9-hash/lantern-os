@@ -1,360 +1,454 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lantern Dream Journal</title>
+  <meta name="theme-color" content="#06b6d4">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/site.css">
+  <title>Journal — Lantern OS</title>
   <style>
-    :root {
-      --bg: #1a1520;
-      --surface: #252030;
-      --border: #3a3048;
-      --text: #e8e0f0;
-      --muted: #a090b8;
-      --accent: #7b68ee;
-      --accent2: #ff8c42;
-      --user-bubble: #3a3058;
-      --agent-bubble: #2a2540;
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      padding: 56px 0 40px;
     }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0; padding: 0;
-      height: 100vh;
-      font-family: system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
+    .header-icon {
+      font-size: 52px;
+      display: block;
+      margin-bottom: 16px;
     }
-    .app {
+    .header h1 {
+      font-size: clamp(1.9rem, 5vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      line-height: 1.15;
+    }
+    .header h1 span { color: var(--accent); }
+    .header .tagline {
+      font-size: 1rem;
+      color: var(--muted);
+      max-width: 540px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── Chat area ── */
+    .chat-wrapper {
       display: flex;
       flex-direction: column;
-      height: 100vh;
-      max-width: 720px;
-      margin: 0 auto;
+      gap: 20px;
+      margin: 40px 0;
     }
-    header {
-      text-align: center;
-      padding: 0.75rem 1rem;
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
+    .chat-area {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      height: 500px;
+      box-shadow: var(--shadow);
     }
-    header h1 { margin: 0; font-size: 1.3rem; letter-spacing: -0.5px; }
-    header p { color: var(--muted); margin: 0.15rem 0 0; font-size: 0.8rem; }
-
-    .chat {
+    .chat-messages {
       flex: 1;
       overflow-y: auto;
-      padding: 1rem;
+      padding: 20px;
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
+      gap: 12px;
     }
-    .msg {
-      max-width: 85%;
-      padding: 0.75rem 1rem;
+    .message {
+      display: flex;
+      gap: 8px;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .message.user { justify-content: flex-end; }
+    .message-content {
+      max-width: 70%;
+      padding: 10px 14px;
       border-radius: 12px;
       line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
+      word-wrap: break-word;
+      font-size: 0.9rem;
     }
-    .msg.user {
-      align-self: flex-end;
-      background: var(--user-bubble);
-      border-bottom-right-radius: 4px;
-    }
-    .msg.agent {
-      align-self: flex-start;
-      background: var(--agent-bubble);
-      border-bottom-left-radius: 4px;
-    }
-    .msg .meta {
-      font-size: 0.7rem;
-      color: var(--muted);
-      margin-bottom: 0.25rem;
-    }
-
-    .input-bar {
-      display: flex;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-      flex-shrink: 0;
-    }
-    .input-bar textarea {
-      flex: 1;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      padding: 0.6rem 0.8rem;
-      font-size: 1rem;
-      font-family: inherit;
-      resize: none;
-      min-height: 2.5rem;
-      max-height: 120px;
-    }
-    .input-bar button {
+    .message.user .message-content {
       background: var(--accent);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 0 1.2rem;
-      font-size: 1rem;
-      cursor: pointer;
-      flex-shrink: 0;
+      color: white;
     }
-    .input-bar button:hover { opacity: 0.9; }
-
-    .toolbar {
+    .message.agent .message-content {
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .empty-state {
       display: flex;
-      gap: 0.75rem;
-      padding: 0.25rem 1rem 0.5rem;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 16px;
+      padding: 40px;
+      color: var(--muted);
+    }
+    .empty-icon { font-size: 48px; opacity: 0.5; }
+    .empty-state p { max-width: 300px; font-size: 0.9rem; line-height: 1.5; }
+
+    /* ── Input area ── */
+    .chat-input {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
       background: var(--surface);
-      border-top: 1px solid var(--border);
-      flex-shrink: 0;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      border-radius: 0 0 var(--radius) var(--radius);
     }
-    .toolbar a, .toolbar button.link {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 0.8rem;
-      background: none;
+    .chat-input textarea {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      resize: none;
+      max-height: 100px;
+      transition: border-color 0.2s;
+    }
+    .chat-input textarea:focus {
+      border-color: var(--accent);
+    }
+    .chat-input textarea::placeholder { color: var(--muted); }
+    .chat-input button {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
       border: none;
+      background: var(--accent);
+      color: white;
       cursor: pointer;
-      padding: 0;
-    }
-    .toolbar a:hover, .toolbar button.link:hover { text-decoration: underline; }
-    .notepad {
-      display: grid;
-      gap: 0.45rem;
-      padding: 0.65rem 1rem;
-      border-top: 1px solid var(--border);
-      background: linear-gradient(135deg, rgba(123, 104, 238, 0.14), rgba(255, 140, 66, 0.08));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
       flex-shrink: 0;
+      font-size: 18px;
     }
-    .notepad-head {
+    .chat-input button:hover { background: var(--accent-hover); }
+    .chat-input button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Notepad ── */
+    .notepad {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .notepad-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.75rem;
+      margin-bottom: 16px;
+    }
+    .notepad-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .notepad-stats {
+      font-size: 0.75rem;
       color: var(--muted);
-      font-size: 0.78rem;
-    }
-    .notepad-head strong {
-      color: var(--text);
-      font-size: 0.84rem;
-    }
-    .notepad-actions {
-      display: flex;
-      gap: 0.45rem;
-      flex-wrap: wrap;
-    }
-    .notepad-actions button {
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--agent-bubble);
-      color: var(--text);
-      cursor: pointer;
-      font-size: 0.72rem;
-      padding: 0.3rem 0.6rem;
+      font-weight: 600;
     }
     .notepad textarea {
       width: 100%;
-      min-height: 72px;
-      max-height: 180px;
+      min-height: 120px;
+      max-height: 200px;
       resize: vertical;
+      background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: 10px;
-      background: rgba(26, 21, 32, 0.92);
+      padding: 12px;
       color: var(--text);
-      font: inherit;
-      line-height: 1.45;
-      padding: 0.65rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      outline: none;
+      transition: border-color 0.2s;
     }
+    .notepad textarea:focus {
+      border-color: var(--accent);
+    }
+    .notepad textarea::placeholder { color: var(--muted); }
+    .notepad-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .notepad-actions button {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .notepad-actions button:hover {
+      border-color: var(--accent);
+      background: var(--border);
+    }
+
   </style>
 </head>
 <body>
-  <div class="app">
-    <header>
-      <h1>Lantern Dream Journal</h1>
-      <p>Freeform RP. Local-only. Say anything.</p>
-    </header>
 
-    <div class="chat" id="chat"></div>
+<!-- ── Site nav ── -->
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/dream-chat.html">Journal</a>
+    <a href="/three-doors-game.html">Explore</a>
+    <a href="/flourishing">Dashboard</a>
+    <a href="/knowledgecenter.html">Help</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" onclick="toggleTheme()">☀️</button>
+  </div>
+</nav>
 
-    <section class="notepad" aria-label="Convergence notepad">
-      <div class="notepad-head">
-        <strong>Convergence Notepad</strong>
-        <span id="draftStats">0 words · saved locally</span>
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <span class="header-icon">📓</span>
+    <h1>Your <span>Journal</span> Archive</h1>
+    <p class="tagline">Full access to your personal archive. Write freely, search deeply, export everything. Your data, your rules.</p>
+  </div>
+
+  <!-- ── Chat Section ── -->
+  <div class="chat-wrapper">
+    <div class="chat-area">
+      <div class="chat-messages" id="messages">
+        <div class="empty-state">
+          <div class="empty-icon">💭</div>
+          <p>Start a conversation about your dreams. Ask questions, explore patterns, or simply reflect.</p>
+        </div>
       </div>
-      <textarea id="draftInput" placeholder="Catch fragments before they fade: images, people, places, feelings, symbols..."></textarea>
-      <div class="notepad-actions">
-        <button id="convergeBtn" type="button">Send as !convergence</button>
-        <button id="dreamPromptBtn" type="button">Add dream prompts</button>
-        <button id="clearDraftBtn" type="button">Clear draft</button>
+      <div class="chat-input">
+        <textarea id="input" placeholder="Ask about your dreams..." rows="1"></textarea>
+        <button id="send-btn" onclick="sendMessage()">↑</button>
       </div>
-    </section>
-
-    <div class="input-bar">
-      <textarea id="msgInput" placeholder="Say something..."></textarea>
-      <button id="sendBtn">Send</button>
-    </div>
-
-    <div class="toolbar">
-      <a href="../index.html">Back</a>
-      <button class="link" id="clearBtn">Clear Chat</button>
-      <button class="link" id="exportBtn">Export</button>
     </div>
   </div>
 
-  <script>
-    const STORAGE_KEY = 'lantern_dream_chat_v2';
-    const DRAFT_KEY = 'lantern_dream_notepad_draft_v1';
+  <!-- ── Convergence Notepad ── -->
+  <div class="notepad">
+    <div class="notepad-header">
+      <div>
+        <div class="notepad-title">✦ Convergence Notepad</div>
+        <div class="notepad-stats">Capture dream fragments before they fade</div>
+      </div>
+      <div class="notepad-stats" id="word-count">0 words</div>
+    </div>
+    <textarea id="notepad" placeholder="Images, people, places, feelings, symbols, colors..."></textarea>
+    <div class="notepad-actions">
+      <button onclick="convergeNotepad()">Send as !convergence</button>
+      <button onclick="addDreamPrompts()">Add prompts</button>
+      <button onclick="clearNotepad()">Clear</button>
+      <button onclick="exportNotepad()">Export</button>
+    </div>
+  </div>
 
-    function loadMessages() {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    }
-    function saveMessages(msgs) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs));
-    }
-    function escapeHtml(t) {
-      const d = document.createElement('div');
-      d.textContent = t;
-      return d.innerHTML;
-    }
-    function appendMessage(role, text) {
-      const chat = document.getElementById('chat');
-      const div = document.createElement('div');
-      div.className = 'msg ' + role;
-      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      div.innerHTML = `<div class="meta">${role === 'user' ? 'You' : 'Lantern'} &middot; ${time}</div>` + escapeHtml(text);
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-    }
-    function render() {
-      const chat = document.getElementById('chat');
-      chat.innerHTML = '';
-      loadMessages().forEach(m => appendMessage(m.role, m.text));
-    }
-    function send() {
-      const input = document.getElementById('msgInput');
-      const text = input.value.trim();
-      if (!text) return;
-      const msgs = loadMessages();
-      msgs.push({ role: 'user', text, time: new Date().toISOString() });
-      saveMessages(msgs);
-      appendMessage('user', text);
-      input.value = '';
-      input.style.height = 'auto';
-    }
-    function updateDraftStats() {
-      const draft = document.getElementById('draftInput').value.trim();
-      const words = draft ? draft.split(/\s+/).length : 0;
-      document.getElementById('draftStats').textContent = `${words} word${words === 1 ? '' : 's'} · saved locally`;
-    }
-    function saveDraft() {
-      localStorage.setItem(DRAFT_KEY, document.getElementById('draftInput').value);
-      updateDraftStats();
-    }
-    function loadDraft() {
-      const draftInput = document.getElementById('draftInput');
-      draftInput.value = localStorage.getItem(DRAFT_KEY) || '';
-      updateDraftStats();
-    }
-    function sendConvergence() {
-      const draftInput = document.getElementById('draftInput');
-      const draft = draftInput.value.trim();
-      if (!draft) return;
-      document.getElementById('msgInput').value = `!convergence\n\nDream fragments:\n${draft}\n\nWhat converges here?`;
-      send();
-      draftInput.value = '';
-      saveDraft();
-    }
-    function addDreamPrompts() {
-      const draftInput = document.getElementById('draftInput');
-      const prompt = '\n\nImages:\nPeople:\nPlaces:\nFeelings:\nSymbols:\nWhat changed by morning:';
-      draftInput.value = `${draftInput.value.trim()}${prompt}`;
-      draftInput.focus();
-      saveDraft();
-    }
+</div>
 
-    async function saveToDreamer(text) {
-      try {
-        await fetch('/api/dreamer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user: 'dreamer', kind: 'note', text, tags: ['chat'] }),
-        });
-      } catch { /* offline — localStorage already has it */ }
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Chat</a></span>
+    <span style="margin-left: auto;">Members only · <a href="/knowledgecenter.html">Learn more</a></span>
+  </div>
+</footer>
+
+<script src="/js/theme-toggle.js"></script>
+<script>
+  // Chat functionality
+  let chatHistory = [];
+  let isSending = false;
+
+  function addUserBubble(text) {
+    const container = document.getElementById('messages');
+    if (container.querySelector('.empty-state')) {
+      container.innerHTML = '';
     }
-    async function loadDreamerEntries() {
-      try {
-        const r = await fetch('/api/dreamer?user=dreamer', { cache: 'no-store' });
-        if (!r.ok) return;
-        const data = await r.json();
-        if (!data.entries || !data.entries.length) return;
-        const chat = document.getElementById('chat');
-        // Only prepend if we haven't already loaded them
-        if (chat.dataset.dreamerLoaded) return;
-        chat.dataset.dreamerLoaded = 'true';
-        data.entries.forEach((entry) => {
-          const div = document.createElement('div');
-          div.className = 'msg agent';
-          const time = entry.recordedAt ? new Date(entry.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-          div.innerHTML = `<div class="meta">${(entry.kind || 'note').toUpperCase()} · ${time}</div>` + escapeHtml(entry.text || '');
-          chat.insertBefore(div, chat.firstChild);
-        });
-      } catch { /* offline */ }
-    }
-    document.getElementById('sendBtn').addEventListener('click', () => {
-      const text = document.getElementById('msgInput').value.trim();
-      if (!text) return;
-      send();
-      saveToDreamer(text);
-    });
-    document.getElementById('msgInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const text = document.getElementById('msgInput').value.trim();
-        if (!text) return;
-        send();
-        saveToDreamer(text);
+    const msg = document.createElement('div');
+    msg.className = 'message user';
+    msg.innerHTML = `<div class="message-content">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+  }
+
+  function createAgentBubble() {
+    const container = document.getElementById('messages');
+    const msg = document.createElement('div');
+    msg.className = 'message agent';
+    const bubble = document.createElement('div');
+    bubble.className = 'message-content';
+    bubble.textContent = '...';
+    msg.appendChild(bubble);
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+    return { bubble, container };
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('input');
+    const text = input.value.trim();
+    if (!text || isSending) return;
+
+    isSending = true;
+    document.getElementById('send-btn').disabled = true;
+
+    addUserBubble(text);
+    chatHistory.push({ role: 'user', text });
+    input.value = '';
+    input.style.height = 'auto';
+
+    const { bubble, container } = createAgentBubble();
+    let fullText = '';
+
+    try {
+      const resp = await fetch('/api/dream/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          user: 'dream-journal',
+          agent: 'founder',
+          history: chatHistory.slice(-10),
+        }),
+        signal: AbortSignal.timeout(90000),
+      });
+
+      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const evt = JSON.parse(line.slice(6));
+            if (evt.type === 'token' && evt.text) {
+              fullText += evt.text;
+              bubble.textContent = fullText;
+              container.scrollTop = container.scrollHeight;
+            }
+          } catch { }
+        }
       }
-    });
-    document.getElementById('msgInput').addEventListener('input', function() {
-      this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
-    document.getElementById('draftInput').addEventListener('input', saveDraft);
-    document.getElementById('convergeBtn').addEventListener('click', sendConvergence);
-    document.getElementById('dreamPromptBtn').addEventListener('click', addDreamPrompts);
-    document.getElementById('clearDraftBtn').addEventListener('click', () => {
-      if (confirm('Clear the saved notepad draft?')) {
-        document.getElementById('draftInput').value = '';
-        saveDraft();
-      }
-    });
+    } catch (e) {
+      fullText = 'The journal is quiet. Try again in a moment.';
+      bubble.style.color = 'var(--muted)';
+      bubble.style.fontStyle = 'italic';
+    }
 
-    document.getElementById('clearBtn').addEventListener('click', () => {
-      if (confirm('Clear all chat history?')) {
-        localStorage.removeItem(STORAGE_KEY);
-        render();
-      }
-    });
+    bubble.textContent = fullText || 'No response.';
+    if (fullText) chatHistory.push({ role: 'assistant', text: fullText });
 
-    document.getElementById('exportBtn').addEventListener('click', () => {
-      const msgs = loadMessages();
-      const blob = new Blob(msgs.map(m => JSON.stringify(m) + '\n'), { type: 'application/jsonl' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `chat_${new Date().toISOString().slice(0,10)}.jsonl`;
-      a.click();
-    });
+    isSending = false;
+    document.getElementById('send-btn').disabled = false;
+  }
 
-    render();
-    loadDraft();
-    loadDreamerEntries();
-  </script>
+  // Notepad
+  const notepad = document.getElementById('notepad');
+
+  notepad.addEventListener('input', () => {
+    updateWordCount();
+    notepad.style.height = 'auto';
+    notepad.style.height = Math.min(notepad.scrollHeight, 200) + 'px';
+  });
+
+  function updateWordCount() {
+    const text = notepad.value.trim();
+    const count = text ? text.split(/\s+/).length : 0;
+    document.getElementById('word-count').textContent = `${count} words`;
+  }
+
+  function convergeNotepad() {
+    const text = notepad.value.trim();
+    if (!text) {
+      alert('Nothing to converge.');
+      return;
+    }
+    document.getElementById('input').value = `!convergence ${text}`;
+    document.getElementById('input').focus();
+    notepad.value = '';
+    updateWordCount();
+  }
+
+  function addDreamPrompts() {
+    const prompts = [
+      'What emotion stayed with you most?',
+      'Who appeared in this dream?',
+      'What symbols or objects stood out?',
+      'What message might this dream carry?',
+      'How does this connect to your waking life?'
+    ];
+    const random = prompts[Math.floor(Math.random() * prompts.length)];
+    document.getElementById('input').value = random;
+    document.getElementById('input').focus();
+  }
+
+  function clearNotepad() {
+    if (notepad.value && !confirm('Clear the notepad?')) return;
+    notepad.value = '';
+    updateWordCount();
+  }
+
+  function exportNotepad() {
+    const text = notepad.value || 'No content to export.';
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dream-fragment-${new Date().toISOString().split('T')[0]}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Auto-expand textarea on input
+  const input = document.getElementById('input');
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+  });
+
+  // Send on Shift+Enter
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+</script>
+
 </body>
 </html>
