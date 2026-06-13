@@ -288,16 +288,23 @@ async function act(dir,fromSwipe){
   if(dir==='take' && !fromSwipe) return flyOut('take');
   // take favorable position (buy) OR close held position (sell)
   busy=true;
-  const card=deck[idx];
-  const side=card.favSide;
-  const isExit=card.kind==='exit';
-  const action=isExit?'sell':'buy';
-  const qty=isExit?(card.qty||1):1;
-  const o={ticker:card.ticker,side,action,type:'limit',count:qty,limitCents:card.favAsk||50};
-  const res=await j('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
-  showResult(res,card);
-  idx++; busy=false; render();
-  if(res.mode==='live') loadBalance();
+  try {
+    const card=deck[idx];
+    const side=card.favSide;
+    const isExit=card.kind==='exit';
+    const action=isExit?'sell':'buy';
+    const qty=isExit?(card.qty||1):1;
+    const o={ticker:card.ticker,side,action,type:'limit',count:qty,limitCents:card.favAsk||50};
+    const res=await j('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+    showResult(res,card);
+    idx++; render();
+    if(res.mode==='live') loadBalance();
+  } catch(e) {
+    showResult({error:e.message},deck[idx]||{});
+    idx++;
+  } finally {
+    busy=false;
+  }
 }
 
 function showResult(res,card){
