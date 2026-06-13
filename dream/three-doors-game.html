@@ -1,0 +1,230 @@
+﻿<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#06b6d4">
+<title>Kingdome of Hearts</title>
+<link rel="stylesheet" href="/css/site.css">
+<link rel="stylesheet" href="css/dream-chat.css">
+<style>
+  /* ── Override dream-chat.css layout for this page ── */
+  html, body { overflow: auto !important; height: auto !important; min-height: 100dvh; }
+  ::-webkit-scrollbar { display: block !important; width: 4px; }
+  * { -ms-overflow-style: auto !important; scrollbar-width: thin !important; }
+  .app { flex-direction: column !important; height: auto !important; min-height: 100dvh; }
+  .chat-container { overflow: visible !important; flex: 1 1 auto !important; max-height: none !important; width: 100% !important; max-width: 720px; margin: 0 auto; padding: 16px; box-sizing: border-box; }
+  .input-container { max-width: 720px; margin: 0 auto; width: 100%; padding: 8px 16px; box-sizing: border-box; }
+
+  /* ── Explore additions on top of dream-chat.css ── */
+  .doors-banner {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .door-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: border-color 0.18s, background 0.18s;
+    font-family: inherit;
+    color: var(--text);
+  }
+  .door-chip:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .door-chip:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .door-letter {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 20px;
+    margin-top: 1px;
+  }
+  .door-info { flex: 1; }
+  .door-name { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+  .door-desc { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+  .scene-image {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 8px;
+    aspect-ratio: 16/9;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .scene-image canvas,
+  .scene-image img { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .scene-image .sd-badge {
+    position: absolute;
+    bottom: 7px;
+    right: 10px;
+    font-size: 10px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.6);
+    padding: 2px 7px;
+    border-radius: 4px;
+  }
+
+  .fox-line {
+    font-size: 13px;
+    color: #f97316;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .history-pill {
+    display: inline-block;
+    font-size: 10px;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin: 2px 2px 0 0;
+  }
+
+  .source-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .source-badge.gemini { background: rgba(52,211,153,0.15); color: #34d399; }
+  .source-badge.engine { background: rgba(161,139,250,0.15); color: #a78bfa; }
+  .source-badge.offline { background: rgba(156,163,175,0.15); color: #9ca3af; }
+
+  .agent-avatar { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
+
+  /* Override agent bubble for doors content */
+  .doors-message .message-content {
+    max-width: 90%;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+
+  .typing-dots span {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin: 0 2px;
+    animation: bounce 1.2s infinite;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); }
+    40% { transform: translateY(-6px); }
+  }
+
+  .welcome-doors { text-align: center; padding: 40px 20px; }
+  .welcome-doors .big-door { font-size: 56px; margin-bottom: 16px; }
+  .welcome-doors h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .welcome-doors p { color: var(--muted); font-size: 14px; max-width: 320px; margin: 0 auto 20px; line-height: 1.5; }
+  .start-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 28px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: inherit;
+  }
+  .start-btn:hover { background: var(--accent-hover); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Site nav -->
+  <nav class="site-nav">
+    <a class="nav-brand" href="/">
+      <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+      Lantern OS
+    </a>
+    <div class="nav-links">
+      <a href="/dream-chat.html">Journal</a>
+      <a href="/three-doors-game.html" class="active">Kingdome</a>
+      <a href="/flourishing">Dashboard</a>
+      <a href="/knowledgecenter.html">Help</a>
+    </div>
+    <div class="nav-actions">
+      <span id="status-line" style="font-size:11px;color:var(--muted);margin-right:6px"></span>
+      <button id="training-badge" onclick="showTrainingStatus()" title="LoRA training data collected" style="display:none;background:none;border:1px solid var(--border);border-radius:7px;padding:4px 8px;color:var(--accent);cursor:pointer;font-size:11px;font-family:inherit;gap:3px">📸 <span id="training-count">0</span></button>
+      <button onclick="resetGame()" title="New game" style="background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;color:var(--muted);cursor:pointer;font-size:12px;font-family:inherit">↺ New</button>
+      <button class="nav-btn" id="narrator-toggle" onclick="toggleNarrator()" title="Narrator on/off">🎙</button>
+      <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    </div>
+  </nav>
+
+  <!-- Chat area -->
+  <div class="chat-container" id="chat">
+    <div class="welcome-doors" id="welcome">
+      <div class="big-door">🏯</div>
+      <h2>Kingdome of Hearts</h2>
+      <p>A seven-stage dream journey through the Kingdome. Three doors each scene — no wrong choices. Lantern guides you. Each loop is different.</p>
+      <button class="start-btn" onclick="startGame()">Enter the Kingdome</button>
+    </div>
+  </div>
+
+  <!-- Door choice bar — quick picks + custom input -->
+  <div class="input-container" id="choice-bar" style="display:none">
+    <!-- Current door quick-picks (updated each scene) -->
+    <div id="door-quick-picks" style="display:flex;gap:6px;margin-bottom:8px"></div>
+    <!-- Custom / free-text input -->
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="custom-door-input" type="text"
+        placeholder="name your own door — or just talk to Lantern..."
+        style="flex:1;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:14px;outline:none;transition:border-color 0.15s"
+        onfocus="this.style.borderColor='var(--accent)'"
+        onblur="this.style.borderColor='var(--border)'"
+        onkeydown="if(event.key==='Enter')submitCustomDoor()" />
+      <button onclick="submitCustomDoor()"
+        style="padding:10px 16px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0">→</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/three-doors-data.js"></script>
+<script src="js/three-doors-game.js"></script>
+<script src="js/three-doors-render.js"></script>
+<script src="js/three-doors-images.js"></script>
+<script src="js/three-doors-lantern.js"></script>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
+  </div>
+</footer>
+
+<script src="js/theme-toggle.js"></script>
+</body>
+</html>
