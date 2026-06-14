@@ -196,16 +196,34 @@ function _getPersonas() {
 }
 
 function selectAgent(message) {
-  // KEYSTONE: Technical auditor — handles ALL chats
-  // No personas, no mystery, pure technical clarity
+  // Σ₀ Fix: Dust (message) flows through routing decision.
+  // Score all personas against message keywords; return highest.
   const personas = _getPersonas();
-  const keystone = personas.find(p => p.id === "keystone");
-  if (!keystone) {
-    console.error("[selectAgent] Keystone persona not found!");
-    return personas[0]; // Fallback to first available
+
+  const agentKeywords = {
+    lantern: ["dream", "safe", "home", "steady", "light", "memory", "remember", "warm", "calm", "feeling", "emotional"],
+    blinkbug: ["chaos", "glitch", "weird", "strange", "random", "creative", "wild", "unhinged", "glitch", "chaotic"],
+    keystone: ["github", "code", "issue", "pr", "fix", "bug", "technical", "engineering", "repo", "#", "implement"],
+    waterfall: ["cascade", "flow", "stream", "river", "water", "gentle", "reflection", "patient", "cascade"],
+    xenon: ["signal", "detect", "pattern", "convergence", "navigate", "explore", "spacecraft", "navigation"],
+    founder: ["vision", "goal", "plan", "strategic", "future", "wish", "protect", "lantern", "leadership"]
+  };
+
+  const scores = {};
+  const lowerMsg = message.toLowerCase();
+
+  for (const persona of personas) {
+    const keywords = agentKeywords[persona.id] || [];
+    scores[persona.id] = keywords.reduce((sum, kw) => sum + (lowerMsg.includes(kw) ? 10 : 0), 1);
   }
-  console.log(`[selectAgent] KEYSTONE: "${message.slice(0, 80)}..."`);
-  return keystone;
+
+  // Find persona with highest score
+  const winner = personas.reduce((best, p) =>
+    (scores[p.id] > scores[best.id]) ? p : best
+  );
+
+  console.log(`[selectAgent] Scored message "${message.slice(0, 60)}..." → ${winner.id} (score: ${scores[winner.id]})`);
+  return winner;
 }
 
 function parseBangCommand(input) {
