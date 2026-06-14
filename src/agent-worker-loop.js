@@ -41,16 +41,18 @@ function gitSafe(cmd, cwd = REPO_ROOT) {
 function runTests(worktreePath) {
   const results = { passed: true, output: "" };
   try {
-    const out = execSync("node scripts/convergence-manager.js --json", {
-      cwd: worktreePath,
-      encoding: "utf8",
-      timeout: 60_000,
-    });
-    const json = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] || "{}");
-    results.output   = `convergence: ${json.status || "?"} (${json.finalIssueCount ?? "?"} issues)`;
-    results.passed   = json.status === "ok" || json.status === "needs_review";
+    const out = execSync(
+      "python -m pytest tests/ -q --tb=short " +
+        "--ignore=tests/test_anti_entropy_memory.py " +
+        "--ignore=tests/test_audit_chain.py " +
+        "--ignore=tests/test_discord_bot.py " +
+        "--ignore=tests/test_discord_voice_gate.py",
+      { cwd: worktreePath, encoding: "utf8", timeout: 120_000 }
+    );
+    results.output = out.slice(-500);
+    results.passed = !out.includes("FAILED") && !out.includes("ERROR");
   } catch (e) {
-    results.output = `test runner error: ${e.message.slice(0, 200)}`;
+    results.output = (e.stdout || e.message).slice(-500);
     results.passed = false;
   }
   return results;

@@ -9,14 +9,39 @@
 
 "use strict";
 
-const path            = require("path");
-const QueueManager    = require("./queue-manager");
+const path             = require("path");
+const { execSync }     = require("child_process");
+const QueueManager     = require("./queue-manager");
 const AgentSlotManager = require("./agent-slot-manager");
 const { createWorktree } = require("./worktree-manager");
 
 const REPO_ROOT  = path.resolve(__dirname, "..");
 const _queue     = new QueueManager(path.join(REPO_ROOT, "data", "agent-work-queue"));
 const _slots     = new AgentSlotManager();
+
+// Recover any stale assigned items at startup
+_queue.recoverStaleAssigned();
+
+/**
+ * Return true if the lane already has an open PR — monoworkstream check.
+ * Bypass with SKIP_MONOWORKSTREAM=1.
+ */
+function laneHasOpenPR(lane) {
+  if (process.env.SKIP_MONOWORKSTREAM === "1") return false;
+  const prefix = lane ? lane.replace(/\/$/, "") : null;
+  if (!prefix) return false;
+  try {
+    const out = execSync(
+      `gh pr list --repo alex-place/lantern-os --state open --json headRefName`,
+      { encoding: "utf8", timeout: 10000 }
+    );
+    const prs = JSON.parse(out || "[]");
+    return prs.some((pr) => pr.headRefName.startsWith(prefix + "/"));
+  } catch {
+    // gh not available or network error — allow dispatch to proceed
+    return false;
+  }
+}
 
 /**
  * Find the first idle slot that can handle the given lane.
@@ -43,17 +68,24 @@ async function dispatchOne(preferredLane, opts = {}) {
   const slot = findIdleSlot(preferredLane);
   if (!slot) return null;
 
-  // 2. Claim next pending work item
+  // 2. Monoworkstream gate — one open PR per lane
+  const lane = slot.lane || preferredLane || "claude/";
+  if (laneHasOpenPR(lane)) {
+    console.log(`[Dispatcher] lane ${lane} already has an open PR — skipping`);
+    return null;
+  }
+
+  // 3. Claim next pending work item
   const entry = await _queue.getNextWork(slot.id);
   if (!entry) return null;
 
-  // 3. Create isolated worktree + branch
+  // 4. Create isolated worktree + branch
   let worktreePath = null;
   let branch       = null;
   if (createTree) {
     try {
       const wt = createWorktree(
-        slot.lane || preferredLane || "claude/",
+        lane,
         entry.issueNumber || entry.issue_number,
         entry.title
       );
@@ -64,7 +96,7 @@ async function dispatchOne(preferredLane, opts = {}) {
     }
   }
 
-  // 4. Mark slot as working
+  // 5. Mark slot as working
   try { _slots.assignWork(slot.id, entry); } catch {}
 
   return {

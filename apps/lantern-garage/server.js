@@ -368,6 +368,11 @@ server.listen(port, host, () => {
     });
     cryptoObserverProcess.on("error", (err) => console.error(`[CryptoObserver] Failed to start: ${err.message}`));
     cryptoObserverProcess.on("exit", (code) => console.warn(`[CryptoObserver] Exited with code ${code} — training data gap from this point`));
+    deps.cryptoObserver = {
+      pid: cryptoObserverProcess.pid,
+      startedAt: new Date().toISOString(),
+      process: cryptoObserverProcess,
+    };
     console.log("[CryptoObserver] Started — logging to logs/crypto-observer.log");
   } else if (enableCryptoObserver) {
     console.warn(`[CryptoObserver] Script not found: ${cryptoObserverScript}`);

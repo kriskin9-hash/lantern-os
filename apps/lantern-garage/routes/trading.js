@@ -1750,6 +1750,37 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/kalshi/observer-status
+  // Reports live crypto_live_trader.py observer health and today's snapshot count
+  if (url.pathname === '/api/trading/kalshi/observer-status' && req.method === 'GET') {
+    try {
+      const { fs: dfs, path: dpath, repoRoot: root } = deps;
+      const obs = deps.cryptoObserver;
+      const today = new Date().toISOString().slice(0, 10);
+      const snapshotFile = dpath.join(root, 'data', `crypto-tight-band-${today}.jsonl`);
+      let snapshotCount = 0;
+      let lastSnapshot = null;
+      if (dfs.existsSync(snapshotFile)) {
+        const lines = dfs.readFileSync(snapshotFile, 'utf8').split('\n').filter(Boolean);
+        snapshotCount = lines.length;
+        try { lastSnapshot = JSON.parse(lines[lines.length - 1]).timestamp || null; } catch {}
+      }
+      const alive = obs ? obs.process.exitCode === null : false;
+      sendJson(res, {
+        alive,
+        pid: obs?.pid || null,
+        startedAt: obs?.startedAt || null,
+        today,
+        snapshotCount,
+        lastSnapshot,
+        snapshotFile: snapshotFile.replace(root, ''),
+      });
+    } catch (error) {
+      sendJson(res, { error: 'Observer status check failed', details: error.message }, 500);
+    }
+    return true;
+  }
+
   // GET /api/trading/crypto/news
   // Returns latest crypto news from CoinGecko trending endpoint
   if (url.pathname === '/api/trading/crypto/news' && req.method === 'GET') {
