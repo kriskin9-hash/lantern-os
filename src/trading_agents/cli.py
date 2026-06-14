@@ -245,8 +245,8 @@ def action_get_watchlist_prices(args):
                 is_crypto_flag = True
             else:
                 try:
-                    bar = alpaca.get_latest_bar(ticker)
-                    price = float(bar.c) if bar else 0
+                    trade = alpaca.get_latest_trade(ticker, feed='iex')
+                    price = float(trade.price) if trade else 0
                     day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
                     bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
                     prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
