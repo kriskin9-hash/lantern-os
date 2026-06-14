@@ -16,14 +16,15 @@
 const fs              = require("fs");
 const path            = require("path");
 const { execSync, spawnSync } = require("child_process");
+const QueueManager    = require("./queue-manager");
+const AgentSlotManager = require("./agent-slot-manager");
+const { dispatchOne } = require("./work-dispatcher");
+const { removeWorktree } = require("./worktree-manager");
 
-const { complete, fail, updateEntry } = require("./queue-manager");
-const { markIdle, markFailed, heartbeat } = require("./agent-slot-manager");
-const { dispatchOne }                 = require("./work-dispatcher");
-const { removeWorktree }              = require("./worktree-manager");
-
-const REPO_ROOT = path.resolve(__dirname, "..");
-const MAX_AGENT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || "300000", 10); // 5 min default
+const REPO_ROOT    = path.resolve(__dirname, "..");
+const MAX_AGENT_MS = parseInt(process.env.AGENT_TIMEOUT_MS || "300000", 10);
+const _queue       = new QueueManager(path.join(REPO_ROOT, "data", "agent-work-queue"));
+const _slots       = new AgentSlotManager();
 
 // ── Git helpers ───────────────────────────────────────────────────────────────
 
@@ -40,16 +41,18 @@ function gitSafe(cmd, cwd = REPO_ROOT) {
 function runTests(worktreePath) {
   const results = { passed: true, output: "" };
   try {
-    const out = execSync("node scripts/convergence-manager.js --json", {
-      cwd: worktreePath,
-      encoding: "utf8",
-      timeout: 60_000,
-    });
-    const json = JSON.parse(out.match(/\{[\s\S]*\}/)?.[0] || "{}");
-    results.output   = `convergence: ${json.status || "?"} (${json.finalIssueCount ?? "?"} issues)`;
-    results.passed   = json.status === "ok" || json.status === "needs_review";
+    const out = execSync(
+      "python -m pytest tests/ -q --tb=short " +
+        "--ignore=tests/test_anti_entropy_memory.py " +
+        "--ignore=tests/test_audit_chain.py " +
+        "--ignore=tests/test_discord_bot.py " +
+        "--ignore=tests/test_discord_voice_gate.py",
+      { cwd: worktreePath, encoding: "utf8", timeout: 120_000 }
+    );
+    results.output = out.slice(-500);
+    results.passed = !out.includes("FAILED") && !out.includes("ERROR");
   } catch (e) {
-    results.output = `test runner error: ${e.message.slice(0, 200)}`;
+    results.output = (e.stdout || e.message).slice(-500);
     results.passed = false;
   }
   return results;
@@ -153,9 +156,12 @@ async function processOne(lane, opts = {}) {
 
   const step = (name, result) => {
     receipt.steps.push({ name, ...result });
-    heartbeat(slot.id);
+    try { _slots.heartbeat(slot.id); } catch {}
     return result;
   };
+
+  const issueNum = entry.issueNumber || entry.issue_number;
+  const title    = entry.title || `issue #${issueNum}`;
 
   try {
     // 1. Spawn agent
@@ -164,23 +170,19 @@ async function processOne(lane, opts = {}) {
       : { ok: false, skipped: true, reason: "no worktree" });
 
     if (!agentResult.ok && !agentResult.skipped) {
-      const failResult = markFailed(slot.id, `agent failed: ${agentResult.stderr || agentResult.reason}`);
-      if (failResult.retry) {
-        updateEntry(entry.id, { status: "pending", assigned_at: null, agent_id: null });
-        return receipt;
-      }
-      step("fail", { ok: false, reason: "agent exhausted retries" });
-      fail(entry.id, agentResult.stderr || agentResult.reason || "agent failed");
+      step("fail", { ok: false, reason: "agent failed" });
+      await _queue.markFailed(entry.id, agentResult.stderr || agentResult.reason || "agent failed");
+      try { _slots.completeWork(slot.id, { workId: entry.id, failed: true }); } catch {}
       receipt.ok = false;
       return receipt;
     }
 
     // 2. Commit changes
     if (worktreePath) {
-      const commitResult = step("commit", commitAgentWork(worktreePath, entry.issue_number, entry.title));
+      const commitResult = step("commit", commitAgentWork(worktreePath, issueNum, title));
 
       // 3. Run tests
-      const testResult = step("tests", runTests(worktreePath));
+      step("tests", runTests(worktreePath));
 
       if (commitResult.committed) {
         // 4. Push branch
@@ -188,9 +190,8 @@ async function processOne(lane, opts = {}) {
 
         // 5. Create PR (only if push succeeded)
         if (pushResult.ok) {
-          const prResult = step("pr", createPR(branch, entry.issue_number, entry.title));
+          const prResult = step("pr", createPR(branch, issueNum, title));
           if (prResult.ok) {
-            updateEntry(entry.id, { pr_number: prResult.url });
             receipt.pr_url = prResult.url;
           }
         }
@@ -199,8 +200,8 @@ async function processOne(lane, opts = {}) {
 
     // 6. Complete queue entry
     receipt.ok = true;
-    complete(entry.id, receipt);
-    markIdle(slot.id);
+    await _queue.markComplete(entry.id, receipt);
+    try { _slots.completeWork(slot.id, { workId: entry.id, duration: Date.now() - new Date(entry.assignedAt || Date.now()).getTime() }); } catch {}
 
     // 7. Cleanup worktree
     if (worktreePath && !opts.keepWorktree) {
@@ -209,8 +210,8 @@ async function processOne(lane, opts = {}) {
 
   } catch (err) {
     step("error", { ok: false, reason: err.message });
-    try { fail(entry.id, err.message); } catch {}
-    markIdle(slot.id);
+    try { await _queue.markFailed(entry.id, err.message); } catch {}
+    try { _slots.completeWork(slot.id, { workId: entry.id, failed: true }); } catch {}
   }
 
   return receipt;

@@ -3,8 +3,17 @@
  * Maps model profiles to Ollama models and surface usage
  */
 
+// Model registry with configurations for all surfaces
 module.exports = {
   text: {
+    keystone: {
+      profileId: "keystone-ft",
+      ftAgentId: "agent_01XLCumJKAJzNtUiB1FQTWrT",
+      memoryStoreId: "memstore_01WYD6jnTDjbCDGPSHGWPeqx",
+      baseModel: "claude-haiku-4-5-20251001",
+      trainingData: "data/training/haiku-ft-pairs.jsonl",
+      surfaces: ["dream-chat", "orchestration", "code-execution"],
+    },
     dream: {
       profileId: "lantern-csf-dream",
       ollamaModel: process.env.DREAMCHAT_MODEL || "lantern-csf-dream",

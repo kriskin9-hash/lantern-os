@@ -47,6 +47,7 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       const proc = spawn(py, [path.join(repoRoot, "src", "convergence_io_engine.py"), "loop"], {
         cwd: repoRoot,
         timeout: 60000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
       });
       let stdout = "";
       let stderr = "";
@@ -61,6 +62,27 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       sendJson(res, result, result.ok ? 200 : 500);
     } catch (err) {
       sendJson(res, { ok: false, error: err.message }, 500);
+    }
+    return true;
+  }
+  if (url.pathname === "/api/actions/inspect" && req.method === "GET") {
+    try {
+      const py = process.platform === "win32" ? "python" : "python3";
+      const proc = spawn(py, [path.join(repoRoot, "src", "convergence_io_engine.py"), "inspect"], {
+        cwd: repoRoot,
+        timeout: 15000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+      });
+      let stdout = "";
+      proc.stdout.on("data", (d) => { stdout += d; });
+      await new Promise((resolve) => proc.on("close", resolve));
+      try {
+        sendJson(res, JSON.parse(stdout));
+      } catch {
+        sendJson(res, { error: "parse_failed", raw: stdout.slice(0, 500) }, 500);
+      }
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
     }
     return true;
   }

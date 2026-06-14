@@ -169,6 +169,50 @@ class QueueManager {
     const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
     return files.map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")));
   }
+
+  /**
+   * Move stale assigned items back to pending.
+   * Called at startup and periodically to recover from agent crashes.
+   *
+   * @param {number} maxAgeMs — items assigned longer than this are stale (default 30 min)
+   * @returns {Array} recovered items
+   */
+  recoverStaleAssigned(maxAgeMs = 30 * 60 * 1000) {
+    const assignedDir = path.join(this.queuePath, "assigned");
+    if (!fs.existsSync(assignedDir)) return [];
+
+    const files = fs.readdirSync(assignedDir).filter((f) => f.endsWith(".json"));
+    const recovered = [];
+
+    for (const file of files) {
+      const filePath = path.join(assignedDir, file);
+      let entry;
+      try {
+        entry = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      } catch {
+        continue;
+      }
+
+      const age = Date.now() - new Date(entry.assignedAt || 0).getTime();
+      if (age < maxAgeMs) continue;
+
+      entry.status = "pending";
+      entry.assignedTo = null;
+      entry.assignedAt = null;
+      entry.retries = (entry.retries || 0) + 1;
+      entry.updatedAt = new Date().toISOString();
+      entry.recoveredAt = new Date().toISOString();
+
+      const pendingFile = path.join(this.queuePath, "pending", file);
+      fs.writeFileSync(pendingFile, JSON.stringify(entry, null, 2));
+      fs.unlinkSync(filePath);
+
+      console.log(`[QueueManager] recovered stale item ${entry.id} (assigned ${Math.round(age / 60000)}m ago)`);
+      recovered.push(entry);
+    }
+
+    return recovered;
+  }
 }
 
 module.exports = QueueManager;

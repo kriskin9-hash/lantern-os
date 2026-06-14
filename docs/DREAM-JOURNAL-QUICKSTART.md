@@ -11,7 +11,7 @@ You now have a **lean, 229MB Docker image** for the Dream Journal skill. This re
 docker-compose -f docker-compose.dream-journal.yml up -d
 ```
 
-Service will run on `http://localhost:5000` with health check at `/health`.
+Service will run on `http://127.0.0.1:4177` (local) or `https://lantern-os.net` (public via Cloudflare Tunnel) with health check at `/health`.
 
 ---
 
@@ -19,7 +19,7 @@ Service will run on `http://localhost:5000` with health check at `/health`.
 
 ### Log a Dream
 ```bash
-curl -X POST http://localhost:5000/dreams/log \
+curl -X POST http://127.0.0.1:4177/api/dream/chat \
   -H "Content-Type: application/json" \
   -d '{
     "content": "I was flying over a river with strange colors...",
@@ -32,24 +32,24 @@ curl -X POST http://localhost:5000/dreams/log \
 
 ### Get Recent Dreams
 ```bash
-curl http://localhost:5000/dreams/recent?limit=10
+curl http://127.0.0.1:4177/api/dream/recent?limit=10
 ```
 
 ### Generate Mirror Prompt (for interpretation)
 ```bash
-curl -X POST http://localhost:5000/dreams/mirror-prompt \
+curl -X POST http://127.0.0.1:4177/api/dream/mirror-prompt \
   -H "Content-Type: application/json" \
   -d '{"dream_id": "dream_20260601_150000"}'
 ```
 
 ### View Statistics
 ```bash
-curl http://localhost:5000/dreams/stats
+curl http://127.0.0.1:4177/api/dream/stats
 ```
 
 ### Health Check
 ```bash
-curl http://localhost:5000/health
+curl http://127.0.0.1:4177/health
 ```
 
 ---

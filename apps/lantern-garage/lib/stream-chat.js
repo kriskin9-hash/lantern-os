@@ -19,6 +19,8 @@ const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, reco
 const { detectTaskType } = require("./task-detector");
 const { classifyIntent } = require("./intent-router");
 const { convergeMessage } = require("./convergence-adapter");
+const { keystoneRun, KEYSTONE_SYSTEM_PROMPT } = require("./keystone-runtime");
+const { unifiedAgentStreamSSE: unifiedStreamSSE } = require("./unified-agent");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -28,32 +30,56 @@ const maxConversationTextLength = 4000;
 const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
 // Conversation history compaction thresholds
-const FULL_FIDELITY_RECENT_TURNS = 2;
-const MID_FIDELITY_TURNS = 2;
-const MID_FIDELITY_CHAR_LIMIT = 200;
+// Increased for richer RP context (issue #332 — journal/Three Doors felt flat)
+const FULL_FIDELITY_RECENT_TURNS = 6;
+const MID_FIDELITY_TURNS = 4;
+const MID_FIDELITY_CHAR_LIMIT = 400;
 const LOW_FIDELITY_WORD_LIMIT = 10;
+
+// Log truncation metrics to track information loss
+function logTruncationMetric(originalChars, truncatedChars, truncationType) {
+  try {
+    const metricsPath = path.resolve(__dirname, "../../data/truncation-metrics.jsonl");
+    const metric = {
+      timestamp: new Date().toISOString(),
+      originalChars,
+      truncatedChars,
+      charsSaved: originalChars - truncatedChars,
+      truncationType, // "mid_fidelity" or "low_fidelity"
+      compressionRatio: truncatedChars / originalChars
+    };
+    const { appendJsonlQueued } = require("./file-queue");
+    appendJsonlQueued(metricsPath, metric).catch(() => {});
+  } catch (e) {
+    // Best-effort logging; never block on metric failure
+  }
+}
 
 // Conversation history compaction: tiered summarization to reduce provider token costs.
 // Only compacts turns older than the most recent FULL_FIDELITY_RECENT_TURNS exchanges;
 // never re-compacts already-compacted text (FlowKV principle).
+// Σ₀ Fix: Track truncation metrics to measure information loss
 function compactHistory(history) {
   if (!Array.isArray(history) || history.length === 0) return [];
   return history.map((h, i) => {
     const text = String(h.text != null ? h.text : (h.content != null ? h.content : ""));
     const role = h.role || "user";
     if (i >= history.length - FULL_FIDELITY_RECENT_TURNS) {
-      return { role, text }; // Full fidelity
+      return { role, text }; // Full fidelity, no truncation
     }
     if (i >= history.length - FULL_FIDELITY_RECENT_TURNS - MID_FIDELITY_TURNS) {
-      const truncated = text.length > MID_FIDELITY_CHAR_LIMIT
-        ? text.slice(0, MID_FIDELITY_CHAR_LIMIT) + "…"
-        : text;
-      return { role, text: truncated };
+      if (text.length > MID_FIDELITY_CHAR_LIMIT) {
+        const truncated = text.slice(0, MID_FIDELITY_CHAR_LIMIT) + "…";
+        logTruncationMetric(text.length, truncated.length, "mid_fidelity");
+        return { role, text: truncated };
+      }
+      return { role, text };
     }
     // Low fidelity: first N words only
     const words = text.trim().split(/\s+/).filter(Boolean).slice(0, LOW_FIDELITY_WORD_LIMIT).join(" ");
     const roleLabel = role === "assistant" ? "Lantern" : "Dreamer";
     const summary = words.length > 0 ? `[${roleLabel}: ${words}…]` : `[${roleLabel}]`;
+    logTruncationMetric(text.length, summary.length, "low_fidelity");
     return { role, text: summary };
   });
 }
@@ -349,6 +375,91 @@ async function handleStreamChat(req, url, res) {
         sendDone("web_search", { agent: "WebSearch", online: false, error: e.message });
       }
       res.end();
+      return;
+    }
+
+    // Keystone Kernel Mode: File-grounded, tool-driven code execution
+    if (cmd.name === "keystone") {
+      const issue = cmd.args.trim() || message.replace(/!keystone\s*/i, "").trim();
+
+      if (!issue) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "issue_required", message: "Usage: !keystone <issue description>" }));
+        return;
+      }
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`🔧 Keystone Kernel Mode\n\n`);
+      sendToken(`Issue: ${issue}\n\n`);
+
+      // Get the selected provider for LLM calls
+      const provider = requestedProvider || selectProvider(message, history);
+      let llmFn;
+
+      try {
+        // Call keystoneRun with the appropriate LLM provider
+        keystoneRun(issue, repoRoot, async (opts) => {
+          // Unified LLM call using the selected provider
+          const systemPrompt = opts.system || KEYSTONE_SYSTEM_PROMPT;
+          const messages = opts.messages || [{ role: "user", content: opts.input || "" }];
+
+          const response = await unifiedStreamSSE({
+            systemPrompt,
+            messages,
+            provider,
+            model: null, // Let unified-agent pick the best model
+            user,
+          });
+
+          return response;
+        }, { verbose: true, maxFiles: 10 })
+          .then((result) => {
+            if (result.status === "success") {
+              sendToken(`\n✅ Keystone execution complete\n\n`);
+              sendToken(`**Plan:**\n${result.plan}\n\n`);
+              sendToken(`**Files changed:**\n${result.applied.map((f) => `  - ${f.path}`).join("\n")}\n\n`);
+
+              if (result.tests && result.tests.success) {
+                sendToken(`✓ Tests passed\n\n`);
+              } else if (result.tests) {
+                sendToken(`⚠️ Tests output:\n${result.tests.output}\n\n`);
+              }
+
+              sendDone("keystone", {
+                agent: "Keystone",
+                provider,
+                status: "success",
+                filesChanged: result.applied.length,
+                testsRun: !!result.tests,
+              });
+            } else {
+              sendToken(`\n❌ Keystone failed: ${result.error}\n`);
+              sendToken(`Phase: ${result.phase}\n`);
+              sendDone("keystone", { agent: "Keystone", provider, status: "failed", error: result.error });
+            }
+            res.end();
+          })
+          .catch((err) => {
+            sendToken(`\n❌ Error: ${err.message}\n`);
+            sendDone("keystone", { agent: "Keystone", provider, status: "error", error: err.message });
+            res.end();
+          });
+      } catch (e) {
+        sendToken(`Error: ${e.message}\n`);
+        sendDone("keystone", { agent: "Keystone", status: "error", error: e.message });
+        res.end();
+      }
+
       return;
     }
 
@@ -757,9 +868,8 @@ async function handleStreamChat(req, url, res) {
   // converganceDecision already computed above (before systemPrompt)
 
   if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
-    sendToken(`Routing to ${routeLabel}...\n`);
     const convResult = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
-      timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 8000),
+      timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 20000),
     });
     if (convResult.reply && !convResult.error) {
       await appendConversationEntry({
@@ -783,7 +893,49 @@ async function handleStreamChat(req, url, res) {
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
   try {
-    const taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+    let taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+
+    // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
+    // The dream-chat surface forces isCreative -> always "creative" (ollama-first).
+    // The gate escalates substantive new-ground turns to the Claude-first
+    // "reasoning" chain instead. Escalate-only; never downgrades coding/reasoning.
+    if (process.env.ROUTER_GATE === "1") {
+      try {
+        const { gateDecision } = require("./router-gate");
+        const priorTurns = (Array.isArray(history) ? history : [])
+          .map((h) => ({ role: h.role || "user", text: String(h.content || h.text || "") }))
+          .filter((t) => t.text && t.text !== message)  // client includes current msg in history
+          .slice(-3);
+        const gate = gateDecision([...priorTurns, { role: "user", text: message }]);
+        const keywordTaskType = taskType;
+        const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        if (applied) {
+          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
+          taskType = "reasoning";
+        } else {
+          console.log(`[router-gate] no-op for ${taskType} (${gate.reason})`);
+        }
+        try {
+          const { appendJsonlQueued } = require("./file-queue");
+          const logPath = require("path").resolve(__dirname, "..", "..", "..", "data", "router-gate-decisions.jsonl");
+          appendJsonlQueued(logPath, {
+            timestamp: new Date().toISOString(),
+            surface: surfaceMode,
+            agent: requestedAgent || "?",
+            escalate: gate.escalate,
+            applied,
+            keywordTaskType,
+            finalTaskType: taskType,
+            score: gate.score,
+            reason: gate.reason,
+            features: gate.features,
+          }).catch(() => {});
+        } catch { /* logging is best-effort */ }
+      } catch (ge) {
+        console.error("[router-gate] gate error (non-fatal):", ge.message);
+      }
+    }
+
     const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(message, taskType, requestedProvider);
     primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
     console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);
@@ -963,7 +1115,7 @@ async function handleStreamChat(req, url, res) {
       const searchInstruction = groundingEnabled ? "\n\nYou have access to live web search. Use it to find current information, verify facts, or answer questions about recent events when relevant." : "";
       const geminiPayloadBase = {
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}${searchInstruction}\n\n${message}` }] }],
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: isRpMode ? 1536 : 1024, temperature: isRpMode ? 0.88 : 0.7 },
       };
       if (groundingEnabled) {
         geminiPayloadBase.tools = [{ googleSearch: {} }];
@@ -1050,7 +1202,8 @@ async function handleStreamChat(req, url, res) {
       }
       const payload = JSON.stringify({
         model: claudeModel,
-        max_tokens: 1024,
+        max_tokens: isRpMode ? 1536 : 1024,
+        temperature: isRpMode ? 0.88 : undefined,
         stream: true,
         system: systemPrompt,
         messages: [...compacted.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],

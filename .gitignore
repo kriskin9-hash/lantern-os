@@ -179,3 +179,22 @@ data/csf_memory/symbolic-dict.json
 # ClaimsPacket runtime log
 data/claim-packets/
 output/
+
+# Kalshi trading data (large, local runtime only)
+data/kalshi/
+
+# ─── Cleanup Tier 1 — runtime artifacts (issue #371) ──────────────────────────
+logs/
+test-results/
+.github-cache/
+full_results.txt
+pytest_results.txt
+server.log
+server.err
+
+# ─── Cleanup Tier 2 — archival dirs (small, low risk) ────────────────────────
+training_data/
+rag/
+merge-patches/
+patches/
+src/cio/target/

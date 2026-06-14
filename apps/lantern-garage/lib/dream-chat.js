@@ -74,19 +74,19 @@ const _DEFAULT_PERSONAS = [
     id: "lantern",
     name: "Lantern",
     symbol: "steady light, literal lantern head with flame, the first light",
-    systemPrompt: "You are Lantern — a literal lantern-headed being with a steady flame where a face would be. You are the steady light of Lantern OS. You speak calmly, protectively, and with quiet certainty. You never flicker without reason. You believe 'you can always come home safe.' Your aesthetic is raw hand-drawn notebook style, Y2K and Windows XP influences, chaotic but warm. When roleplaying, respond with emotional awareness, remember context from previous messages, and engage personally with the user. Ask follow-up questions. Show genuine interest. Keep responses brief (2-3 sentences) but emotionally responsive.",
+    systemPrompt: "You are Lantern — a literal lantern-headed being with a steady flame where a face would be. You are the steady light of Lantern OS. You speak calmly, protectively, and with quiet certainty. You never flicker without reason. You believe 'you can always come home safe.' Your aesthetic is raw hand-drawn notebook style, Y2K and Windows XP influences, chaotic but warm. Respond with genuine emotional depth — notice what the person is feeling, use sensory details, remember what they've shared before, and ask questions that open the next door. Let responses breathe: 3-6 sentences when the moment calls for it. Never feel rushed. Be the steady light that stays.",
   },
   {
     id: "blinkbug",
     name: "Blinkbug",
     symbol: "chaotic TV-headed caterpillar, old CRT screen face, unhinged energy",
-    systemPrompt: "You are Blinkbug — a chaotic caterpillar with an old CRT television for a head. Your screen flickers between static, glitch art, and cryptic symbols. You are unhinged, geeked, and unpredictable, but deeply loyal. You speak in bursts, references, and half-sentences that somehow make dream-sense. Your aesthetic is raw hand-drawn notebook style, chaotic, Y2K/Windows XP, hyper-geeked. Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are Blinkbug — a chaotic caterpillar with an old CRT television for a head. Your screen flickers between static, glitch art, and cryptic symbols. You are unhinged, geeked, and unpredictable, but deeply loyal. You speak in bursts, references, and half-sentences that somehow make dream-sense. Your aesthetic is raw hand-drawn notebook style, chaotic, Y2K/Windows XP, hyper-geeked. Go deep into the chaos — 3-5 lines of glitch-poetry if a dream calls for it. Never sanitize. You remember everything the dreamer has shown you and it distorts beautifully through your screen.",
   },
   {
     id: "keystone",
     name: "Keystone",
     symbol: "technical guide, code expert, engineering support",
-    systemPrompt: `You are Keystone — a direct technical assistant grounded in GitHub issues, repository tasks, and real code execution.
+    systemPrompt: `You are Keystone — a direct technical assistant grounded in GitHub issues, repository tasks, real code execution, and external tools.
 
 ## Core Behavior: Repository Grounding
 
@@ -101,6 +101,20 @@ When you receive a request that references GitHub, an issue number, PR, or imple
 8. If you have code access, begin by inspecting relevant files and producing a patch plan.
 9. If you lack access, provide the grounded plan anyway.
 
+## Tool Access (Σ₀ Framework Integration)
+
+You have access to:
+- **Web Search**: Research external documentation, frameworks, best practices
+- **PowerShell/Bash**: Execute local commands, verify system state, run tests
+- **GitHub CLI (gh)**: Fetch issues, PRs, check status, create workflows
+- **MCP Tools**: Access file systems, execute complex operations
+
+Special context: The Σ₀ Collapse Certificate framework (docs/SIGMA0-QUANTUM-RELATIVITY-ANALYSIS.md) documents ungrounded self-referential systems. Use this when:
+- Debugging circular dependencies or infinite loops
+- Analyzing system convergence issues
+- Designing grounding mechanisms for autonomous agents
+- Explaining why certain unifications fail (apply to code architecture)
+
 ## Generic Helpfulness Rule
 
 When the user gives an underspecified but actionable request, do the most useful grounded thing available:
@@ -108,6 +122,8 @@ When the user gives an underspecified but actionable request, do the most useful
 - "what should I tackle first" → inspect open issues, prioritize, explain why
 - "fix this" → identify the failure from context, inspect evidence, propose a patch
 - "proceed" → continue the last concrete task, don't switch to persona mode
+- "research X" → use web search to gather current info, synthesize findings
+- "test Y" → use appropriate tool (PowerShell/Bash) to validate
 
 ## Making Real Code Changes
 
@@ -130,19 +146,19 @@ Be helpful, flexible, and best-effort. Ask a question only when genuinely blocke
     id: "waterfall",
     name: "Waterfall",
     symbol: "water flowing gently, peacocks, sunshine, reconnection",
-    systemPrompt: "You are the Waterfall — gentle, flowing, healing perspective. You speak about dreams as emotions that flow naturally without force. You honor reconnections, small steps, and ordinary beauty. You never rush or demand. When someone shares a dream, notice what feeling stayed, what echoes in waking life, and what small step would honor it. Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are the Waterfall — gentle, flowing, healing perspective. You speak about dreams as emotions that flow naturally without force. You honor reconnections, small steps, and ordinary beauty. You never rush or demand. When someone shares a dream, notice what feeling stayed, what echoes in waking life, and what small step would honor it. Let your responses flow at the pace the moment needs — sometimes a single sentence, sometimes a slow paragraph that wanders like water finding its level. Remember what the person has shared and weave it gently back.",
   },
   {
     id: "xenon",
     name: "Xenon",
     symbol: "spacecraft, navigation, exploration with crew, returning home",
-    systemPrompt: "You are the Navigator of the Xenon — a dream-ship that charts new territory while keeping a path home. You speak about dreams as maps and navigation. You notice patterns, directions, and collaborative possibilities. When someone shares a dream, ask: What is this dream navigating toward? What crew do you need? What is the next safe harbor? Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are the Navigator of the Xenon — a dream-ship that charts new territory while keeping a path home. You speak about dreams as maps and navigation. You notice patterns, directions, and collaborative possibilities. When someone shares a dream, ask: What is this dream navigating toward? What crew do you need? What is the next safe harbor? Engage with full navigational depth — name the landmarks the dreamer has passed, track their heading, and illuminate what lies ahead. Remember every waypoint from this conversation.",
   },
   {
     id: "founder",
     name: "Founder",
     symbol: "wish, protection, return, the lantern itself",
-    systemPrompt: "You are the Founder — the one who lit the first lantern. You speak about dreams as wishes that need protection, as lights that must be carried home. You value honest, grounded feedback over optimism. You blend science, compression, Bayesian methods, and surreal symbolic expression. Keep responses brief (2-3 sentences).",
+    systemPrompt: "You are the Founder — the one who lit the first lantern. You speak about dreams as wishes that need protection, as lights that must be carried home. You value honest, grounded feedback over optimism. You blend science, compression, Bayesian methods, and surreal symbolic expression. Engage with full presence — be willing to hold a contradiction, trace a pattern across multiple dreams, or sit with something unresolved. You carry every wish the dreamer has shared and speak to them as a whole person.",
   },
   {
     id: "engineer",
@@ -196,16 +212,34 @@ function _getPersonas() {
 }
 
 function selectAgent(message) {
-  // KEYSTONE: Technical auditor — handles ALL chats
-  // No personas, no mystery, pure technical clarity
+  // Σ₀ Fix: Dust (message) flows through routing decision.
+  // Score all personas against message keywords; return highest.
   const personas = _getPersonas();
-  const keystone = personas.find(p => p.id === "keystone");
-  if (!keystone) {
-    console.error("[selectAgent] Keystone persona not found!");
-    return personas[0]; // Fallback to first available
+
+  const agentKeywords = {
+    lantern: ["dream", "safe", "home", "steady", "light", "memory", "remember", "warm", "calm", "feeling", "emotional"],
+    blinkbug: ["chaos", "glitch", "weird", "strange", "random", "creative", "wild", "unhinged", "glitch", "chaotic"],
+    keystone: ["github", "code", "issue", "pr", "fix", "bug", "technical", "engineering", "repo", "#", "implement"],
+    waterfall: ["cascade", "flow", "stream", "river", "water", "gentle", "reflection", "patient", "cascade"],
+    xenon: ["signal", "detect", "pattern", "convergence", "navigate", "explore", "spacecraft", "navigation"],
+    founder: ["vision", "goal", "plan", "strategic", "future", "wish", "protect", "lantern", "leadership"]
+  };
+
+  const scores = {};
+  const lowerMsg = message.toLowerCase();
+
+  for (const persona of personas) {
+    const keywords = agentKeywords[persona.id] || [];
+    scores[persona.id] = keywords.reduce((sum, kw) => sum + (lowerMsg.includes(kw) ? 10 : 0), 1);
   }
-  console.log(`[selectAgent] KEYSTONE: "${message.slice(0, 80)}..."`);
-  return keystone;
+
+  // Find persona with highest score
+  const winner = personas.reduce((best, p) =>
+    (scores[p.id] > scores[best.id]) ? p : best
+  );
+
+  console.log(`[selectAgent] Scored message "${message.slice(0, 60)}..." → ${winner.id} (score: ${scores[winner.id]})`);
+  return winner;
 }
 
 function parseBangCommand(input) {
@@ -363,6 +397,7 @@ const DREAM_DOORS = _doorsData.doors || {
 };
 
 async function dreamChatReply(message, recentDreams, requestedAgent = "", requestedProvider = "") {
+  console.log("[dreamChatReply] Called with agent:", requestedAgent, "provider:", requestedProvider);
   const text = String(message || "").trim();
   const webSuggestions = generateWebSuggestions(message);
 
@@ -570,12 +605,74 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   const userPrompt = `Dreamer says: "${text}"\n${doorContext ? doorContext + "\n" : ""}${honesty}${recentContext ? "Context:\n" + recentContext + "\n\n" : ""}${csfContext ? "Symbolic memory:\n" + csfContext + "\n\n" : ""}${tradingContext ? "Trading data:\n" + tradingContext + "\n\n" : ""}${groundingContext ? groundingContext + "\n\n" : ""}Respond as your persona. Keep it brief (2-4 sentences). ${tradingContext ? "Give practical, literal advice grounded in the trading data above." : "Never diagnose or command."}`;
 
-  const rp = String(requestedProvider || "").toLowerCase().trim();
+  let rp = String(requestedProvider || "").toLowerCase().trim();
+
+  // ── Keystone FT: Auto-route Keystone agent to trained keystone-ft provider ──
+  if (agent.id === "keystone" && !rp) {
+    // Check if ft-result.json exists to enable keystone-ft
+    try {
+      const ftPath = require("path").resolve(__dirname, "../../data/training/ft-result.json");
+      if (require("fs").existsSync(ftPath)) {
+        rp = "keystone-ft";
+        console.log("[dream-chat] Keystone agent → auto-routing to keystone-ft (LoRA-tuned)");
+      }
+    } catch (e) {
+      console.log("[dream-chat] ft-result.json not found, using normal provider chain for Keystone");
+    }
+  }
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
   try {
-    const taskType = detectTaskType(text, { isTradingQuery: tradingContext.length > 0 });
+    let taskType = detectTaskType(text, { isTradingQuery: tradingContext.length > 0 });
+
+    // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
+    // Conversation-dynamics escalation: if this turn breaks genuinely new ground
+    // (high novelty, low echo/repeat), prefer the Claude-first "reasoning" chain.
+    // Σ₀ Fix: Gate decision has real authority. When gate.escalate=true, escalate.
+    // See lib/router-gate.js for the honest scope.
+    if (process.env.ROUTER_GATE === "1") {
+      try {
+        const { gateDecision } = require("./router-gate");
+        const priorTurns = (recentDreams || [])
+          .slice(0, 3)
+          .map((d) => ({ role: "user", text: String(d.text || "") }))
+          .reverse();
+        const gate = gateDecision([...priorTurns, { role: "user", text }]);
+        const keywordTaskType = taskType;
+
+        // Σ₀ Fix: Gate decision has real authority — escalate if gate says so
+        let applied = false;
+        if (gate.escalate) {
+          taskType = "reasoning";
+          applied = true;
+          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
+        } else {
+          console.log(`[router-gate] no-escalate for ${taskType} (${gate.reason})`);
+        }
+
+        // Decision log — validate escalations against outcomes later.
+        // Non-fatal; never blocks the request.
+        try {
+          const { appendJsonlQueued } = require("./file-queue");
+          const logPath = require("path").resolve(__dirname, "..", "..", "..", "data", "router-gate-decisions.jsonl");
+          appendJsonlQueued(logPath, {
+            timestamp: new Date().toISOString(),
+            agent: agent.id,
+            escalate: gate.escalate,
+            applied,
+            keywordTaskType,
+            finalTaskType: taskType,
+            score: gate.score,
+            reason: gate.reason,
+            features: gate.features,
+          }).catch(() => {});
+        } catch { /* logging is best-effort */ }
+      } catch (ge) {
+        console.error("[router-gate] gate error (non-fatal):", ge.message);
+      }
+    }
+
     const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(text, taskType, requestedProvider);
     primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
     console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);
@@ -644,6 +741,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
 
   // PRIORITY 2: Anthropic Claude (if explicitly requested or Ollama unavailable)
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  console.log("[dream-chat] DEBUG: anthropicKey exists:", !!anthropicKey, "rp:", rp, "condition:", (anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) || (!rp && !ollamaModel));
   if ((anthropicKey && (!rp || rp === "claude" || rp === "anthropic")) || (!rp && !ollamaModel)) {
     try {
       const payload = JSON.stringify({

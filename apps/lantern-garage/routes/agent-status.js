@@ -1,10 +1,8 @@
 /**
  * GET /api/dream/status/agents
  *
- * Returns live agent slot status + queue snapshot formatted for
- * dream-chat display and JSON consumers.
- *
- * Part of Phase 4 (Dream-Chat Bridge).
+ * Returns live agent slot + queue status formatted for dream-chat display.
+ * Uses the class-based QueueManager / AgentSlotManager API.
  */
 
 "use strict";
@@ -12,46 +10,62 @@
 const path = require("path");
 const { sendJson } = require("../lib/http-utils");
 
-// Lazy-load orchestration modules — they may not exist in older deploys
-function tryRequire(p) {
-  try { return require(p); } catch { return null; }
+const REPO_ROOT = path.resolve(__dirname, "../../..");
+const QUEUE_DIR = path.join(REPO_ROOT, "data", "agent-work-queue");
+const SLOTS_CFG = path.join(process.env.HOME || process.env.USERPROFILE, ".claude", "agent-slots.json");
+
+function tryLoad(mod, ...args) {
+  try {
+    const Cls = require(mod);
+    return new Cls(...args);
+  } catch {
+    return null;
+  }
 }
 
-const REPO_ROOT   = path.resolve(__dirname, "../../..");
-const qm  = tryRequire(path.join(REPO_ROOT, "src/queue-manager"));
-const asm = tryRequire(path.join(REPO_ROOT, "src/agent-slot-manager"));
+async function buildStatusPayload() {
+  const QueueManager     = require(path.join(REPO_ROOT, "src/queue-manager"));
+  const AgentSlotManager = require(path.join(REPO_ROOT, "src/agent-slot-manager"));
 
-function formatDuration(ms) {
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-  if (ms < 3600_000) return `${Math.round(ms / 60_000)}m`;
-  return `${Math.round(ms / 3600_000)}h`;
-}
+  const qm  = new QueueManager(QUEUE_DIR);
+  const asm = new AgentSlotManager(SLOTS_CFG);
 
-function buildStatusPayload() {
-  const slots   = asm ? asm.getAllStatus() : [];
-  const snap    = qm  ? qm.snapshot()     : { pending: [], assigned: [], completed: [] };
+  // Queue snapshot via class API
+  const [pending, assigned, completed, failed] = await Promise.all([
+    qm.listByStatus("pending"),
+    qm.listByStatus("assigned"),
+    qm.listByStatus("completed"),
+    qm.listByStatus("failed"),
+  ]);
 
-  const pendingCount   = snap.pending.length;
-  const workingCount   = snap.assigned.length;
-  const completedCount = snap.completed.length;
+  const pendingCount   = pending.length;
+  const workingCount   = assigned.length;
+  const completedCount = completed.length;
   const totalCount     = pendingCount + workingCount + completedCount;
   const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // Per-lane summary lines
+  // Slot summary via class API
+  const slots = asm.getEnabledSlots();
+
+  function fmt(ms) {
+    if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+    if (ms < 3600_000) return `${Math.round(ms / 60_000)}m`;
+    return `${Math.round(ms / 3600_000)}h`;
+  }
+
   const laneLines = slots.map(s => {
-    const working = snap.assigned.find(e => e.agent_id === s.id);
+    const working = assigned.find(e => e.assignedTo === s.id);
     if (s.status === "working" && working) {
-      const age = Date.now() - new Date(working.assigned_at).getTime();
-      return `${s.lane.replace(/\/$/, "")} lane: Issue #${working.issue_number} (${working.title.slice(0, 40)}) — working ${formatDuration(age)}`;
+      const age = Date.now() - new Date(working.assignedAt).getTime();
+      return `${s.lane.replace(/\/$/, "")} lane: Issue #${working.issueNumber} — working ${fmt(age)}`;
     }
-    if (s.status === "disabled") return `${s.lane.replace(/\/$/, "")} lane: Disabled`;
-    if (s.status === "failed")   return `${s.lane.replace(/\/$/, "")} lane: ⚠ Failed (${s.lastError || "unknown"})`;
-    return `${s.lane.replace(/\/$/, "")} lane: Ready for work`;
+    if (!s.enabled) return `${s.lane.replace(/\/$/, "")} lane: Disabled`;
+    return `${s.lane.replace(/\/$/, "")} lane: Ready`;
   });
 
-  const queueLine = `Queue: ${pendingCount} pending · ${workingCount} working · ${completedCount} completed${pct > 0 ? ` · ${pct}% done` : ""}`;
-
-  const nextItems = snap.pending.slice(0, 3).map(e => `  #${e.issue_number} ${e.title.slice(0, 50)}`).join("\n");
+  const stats = asm.getStats();
+  const queueLine = `Queue: ${pendingCount} pending · ${workingCount} working · ${completedCount} done · ${stats.successRate > 0 ? Math.round(stats.successRate * 100) + "% success" : "no history"}`;
+  const nextItems = pending.slice(0, 3).map(e => `  #${e.issueNumber} ${(e.title || "").slice(0, 50)}`).join("\n");
 
   const text = [
     ...laneLines,
@@ -61,16 +75,16 @@ function buildStatusPayload() {
 
   return {
     text,
-    slots,
+    slots: slots.map(s => ({ id: s.id, lane: s.lane, status: s.status, enabled: s.enabled })),
     queue: {
-      pending:   pendingCount,
-      working:   workingCount,
+      pending: pendingCount,
+      working: workingCount,
       completed: completedCount,
-      total:     totalCount,
+      total: totalCount,
       pct,
-      next:      snap.pending.slice(0, 5).map(e => ({ number: e.issue_number, title: e.title, lane: e.lane })),
+      next: pending.slice(0, 5).map(e => ({ number: e.issueNumber, title: e.title })),
     },
-    raw: { slots, snap },
+    stats,
   };
 }
 
@@ -78,15 +92,15 @@ module.exports = async function agentStatusRoute(req, res, url) {
   if (url.pathname !== "/api/dream/status/agents") return false;
   if (req.method !== "GET") return false;
 
-  if (!qm || !asm) {
+  try {
+    const payload = await buildStatusPayload();
+    sendJson(res, payload);
+  } catch (err) {
     sendJson(res, {
-      text: "Orchestration modules not loaded. Run convergence Phase 1-3 first.",
+      text: `Agent status unavailable: ${err.message}`,
       slots: [],
       queue: { pending: 0, working: 0, completed: 0, total: 0, pct: 0, next: [] },
     });
-    return true;
   }
-
-  sendJson(res, buildStatusPayload());
   return true;
 };

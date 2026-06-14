@@ -9,13 +9,23 @@
       "autoPort": false
     },
     {
+      "name": "three-doors-worktree",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/worktrees/frosty-northcutt-79abbf/apps/lantern-garage/server.js"],
+      "port": 4180,
+      "env": {
+        "LANTERN_GARAGE_PORT": "4180"
+      }
+    },
+    {
       "name": "dream-journal-dev",
       "runtimeExecutable": "node",
       "runtimeArgs": ["apps/lantern-garage/server.js"],
       "port": 4178,
       "autoPort": false,
       "env": {
-        "LANTERN_GARAGE_PORT": "4178"
+        "LANTERN_GARAGE_PORT": "4178",
+        "ROUTER_GATE": "1"
       }
     },
     {

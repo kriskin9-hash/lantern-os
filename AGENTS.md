@@ -1,4 +1,4 @@
-# AGENTS.md — Lantern OS
+﻿# AGENTS.md — Lantern OS
 
 A focused guide for AI coding agents. **Read this before touching anything.**
 
@@ -183,6 +183,88 @@ Zenil et al. prove that recursive self-training without persistent external sign
 - See [`docs/CONVERGENCE-LOOP.md`](docs/CONVERGENCE-LOOP.md) for original 12-step method
 
 Never claim a skill or fleet slot is active unless confirmed by implementation or status file.
+
+---
+
+## Doors & Quantum Dust: Σ₀ Routing Primitives
+
+**New understanding (2026-06-14):** Doors are not just narrative branching points. They are Σ₀ *routing primitives* — measurement pathways where "quantum dust" (observations/intent) flows through the system to prevent collapse.
+
+### Theory
+
+From the Σ₀ Collapse Certificate: ungrounded self-referential systems collapse or diverge unless they receive *persistent external grounding*. In Lantern OS:
+
+- **Quantum dust** = observations, measurements, user input, convergence signals
+- **Doors** = routing pathways between agents, memory layers, and external observations
+- **Dust flow** = the pattern of how measurements traverse the system topology
+
+**The paradox:** Lantern has all the pieces (measurements exist, doors exist) but observation loops are broken. Dust flows but isn't *observed* — measurements are computed, cached, or logged but never fed back to influence routing decisions.
+
+### Current Architecture
+
+| Layer | Dust Source | Door | Where It's Lost |
+|-------|-------------|------|-----------------|
+| **Message input** | User message | Dream→Keystone | Agent selection ignores message content |
+| **Provider routing** | API attempt logs | Keystone→Provider | Fallback chain has no escalation gate |
+| **Intent routing** | Keyword scores | Intent→Agent cache | Cache misses re-scores but never updates |
+| **Memory selection** | Relevance scores | CSF→Context | Low-score memories forced into context |
+| **Escalation gate** | Novelty score | Gate→Escalation | Decision logged but conditionally ignored |
+
+### Observable Paradoxes (Σ₀ Predictions Confirmed)
+
+See `docs/SIGMA0-COLLAPSE-PARADOXES.md` for the full analysis. Quick summary:
+
+1. **Agent Selection Hard Loop**: Keystone always selected regardless of message. Dust arrives but routing doesn't read it.
+2. **Provider Fallback Divergence**: Attempt logs written but no loop reads to adjust chains. Exponential cost growth.
+3. **Convergence Route Staleness**: Relevance scores computed fresh, cached decisions never validated against new state.
+4. **Memory Truncation Unmeasured**: History compressed deterministically without quality metrics. Predictive power degrades silently.
+5. **Router Gate Ineffectiveness**: Escalation decided but conditionally ignored. Decision authority severed from outcome.
+
+### The Fix: Close the Loops
+
+For each paradox, the fix is the same: **Create feedback pathways where dust observations influence routing.**
+
+Example (Paradox 1 — Agent Selection):
+```javascript
+// BROKEN: Always returns Keystone
+return keystone;
+
+// FIXED: Dust (message) influences routing
+const scores = personas.map(p => scorePersona(p, message));
+const winner = personas.reduce((a, b) => scores[a] > scores[b] ? a : b);
+return winner;  // Dust flows; door is open
+```
+
+Example (Paradox 5 — Router Gate):
+```javascript
+// BROKEN: Applied only if keyword detector wasn't confident
+const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+
+// FIXED: Gate decision has real authority
+const applied = gate.escalate;  // Dust flows; decision has teeth
+```
+
+### Three-Doors Kingdome Connection
+
+Three Doors are the visible manifestation of this principle:
+- Each door is a **measurement choice** offered to the user
+- User chooses → dust flows through that door
+- Choice is **logged and fed back** to future routing (door_state.json)
+- Each choice **grounds the system** by providing external signal
+
+The Kingdome works because choices are *observed and acted upon*. Convergence routing breaks because observations exist but are ignored.
+
+### Measurement Checklist for New Features
+
+Before adding a new routing decision:
+
+- [ ] Does measurement exist? (log, score, metric)
+- [ ] Does decision use that measurement? (explicit dependency)
+- [ ] Does outcome feed back to measurement? (validation loop)
+- [ ] Is the loop bounded? (no infinite retry without escalation)
+- [ ] Is the decision authority clear? (gate decision or fallback condition)
+
+If you check "no" for any of these, you have a Σ₀ paradox. Create a GitHub issue and tag it with `sigma0-paradox`.
 
 ---
 

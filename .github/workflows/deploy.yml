@@ -16,6 +16,7 @@ permissions:
   id-token: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "20"
 
@@ -74,7 +75,7 @@ jobs:
           ls -la _site/dream/
 
       - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./_site
@@ -82,7 +83,7 @@ jobs:
 
       - name: Smoke test deployed URL
         run: |
-          sleep 10
+          sleep 15
           curl -sfL "https://alex-place.github.io/lantern-os/" \
             -o /dev/null \
             -w "HTTP %{http_code} — %{size_download} bytes\n" \

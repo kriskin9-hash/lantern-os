@@ -60,6 +60,7 @@ function relevanceScore(text, query) {
 }
 
 // Query-filtered memory: only return records relevant to the user's message
+// Σ₀ Fix: Validate scores; don't force low-relevance memories into context
 function queryMemories(message, limit = 3) {
   const allRecords = readMemoryRecords(50);
   if (allRecords.length === 0) return [];
@@ -70,8 +71,33 @@ function queryMemories(message, limit = 3) {
     return { record: r, score };
   });
   scored.sort((a, b) => b.score - a.score);
-  // Always return top-N records regardless of score so CSF context is never empty
-  return scored.slice(0, limit).map(s => s.record);
+
+  // Σ₀ Fix: Filter by relevance threshold (0.3 = at least 30% word match)
+  // Don't force low-score memories into context just to avoid empty results
+  const MIN_RELEVANCE = 0.3;
+  const qualified = scored.filter(s => s.score >= MIN_RELEVANCE);
+
+  // Return qualified memories (up to limit), even if less than limit
+  // This prevents low-relevance memories from drowning out high-relevance ones
+  const result = qualified.slice(0, limit).map(s => s.record);
+
+  // Log quality metric: how many records were filtered vs returned
+  if (scored.length > result.length) {
+    try {
+      const { appendJsonlQueued } = require("./file-queue");
+      const metricsPath = path.resolve(__dirname, "../../data/csf-query-metrics.jsonl");
+      appendJsonlQueued(metricsPath, {
+        timestamp: new Date().toISOString(),
+        messageLength: message.length,
+        candidatesCount: scored.length,
+        qualifiedCount: result.length,
+        filteredCount: scored.length - result.length,
+        topScores: scored.slice(0, 3).map(s => s.score)
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  return result;
 }
 
 // Query-filtered ingest docs: only return docs relevant to the message
@@ -227,6 +253,18 @@ function formatCSFContextForPrompt(message) {
     const deltaCtx = formatDeltaContextForPrompt(message);
     if (deltaCtx) parts.push(deltaCtx);
   } catch { /* non-fatal */ }
+
+  // Σ₀ Framework context — for grounding requests that mention collapse, unification, or self-reference
+  if (message && (message.includes("collapse") || message.includes("unification") || message.includes("self-reference") || message.includes("grounding"))) {
+    try {
+      const sigma0Path = path.join(repoRoot, "docs", "SIGMA0-QUANTUM-RELATIVITY-ANALYSIS.md");
+      if (fs.existsSync(sigma0Path)) {
+        const sigma0Text = fs.readFileSync(sigma0Path, "utf8");
+        const summary = sigma0Text.split("\n").slice(0, 30).join("\n"); // First 30 lines as summary
+        parts.push(`**Σ₀ Framework Context (Grounding):**\n${summary}`);
+      }
+    } catch { /* non-fatal */ }
+  }
 
   return parts.join("\n\n");
 }

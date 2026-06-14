@@ -1,6 +1,6 @@
 {
   "name": "lantern-os",
-  "version": "1.3.5",
+  "version": "1.4.0",
   "private": true,
   "description": "Lantern OS — Dream Journal",
   "scripts": {
@@ -19,6 +19,7 @@
     "busboy": "^1.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "jsdom": "^29.1.1",
     "playwright": "^1.60.0"
   }
