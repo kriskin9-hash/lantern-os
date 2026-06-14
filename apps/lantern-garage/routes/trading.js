@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Trading API Routes
  * Serves market data, AI recommendations, and broker integration
  * Integrates with local TraderAgent (Python subprocess) for single-app architecture
@@ -11,6 +11,14 @@ const tradingMemory = require('../lib/trading-memory');
 const tradingStore = require('../lib/trading-store');
 const tradingNews = require('../lib/trading-news');
 const { recordOrder, recordSignal, queryRecentTradingRecords } = tradingMemory;
+const { TradingPriceFeed } = require('../lib/trader-price-feed');
+
+// Shared price feed instance (caches ticks for 1 min)
+let _priceFeed = null;
+function getPriceFeed() {
+  if (!_priceFeed) _priceFeed = new TradingPriceFeed(traderAgent);
+  return _priceFeed;
+}
 
 // Initialize local trader agent (replaces external AI Trader service)
 let traderAgent = null;
@@ -158,8 +166,8 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     }
     try {
       const scan = await traderAgent.scanMarket();
+      const signals = Array.isArray(scan.signals) ? scan.signals : [];
       if (!scan.error) {
-        const signals = Array.isArray(scan.signals) ? scan.signals : [];
         const logEntries = [
           {
             id: `scan_${scan.timestamp}_summary`,
@@ -181,7 +189,34 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
           console.error('[Trading] /zones agent-log write failed:', e.message);
         });
       }
-      sendJson(res, { zones: scan.zones || {} }, 200);
+
+      // Reshape into the per-ticker shape trader-dashboard.html expects:
+      // { zones: [...], position, last_signal, confidence, direction, catalyst }
+      let positions = [];
+      try {
+        const posData = await traderAgent.getPositions();
+        positions = (posData && posData.positions) || [];
+      } catch (e) {
+        console.error('[Trading] /zones positions fetch failed:', e.message);
+      }
+      const reshaped = {};
+      const tickers = new Set([
+        ...Object.keys(scan.zones || {}),
+        ...signals.map((s) => s.symbol || s.ticker).filter(Boolean),
+      ]);
+      for (const ticker of tickers) {
+        const sig = signals.find((s) => (s.symbol || s.ticker) === ticker) || null;
+        const pos = positions.find((p) => p.symbol === ticker) || null;
+        reshaped[ticker] = {
+          zones: scan.zones && scan.zones[ticker] ? [scan.zones[ticker]] : [],
+          position: pos ? { entry: pos.avg_entry_price, current: pos.current_price, qty: pos.qty, pnl_pct: pos.pnl_pct } : null,
+          last_signal: sig,
+          confidence: (sig && sig.confidence) || 0,
+          direction: (sig && sig.direction) || 'NEUTRAL',
+          catalyst: (sig && sig.catalyst) || '',
+        };
+      }
+      sendJson(res, { zones: reshaped }, 200);
     } catch (error) {
       console.error('[Trading] /zones error:', error.message);
       sendJson(res, { zones: {}, error: error.message }, 500);
@@ -201,6 +236,26 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     } catch (error) {
       console.error('[Trading] /watchlist-prices error:', error.message);
       sendJson(res, [], 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/bars-multi?timeframe=5m
+  // OHLCV bars for the whole watchlist in one subprocess call — used to
+  // draw the candlestick/line charts on the trader dashboard.
+  if (url.pathname === '/api/trading/bars-multi' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { bars: {} }, 503);
+    }
+    const ALLOWED_TIMEFRAMES = new Set(['1m', '5m', '15m', '1h', '4h', '1d']);
+    const timeframeParam = url.searchParams.get('timeframe') || '5m';
+    const timeframe = ALLOWED_TIMEFRAMES.has(timeframeParam) ? timeframeParam : '5m';
+    try {
+      const result = await traderAgent.getBarsMulti(traderAgent.watchlist, timeframe);
+      sendJson(res, result, 200);
+    } catch (error) {
+      console.error('[Trading] /bars-multi error:', error.message);
+      sendJson(res, { bars: {}, timeframe, error: error.message }, 500);
     }
     return true;
   }
@@ -337,6 +392,85 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, { error: 'Failed to record order', details: error.message }, 400);
     }
     return true;
+  }
+
+  // POST /api/trading/orders/place
+  // Place a manual paper order (buy/sell) via Alpaca, routed through the
+  // local TraderAgent → cli.py → Alpaca paper account.
+  if (url.pathname === '/api/trading/orders/place' && req.method === 'POST') {
+    if (!traderAgent) {
+      return sendJson(res, { status: 'error', error: 'TraderAgent not initialized' }, 503);
+    }
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const { ticker, side, qty, type, limitPrice, timeInForce, stopLoss, takeProfit } = payload;
+      if (!ticker || !['buy', 'sell'].includes(String(side || '').toLowerCase()) || !qty || Number(qty) <= 0) {
+        return sendJson(res, { status: 'error', error: 'ticker, side (buy/sell), and positive qty are required' }, 400);
+      }
+      if (stopLoss != null && Number(stopLoss) <= 0) {
+        return sendJson(res, { status: 'error', error: 'stopLoss must be a positive number' }, 400);
+      }
+      if (takeProfit != null && Number(takeProfit) <= 0) {
+        return sendJson(res, { status: 'error', error: 'takeProfit must be a positive number' }, 400);
+      }
+      const result = await traderAgent.placeOrder({ ticker, side, qty, type, limitPrice, timeInForce, stopLoss, takeProfit });
+      if (result && result.status === 'placed') {
+        await tradingMemory.recordNewOrders([{
+          id: result.order_id,
+          symbol: result.ticker,
+          side: result.side,
+          qty: result.qty,
+          status: 'submitted',
+          order_type: result.type,
+        }]);
+        sendJson(res, result, 201);
+      } else {
+        sendJson(res, result || { status: 'error', error: 'Unknown error' }, 400);
+      }
+    } catch (error) {
+      sendJson(res, { status: 'error', error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/watchlist
+  if (url.pathname === '/api/trading/watchlist' && req.method === 'GET') {
+    if (!traderAgent) {
+      return sendJson(res, { watchlist: [] }, 503);
+    }
+    sendJson(res, { watchlist: traderAgent.watchlist }, 200);
+    return true;
+  }
+
+  // POST /api/trading/watchlist
+  // Body: { ticker } — add a ticker to the persisted watchlist
+  if (url.pathname === '/api/trading/watchlist' && req.method === 'POST') {
+    if (!traderAgent) {
+      return sendJson(res, { watchlist: [], error: 'TraderAgent not initialized' }, 503);
+    }
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const watchlist = traderAgent.addTicker(payload.ticker);
+      sendJson(res, { watchlist }, 200);
+    } catch (error) {
+      sendJson(res, { error: error.message }, 400);
+    }
+    return true;
+  }
+
+  // DELETE /api/trading/watchlist/:ticker — remove a ticker from the watchlist
+  if (req.method === 'DELETE') {
+    const watchlistMatch = url.pathname.match(/^\/api\/trading\/watchlist\/([A-Za-z]{1,10})$/);
+    if (watchlistMatch) {
+      if (!traderAgent) {
+        return sendJson(res, { watchlist: [], error: 'TraderAgent not initialized' }, 503);
+      }
+      const watchlist = traderAgent.removeTicker(watchlistMatch[1]);
+      sendJson(res, { watchlist }, 200);
+      return true;
+    }
   }
 
   // POST /api/trading/agent-log
@@ -1228,6 +1362,223 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // ── TradingTesseract ─────────────────────────────────────────────────────
+
+  // POST /api/trading/evaluate-asset
+  // Body: { asset: 'AAPL', zones_data?, market_status?, agent_log? }
+  // Returns: { asset, cube, confidence, action, evaluated_at }
+  if (url.pathname === '/api/trading/evaluate-asset' && req.method === 'POST') {
+    let body = '';
+    req.on('data', d => body += d);
+    req.on('end', async () => {
+      try {
+        const params = body ? JSON.parse(body) : {};
+        if (!params.asset) {
+          sendJson(res, { error: 'asset is required' }, 400);
+          return;
+        }
+        if (!traderAgent) {
+          sendJson(res, { error: 'TraderAgent not initialised' }, 503);
+          return;
+        }
+        // Fetch supporting data in parallel if not supplied
+        const [zonesResult, marketResult, agentLogResult] = await Promise.all([
+          params.zones_data   ? Promise.resolve({ zones: params.zones_data })
+                              : traderAgent._callPython('scan_market', { watchlist: [params.asset] }).catch(() => ({})),
+          params.market_status ? Promise.resolve(params.market_status)
+                               : traderAgent._callPython('get_market_status', {}).catch(() => ({})),
+          traderAgent._callPython('scan_market', {}).catch(() => ({ logs: [] })).catch(() => ({ logs: [] })),
+        ]);
+        const evaluateArgs = {
+          asset:         params.asset,
+          zones_data:    zonesResult.zones || zonesResult || {},
+          market_status: marketResult,
+          agent_log:     (agentLogResult.signals || agentLogResult.logs || []),
+        };
+        const result = await traderAgent._callPython('evaluate_asset', evaluateArgs);
+
+        // Persist to CSF memory as a TRACE record
+        try {
+          const { recordSignal } = require('../lib/trading-memory');
+          await recordSignal({
+            id:        `tesseract-${result.asset}-${Date.now()}`,
+            symbol:    result.asset,
+            type:      'tesseract_evaluation',
+            action:    result.action,
+            confidence: result.confidence,
+            cube:      result.cube,
+            timestamp: result.evaluated_at,
+          });
+        } catch (_) { /* non-fatal */ }
+
+        sendJson(res, result);
+      } catch (err) {
+        sendJson(res, { error: err.message }, 500);
+      }
+    });
+    return true;
+  }
+
+  // POST /api/trading/evaluate-watchlist
+  // Body: { watchlist?: string[], zones_data?, market_status?, agent_log? }
+  // Returns: { evaluations: [...], count, evaluated_at }
+  if (url.pathname === '/api/trading/evaluate-watchlist' && req.method === 'POST') {
+    let body = '';
+    req.on('data', d => body += d);
+    req.on('end', async () => {
+      try {
+        const params = body ? JSON.parse(body) : {};
+        const DEFAULT_WL = ['SPY', 'AAPL', 'TSLA', 'NVDA', 'MSFT'];
+        const watchlist = params.watchlist || DEFAULT_WL;
+        const zones    = params.zones_data    || {};
+        const market   = params.market_status || {};
+        const agentLog = params.agent_log     || [];
+
+        // Pure-JS TradingTesseract (mirrors trading_tesseract.py exactly)
+        function classifyTime(z, m) {
+          if (!m.market_open) return 'eod';
+          const ts = z.timestamp || z.updated_at;
+          if (ts) {
+            const ageS = (Date.now() - new Date(ts).getTime()) / 1000;
+            if (ageS < 60)   return 'realtime';
+            if (ageS < 3600) return 'intraday';
+            return 'session';
+          }
+          return 'intraday';
+        }
+        function classifyMarket(m) {
+          const vix = (m.vix_regime || '').toUpperCase();
+          if (vix === 'HIGH' || vix === 'EXTREME') return 'volatile';
+          const spy = parseFloat(m.spy_day_change_pct || 0);
+          if (spy >  0.8) return 'bullish';
+          if (spy < -0.8) return 'bearish';
+          if (vix === 'CALM') return 'calm';
+          return 'neutral';
+        }
+        function classifySignal(asset, z, log) {
+          for (let i = log.length - 1; i >= Math.max(0, log.length - 50); i--) {
+            const e = log[i];
+            const sym = (e.symbol || e.asset || e.ticker || '').toUpperCase();
+            if (sym !== asset.toUpperCase()) continue;
+            const s = (e.signal_strength || e.strength || '').toLowerCase();
+            if (['strong','moderate','weak','invalid'].includes(s)) return s;
+            const sc = parseFloat(e.score || e.confidence || 0);
+            if (sc >= 0.75) return 'strong';
+            if (sc >= 0.45) return 'moderate';
+            if (sc > 0)     return 'weak';
+          }
+          const az = z[asset] || {};
+          const top = parseFloat(az.top || az.resistance || 0);
+          const bot = parseFloat(az.bottom || az.support || 0);
+          const mid = parseFloat(az.mid || az.entry_price || 0);
+          if (!top || !bot || !mid) return 'invalid';
+          const spread = (top - bot) / mid;
+          if (spread < 0.02) return 'strong';
+          if (spread < 0.05) return 'moderate';
+          return 'weak';
+        }
+        function classifyLayer(log, asset) {
+          for (let i = log.length - 1; i >= Math.max(0, log.length - 50); i--) {
+            const e = log[i];
+            const sym = (e.symbol || e.asset || e.ticker || '').toUpperCase();
+            if (sym !== asset.toUpperCase()) continue;
+            const a = (e.agent || e.layer || '').toLowerCase();
+            if (['scanner','riley','mft','risk','claude','execution'].includes(a)) return a;
+            if (a.includes('claude'))  return 'claude';
+            if (a.includes('mft'))     return 'mft';
+            if (a.includes('riley'))   return 'riley';
+            if (a.includes('risk'))    return 'risk';
+            if (a.includes('execut'))  return 'execution';
+          }
+          return 'scanner';
+        }
+        function classifyState(asset, m) {
+          for (const p of (m.positions || [])) {
+            const sym = (p.symbol || p.ticker || '').toUpperCase();
+            if (sym !== asset.toUpperCase()) continue;
+            return parseFloat(p.qty || p.quantity || 0) !== 0 ? 'in_trade' : 'closed';
+          }
+          return 'watching';
+        }
+        const SIG_SC  = {strong:1.0, moderate:0.6, weak:0.3, invalid:0.0};
+        const MKT_SC  = {bullish:1.0, neutral:0.5, calm:0.5, volatile:0.35, bearish:0.1};
+        const ST_SC   = {watching:0.5, active:0.8, in_trade:0.9, closed:0.0, rejected:0.0};
+        const LYR_SC  = {claude:1.0, mft:0.85, riley:0.75, scanner:0.6, risk:0.5, execution:0.4};
+        const TIME_SC = {realtime:1.0, intraday:0.8, session:0.6, eod:0.4};
+        function confidence(cube) {
+          return Math.round(10000 * (
+            0.35 * (SIG_SC[cube.signal]      || 0) +
+            0.30 * (MKT_SC[cube.market]      || 0.5) +
+            0.15 * (ST_SC[cube.asset_state]  || 0) +
+            0.10 * (LYR_SC[cube.layer]       || 0.5) +
+            0.10 * (TIME_SC[cube.time]       || 0.5)
+          )) / 10000;
+        }
+        function deriveAction(conf, cube) {
+          if (cube.signal === 'invalid')                                       return 'skip';
+          if (['closed','rejected'].includes(cube.asset_state))               return 'skip';
+          if (cube.market === 'volatile' && conf < 0.55)                      return 'hold';
+          if (conf >= 0.72 && ['bullish','neutral','calm'].includes(cube.market)) return 'buy';
+          if (conf >= 0.55)                                                    return 'watch';
+          if (cube.market === 'bearish' && ['weak','invalid'].includes(cube.signal)) return 'skip';
+          return 'hold';
+        }
+
+        const now = new Date().toISOString();
+        const evaluations = watchlist.map(asset => {
+          const cube = {
+            time:        classifyTime(zones, market),
+            market:      classifyMarket(market),
+            signal:      classifySignal(asset, zones, agentLog),
+            layer:       classifyLayer(agentLog, asset),
+            asset_state: classifyState(asset, market),
+          };
+          const conf = confidence(cube);
+          return { asset: asset.toUpperCase(), cube, confidence: conf, action: deriveAction(conf, cube), evaluated_at: now };
+        }).sort((a, b) => b.confidence - a.confidence);
+
+        sendJson(res, { evaluations, count: evaluations.length, evaluated_at: now });
+      } catch (err) {
+        sendJson(res, { error: err.message }, 500);
+      }
+    });
+    return true;
+  }
+
+
+  // ── Price Feed (Phase 5) ──────────────────────────────────────────────────
+
+  // GET /api/trading/price-feed?symbol=AAPL&range=1D
+  // Returns: { symbol, range, ticks, source, current_price, open_price, generated_at }
+  if (url.pathname === '/api/trading/price-feed' && req.method === 'GET') {
+    const symbol = (url.searchParams.get('symbol') || 'SPY').toUpperCase();
+    const range  = url.searchParams.get('range') || '1D';
+    try {
+      const data = await getPriceFeed().getTicks(symbol, range);
+      sendJson(res, data);
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/price-feed/watchlist?range=1D
+  // Returns: [{ symbol, range, ticks, source, current_price, ... }, ...]
+  if (url.pathname === '/api/trading/price-feed/watchlist' && req.method === 'GET') {
+    const range     = url.searchParams.get('range') || '1D';
+    const DEFAULT_WL = ['SPY', 'AAPL', 'TSLA', 'NVDA', 'MSFT'];
+    const watchlist = url.searchParams.get('symbols')
+      ? url.searchParams.get('symbols').split(',').map(s => s.trim().toUpperCase())
+      : DEFAULT_WL;
+    try {
+      const results = await getPriceFeed().getWatchlistTicks(watchlist, range);
+      sendJson(res, results);
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
+    }
+    return true;
+  }
+
   // ── Crypto Collector Routes ──────────────────────────────────────────────────
   // Real-time crypto pricing and news from Kalshi markets + CoinGecko
 
@@ -1283,3 +1634,5 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
   return false;
 };
+
+

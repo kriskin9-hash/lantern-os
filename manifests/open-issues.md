@@ -1,4 +1,4 @@
-# Open Issues
+﻿# Open Issues
 
 The convergence loop fixes the first 2-4 actionable issues before expansion.
 
@@ -425,3 +425,40 @@ Documentation: See `docs/DASHBOARD-CONSOLIDATION.md`
    - Detected by: agent slot `dream_journal/voice_server_stt` (priority 8, queued)
    - Status: queued. Needs Vosk model installation + POST /api/dream/transcribe route.
    - Next: install Vosk, add transcribe route to dream.js, create test.
+
+## Market Research Snapshot — 2026-06-13
+
+*Searched and recorded by convergence loop to seed TradingTesseract cube defaults.*
+
+### Live Price Anchors (June 13, 2026)
+| Symbol | Price | Source | Notes |
+|--------|-------|--------|-------|
+| SPY    | $742.45 | Yahoo Finance | Near all-time-high; broad bull market |
+| QQQ    | $716.31 | Yahoo Finance | Down ~7% from recent peak; AI rotation |
+| AAPL   | $291.52 | Yahoo Finance | Range $289.62–$297.14 |
+| MSFT   | $387.71 | Yahoo Finance | Range $382.27–$394.42 |
+| NVDA   | $205.16 | Yahoo Finance | Post 10:1 split (Jun 2024); AI correction |
+| TSLA   | $400.77 | MarketBeat   | Range $288.77–$498.83 52-wk; ATH $489 Dec-2025 |
+| GOOGL  | ~$340  | FinanceCharts | Feb-2026 data; estimated forward |
+| META   | ~$730  | Yahoo Finance | Dividend ex-date Jun-15-2026 confirmed |
+
+### Market Regime (June 13, 2026)
+- **VIX**: 19.44 — regime: CALM (just under 20 threshold); historically elevated post-March spike
+- **Regime classification**: `neutral` trending `bullish` for broad market; `volatile` for tech sub-sector
+- **Sector rotation**: Energy (XLE) + Materials (XLB) leading; Technology (XLK) -11% from peak
+- **AI/semiconductor correction**: NVDA, AMD in drawdown as capex narrative shifts
+- **S&P 500 year-end targets**: Goldman Sachs 8,000 | UBS 7,700 | Reuters median 7,620
+- **Bull market breadth**: S&P 500 Equal-Weight + Russell 2000 at record highs — rotation, not reversal
+
+### Cube Seeding Impact
+- `trader-price-feed.js` SEED_PRICES updated from stale 2024 values to 2026 actuals
+- `trading_tesseract.py` annotated with current market context
+- VIX 19.44 → `_classify_market` returns `calm` (spy_change positive) or `neutral` at flat
+- SPY at ATH with moderate VIX → default cube dimension: `market: bullish`, `signal: moderate`
+
+### Sources
+- [Yahoo Finance SPY](https://finance.yahoo.com/quote/SPY/) | [AAPL](https://finance.yahoo.com/quote/AAPL/) | [MSFT](https://finance.yahoo.com/quote/MSFT/) | [NVDA](https://finance.yahoo.com/quote/NVDA/) | [TSLA](https://finance.yahoo.com/quote/TSLA/)
+- [VIX StreetStats](https://streetstats.finance/markets/volatility)
+- [Morningstar Sector Rotation 2026](https://www.morningstar.com/markets/is-stock-market-rotation-underway-these-sectors-are-outpacing-tech-2026)
+- [Goldman Sachs S&P 500 Forecast](https://www.goldmansachs.com/insights/articles/s-and-p-500-forecast-to-climb-as-earnings-growth-powers-stocks-higher)
+- [Investing.com Rotation Drives ATH](https://www.investing.com/analysis/rotation-drives-a-new-market-high-despite-ai-sector-weakness-200674632)

@@ -96,6 +96,7 @@ const routes = [
   require("./routes/dreams"),
   require("./routes/keystone"),
   require("./routes/image"),
+  require("./routes/web-images"),
   require("./routes/three-doors-image-pool"),
   require("./routes/flourishing"),
   require("./routes/claims"),
@@ -108,6 +109,7 @@ const routes = [
   require("./routes/agent-status"),
   require("./routes/surfaces"),
   require("./routes/self-edit"),
+  require("./routes/features"),
   require("./routes/personal-cube"),
   require("./routes/pr-review"),
 ];
