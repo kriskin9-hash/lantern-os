@@ -138,9 +138,9 @@
 <div class="deck">
   <div class="stage" id="stage"></div>
   <div class="end" id="end">
-    <div>Deck cleared 🎉</div>
-    <div style="font-size:12px;color:var(--text3)">No more time-sensitive markets right now.</div>
-    <button class="reload" onclick="loadDeck()">↻ Reload</button>
+    <div>No open positions</div>
+    <div style="font-size:12px;color:var(--text3)">Checking for new positions every 5s automatically.</div>
+    <button class="reload" onclick="syncDeck()">↻ Refresh</button>
   </div>
 </div>
 <div class="progress" id="progress"></div>
@@ -176,8 +176,8 @@ async function loadConnection(){
   const live=conn.canTradeLive, m=document.getElementById('cMode');
   m.className='chip '+(live?'live':'dry'); m.innerHTML=live?'LIVE':'DRY-RUN';
   document.getElementById('note').textContent = live
-    ? '⚠ LIVE: "Take it" WILL send a real order on the favorable side. Right=take, left=pass.'
-    : 'Green / swipe right = take the favorable position · Red / swipe left = pass. Live now-slice, refreshed every 6s. Practice mode.';
+    ? '⚠ LIVE: "Take it" sells the position at current bid. Right=cash out, left=hold.'
+    : '⚠ DRY-RUN: orders not sent. Right=cash out, left=hold. Set KALSHI_TRADING_ENABLED=1 for live.';
 }
 async function loadBalance(){
   const d=await j('/balance');
@@ -186,11 +186,11 @@ async function loadBalance(){
 
 // ── syncDeck: initial load + live merge every SYNC_MS ────────────────────────
 async function syncDeck(){
-  const d=await j('/impossibility-deck?limit=60');
+  const d=await j('/positions-deck');
   if(!d.cards) return;
   const fresh=d.cards;
   liveMap={}; for(const x of fresh) liveMap[x.ticker]=x;
-  markFresh(d.determined);
+  markFresh(d.count);
 
   if(deck.length===0){
     // first load
@@ -227,12 +227,10 @@ async function syncDeck(){
   document.getElementById('progress').textContent=rem>0?`${rem} of ${deck.length} · soonest first`:'';
 }
 
-function markFresh(determined){
-  lastSyncMs=Date.now(); lastDetCount=determined;
-  // pulse dot
+function markFresh(count){
+  lastSyncMs=Date.now(); lastDetCount=count;
   const dot=document.getElementById('sdot');
   if(dot){ dot.className='sdot live'; setTimeout(()=>{if(dot) dot.className='sdot';},600); }
-  // drain sync bar: snap to full, then animate to empty over SYNC_MS
   const fill=document.getElementById('syncFill');
   if(fill){
     fill.style.transition='none'; fill.style.transform='scaleX(1)';
@@ -246,8 +244,8 @@ function updateFreshnessChip(){
   const chip=document.getElementById('cFresh'); if(!chip) return;
   const age=lastSyncMs?Math.floor((Date.now()-lastSyncMs)/1000):null;
   const ageStr=age==null?'—':age<2?'live':age<60?`${age}s ago`:`${Math.floor(age/60)}m ago`;
-  const det=lastDetCount!=null?` · <b style="color:var(--green)">${lastDetCount} det</b>`:'';
-  chip.innerHTML=`<span class="sdot" id="sdot"></span>${ageStr}${det}`;
+  const cnt=lastDetCount!=null?` · <b>${lastDetCount} pos</b>`:'';
+  chip.innerHTML=`<span class="sdot" id="sdot"></span>${ageStr}${cnt}`;
 }
 
 function convColor(v){ return v>=66?'var(--green)':v>=45?'var(--amber)':'var(--text3)'; }
@@ -269,25 +267,60 @@ function cardInner(card){
   const noPct=100-(card.yesPct||0);
   const cd=fmtCountdown(card);
   const fav=card.favSide;
+  const isPosition=card.kind==='position';
   const isExit=card.kind==='exit';
-  // exit cards: red for stop-loss/flatten, green for take-profit
+  const isSell=isPosition||isExit;
+
+  // ── Position card (open Kalshi holding) ─────────────────────────────────────
+  if(isPosition){
+    const pnlPct=card.pnlPct||0;
+    const pnlColor=pnlPct>=0?'var(--green)':'var(--red)';
+    const pnlSign=pnlPct>=0?'+':'';
+    const pnlDollars=card.pnlCents!=null?(card.pnlCents>=0?'+':'')+((card.pnlCents/100).toFixed(2)):null;
+    const maxPayout=card.maxPayoutCents!=null?'$'+(card.maxPayoutCents/100).toFixed(2):null;
+    const tag=card.exitTag;
+    const ribbonCls=tag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
+    const ribbon=tag?`<div class="${ribbonCls}">⚠ ${tag} · ${pnlSign}${pnlPct}%</div>`:'';
+    const favClass=fav==='yes'?'yes':'no';
+    return `
+      <div class="stamp take">SELL</div><div class="stamp pass">HOLD</div>
+      ${ribbon}
+      <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span><span>position</span></div>
+      <div class="card-q">${card.title||card.ticker}</div>
+      <div class="fav ${favClass}">
+        <div class="fav-tag">${card.qty||1} × ${fav.toUpperCase()} · cash out</div>
+        <div class="fav-act">● SELL ${card.favLabel||fav.toUpperCase()}</div>
+        <div class="fav-px">@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} bid · ${card.qty||1} contract${(card.qty||1)>1?'s':''}</div>
+        <div class="conv-row">
+          <div class="conv-bar"><div class="conv-fill" style="width:${Math.min(100,Math.abs(pnlPct)*2)}%;background:${pnlColor}"></div></div>
+          <div class="conv-num" style="color:${pnlColor}">${pnlSign}${pnlPct}%</div>
+        </div>
+        <div class="reason">entry ${card.entryCents||'?'}¢${maxPayout?' · max payout '+maxPayout:''}${pnlDollars?` <span style="float:right;color:${pnlColor}">${pnlDollars}</span>`:''}</div>
+      </div>
+      <div class="sides">
+        <div class="side yes"><div class="lbl">${card.yesLabel||'YES'}</div><div class="pct">${card.yesPct==null?'—':card.yesPct+'%'}</div></div>
+        <div class="side no"><div class="lbl">${card.noLabel||'NO'}</div><div class="pct">${card.yesPct==null?'—':noPct+'%'}</div></div>
+      </div>`;
+  }
+
+  // ── Entry / exit card (original engine cards) ────────────────────────────────
   const favClass=isExit?(card.exitTag==='TAKE-PROFIT'?'yes':'no'):fav;
   const ribbonClass=isExit&&card.exitTag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
   const ribbon=isExit?`<div class="${ribbonClass}">⚠ SELL NOW · ${card.exitTag}${card.pnlPct!=null?' '+(card.pnlPct>=0?'+':'')+card.pnlPct+'%':''}</div>`:'';
   const tag=isExit?'High-priority exit':'Favorable now';
-  const act=isExit
+  const act=isSell
     ? `● SELL ${card.favLabel||fav.toUpperCase()}`
     : `${fav==='yes'?'▲':'▼'} BUY ${card.favLabel||fav.toUpperCase()}`;
-  const px=isExit
+  const px=isSell
     ? `@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · ${card.qty||1} contract${(card.qty||1)>1?'s':''}`
     : `@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · 1 contract`;
   const convLabel=isExit?'priority':'certainty';
   const sl=card.stateLabel||'';
-  const stateBadge=(!isExit&&sl)?`<span class="state-badge ${sl}">${sl}</span>`:'';
-  const traceHtml=(!isExit&&card.trace&&card.trace.length)?
+  const stateBadge=(!isSell&&sl)?`<span class="state-badge ${sl}">${sl}</span>`:'';
+  const traceHtml=(!isSell&&card.trace&&card.trace.length)?
     `<div class="engine-trace">${card.trace.map(t=>`<span class="trace-chip">${t.constraint} −${t.eliminated}</span>`).join('')}</div>`:'';
   return `
-    <div class="stamp take">${isExit?'SELL':'TAKE'}</div><div class="stamp pass">PASS</div>
+    <div class="stamp take">${isSell?'SELL':'TAKE'}</div><div class="stamp pass">PASS</div>
     ${ribbon}
     <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span>${stateBadge}<span>${isExit?'position':'engine'}</span></div>
     <div class="card-q">${card.title||card.ticker}</div>
@@ -379,13 +412,13 @@ async function act(dir,fromSwipe){
   try {
     const card=deck[idx];
     const side=card.favSide;
-    const isExit=card.kind==='exit';
-    const action=isExit?'sell':'buy';
-    const qty=isExit?(card.qty||1):1;
+    const isSell=card.kind==='exit'||card.kind==='position';
+    const action=isSell?'sell':'buy';
+    const qty=isSell?(card.qty||1):1;
     const o={ticker:card.ticker,side,action,type:'limit',count:qty,limitCents:card.favAsk||50};
     const res=await j('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
     showResult(res,card);
-    if(!isExit && (res.mode==='dry_run'||res.mode==='live')) recordPaperTrade(card);
+    if(!isSell && (res.mode==='dry_run'||res.mode==='live')) recordPaperTrade(card);
     idx++; render();
     if(res.mode==='live') loadBalance();
   } catch(e) {

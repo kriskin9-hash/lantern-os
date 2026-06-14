@@ -618,6 +618,98 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     }
   }
 
+  // GET /api/trading/kalshi/positions-deck
+  // Open positions as swipe cards: entry price, current bid, P&L, exit tag.
+  // Parallel market fetches so latency = slowest single market, not sum.
+  if (url.pathname === '/api/trading/kalshi/positions-deck' && req.method === 'GET') {
+    try {
+      const kalshi = require('../lib/kalshi-api');
+      const posRes = await kalshi.getPositions({});
+      const rawPositions = (posRes.data && posRes.data.market_positions) || [];
+
+      const active = rawPositions.filter(p => {
+        const n = parseFloat(p.position ?? p.quantity_fp ?? 0);
+        return Number.isFinite(n) && n !== 0;
+      });
+
+      const mkResults = await Promise.all(
+        active.map(p => kalshi.getMarket(p.ticker || p.market_ticker).catch(() => null))
+      );
+
+      const nowMs = Date.now();
+      const num = v => { const f = parseFloat(v); return Number.isFinite(f) ? f : null; };
+
+      function entryCents(p, qty) {
+        const expD = num(p.market_exposure_dollars);
+        if (expD != null && qty > 0) return Math.round((Math.abs(expD) / qty) * 100);
+        const exp = num(p.market_exposure);
+        if (exp != null && qty > 0) return Math.round(Math.abs(exp) / qty);
+        const avg = num(p.average_price_dollars) ?? num(p.avg_price_dollars);
+        if (avg != null) return Math.round(avg * 100);
+        return null;
+      }
+
+      const cards = [];
+      for (let i = 0; i < active.length; i++) {
+        const p = active[i];
+        const m = mkResults[i] && mkResults[i].data && mkResults[i].data.market;
+        const ticker = p.ticker || p.market_ticker;
+        const count = parseFloat(p.position ?? 0);
+        const heldSide = count > 0 ? 'yes' : 'no';
+        const qty = Math.abs(Math.round(count));
+
+        const entry = entryCents(p, qty) || 50;
+        const bidCents = m ? (heldSide === 'yes'
+          ? (m.yes_bid ?? Math.round((num(m.yes_bid_dollars) || 0) * 100))
+          : (m.no_bid  ?? Math.round((num(m.no_bid_dollars)  || 0) * 100))) : entry;
+
+        const pnlCents = bidCents - entry;
+        const pnlPct   = Math.round((pnlCents / entry) * 100);
+        const maxPayout = qty * 100; // $1 per contract in cents
+
+        const minsToClose = m && m.close_time
+          ? Math.round((new Date(m.close_time).getTime() - nowMs) / 60000) : null;
+
+        const yesCents = (m && m.yes_ask != null) ? m.yes_ask : 50;
+        const conviction = Math.min(99, Math.round(
+          heldSide === 'yes' ? yesCents * 1.1 : (100 - yesCents) * 1.1
+        ));
+
+        const exitTag = pnlPct <= -30 ? 'STOP-LOSS'
+          : pnlPct >= 40 ? 'TAKE-PROFIT'
+          : (minsToClose !== null && minsToClose <= 30 && minsToClose >= 0) ? 'FLATTEN'
+          : null;
+
+        const pnlSign = pnlPct >= 0 ? '+' : '';
+        const reason = `${heldSide.toUpperCase()} @${entry}¢ entry · ${bidCents}¢ now · ${pnlSign}${pnlPct}%${qty > 1 ? ` · ${qty} contracts` : ''}`;
+
+        cards.push({
+          kind: 'position', action: 'sell',
+          ticker,
+          title: (m && m.title) || ticker,
+          yesLabel: (m && m.yes_sub_title) || 'YES',
+          noLabel:  (m && m.no_sub_title)  || 'NO',
+          favSide: heldSide,
+          favLabel: heldSide === 'yes' ? ((m && m.yes_sub_title) || 'YES') : ((m && m.no_sub_title) || 'NO'),
+          favAsk: bidCents,
+          qty, entryCents: entry, currentBidCents: bidCents,
+          pnlCents: pnlCents * qty, pnlPct, maxPayoutCents: maxPayout,
+          conviction, exitTag, minsToClose,
+          close: (m && m.close_time) || '',
+          reason, yesPct: yesCents,
+        });
+      }
+
+      // Stop-loss first → flatten → take-profit → worst P&L first
+      const urgency = t => t === 'STOP-LOSS' ? 0 : t === 'FLATTEN' ? 1 : t === 'TAKE-PROFIT' ? 2 : 3;
+      cards.sort((a, b) => urgency(a.exitTag) - urgency(b.exitTag) || a.pnlPct - b.pnlPct);
+
+      return sendJson(res, { count: cards.length, generatedAt: new Date().toISOString(), cards }, 200), true;
+    } catch (error) {
+      return sendJson(res, { error: 'positions_deck_error', details: error.message }, 502), true;
+    }
+  }
+
   // GET /api/trading/alpaca/account
   // Returns Alpaca paper trading account
   if (url.pathname === '/api/trading/alpaca/account' && req.method === 'GET') {
