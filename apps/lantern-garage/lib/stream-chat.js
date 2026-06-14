@@ -19,6 +19,8 @@ const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, reco
 const { detectTaskType } = require("./task-detector");
 const { classifyIntent } = require("./intent-router");
 const { convergeMessage } = require("./convergence-adapter");
+const { keystoneRun, KEYSTONE_SYSTEM_PROMPT } = require("./keystone-runtime");
+const { unifiedAgentStreamSSE: unifiedStreamSSE } = require("./unified-agent");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -350,6 +352,91 @@ async function handleStreamChat(req, url, res) {
         sendDone("web_search", { agent: "WebSearch", online: false, error: e.message });
       }
       res.end();
+      return;
+    }
+
+    // Keystone Kernel Mode: File-grounded, tool-driven code execution
+    if (cmd.name === "keystone") {
+      const issue = cmd.args.trim() || message.replace(/!keystone\s*/i, "").trim();
+
+      if (!issue) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "issue_required", message: "Usage: !keystone <issue description>" }));
+        return;
+      }
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`🔧 Keystone Kernel Mode\n\n`);
+      sendToken(`Issue: ${issue}\n\n`);
+
+      // Get the selected provider for LLM calls
+      const provider = requestedProvider || selectProvider(message, history);
+      let llmFn;
+
+      try {
+        // Call keystoneRun with the appropriate LLM provider
+        keystoneRun(issue, repoRoot, async (opts) => {
+          // Unified LLM call using the selected provider
+          const systemPrompt = opts.system || KEYSTONE_SYSTEM_PROMPT;
+          const messages = opts.messages || [{ role: "user", content: opts.input || "" }];
+
+          const response = await unifiedStreamSSE({
+            systemPrompt,
+            messages,
+            provider,
+            model: null, // Let unified-agent pick the best model
+            user,
+          });
+
+          return response;
+        }, { verbose: true, maxFiles: 10 })
+          .then((result) => {
+            if (result.status === "success") {
+              sendToken(`\n✅ Keystone execution complete\n\n`);
+              sendToken(`**Plan:**\n${result.plan}\n\n`);
+              sendToken(`**Files changed:**\n${result.applied.map((f) => `  - ${f.path}`).join("\n")}\n\n`);
+
+              if (result.tests && result.tests.success) {
+                sendToken(`✓ Tests passed\n\n`);
+              } else if (result.tests) {
+                sendToken(`⚠️ Tests output:\n${result.tests.output}\n\n`);
+              }
+
+              sendDone("keystone", {
+                agent: "Keystone",
+                provider,
+                status: "success",
+                filesChanged: result.applied.length,
+                testsRun: !!result.tests,
+              });
+            } else {
+              sendToken(`\n❌ Keystone failed: ${result.error}\n`);
+              sendToken(`Phase: ${result.phase}\n`);
+              sendDone("keystone", { agent: "Keystone", provider, status: "failed", error: result.error });
+            }
+            res.end();
+          })
+          .catch((err) => {
+            sendToken(`\n❌ Error: ${err.message}\n`);
+            sendDone("keystone", { agent: "Keystone", provider, status: "error", error: err.message });
+            res.end();
+          });
+      } catch (e) {
+        sendToken(`Error: ${e.message}\n`);
+        sendDone("keystone", { agent: "Keystone", status: "error", error: e.message });
+        res.end();
+      }
+
       return;
     }
 
