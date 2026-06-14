@@ -320,6 +320,9 @@ function shutdown(signal) {
   if (deps.kalshiCollector) {
     deps.kalshiCollector.stop();
   }
+  if (deps.newsCollector) {
+    deps.newsCollector.stop();
+  }
   prWatcher.stop();
   server.close(() => {
     process.exit(0);
@@ -341,6 +344,12 @@ server.listen(port, host, () => {
   const cryptoCollector = new CryptoCollector();
   cryptoCollector.start(30000); // 30s interval
   deps.cryptoCollector = cryptoCollector; // Make available to routes
+
+  // ── Market News Collector (10-min polling, watchlist + broad market RSS) ──
+  const NewsCollector = require("./lib/news-collector");
+  const newsCollector = new NewsCollector();
+  newsCollector.start(600000); // 10-min interval
+  deps.newsCollector = newsCollector; // Make available to routes
 
   // ── Kalshi Position Monitor (10s polling) + Convergence Trainer ──
   const { startMonitoring } = require("./lib/kalshi-position-monitor");
