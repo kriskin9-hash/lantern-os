@@ -8,6 +8,7 @@ const { analyzeVideoForHighlights } = require("./highlight-engine");
 const { generateVariants } = require("./retention-engine");
 const { generateCaptions } = require("./caption-engine");
 const { detectSafeZones } = require("./safe-zone-detector");
+const { reencodeToShortForm } = require("./video-export");
 const ci = require("../../../src/creator-intelligence");
 
 class JobWorker {
@@ -197,13 +198,21 @@ async function processExportJob(job, repoRoot, updateProgress) {
     fs.mkdirSync(exportsDir, { recursive: true });
   }
 
-  updateProgress(30, "Processing video");
+  updateProgress(30, "Re-encoding to short-form (1080x1920)");
 
-  // For now: mock export (in production: use FFmpeg to actual re-encode)
   const exportFile = path.join(exportsDir, `${job.id}-${format}.mp4`);
 
-  // Simulate export by copying file (real implementation: re-encode with FFmpeg)
-  fs.copyFileSync(fullPath, exportFile);
+  // Real re-encode to short-form spec. Mapping/fps/duration are overridable via
+  // job.input; defaults produce exact 1080x1920, h264 + aac, <=60s, +faststart.
+  const encodeInfo = await reencodeToShortForm(fullPath, exportFile, {
+    width: job.input.width,
+    height: job.input.height,
+    fps: job.input.fps,
+    fit: job.input.fit, // pad (default) | crop | blur
+    start: job.input.start,
+    duration: job.input.duration,
+    maxDuration: job.input.maxDuration,
+  });
 
   updateProgress(90, "Validating output");
 
@@ -231,6 +240,7 @@ async function processExportJob(job, repoRoot, updateProgress) {
     exportFile,
     size: stats.size,
     created: stats.birthtime,
+    encode: encodeInfo,
     validation,
   };
 }
