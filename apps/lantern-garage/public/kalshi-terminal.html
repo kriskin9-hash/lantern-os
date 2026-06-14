@@ -88,6 +88,21 @@
     font-family:var(--mono);font-size:11px;max-width:90vw;opacity:0;transition:.25s;z-index:50;white-space:pre-wrap}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .toast.dry{border-color:var(--green)}.toast.live{border-color:var(--red)}.toast.err{border-color:var(--amber)}
+  /* paper book */
+  .pbook{padding:6px 16px 10px;max-height:160px;overflow-y:auto;border-top:1px solid var(--border)}
+  .pbook-hdr{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text3);margin-bottom:5px;
+    display:flex;justify-content:space-between;align-items:center}
+  .prow{font-family:var(--mono);font-size:11px;display:flex;gap:8px;align-items:center;
+    padding:4px 8px;border-radius:5px;background:var(--bg1);margin-bottom:3px;border:1px solid var(--border)}
+  .prow.sl{border-color:var(--red)}.prow.tp{border-color:var(--green)}
+  .pticker{color:var(--text2);min-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pside-yes{color:var(--green)}.pside-no{color:var(--red)}
+  .ppnl{min-width:44px;text-align:right}
+  .ppnl.pos{color:var(--green)}.ppnl.neg{color:var(--red)}
+  .ptag{font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid}
+  .ptag.sl{color:var(--red);border-color:var(--red)}.ptag.tp{color:var(--green);border-color:var(--green)}
+  .pclose{margin-left:auto;cursor:pointer;color:var(--text3);font-size:13px;background:none;border:none;padding:2px 4px}
+  .pclose:hover{color:var(--text)}
 </style>
 </head>
 <body>
@@ -118,6 +133,14 @@
 <div class="alabels"><span>Pass</span><span>Take it</span></div>
 
 <div class="toast" id="toast"></div>
+
+<div class="pbook" id="pbook" style="display:none">
+  <div class="pbook-hdr">
+    <span>PAPER BOOK</span>
+    <span id="pbook-count" style="color:var(--text3)"></span>
+  </div>
+  <div id="pbook-rows"></div>
+</div>
 
 <script>
 const API='/api/trading/kalshi';
@@ -297,6 +320,7 @@ async function act(dir,fromSwipe){
     const o={ticker:card.ticker,side,action,type:'limit',count:qty,limitCents:card.favAsk||50};
     const res=await j('/order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
     showResult(res,card);
+    if(!isExit && (res.mode==='dry_run'||res.mode==='live')) recordPaperTrade(card);
     idx++; render();
     if(res.mode==='live') loadBalance();
   } catch(e) {
@@ -324,11 +348,62 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='ArrowLeft') act('pass');
 });
 
+// ── paper book: track dry-run entries, poll P&L, auto-exit ───────────────────
+const closingIds = new Set(); // prevent double-close race
+
+function recordPaperTrade(card){
+  j('/paper-trade',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ticker:card.ticker,title:card.title||card.ticker,
+      side:card.favSide,action:'buy',count:1,limitCents:card.favAsk||50})});
+}
+
+async function closePaper(id, exitTag){
+  if(closingIds.has(id)) return;
+  closingIds.add(id);
+  await j('/paper-close',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id,exitTag})});
+}
+
+async function pollPaperBook(){
+  const d = await j('/paper-positions');
+  const positions = (d.positions||[]).filter(p=>!p.resolved&&!p.expired&&!p.error);
+  const el = document.getElementById('pbook');
+  if(positions.length===0){ el.style.display='none'; return; }
+  el.style.display='';
+  document.getElementById('pbook-count').textContent = positions.length+' open';
+
+  // Auto-exit triggered positions
+  for(const p of positions){
+    if(p.autoExit && !closingIds.has(p.id)){
+      closePaper(p.id, p.autoExit);
+    }
+  }
+
+  const rows = positions.map(p=>{
+    const pct = p.pnlPct;
+    const pnlClass = pct==null?'': pct>=0?'pos':'neg';
+    const pnlTxt = pct==null?'...':(pct>=0?'+':'')+pct+'%';
+    const rowCls = p.autoExit==='STOP-LOSS'?'sl': p.autoExit==='TAKE-PROFIT'?'tp':'';
+    const tag = p.autoExit
+      ? `<span class="ptag ${p.autoExit==='STOP-LOSS'?'sl':'tp'}">${p.autoExit}</span>`
+      : (p.minsToClose!=null?`<span style="color:var(--text3)">${p.minsToClose}m</span>`:'');
+    const sideClass = p.side==='yes'?'pside-yes':'pside-no';
+    return `<div class="prow ${rowCls}">
+      <span class="pticker">${(p.title||p.ticker).slice(0,28)}</span>
+      <span class="${sideClass}">${p.side.toUpperCase()} @${p.entryCents||'?'}¢</span>
+      <span class="ppnl ${pnlClass}">${pnlTxt}</span>
+      ${tag}
+      <button class="pclose" onclick="closePaper('${p.id}','MANUAL');pollPaperBook()">×</button>
+    </div>`;
+  }).join('');
+  document.getElementById('pbook-rows').innerHTML = rows;
+}
+
 function init(){
-  loadConnection(); loadBalance(); loadDeck();
+  loadConnection(); loadBalance(); loadDeck(); pollPaperBook();
   setInterval(loadConnection,20000);
   setInterval(loadBalance,30000);
-  setInterval(refreshNow,6000);     // tight-band now-slice refresh
+  setInterval(()=>{ refreshNow(); pollPaperBook(); },6000);
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

@@ -130,4 +130,4 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
   };
 }
 
-module.exports = { getCryptoSuggestions, isCryptoMarket };
+module.exports = { getCryptoSuggestions, isShortWindowMarket };

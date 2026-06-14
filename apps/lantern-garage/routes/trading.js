@@ -549,6 +549,29 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         const { orderId } = body ? JSON.parse(body) : {};
         return sendJson(res, await kalshi.cancelOrder(orderId), 200), true;
       }
+
+      // ── Paper trading ledger (dry-run position tracking) ───────────────────
+      // POST — open a paper position (called after each dry-run "take")
+      if (url.pathname === '/api/trading/kalshi/paper-trade' && req.method === 'POST') {
+        const paperLedger = require('../lib/kalshi-paper-ledger');
+        const body = await collectRequestBody(req);
+        const o = body ? JSON.parse(body) : {};
+        return sendJson(res, paperLedger.openPosition(o), 201), true;
+      }
+      // GET — poll open paper positions with live P&L + auto-exit signals
+      if (url.pathname === '/api/trading/kalshi/paper-positions' && req.method === 'GET') {
+        const paperLedger = require('../lib/kalshi-paper-ledger');
+        const positions = await paperLedger.pollOpen();
+        return sendJson(res, { count: positions.length, positions }, 200), true;
+      }
+      // POST — close a paper position  { id, exitTag?, exitPriceCents?, pnlPct? }
+      if (url.pathname === '/api/trading/kalshi/paper-close' && req.method === 'POST') {
+        const paperLedger = require('../lib/kalshi-paper-ledger');
+        const body = await collectRequestBody(req);
+        const { id, exitTag, exitPriceCents, pnlPct } = body ? JSON.parse(body) : {};
+        if (!id) return sendJson(res, { error: 'id required' }, 400), true;
+        return sendJson(res, paperLedger.closePosition(id, { exitTag, exitPriceCents, pnlPct }), 200), true;
+      }
     } catch (error) {
       return sendJson(res, { error: 'kalshi_api_error', details: error.message }, 502), true;
     }
