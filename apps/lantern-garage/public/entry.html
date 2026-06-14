@@ -237,6 +237,134 @@
       padding: 24px;
       text-align: center;
     }
+
+    .status-timeline {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 24px 0;
+    }
+
+    .status-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .status-step.active {
+      border-color: var(--accent);
+      background: rgba(124, 106, 247, 0.1);
+    }
+
+    .status-step.completed {
+      border-color: var(--green);
+      background: rgba(76, 175, 130, 0.1);
+    }
+
+    .status-step-number {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .status-step.completed .status-step-number {
+      color: var(--green);
+    }
+
+    .status-step-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+
+    .artifacts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .artifact-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .artifact-icon {
+      font-size: 2.4rem;
+    }
+
+    .artifact-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      word-break: break-word;
+    }
+
+    .artifact-size {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .artifact-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .download-btn {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .download-btn:hover {
+      background: var(--accent-hover);
+      opacity: 0.9;
+    }
+
+    .download-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    @media (max-width: 768px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .status-timeline {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .artifacts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -262,6 +390,29 @@
 
   <!-- Overview Tab -->
   <div id="overview" class="tab-panel active">
+    <!-- Status Timeline (Phase 10) -->
+    <div style="margin-bottom: 32px;">
+      <h3 style="margin: 0 0 16px; font-size: 1rem;">Processing Status</h3>
+      <div class="status-timeline" id="status-timeline">
+        <div class="status-step completed">
+          <div class="status-step-number">✓</div>
+          <div class="status-step-label">Uploaded</div>
+        </div>
+        <div class="status-step">
+          <div class="status-step-number">2</div>
+          <div class="status-step-label">Analyzing</div>
+        </div>
+        <div class="status-step">
+          <div class="status-step-number">3</div>
+          <div class="status-step-label">Generating</div>
+        </div>
+        <div class="status-step">
+          <div class="status-step-number">✓</div>
+          <div class="status-step-label">Complete</div>
+        </div>
+      </div>
+    </div>
+
     <div class="content-grid">
       <div>
         <div class="video-label">Original Upload</div>
@@ -278,12 +429,25 @@
       </div>
     </div>
 
+    <!-- Output Artifacts (Phase 9) -->
+    <div style="margin-top: 32px;">
+      <h3 style="margin: 0 0 16px; font-size: 1rem;">Generated Outputs</h3>
+      <div class="artifacts-grid" id="artifacts-grid">
+        <p class="no-data">No artifacts yet</p>
+      </div>
+    </div>
+
     <div class="info-grid">
       <div class="info-box">
         <div class="info-label">Status</div>
         <div class="info-value">
           <span id="status-badge" class="badge badge-processing">Processing</span>
         </div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-label">Created</div>
+        <div class="info-value" id="entry-created">—</div>
       </div>
 
       <div class="info-box">
@@ -299,6 +463,11 @@
       <div class="info-box">
         <div class="info-label">Tags</div>
         <div class="info-value" id="entry-tags">—</div>
+      </div>
+
+      <div class="info-box">
+        <div class="info-label">Type</div>
+        <div class="info-value" id="entry-type">—</div>
       </div>
     </div>
   </div>
@@ -384,23 +553,35 @@ async function loadEntry() {
     const entry = data.entry;
     const analysis = data.analysis;
 
+    // Format timestamps with timezone (Phase 6)
+    const createdDate = new Date(entry.createdAt);
+    const formattedCreated = formatDateTime(createdDate);
+
     // Update page title
     document.getElementById("entry-title").textContent = entry.title;
-    document.getElementById("entry-date").textContent = entry.formattedDate;
+    document.getElementById("entry-date").textContent = formattedCreated;
 
     // Update overview tab
+    document.getElementById("entry-created").textContent = formattedCreated;
     document.getElementById("entry-description").textContent = entry.description || "—";
     document.getElementById("entry-project").textContent = entry.project || "—";
     document.getElementById("entry-tags").textContent = entry.tags.join(", ") || "—";
+    document.getElementById("entry-type").textContent = entry.type || "—";
 
     // Update metadata tab
     document.getElementById("metadata-id").textContent = entry.id;
     document.getElementById("metadata-type").textContent = entry.type;
-    document.getElementById("metadata-created").textContent = entry.formattedDate;
-    document.getElementById("metadata-updated").textContent = entry.formattedDate;
+    document.getElementById("metadata-created").textContent = formattedCreated;
+    document.getElementById("metadata-updated").textContent = formattedCreated;
 
-    // Load video players
+    // Update status timeline (Phase 10)
+    updateStatusTimeline(entry.status);
+
+    // Load video players (Phase 7-8)
     loadVideoPlayers(entry);
+
+    // Load artifacts (Phase 9)
+    loadArtifacts(entry);
 
     // Load analysis
     if (analysis) {
@@ -432,6 +613,158 @@ async function loadEntry() {
       err.message +
       "</p>";
   }
+}
+
+// Phase 6: Format timestamp with timezone
+function formatDateTime(date) {
+  const options = {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short'
+  };
+  return date.toLocaleDateString('en-US', options);
+}
+
+// Phase 10: Update status timeline based on current status
+function updateStatusTimeline(status) {
+  const timeline = document.getElementById('status-timeline');
+  const steps = timeline.querySelectorAll('.status-step');
+
+  // Map statuses to step indices
+  const statusMap = {
+    'uploaded': 0,
+    'analyzing': 1,
+    'generating': 2,
+    'ready': 3,
+    'failed': -1
+  };
+
+  const currentStep = statusMap[status] ?? 0;
+
+  steps.forEach((step, index) => {
+    step.classList.remove('active', 'completed');
+
+    if (currentStep === -1) {
+      // Failed state
+      step.style.opacity = '0.5';
+    } else if (index < currentStep) {
+      step.classList.add('completed');
+    } else if (index === currentStep) {
+      step.classList.add('active');
+    }
+  });
+}
+
+// Phase 9: Load and display artifacts
+function loadArtifacts(entry) {
+  const artifactsGrid = document.getElementById('artifacts-grid');
+  const artifacts = [];
+
+  // Map entry renders and analysis to artifacts
+  if (entry.filePath) {
+    artifacts.push({
+      name: 'Original Video',
+      icon: '🎬',
+      path: entry.filePath,
+      type: 'video/mp4'
+    });
+  }
+
+  if (entry.renders?.highlight) {
+    artifacts.push({
+      name: 'Highlight Render',
+      icon: '⭐',
+      path: entry.renders.highlight,
+      type: 'video/mp4'
+    });
+  }
+
+  if (entry.renders?.variantA) {
+    artifacts.push({
+      name: 'Variant A',
+      icon: '📊',
+      path: entry.renders.variantA,
+      type: 'video/mp4'
+    });
+  }
+
+  if (entry.renders?.variantB) {
+    artifacts.push({
+      name: 'Variant B',
+      icon: '📊',
+      path: entry.renders.variantB,
+      type: 'video/mp4'
+    });
+  }
+
+  if (entry.renders?.variantC) {
+    artifacts.push({
+      name: 'Variant C',
+      icon: '📊',
+      path: entry.renders.variantC,
+      type: 'video/mp4'
+    });
+  }
+
+  if (entry.thumbnail) {
+    artifacts.push({
+      name: 'Thumbnail',
+      icon: '🖼️',
+      path: entry.thumbnail,
+      type: 'image/jpeg'
+    });
+  }
+
+  if (artifacts.length === 0) {
+    artifactsGrid.innerHTML = '<p class="no-data">No artifacts generated yet</p>';
+    return;
+  }
+
+  artifactsGrid.innerHTML = artifacts.map(artifact => `
+    <div class="artifact-card">
+      <div class="artifact-icon">${artifact.icon}</div>
+      <div class="artifact-name">${artifact.name}</div>
+      <div class="artifact-size" id="size-${artifact.path}">...</div>
+      <div class="artifact-actions">
+        <a href="/${artifact.path}" class="download-btn" download>
+          ⬇️ Download
+        </a>
+      </div>
+    </div>
+  `).join('');
+
+  // Load file sizes
+  artifacts.forEach(artifact => {
+    fetchFileSize(artifact.path);
+  });
+}
+
+// Fetch file size for display
+async function fetchFileSize(path) {
+  try {
+    const response = await fetch(`/${path}`, { method: 'HEAD' });
+    const size = response.headers.get('content-length');
+    if (size) {
+      const sizeEl = document.getElementById(`size-${path}`);
+      if (sizeEl) {
+        sizeEl.textContent = formatFileSize(parseInt(size));
+      }
+    }
+  } catch (err) {
+    // Size fetch failed, leave blank
+  }
+}
+
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
 }
 
 function loadVideoPlayers(entry) {
