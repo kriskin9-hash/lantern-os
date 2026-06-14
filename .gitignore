@@ -180,6 +180,9 @@ data/csf_memory/symbolic-dict.json
 data/claim-packets/
 output/
 
+# Kalshi trading data (large, local runtime only)
+data/kalshi/
+
 # ─── Cleanup Tier 1 — runtime artifacts (issue #371) ──────────────────────────
 logs/
 test-results/
