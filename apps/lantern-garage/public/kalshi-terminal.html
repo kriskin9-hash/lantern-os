@@ -166,7 +166,7 @@ async function loadBalance(){
 
 async function loadDeck(){
   document.getElementById('end').style.display='none';
-  const d=await j('/suggestions?limit=60');
+  const d=await j('/crypto-intraday?limit=60');
   deck=(d.cards)||[]; idx=0;
   liveMap={}; for(const x of deck) liveMap[x.ticker]=x;
   markFresh();
@@ -176,7 +176,7 @@ async function loadDeck(){
 // tight-band refresh: re-pull now-slice every 6s, patch the front card in place
 async function refreshNow(){
   if(idx>=deck.length) return;
-  const d=await j('/suggestions?limit=60');
+  const d=await j('/crypto-intraday?limit=60');
   if(!d.cards) return;
   liveMap={}; for(const x of d.cards) liveMap[x.ticker]=x;
   markFresh();
