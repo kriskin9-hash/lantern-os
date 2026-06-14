@@ -752,6 +752,31 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         }, 200), true;
       }
 
+      // GET — Dashboard: Complete progress report
+      if (url.pathname === '/api/trading/kalshi/dashboard/progress' && req.method === 'GET') {
+        const { getReport } = require('../lib/kalshi-progress-report');
+        const report = getReport().getReport();
+        return sendJson(res, report, 200), true;
+      }
+
+      // GET — Dashboard: Quick overview
+      if (url.pathname === '/api/trading/kalshi/dashboard/overview' && req.method === 'GET') {
+        const { getReport } = require('../lib/kalshi-progress-report');
+        const { getEnhancer } = require('../lib/kalshi-convergence-enhancer');
+        const { getLora } = require('../lib/kalshi-convergence-lora');
+
+        const report = getReport().getReport();
+        const overview = {
+          projectName: report.projectName,
+          phases: Object.keys(report.phases).length,
+          loops: Object.keys(report.trainingLoops).length,
+          enhancerStatus: getEnhancer().getStatus(),
+          loraStatus: getLora().getStatus(),
+          generatedAt: new Date().toISOString()
+        };
+        return sendJson(res, overview, 200), true;
+      }
+
       // GET — Impossibility Engine deck: constraint-elimination over short-window markets
       // Returns same card shape as crypto-intraday + { determined, stateLabel, knowledge, trace }
       if (url.pathname === '/api/trading/kalshi/impossibility-deck' && req.method === 'GET') {

@@ -1,1 +1,9 @@
-{}
+{
+  "447": {
+    "number": 447,
+    "title": "fix(agent-orchestration): stale queue recovery + monoworkstream dispatch gate",
+    "updatedAt": 1781460798000,
+    "firstSeenAt": 1781457502180,
+    "reviewedAt": null
+  }
+}

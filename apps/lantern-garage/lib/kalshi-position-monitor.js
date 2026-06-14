@@ -96,13 +96,13 @@ class PositionMonitor {
         const conviction = p.conviction || 50;
 
         // Evaluate exit using adaptive logic
-        const eval = evaluateExit(
+        const exitEval = evaluateExit(
           { side: heldSide, limitCents: entry },
           market,
           conviction
         );
 
-        if (!eval.shouldExit) {
+        if (!exitEval.shouldExit) {
           // Still holding — update position state
           this.positions.set(key, {
             ticker,
@@ -117,18 +117,18 @@ class PositionMonitor {
         }
 
         // ── EXIT TRIGGERED ──────────────────────────────────
-        console.log(`[PositionMonitor] EXIT SIGNAL: ${ticker} - ${eval.tag}`);
-        console.log(`  Reason: ${eval.reason}`);
-        console.log(`  P&L: ${eval.pnlPct}%`);
+        console.log(`[PositionMonitor] EXIT SIGNAL: ${ticker} - ${exitEval.tag}`);
+        console.log(`  Reason: ${exitEval.reason}`);
+        console.log(`  P&L: ${exitEval.pnlPct}%`);
 
         // Record for convergence training
         this.recordTrade(
           ticker,
           heldSide,
           entry,
-          eval.exitPrice,
-          eval.pnlPct,
-          eval.tag,
+          exitEval.exitPrice,
+          exitEval.pnlPct,
+          exitEval.tag,
           conviction,
           market
         );
@@ -139,9 +139,9 @@ class PositionMonitor {
           side: heldSide,
           entryCents: entry,
           conviction,
-          exitTag: eval.tag,
-          exitPrice: eval.exitPrice,
-          pnlPct: eval.pnlPct,
+          exitTag: exitEval.tag,
+          exitPrice: exitEval.exitPrice,
+          pnlPct: exitEval.pnlPct,
           exited: true,
           readyToClose: true,
           lastChecked: new Date().toISOString()
