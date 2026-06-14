@@ -190,6 +190,11 @@
     <option value="4h">4h</option>
     <option value="1d">1d</option>
   </select>
+  <div class="range-group">
+    <button class="range-btn" data-range="1D" onclick="changeRange('1D')">1D</button>
+    <button class="range-btn" data-range="5D" onclick="changeRange('5D')">5D</button>
+    <button class="range-btn" data-range="1M" onclick="changeRange('1M')">1M</button>
+  </div>
   <div class="pulse"></div>
   <a href="/trading-news.html" class="nav-link">News →</a>
   <a href="/" class="nav-link" style="margin-left:8px">← Back</a>
@@ -245,6 +250,11 @@
         <option value="4h">4h</option>
         <option value="1d">1d</option>
       </select>
+      <div class="range-group">
+        <button class="range-btn" data-range="1D" onclick="changeRange('1D')">1D</button>
+        <button class="range-btn" data-range="5D" onclick="changeRange('5D')">5D</button>
+        <button class="range-btn" data-range="1M" onclick="changeRange('1M')">1M</button>
+      </div>
       <div class="order-ticket fs-order-ticket">
         <button class="btn-buy" onclick="openOrderTicket(fullscreenTicker,'buy')">BUY</button>
         <button class="btn-sell" onclick="openOrderTicket(fullscreenTicker,'sell')">SELL</button>
@@ -345,6 +355,10 @@ let chartTimeframe = '5m';
 let fullscreenTicker = null;
 let otTicker = null, otSide = 'buy', otOrderType = 'market';
 const TICK_SIZE = 0.01;
+
+// Range presets map onto the existing bar-resolution timeframes: 1D shows
+// today's session at 5m bars, 5D at hourly bars, 1M at daily bars.
+const RANGE_TIMEFRAMES = { '1D': '5m', '5D': '1h', '1M': '1d' };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmt(n, d=2){ return n == null ? '—' : Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
@@ -908,6 +922,7 @@ function openFullscreenChart(t){
   document.getElementById('fsTicker').textContent = t;
   document.getElementById('fsChartTypeSelect').value = chartType;
   document.getElementById('fsChartTfSelect').value = chartTimeframe;
+  syncRangeButtons(chartTimeframe);
   document.getElementById('fsBg').classList.remove('hidden');
   renderFullscreenChart();
 }
@@ -1032,7 +1047,20 @@ function changeTimeframe(tf){
   chartTimeframe = tf;
   document.getElementById('chartTfSelect').value = tf;
   document.getElementById('fsChartTfSelect').value = tf;
+  syncRangeButtons(tf);
   loadBars();
+}
+
+// ── Chart range presets (1D/5D/1M) ───────────────────────────────────────────
+function changeRange(range){
+  changeTimeframe(RANGE_TIMEFRAMES[range]);
+}
+
+function syncRangeButtons(tf){
+  const range = Object.keys(RANGE_TIMEFRAMES).find(r => RANGE_TIMEFRAMES[r] === tf) || null;
+  document.querySelectorAll('.range-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.range === range);
+  });
 }
 
 async function loadPortfolio(){
@@ -1110,6 +1138,7 @@ async function fullRefresh(){
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 function startDashboard(){
+  syncRangeButtons(chartTimeframe);
   fullRefresh();
   loadBars();
   loadAgentLog();
