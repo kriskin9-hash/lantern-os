@@ -78,34 +78,56 @@ class ConvergenceRouter {
    *
    * Map intent_class → agent_id without calling Claude.
    * Uses regex patterns + keyword scoring.
+   *
+   * Σ₀ Fix: Validate cached agent against fresh scores to prevent stale routing.
    */
   async routeIntent(message, context = {}) {
     const intentHash = this.hashIntent(message);
-
-    // Check cache
-    if (this.patterns.intentPatterns[intentHash]) {
-      const cached = this.patterns.intentPatterns[intentHash];
-      if (cached.confidence > 0.7) {
-        return { agent: cached.agent_id, confidence: cached.confidence, source: "cache" };
-      }
-    }
-
-    // Keystone routing (6 agents, deterministic)
     const agents = ["lantern", "blinkbug", "keystone", "waterfall", "xenon", "founder"];
     const scores = this.scoreAgents(message, agents);
     const winner = agents.reduce((a, b) => scores[a] > scores[b] ? a : b);
+    const freshConfidence = Math.min(100, scores[winner]);
 
+    // Check cache BUT validate against fresh scores
+    if (this.patterns.intentPatterns[intentHash]) {
+      const cached = this.patterns.intentPatterns[intentHash];
+      const cachedAgentScore = scores[cached.agent_id] || 0;
+
+      // Return cached only if: (1) high confidence AND (2) cached agent still matches fresh scores
+      if (cached.confidence > 0.7 && cachedAgentScore >= scores[winner] * 0.8) {
+        return {
+          agent: cached.agent_id,
+          confidence: cached.confidence,
+          source: "cache_validated",
+          cacheHit: true
+        };
+      } else if (cached.confidence > 0.7 && cachedAgentScore < scores[winner] * 0.8) {
+        // Cache stale: cached agent lost to fresh computation
+        return {
+          agent: winner,
+          confidence: freshConfidence,
+          source: "cache_stale",
+          cacheHit: false,
+          cachedAgent: cached.agent_id,
+          reasonStale: `${cached.agent_id} scored ${cachedAgentScore}, ${winner} scored ${scores[winner]}`
+        };
+      }
+    }
+
+    // No cache or cache invalid: use fresh scores
     const result = {
       agent: winner,
-      confidence: Math.min(100, scores[winner]),
+      confidence: freshConfidence,
       source: "keystone_routing",
-      scores
+      scores,
+      cacheHit: false
     };
 
-    // Cache for future use
+    // Update cache with fresh routing
     this.patterns.intentPatterns[intentHash] = {
       agent_id: winner,
-      confidence: result.confidence
+      confidence: freshConfidence,
+      lastValidated: new Date().toISOString()
     };
     this.savePatternCache();
 
