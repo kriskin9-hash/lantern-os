@@ -7,6 +7,7 @@ const MAX_HISTORY = 10;
 
 // Canonical provider descriptors
 const PROVIDERS = [
+  { id: "keystone-ft", env: ["ANTHROPIC_API_KEY"], managed: true }, // Trained Keystone agent w/ memory store
   { id: "gemini",    env: ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
   { id: "anthropic", env: ["ANTHROPIC_API_KEY"] },
   { id: "openai",    env: ["OPENAI_API_KEY"] },

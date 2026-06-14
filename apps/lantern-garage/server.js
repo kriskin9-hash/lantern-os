@@ -31,6 +31,7 @@ const { refreshAllPcsf } = require("./lib/pcsf-refresh");
 const { getRoutingSnapshot, refreshProviderCache } = require("./lib/provider-cache");
 const { JobQueue } = require("./lib/job-queue");
 const { JobWorker } = require("./lib/job-worker");
+const { PrWatcher } = require("./lib/pr-watcher");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -51,6 +52,9 @@ const jobQueue = new JobQueue(repoRoot);
 const jobWorker = new JobWorker(jobQueue, repoRoot);
 jobWorker.start(2000); // Poll every 2 seconds for new jobs
 
+// PR Watcher — auto-reviews PRs idle for 3min via Keystone fleet
+const prWatcher = new PrWatcher({ repoRoot, port, idleMs: Number(process.env.PR_WATCHER_IDLE_MS || 3 * 60_000) });
+
 // Shared dependency bundle passed to every route module
 const deps = {
   fs, path,
@@ -67,7 +71,7 @@ const deps = {
   dreamChatReply, AGENT_PERSONAS, DREAM_DOORS, selectAgent,
   unifiedAgentGreet, unifiedAgentHealth, unifiedAgentInspect,
   handleStreamChat,
-  jobQueue, jobWorker,
+  jobQueue, jobWorker, prWatcher,
   repoRoot, publicRoot,
   conversationLogPath, flatRagHousePath, flatRagHouseManifestPath,
   operatorNotesPath, cloudMirrorsPath, cloudMirrorUrls,
@@ -103,8 +107,10 @@ const routes = [
   require("./routes/leaderboard"),
   require("./routes/surfaces"),
   require("./routes/self-edit"),
+  require("./routes/features"),
   require("./routes/personal-cube"),
   require("./routes/agent-status"),
+  require("./routes/pr-review"),
 ];
 
 async function route(req, res) {
@@ -177,6 +183,54 @@ if (discordToken && discordGuildId) {
   console.log("[Discord Bot] Skipped (set DISCORD_BOT_TOKEN + LANTERN_DISCORD_GUILD_ID in .env.local to enable)");
 }
 
+// ── MCP Server (no-auth, port 8771) ──
+let mcpServer = null;
+const mcpServerScript = path.join(repoRoot, "src", "mcp_server", "server.py");
+const enableMcpServer = process.env.LANTERN_MCP_SERVER !== "false";
+if (enableMcpServer && fs.existsSync(mcpServerScript)) {
+  const pythonExe = process.platform === "win32" ? "python" : "python3";
+  mcpServer = spawn(pythonExe, [mcpServerScript], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    env: { ...process.env, LANTERN_MCP_PORT: "8771" },
+  });
+  mcpServer.on("error", (err) => {
+    console.error(`[MCP Server] Failed to start: ${err.message}`);
+  });
+  mcpServer.on("exit", (code) => {
+    console.log(`[MCP Server] exited with code ${code}`);
+  });
+  console.log(`[MCP Server] Starting on port 8771...`);
+} else if (enableMcpServer) {
+  console.warn(`[MCP Server] Script not found: ${mcpServerScript}`);
+} else {
+  console.log("[MCP Server] Disabled (set LANTERN_MCP_SERVER=true to enable)");
+}
+
+// ── MCP OAuth2 Server (OAuth2 protected, port 8772) ──
+let mcpOAuthServer = null;
+const mcpOAuthServerScript = path.join(repoRoot, "src", "mcp_server", "server_oauth.py");
+const enableMcpOAuth = process.env.LANTERN_MCP_OAUTH !== "false";
+if (enableMcpOAuth && fs.existsSync(mcpOAuthServerScript)) {
+  const pythonExe = process.platform === "win32" ? "python" : "python3";
+  mcpOAuthServer = spawn(pythonExe, [mcpOAuthServerScript], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    env: { ...process.env, LANTERN_MCP_OAUTH_PORT: "8772" },
+  });
+  mcpOAuthServer.on("error", (err) => {
+    console.error(`[MCP OAuth Server] Failed to start: ${err.message}`);
+  });
+  mcpOAuthServer.on("exit", (code) => {
+    console.log(`[MCP OAuth Server] exited with code ${code}`);
+  });
+  console.log(`[MCP OAuth Server] Starting on port 8772...`);
+} else if (enableMcpOAuth) {
+  console.warn(`[MCP OAuth Server] Script not found: ${mcpOAuthServerScript}`);
+} else {
+  console.log("[MCP OAuth Server] Disabled (set LANTERN_MCP_OAUTH=true to enable)");
+}
+
 // ── Trading Microservice (Lantern OS Native) ──
 let tradingService = null;
 const tradingServiceScript = path.join(__dirname, "start-trading-service.js");
@@ -217,11 +271,39 @@ if (fs.existsSync(aiTraderStartupScript)) {
   console.log(`[AI Trader] Using native Lantern OS Trading Microservice`);
 }
 
+// ── Cloudflare Tunnel (optional, for public access) ──
+let cloudflaredProcess = null;
+const enableCloudflare = process.env.LANTERN_CLOUDFLARE_TUNNEL !== "false";
+if (enableCloudflare) {
+  // Use tunnel run without explicit name to let cloudflared use ~/.cloudflared/config.yml
+  cloudflaredProcess = spawn("cloudflared", ["tunnel", "run"], {
+    stdio: "inherit",
+    cwd: repoRoot,
+    env: { ...process.env },
+  });
+  cloudflaredProcess.on("error", (err) => {
+    console.error(`[Cloudflare Tunnel] Failed to start: ${err.message}`);
+    console.log("[Cloudflare Tunnel] Install with: choco install cloudflare-warp");
+  });
+  cloudflaredProcess.on("exit", (code) => {
+    console.log(`[Cloudflare Tunnel] exited with code ${code}`);
+  });
+  console.log(`[Cloudflare Tunnel] Starting (reading from ~/.cloudflared/config.yml)...`);
+} else {
+  console.log("[Cloudflare Tunnel] Disabled (set LANTERN_CLOUDFLARE_TUNNEL=true to enable)");
+}
+
 // Graceful shutdown
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down...`);
   if (discordBot && !discordBot.killed) {
     discordBot.kill("SIGTERM");
+  }
+  if (mcpServer && !mcpServer.killed) {
+    mcpServer.kill("SIGTERM");
+  }
+  if (mcpOAuthServer && !mcpOAuthServer.killed) {
+    mcpOAuthServer.kill("SIGTERM");
   }
   if (tradingService && !tradingService.killed) {
     tradingService.kill("SIGTERM");
@@ -229,6 +311,10 @@ function shutdown(signal) {
   if (aiTraderProcess && !aiTraderProcess.killed) {
     aiTraderProcess.kill("SIGTERM");
   }
+  if (cloudflaredProcess && !cloudflaredProcess.killed) {
+    cloudflaredProcess.kill("SIGTERM");
+  }
+  prWatcher.stop();
   server.close(() => {
     process.exit(0);
   });
@@ -295,6 +381,7 @@ server.listen(port, host, () => {
     }
   })();
 
+  prWatcher.start();
   refreshAllPcsf(repoRoot);
   // Ollama cold-start probe
   const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";

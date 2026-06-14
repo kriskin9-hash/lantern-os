@@ -2,14 +2,6 @@
 // Generates A/B/C variants of highlight clips with different hooks, pacing, and captions
 // Optimized for viral retention, completion rate, and rewatch potential
 
-module.exports = {
-  generateVariants,
-  RetentionVariant,
-  hookLibrary,
-  captionLibrary,
-  pacingProfiles,
-};
-
 // ============================================================================
 // HOOK LIBRARY
 // ============================================================================
@@ -319,3 +311,11 @@ function scoreVirality(variant) {
 
   return (noveltyScore + hookScore + energyScore) / 3;
 }
+
+module.exports = {
+  generateVariants,
+  RetentionVariant,
+  hookLibrary,
+  captionLibrary,
+  pacingProfiles,
+};

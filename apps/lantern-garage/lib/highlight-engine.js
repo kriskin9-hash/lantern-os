@@ -6,15 +6,6 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 
-module.exports = {
-  analyzeVideoForHighlights,
-  HighlightTimeline,
-  detectMotion,
-  detectAudioSpikes,
-  detectSceneChanges,
-  scoreHighlight,
-};
-
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
@@ -450,3 +441,11 @@ async function getVideoMetadata(videoPath) {
     });
   });
 }
+module.exports = {
+  analyzeVideoForHighlights,
+  HighlightTimeline,
+  detectMotion,
+  detectAudioSpikes,
+  detectSceneChanges,
+  scoreHighlight,
+};

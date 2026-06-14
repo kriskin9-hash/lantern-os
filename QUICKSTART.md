@@ -21,6 +21,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File start-dual-servers.ps1
 - **Port 4177**: Stable tagged release (checks out master, pulls latest)
 - **Port 4178**: Development version (your current working branch)
 - Opens Chrome to http://127.0.0.1:4177/dream-chat.html
+- **Public access** (via Cloudflare Tunnel): https://lantern-os.net
 
 **Dual boot means:** You can test stable releases while developing on the same machine without conflicts.
 
@@ -112,7 +113,9 @@ What it does in order:
 npm run dev --prefix apps/lantern-garage
 ```
 
-Open `http://127.0.0.1:4177` — the Dream Journal chat UI.
+Open locally: `http://127.0.0.1:4177` — the Dream Journal chat UI.
+
+Or access publicly: `https://lantern-os.net` (via Cloudflare Tunnel)
 
 **Discord bot starts automatically** when `DISCORD_BOT_TOKEN` and `LANTERN_DISCORD_GUILD_ID`
 are set in `.env`. No separate terminal needed — the server spawns it as a child process.
@@ -165,12 +168,31 @@ The server hot-reloads keys on save — no restart needed.
 python src/mcp_server/server.py
 ```
 
-**Port:** `8771`
+**Local access:** `http://127.0.0.1:8771`
+
+**Public access (via Cloudflare Tunnel):** `https://mcp.lantern-os.net`
 
 **What you get:**
 - Tool discovery endpoint
 - Agent slot registration
 - Local-first runtime verification
+
+### 4a. OAuth2-Protected MCP Server (Optional)
+
+For external integrations with OAuth2 authentication:
+
+```bash
+python src/mcp_server/server_oauth.py
+```
+
+**Local access:** `http://127.0.0.1:8772`
+
+**Public access (via Cloudflare Tunnel):** `https://mcp.lantern-os.net/oauth`
+
+Supports OAuth2 providers:
+- **Google** — `https://mcp.lantern-os.net/oauth/authorize?provider=google`
+- **GitHub** — `https://mcp.lantern-os.net/oauth/authorize?provider=github`
+- **Discord** — `https://mcp.lantern-os.net/oauth/authorize?provider=discord`
 
 ---
 
@@ -266,8 +288,48 @@ After running, move `archive/reports-YYYY-MM-DD/` and `archive/manifests-*-YYYY-
 
 ---
 
+## 10. Public Deployment via Cloudflare Tunnel (Automatic)
+
+The Cloudflare tunnel now starts automatically with `npm start` — no separate command needed!
+
+**One-time setup:**
+
+```bash
+# Install Cloudflare tunnel agent
+choco install cloudflare-warp
+
+# Authenticate (one-time, opens browser)
+cloudflared tunnel login
+
+# Create tunnel (one-time)
+cloudflared tunnel create lantern-os
+```
+
+Then access publicly:
+- **Dream Journal:** `https://lantern-os.net`
+- **MCP (public):** `https://mcp.lantern-os.net`
+- **MCP (OAuth2):** `https://mcp.lantern-os.net/oauth`
+
+The tunnel will start automatically whenever you run `npm start` (can disable with `LANTERN_CLOUDFLARE_TUNNEL=false`).
+
+**Manual tunnel start (if not using npm start):**
+
+```bash
+# Run tunnel (connects local ports to public domain)
+cloudflared tunnel run lantern-os --config cloudflare-config.yml
+```
+
+Then access:
+- **Dream Journal:** `https://lantern-os.net`
+- **MCP Server:** `https://mcp.lantern-os.net`
+
+See [`docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md`](docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md) for full setup guide.
+
+---
+
 ## Next Steps
 
 - Read [`AGENTS.md`](AGENTS.md) for agent workflow rules
 - Read [`docs/CONVERGENCE-LOOP.md`](docs/CONVERGENCE-LOOP.md) for the 12-phase method
 - Check [`manifests/dream-journal-v1-agent-slots.json`](manifests/dream-journal-v1-agent-slots.json) for active work items
+- Deploy publicly: [`docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md`](docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md)

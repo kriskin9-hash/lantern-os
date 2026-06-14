@@ -62,7 +62,8 @@ data/internal-rag-house/RAG-HOUSE-MANIFEST.sha256
 
 Default policy:
 
-- Use `http://127.0.0.1:8771`.
+- **Local (development):** Use `http://127.0.0.1:8771`
+- **Public (production):** Use `https://mcp.lantern-os.net` (via Cloudflare Tunnel)
 - Treat remote tunnels as untrusted until endpoint, auth, and exposed tools are verified.
 - Do not run arbitrary shell through MCP.
 - Do not accept advertised capability as proof.

@@ -45,11 +45,18 @@ try:
         alpaca,
     )
 except ImportError as e:
-    print(json.dumps({
-        "error": f"Failed to import agents: {str(e)}",
-        "type": "import_error"
-    }))
-    sys.exit(1)
+    # agents.py not available — evaluate_* actions still work without it
+    scan_all = None
+    get_portfolio_equity = None
+    get_open_positions = None
+    is_market_hours = lambda: False
+    is_crypto = lambda t: False
+    get_profile = lambda t: {}
+    agent_log = []
+    DEFAULT_WATCHLIST = ["SPY", "AAPL", "TSLA", "NVDA", "MSFT"]
+    ASSET_PROFILES = {}
+    alpaca = None
+    _agents_import_error = str(e)
 
 
 def action_scan_market(args):
@@ -469,6 +476,95 @@ def action_get_bars_multi(args):
     return {'bars': result, 'timeframe': timeframe}
 
 
+def action_evaluate_asset(args):
+    """
+    Evaluate a single asset through the TradingTesseract (Phase 4, issue #325).
+
+    Args: {
+        asset:       str  — ticker symbol, e.g. 'AAPL',
+        zones_data:  dict — optional; if omitted, a scan_market is run first,
+        market_status: dict — optional; if omitted, get_market_status is called,
+        agent_log:   list — optional agent-log entries
+    }
+    Returns: { asset, cube: {time,market,signal,layer,asset_state},
+               confidence, action, evaluated_at }
+    """
+    try:
+        from trading_tesseract import TradingTesseract
+    except ImportError as e:
+        return {'error': f'TradingTesseract not available: {e}', 'type': 'import_error'}
+
+    asset = args.get('asset', '').upper()
+    if not asset:
+        return {'error': 'asset is required', 'type': 'validation_error'}
+
+    # Resolve inputs — use provided data or fetch live
+    zones_data = args.get('zones_data')
+    if zones_data is None:
+        try:
+            scan = action_scan_market({'watchlist': [asset]})
+            zones_data = scan.get('zones', {})
+        except Exception:
+            zones_data = {}
+
+    market_status = args.get('market_status')
+    if market_status is None:
+        try:
+            market_status = action_get_market_status({})
+        except Exception:
+            market_status = {}
+
+    agent_log_entries = args.get('agent_log') or []
+
+    tt = TradingTesseract()
+    return tt.evaluate(asset, zones_data, market_status, agent_log_entries)
+
+
+def action_evaluate_watchlist(args):
+    """
+    Evaluate every asset in a watchlist through the TradingTesseract.
+
+    Args: {
+        watchlist:    list[str] — tickers; defaults to DEFAULT_WATCHLIST,
+        zones_data:   dict      — optional; omit to fetch live,
+        market_status: dict     — optional; omit to fetch live,
+        agent_log:    list      — optional agent-log entries
+    }
+    Returns: { evaluations: [...sorted by confidence desc], evaluated_at }
+    """
+    try:
+        from trading_tesseract import TradingTesseract
+    except ImportError as e:
+        return {'error': f'TradingTesseract not available: {e}', 'type': 'import_error'}
+
+    watchlist = args.get('watchlist') or DEFAULT_WATCHLIST
+
+    zones_data = args.get('zones_data')
+    if zones_data is None:
+        try:
+            scan = action_scan_market({'watchlist': watchlist})
+            zones_data = scan.get('zones', {})
+        except Exception:
+            zones_data = {}
+
+    market_status = args.get('market_status')
+    if market_status is None:
+        try:
+            market_status = action_get_market_status({})
+        except Exception:
+            market_status = {}
+
+    agent_log_entries = args.get('agent_log') or []
+
+    tt = TradingTesseract()
+    results = tt.evaluate_watchlist(watchlist, zones_data, market_status, agent_log_entries)
+    return {
+        'evaluations': results,
+        'evaluated_at': results[0]['evaluated_at'] if results else None,
+        'count': len(results),
+    }
+
+
 def main():
     """Main CLI entry point"""
     if len(sys.argv) < 2:
@@ -509,6 +605,8 @@ def main():
         'get_bars': action_get_bars,
         'get_bars_multi': action_get_bars_multi,
         'place_order': action_place_order,
+        'evaluate_asset': action_evaluate_asset,
+        'evaluate_watchlist': action_evaluate_watchlist,
     }
 
     if action not in handlers:
@@ -534,3 +632,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -6,12 +6,6 @@ const fs = require("fs");
 const path = require("path");
 const { v4: uuid } = require("crypto").randomUUID || (() => Math.random().toString(36).substr(2, 9))();
 
-module.exports = {
-  JobQueue,
-  Job,
-  JobStatus,
-};
-
 const JobStatus = {
   PENDING: "pending",
   PROCESSING: "processing",
@@ -189,3 +183,9 @@ class JobQueue {
 function generateJobId() {
   return "job-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9);
 }
+
+module.exports = {
+  JobQueue,
+  Job,
+  JobStatus,
+};

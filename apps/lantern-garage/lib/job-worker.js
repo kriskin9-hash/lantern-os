@@ -9,11 +9,6 @@ const { generateVariants } = require("./retention-engine");
 const { generateCaptions } = require("./caption-engine");
 const { detectSafeZones } = require("./safe-zone-detector");
 
-module.exports = {
-  JobWorker,
-  processJob,
-};
-
 class JobWorker {
   constructor(jobQueue, repoRoot) {
     this.jobQueue = jobQueue;
@@ -234,3 +229,8 @@ async function processJob(job, repoRoot) {
   await worker.executeJob(job);
   return job;
 }
+
+module.exports = {
+  JobWorker,
+  processJob,
+};

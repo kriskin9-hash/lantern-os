@@ -3,16 +3,16 @@
   "pcsf_version": "1.0.0",
   "component": "settings",
   "description": "Runtime configuration layer. Tracks env-var presence for Lantern OS features.",
-  "generated_at": "2026-06-13T01:51:59.327Z",
+  "generated_at": "2026-06-13T04:11:15.738Z",
   "state": "available",
   "settings": [
     {
       "key": "ANTHROPIC_API_KEY",
-      "state": "present"
+      "state": "absent"
     },
     {
       "key": "OPENAI_API_KEY",
-      "state": "absent"
+      "state": "present"
     },
     {
       "key": "GEMINI_API_KEY",
