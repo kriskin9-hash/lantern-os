@@ -758,7 +758,6 @@ async function handleStreamChat(req, url, res) {
   // converganceDecision already computed above (before systemPrompt)
 
   if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
-    sendToken(`Routing to ${routeLabel}...\n`);
     const convResult = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
       timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 20000),
     });
@@ -784,7 +783,49 @@ async function handleStreamChat(req, url, res) {
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
   try {
-    const taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+    let taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+
+    // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
+    // The dream-chat surface forces isCreative -> always "creative" (ollama-first).
+    // The gate escalates substantive new-ground turns to the Claude-first
+    // "reasoning" chain instead. Escalate-only; never downgrades coding/reasoning.
+    if (process.env.ROUTER_GATE === "1") {
+      try {
+        const { gateDecision } = require("./router-gate");
+        const priorTurns = (Array.isArray(history) ? history : [])
+          .map((h) => ({ role: h.role || "user", text: String(h.content || h.text || "") }))
+          .filter((t) => t.text && t.text !== message)  // client includes current msg in history
+          .slice(-3);
+        const gate = gateDecision([...priorTurns, { role: "user", text: message }]);
+        const keywordTaskType = taskType;
+        const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        if (applied) {
+          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
+          taskType = "reasoning";
+        } else {
+          console.log(`[router-gate] no-op for ${taskType} (${gate.reason})`);
+        }
+        try {
+          const { appendJsonlQueued } = require("./file-queue");
+          const logPath = require("path").resolve(__dirname, "..", "..", "..", "data", "router-gate-decisions.jsonl");
+          appendJsonlQueued(logPath, {
+            timestamp: new Date().toISOString(),
+            surface: surfaceMode,
+            agent: requestedAgent || "?",
+            escalate: gate.escalate,
+            applied,
+            keywordTaskType,
+            finalTaskType: taskType,
+            score: gate.score,
+            reason: gate.reason,
+            features: gate.features,
+          }).catch(() => {});
+        } catch { /* logging is best-effort */ }
+      } catch (ge) {
+        console.error("[router-gate] gate error (non-fatal):", ge.message);
+      }
+    }
+
     const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(message, taskType, requestedProvider);
     primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
     console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);

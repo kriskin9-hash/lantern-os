@@ -590,7 +590,51 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
   try {
-    const taskType = detectTaskType(text, { isTradingQuery: tradingContext.length > 0 });
+    let taskType = detectTaskType(text, { isTradingQuery: tradingContext.length > 0 });
+
+    // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
+    // Conversation-dynamics escalation: if this turn breaks genuinely new ground
+    // (high novelty, low echo/repeat), prefer the Claude-first "reasoning" chain.
+    // Escalate-only — never downgrades a keyword-detected coding/reasoning task,
+    // never blocks a provider. See lib/router-gate.js for the honest scope.
+    if (process.env.ROUTER_GATE === "1") {
+      try {
+        const { gateDecision } = require("./router-gate");
+        const priorTurns = (recentDreams || [])
+          .slice(0, 3)
+          .map((d) => ({ role: "user", text: String(d.text || "") }))
+          .reverse();
+        const gate = gateDecision([...priorTurns, { role: "user", text }]);
+        const keywordTaskType = taskType;
+        const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        if (applied) {
+          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
+          taskType = "reasoning";
+        } else {
+          console.log(`[router-gate] no-op for ${taskType} (${gate.reason})`);
+        }
+        // Decision log — lets escalations be labelled against outcomes later.
+        // Non-fatal; never blocks the request.
+        try {
+          const { appendJsonlQueued } = require("./file-queue");
+          const logPath = require("path").resolve(__dirname, "..", "..", "..", "data", "router-gate-decisions.jsonl");
+          appendJsonlQueued(logPath, {
+            timestamp: new Date().toISOString(),
+            agent: agent.id,
+            escalate: gate.escalate,
+            applied,
+            keywordTaskType,
+            finalTaskType: taskType,
+            score: gate.score,
+            reason: gate.reason,
+            features: gate.features,
+          }).catch(() => {});
+        } catch { /* logging is best-effort */ }
+      } catch (ge) {
+        console.error("[router-gate] gate error (non-fatal):", ge.message);
+      }
+    }
+
     const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(text, taskType, requestedProvider);
     primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
     console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);

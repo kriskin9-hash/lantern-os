@@ -7,8 +7,6 @@
 const http = require('http');
 const TradingAPIBridge = require('../lib/trading-api-bridge');
 const TraderAgent = require('../lib/trader-agent');
-const kalshiApi = require('../lib/kalshi-api');
-const kalshiLedger = require('../lib/kalshi-paper-ledger');
 const tradingMemory = require('../lib/trading-memory');
 const tradingStore = require('../lib/trading-store');
 const tradingNews = require('../lib/trading-news');
@@ -587,142 +585,468 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
-  // ── Kalshi v2 authenticated endpoints (#397) ─────────────────────────────
-
-  // GET /api/trading/kalshi/balance
-  // Returns account balance in cents. Requires RSA credentials.
-  if (url.pathname === '/api/trading/kalshi/balance' && req.method === 'GET') {
-    if (!kalshiApi.hasCredentials()) {
-      sendJson(res, { error: 'Kalshi RSA credentials not configured (KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY)' }, 401);
-      return true;
-    }
-    try {
-      const data = await kalshiApi.getBalance();
-      sendJson(res, data);
-    } catch (err) {
-      sendJson(res, { error: err.message, status: err.status }, err.status || 502);
-    }
-    return true;
-  }
-
-  // GET /api/trading/kalshi/positions
-  // Returns open portfolio positions. Requires RSA credentials.
-  if (url.pathname === '/api/trading/kalshi/positions' && req.method === 'GET') {
-    if (!kalshiApi.hasCredentials()) {
-      sendJson(res, { error: 'Kalshi RSA credentials not configured' }, 401);
-      return true;
-    }
-    try {
-      const data = await kalshiApi.getPositions();
-      sendJson(res, data);
-    } catch (err) {
-      sendJson(res, { error: err.message, status: err.status }, err.status || 502);
-    }
-    return true;
-  }
-
   // GET /api/trading/kalshi/markets
-  // Public — all open markets, optionally filtered by series_ticker or category.
+  // Returns the CIO collector's recorded Kalshi odds (read-only, from snapshots)
   if (url.pathname === '/api/trading/kalshi/markets' && req.method === 'GET') {
     try {
-      const params = {};
-      if (url.searchParams.get('series_ticker')) params.series_ticker = url.searchParams.get('series_ticker');
-      if (url.searchParams.get('limit'))         params.limit = url.searchParams.get('limit');
-      const data = await kalshiApi.getMarkets(params);
-      sendJson(res, data);
-    } catch (err) {
-      sendJson(res, { error: err.message }, 503);
+      const stats = require('../lib/kalshi-stats').getKalshiStats();
+      sendJson(res, stats, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Kalshi stats unavailable', details: error.message }, 503);
     }
     return true;
   }
 
-  // GET /api/trading/kalshi/crypto-markets  (#398)
-  // Discover BTC/ETH/SOL/XRP/DOGE 15-min markets via series_ticker filter.
-  if (url.pathname === '/api/trading/kalshi/crypto-markets' && req.method === 'GET') {
+  // ── Full Kalshi v2 API surface (for the on-dashboard terminal) ────────────
+  // Read endpoints are public; portfolio + orders are RSA-signed & gated.
+  if (url.pathname.startsWith('/api/trading/kalshi/') &&
+      url.pathname !== '/api/trading/kalshi/events' &&
+      url.pathname !== '/api/trading/kalshi/markets') {
+    const kalshi = require('../lib/kalshi-api');
+    const q = Object.fromEntries(url.searchParams.entries());
     try {
-      const limit = parseInt(url.searchParams.get('limit') || '50', 10);
-      const markets = await kalshiApi.getCryptoMarkets(limit);
-      sendJson(res, { markets, count: markets.length, series: kalshiApi.CRYPTO_SERIES });
-    } catch (err) {
-      sendJson(res, { error: err.message }, 503);
+      // GET — connection & safety snapshot
+      if (url.pathname === '/api/trading/kalshi/connection' && req.method === 'GET') {
+        return sendJson(res, await kalshi.getConnection(), 200), true;
+      }
+      // GET — CIO suggestion deck (the "Tinder of trading" cards)
+      if (url.pathname === '/api/trading/kalshi/suggestions' && req.method === 'GET') {
+        const suggest = require('../lib/kalshi-suggest');
+        const limit = q.limit ? Number(q.limit) : 60;
+        const collector = deps.kalshiCollector || null;
+        return sendJson(res, await suggest.getSuggestions({ limit, collector }), 200), true;
+      }
+
+      // GET — Convergence-optimized games (ideal time window + conviction + momentum)
+      if (url.pathname === '/api/trading/kalshi/convergence-ranked' && req.method === 'GET') {
+        const suggest = require('../lib/kalshi-suggest');
+        const scorer = require('../lib/kalshi-convergence-scorer');
+        const limit = q.limit ? Number(q.limit) : 12;
+        const collector = deps.kalshiCollector || null;
+        const suggestions = await suggest.getSuggestions({ limit: 200, collector });
+        const ranked = scorer.rankByConvergence(suggestions.cards || [], limit);
+        return sendJson(res, {
+          count: ranked.length,
+          note: 'Games ranked by convergence fitness: ideal time window (1-6h) + high conviction + strong momentum',
+          cards: ranked
+        }, 200), true;
+      }
+
+      // GET — Crypto intraday markets (15m, 1h, daily predictions)
+      if (url.pathname === '/api/trading/kalshi/crypto-intraday' && req.method === 'GET') {
+        const cryptoSuggest = require('../lib/kalshi-crypto-suggester');
+        const limit = q.limit ? Number(q.limit) : 20;
+        const collector = deps.kalshiCollector || null;
+        return sendJson(res, await cryptoSuggest.getCryptoSuggestions({ limit, collector }), 200), true;
+      }
+
+      // GET — Impossibility Engine deck: constraint-elimination over short-window markets
+      // Returns same card shape as crypto-intraday + { determined, stateLabel, knowledge, trace }
+      if (url.pathname === '/api/trading/kalshi/impossibility-deck' && req.method === 'GET') {
+        const { createKalshiEngine, engineResultToCard } = require('../lib/impossibility-engine');
+        const { isShortWindowMarket } = require('../lib/kalshi-crypto-suggester');
+        const limit = q.limit ? Number(q.limit) : 20;
+        const nowMs = Date.now();
+
+        // Fetch short-window markets
+        let markets = [];
+        const collector = deps.kalshiCollector;
+        if (collector) {
+          const latest = collector.getLatestMarkets?.();
+          if (latest && latest.length > 0) {
+            markets = latest.filter(m => isShortWindowMarket(m, nowMs));
+          }
+        }
+        if (markets.length === 0) {
+          const mk = await kalshi.getMarkets({ status: 'open', limit: 500 });
+          markets = (mk.data?.markets || []).filter(m => isShortWindowMarket(m, nowMs));
+        }
+
+        if (markets.length === 0) {
+          return sendJson(res, { count: 0, cards: [], note: 'No markets closing within 6 hours' }, 200), true;
+        }
+
+        const engine = createKalshiEngine();
+        const solved = engine.solveAll(markets);
+        const cards  = solved
+          .slice(0, limit)
+          .map(({ market, result }) => engineResultToCard(market, result));
+
+        return sendJson(res, {
+          count: cards.length,
+          generatedAt: new Date().toISOString(),
+          note: 'Impossibility Engine: constraint-elimination over short-window Kalshi markets',
+          determined: cards.filter(c => c.determined).length,
+          cards,
+        }, 200), true;
+      }
+
+      // GET — Decisive Deck: ONE action per market (buy or sell, not both)
+      // Consolidates all positions + suggestions into high-conviction trades only
+      // WITH regime detection + strategy fitness scoring (Phase C MVP)
+      if (url.pathname === '/api/trading/kalshi/decisive-deck' && req.method === 'GET') {
+        const suggest = require('../lib/kalshi-suggest');
+        const { createKalshiEngine, engineResultToCard } = require('../lib/impossibility-engine');
+        const { isShortWindowMarket } = require('../lib/kalshi-crypto-suggester');
+        const cryptoSuggest = require('../lib/kalshi-crypto-suggester');
+        const RegimeDetector = require('../lib/regime-detector');
+        const performanceLogger = require('../lib/strategy-performance-logger');
+        const strategyRegistry = require('../lib/strategy-registry');
+        const collector = deps.kalshiCollector || null;
+        const nowMs = Date.now();
+
+        try {
+          // Initialize regime detector
+          const regimeDetector = new RegimeDetector();
+
+          // Step 1: Get all suggestions in parallel
+          const [suggestions, ieCards, cryptoCards] = await Promise.all([
+            suggest.getSuggestions({ limit: 100, collector }),
+            (async () => {
+              let markets = [];
+              if (collector) {
+                const latest = collector.getLatestMarkets?.();
+                if (latest?.length > 0) markets = latest.filter(m => isShortWindowMarket(m, nowMs));
+              }
+              if (markets.length === 0) {
+                const mk = await kalshi.getMarkets({ status: 'open', limit: 500 });
+                markets = (mk.data?.markets || []).filter(m => isShortWindowMarket(m, nowMs));
+              }
+              if (markets.length === 0) return [];
+              const engine = createKalshiEngine();
+              const solved = engine.solveAll(markets);
+              return solved.slice(0, 20).map(({ market, result }) => engineResultToCard(market, result));
+            })(),
+            cryptoSuggest.getCryptoSuggestions({ limit: 15, collector }).catch(() => ({ cards: [] })),
+          ]);
+
+          // Step 2: Extract cards from suggestions (already includes exits + entries)
+          const existingCards = suggestions.cards || [];
+          const cryptoCardsList = cryptoCards.cards || [];
+          const allSignals = [...existingCards, ...ieCards, ...cryptoCardsList];
+
+          // Step 3: Detect regime + score strategies per market
+          const activeStrategies = strategyRegistry.getActiveStrategies();
+          const strategyIds = activeStrategies.map(s => s.strategy_id);
+
+          // Enrich cards with regime detection + strategy fitness
+          const enrichedCards = allSignals.map(card => {
+            // Detect regime for this market
+            const regime = regimeDetector.detect(card.market || {});
+
+            // Score available strategies for this regime
+            const bestStrategy = performanceLogger.getBestStrategyForRegime(regime, strategyIds);
+
+            return {
+              ...card,
+              regime,
+              best_strategy: bestStrategy.strategy_id,
+              strategy_fitness: bestStrategy.fitness,
+              strategy_score: bestStrategy.score,
+            };
+          });
+
+          // Step 4: Consolidate: one action per ticker (exits take priority)
+          const decisiveMap = new Map();
+
+          // Sort so exits come first, then by strategy fitness + conviction
+          enrichedCards.sort((a, b) => {
+            const aIsExit = a.kind === 'exit' ? 0 : 1;
+            const bIsExit = b.kind === 'exit' ? 0 : 1;
+            if (aIsExit !== bIsExit) return aIsExit - bIsExit;
+
+            // Tie-breaker: strategy fitness score
+            const aStrategyScore = a.strategy_score || 0;
+            const bStrategyScore = b.strategy_score || 0;
+            if (Math.abs(aStrategyScore - bStrategyScore) > 0.1) {
+              return bStrategyScore - aStrategyScore;
+            }
+
+            // Final tie-breaker: conviction
+            return (b.conviction || 0) - (a.conviction || 0);
+          });
+
+          // Take first action per ticker (exits first, then highest fitness strategy + conviction entry)
+          for (const card of enrichedCards) {
+            if (!decisiveMap.has(card.ticker)) {
+              // Only add entries if conviction > 70% OR strategy has positive recent fitness
+              const hasPositiveFitness = card.strategy_fitness?.pnl > 0;
+              if (card.kind === 'exit' || (card.conviction || 0) >= 70 || hasPositiveFitness) {
+                decisiveMap.set(card.ticker, card);
+              }
+            }
+          }
+
+          // Step 5: Rank by conviction × time-weight × strategy fitness
+          const allCards = Array.from(decisiveMap.values());
+          allCards.forEach(card => {
+            const timeWeight = (card.minsToClose ?? 60) < 60 ? 1.2 : (card.minsToClose ?? 60) < 240 ? 1.0 : 0.7;
+            const strategyWeight = Math.min(1.5, 1.0 + (card.strategy_fitness?.stability || 0.5) * 0.5);
+            card.decisionScore = (card.conviction || 0) * timeWeight * strategyWeight;
+          });
+          allCards.sort((a, b) => (b.decisionScore || 0) - (a.decisionScore || 0));
+
+          // Step 6: Return top 6 trades (focused, decisive deck)
+          const decisive = allCards.slice(0, 6);
+
+          return sendJson(res, {
+            count: decisive.length,
+            generatedAt: new Date().toISOString(),
+            note: 'Decisive Deck: ONE action per market (regime-aware strategy selection)',
+            regime_stats: {
+              regimes_detected: [...new Set(decisive.map(c => c.regime))],
+              strategies_active: strategyIds,
+            },
+            cards: decisive.map(c => ({
+              ...c,
+              // Expose regime + strategy info to human for validation
+              regime: c.regime,
+              best_strategy: c.best_strategy,
+              strategy_fitness: c.strategy_fitness,
+            })),
+          }, 200), true;
+        } catch (error) {
+          console.error('[Decisive Deck] error:', error.message);
+          return sendJson(res, { count: 0, cards: [], error: error.message }, 500), true;
+        }
+      }
+
+      // GET — Observer Engine frontier over current short-window markets
+      // Returns KnowabilityFrontier + TemporalBand + ConvergenceStateField snapshot
+      if (url.pathname === '/api/trading/kalshi/observer-frontier' && req.method === 'GET') {
+        const { createKalshiEngine } = require('../lib/impossibility-engine');
+        const { isShortWindowMarket } = require('../lib/kalshi-crypto-suggester');
+        const { buildKalshiObserver, ConvergenceStateField } = require('../lib/observer-engine');
+        const limit = q.limit ? Number(q.limit) : 50;
+
+        let markets = [];
+        const collector = deps.kalshiCollector;
+        if (collector) {
+          const latest = collector.getLatestMarkets?.();
+          if (latest && latest.length > 0) markets = latest.filter(m => isShortWindowMarket(m, Date.now()));
+        }
+        if (markets.length === 0) {
+          const mk = await kalshi.getMarkets({ status: 'open', limit: 500 });
+          markets = (mk.data?.markets || []).filter(m => isShortWindowMarket(m, Date.now()));
+        }
+
+        // Run IE first — results feed Observer Engine frontier classification
+        const engine = createKalshiEngine();
+        const ieResults = engine.solveAll(markets).map(({ result }) => result);
+
+        const observer = buildKalshiObserver(markets.slice(0, limit), ieResults);
+        const band = observer.emit_band();
+        const csf = new ConvergenceStateField([band]);
+
+        return sendJson(res, {
+          generatedAt: new Date().toISOString(),
+          marketCount: markets.length,
+          frontier: observer.frontier.toJSON(),
+          band: band.toJSON(),
+          csf: csf.toJSON(),
+          summary: {
+            known:        observer.frontier.known.size,
+            recallable:   observer.frontier.recallable.size,
+            observable:   observer.frontier.observable.size,
+            reachable:    observer.frontier.reachable.size,
+            inferable:    observer.frontier.inferable.size,
+            discoverable: observer.frontier.discoverable.size,
+          },
+        }, 200), true;
+      }
+
+      // GET — live market data (pass-through query: series_ticker, status, limit, event_ticker)
+      if (url.pathname === '/api/trading/kalshi/live-markets' && req.method === 'GET') {
+        const r = await kalshi.getMarkets(q);
+        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/events-list' && req.method === 'GET') {
+        const r = await kalshi.getEvents(q);
+        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+      }
+      // GET — order book for one market  (?ticker=...&depth=...)
+      if (url.pathname === '/api/trading/kalshi/orderbook' && req.method === 'GET') {
+        const r = await kalshi.getOrderbook(q.ticker, q.depth ? Number(q.depth) : 10);
+        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+      }
+      // GET — authenticated portfolio (balance / positions / orders / fills)
+      if (url.pathname === '/api/trading/kalshi/balance' && req.method === 'GET') {
+        const r = await kalshi.getBalance();
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/positions' && req.method === 'GET') {
+        const r = await kalshi.getPositions(q);
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/portfolio-orders' && req.method === 'GET') {
+        const r = await kalshi.getOrders(q);
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      if (url.pathname === '/api/trading/kalshi/fills' && req.method === 'GET') {
+        const r = await kalshi.getFills(q);
+        return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
+      }
+      // POST — place order (dry-run / kill-switch gated inside placeOrder)
+      if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
+        const body = await collectRequestBody(req);
+        const o = body ? JSON.parse(body) : {};
+        return sendJson(res, await kalshi.placeOrder(o), 200), true;
+      }
+      // POST — cancel order  { orderId }
+      if (url.pathname === '/api/trading/kalshi/order/cancel' && req.method === 'POST') {
+        const body = await collectRequestBody(req);
+        const { orderId } = body ? JSON.parse(body) : {};
+        return sendJson(res, await kalshi.cancelOrder(orderId), 200), true;
+      }
+
+      // ── Paper trading ledger (dry-run position tracking) ───────────────────
+      // POST — open a paper position (called after each dry-run "take")
+      if (url.pathname === '/api/trading/kalshi/paper-trade' && req.method === 'POST') {
+        const paperLedger = require('../lib/kalshi-paper-ledger');
+        const body = await collectRequestBody(req);
+        const o = body ? JSON.parse(body) : {};
+        return sendJson(res, paperLedger.openPosition(o), 201), true;
+      }
+      // GET — poll open paper positions with live P&L + auto-exit signals
+      if (url.pathname === '/api/trading/kalshi/paper-positions' && req.method === 'GET') {
+        const paperLedger = require('../lib/kalshi-paper-ledger');
+        const positions = await paperLedger.pollOpen();
+        return sendJson(res, { count: positions.length, positions }, 200), true;
+      }
+      // POST — close a paper position  { id, exitTag?, exitPriceCents?, pnlPct? }
+      if (url.pathname === '/api/trading/kalshi/paper-close' && req.method === 'POST') {
+        const paperLedger = require('../lib/kalshi-paper-ledger');
+        const body = await collectRequestBody(req);
+        const { id, exitTag, exitPriceCents, pnlPct } = body ? JSON.parse(body) : {};
+        if (!id) return sendJson(res, { error: 'id required' }, 400), true;
+        return sendJson(res, paperLedger.closePosition(id, { exitTag, exitPriceCents, pnlPct }), 200), true;
+      }
+    } catch (error) {
+      return sendJson(res, { error: 'kalshi_api_error', details: error.message }, 502), true;
     }
-    return true;
   }
 
-  // GET /api/trading/kalshi/series  (#398 helper)
-  // Returns all available series tickers for market discovery.
-  if (url.pathname === '/api/trading/kalshi/series' && req.method === 'GET') {
+  // GET /api/trading/kalshi/positions-deck
+  // Open positions as swipe cards: entry price, current bid, P&L, exit tag.
+  // Parallel market fetches so latency = slowest single market, not sum.
+  if (url.pathname === '/api/trading/kalshi/positions-deck' && req.method === 'GET') {
     try {
-      const data = await kalshiApi.getSeries();
-      sendJson(res, data);
-    } catch (err) {
-      sendJson(res, { error: err.message }, 503);
-    }
-    return true;
-  }
+      const kalshi = require('../lib/kalshi-api');
+      const posRes = await kalshi.getPositions({});
+      const rawPositions = (posRes.data && posRes.data.market_positions) || [];
 
-  // ── Kalshi paper trading endpoints ────────────────────────────────────────
+      // Kalshi v2 API returns position:0 (integer) even when position_fp is non-zero
+      // (fractional contracts). Fall through to position_fp when the integer rounds to 0.
+      const rawCount = p => {
+        const pos = p.position;
+        if (pos != null && pos !== 0) return parseFloat(pos);
+        return parseFloat(p.position_fp ?? p.quantity_fp ?? 0);
+      };
 
-  // POST /api/trading/kalshi/paper-trade  — open a paper position
-  if (url.pathname === '/api/trading/kalshi/paper-trade' && req.method === 'POST') {
-    try {
-      const body = JSON.parse(await collectRequestBody(req));
-      const position = kalshiLedger.openPosition(body);
-      sendJson(res, { ok: true, position }, 201);
-    } catch (err) {
-      sendJson(res, { error: err.message }, 400);
-    }
-    return true;
-  }
+      const active = rawPositions.filter(p => {
+        const n = rawCount(p);
+        return Number.isFinite(n) && n !== 0;
+      });
 
-  // POST /api/trading/kalshi/paper-close  — close a paper position
-  if (url.pathname === '/api/trading/kalshi/paper-close' && req.method === 'POST') {
-    try {
-      const body = JSON.parse(await collectRequestBody(req));
-      const { id, exitPriceCents, exitTag } = body;
-      if (!id) { sendJson(res, { error: 'id required' }, 400); return true; }
-      const record = kalshiLedger.closePosition(id, exitPriceCents || 50, exitTag || 'MANUAL');
-      if (!record) { sendJson(res, { error: 'position not found' }, 404); return true; }
-      sendJson(res, { ok: true, record });
-    } catch (err) {
-      sendJson(res, { error: err.message }, 400);
-    }
-    return true;
-  }
-
-  // GET /api/trading/kalshi/paper-positions  — open positions with live P&L
-  if (url.pathname === '/api/trading/kalshi/paper-positions' && req.method === 'GET') {
-    try {
-      const open = kalshiLedger.getOpenPositions();
-      // Enrich with live bid prices if available (best-effort, no auth needed for orderbook)
-      const priceMap = new Map();
-      await Promise.allSettled(
-        open.map(async (p) => {
-          try {
-            const ob = await kalshiApi.getOrderbook(p.ticker);
-            const bestBid = ob?.orderbook?.yes?.[0]?.[0] ?? p.entryCents;
-            priceMap.set(p.ticker, bestBid);
-          } catch { /* leave at entry price */ }
-        })
+      const mkResults = await Promise.all(
+        active.map(p => kalshi.getMarket(p.ticker || p.market_ticker).catch(() => null))
       );
-      const positions = kalshiLedger.evaluatePositions(priceMap);
-      sendJson(res, { positions, count: positions.length });
-    } catch (err) {
-      sendJson(res, { error: err.message }, 500);
-    }
-    return true;
-  }
 
-  // GET /api/trading/kalshi/paper-history  — closed trade history (#400)
-  if (url.pathname === '/api/trading/kalshi/paper-history' && req.method === 'GET') {
-    try {
-      const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-      const history = kalshiLedger.getHistory(limit);
-      sendJson(res, history);
-    } catch (err) {
-      sendJson(res, { error: err.message }, 500);
+      const nowMs = Date.now();
+      const num = v => { const f = parseFloat(v); return Number.isFinite(f) ? f : null; };
+
+      function entryCents(p, qty) {
+        const expD = num(p.market_exposure_dollars);
+        if (expD != null && qty > 0) return Math.round((Math.abs(expD) / qty) * 100);
+        const exp = num(p.market_exposure);
+        if (exp != null && qty > 0) return Math.round(Math.abs(exp) / qty);
+        const avg = num(p.average_price_dollars) ?? num(p.avg_price_dollars);
+        if (avg != null) return Math.round(avg * 100);
+        return null;
+      }
+
+      // Kalshi taker fee: round_up(0.07 × C × P × (1-P)) in cents.
+      // INX / NASDAQ100 markets use the 0.035 rate per fee schedule (Feb 5, 2026).
+      function kalshiFee(contracts, priceCents, ticker = '') {
+        const pc = Math.max(1, Math.min(99, priceCents));
+        const P = pc / 100;
+        const rate = (ticker.startsWith('INX') || ticker.startsWith('NASDAQ100')) ? 0.035 : 0.07;
+        return Math.ceil(rate * contracts * P * (1 - P) * 100); // cents
+      }
+
+      const cards = [];
+      for (let i = 0; i < active.length; i++) {
+        const p = active[i];
+        const m = mkResults[i] && mkResults[i].data && mkResults[i].data.market;
+        const ticker = p.ticker || p.market_ticker;
+        const count = rawCount(p);
+        const heldSide = count > 0 ? 'yes' : 'no';
+        const absCount = Math.abs(count);
+        // Display qty: round fractional positions up to 1 so the card reads "1 contract"
+        const qty = absCount < 1 ? 1 : Math.abs(Math.round(count));
+        // Entry price: use raw fractional count so exposure/count gives the correct per-contract cost
+        const entry = entryCents(p, absCount || 1) || 50;
+        const bidCents = m ? (heldSide === 'yes'
+          ? (m.yes_bid ?? Math.round((num(m.yes_bid_dollars) || 0) * 100))
+          : (m.no_bid  ?? Math.round((num(m.no_bid_dollars)  || 0) * 100))) : entry;
+
+        const pnlCents = bidCents - entry;
+        const pnlPct   = Math.round((pnlCents / entry) * 100);
+        const maxPayout = qty * 100; // $1 per contract in cents
+
+        // Fee impact: exit fee you'd pay to sell now; entry fee already paid at open
+        const exitFeeCents  = kalshiFee(qty, bidCents, ticker);
+        const entryFeeCents = kalshiFee(qty, entry, ticker);
+        const grossPnlCents = pnlCents * qty;
+        const netPnlCents   = grossPnlCents - entryFeeCents - exitFeeCents;
+        const costBasis     = entry * qty + entryFeeCents;
+        const netPnlPct     = costBasis > 0 ? Math.round((netPnlCents / costBasis) * 100) : 0;
+
+        const minsToClose = m && m.close_time
+          ? Math.round((new Date(m.close_time).getTime() - nowMs) / 60000) : null;
+
+        const yesCents = (m && m.yes_ask != null) ? m.yes_ask : 50;
+        const conviction = Math.min(99, Math.round(
+          heldSide === 'yes' ? yesCents * 1.1 : (100 - yesCents) * 1.1
+        ));
+
+        const exitTag = pnlPct <= -30 ? 'STOP-LOSS'
+          : pnlPct >= 40 ? 'TAKE-PROFIT'
+          : (minsToClose !== null && minsToClose <= 30 && minsToClose >= 0) ? 'FLATTEN'
+          : null;
+
+        const pnlSign    = pnlPct >= 0 ? '+' : '';
+        const netPnlSign = netPnlPct >= 0 ? '+' : '';
+        const reason = `entry ${entry}¢ · bid ${bidCents}¢ · gross ${pnlSign}${pnlPct}% · fee −${exitFeeCents}¢ · net ${netPnlSign}${netPnlPct}%`;
+
+        cards.push({
+          kind: 'position', action: 'sell',
+          ticker,
+          title: (m && m.title) || ticker,
+          yesLabel: (m && m.yes_sub_title) || 'YES',
+          noLabel:  (m && m.no_sub_title)  || 'NO',
+          favSide: heldSide,
+          favLabel: heldSide === 'yes' ? ((m && m.yes_sub_title) || 'YES') : ((m && m.no_sub_title) || 'NO'),
+          favAsk: bidCents,
+          qty, entryCents: entry, currentBidCents: bidCents,
+          pnlCents: grossPnlCents, pnlPct,
+          netPnlCents, netPnlPct,
+          exitFeeCents, entryFeeCents,
+          maxPayoutCents: maxPayout,
+          conviction, exitTag, minsToClose,
+          close: (m && m.close_time) || '',
+          reason, yesPct: yesCents,
+        });
+      }
+
+      // Stop-loss first → flatten → take-profit → worst P&L first
+      const urgency = t => t === 'STOP-LOSS' ? 0 : t === 'FLATTEN' ? 1 : t === 'TAKE-PROFIT' ? 2 : 3;
+      cards.sort((a, b) => urgency(a.exitTag) - urgency(b.exitTag) || a.pnlPct - b.pnlPct);
+
+      return sendJson(res, { count: cards.length, generatedAt: new Date().toISOString(), cards }, 200), true;
+    } catch (error) {
+      return sendJson(res, { error: 'positions_deck_error', details: error.message }, 502), true;
     }
-    return true;
   }
 
   // GET /api/trading/alpaca/account
@@ -939,6 +1263,27 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, { ok: true, relation: `${newsId} → ${orderId}` }, 201);
     } catch (error) {
       sendJson(res, { error: 'Link failed', details: error.message }, 400);
+    }
+    return true;
+  }
+
+  // GET /api/trading/kalshi/collector-status
+  // Get tight-band collector status and latest snapshot
+  if (url.pathname === '/api/trading/kalshi/collector-status' && req.method === 'GET') {
+    try {
+      const collector = deps.kalshiCollector;
+      const latest = collector ? collector.getLatest() : null;
+      sendJson(res, {
+        running: !!collector,
+        lastSnapshot: latest ? {
+          generatedAt: latest.generatedAt,
+          marketCount: latest.markets?.length || 0,
+          exitCount: latest.exitCount || 0,
+          markets: latest.markets?.slice(0, 5), // First 5 for preview
+        } : null,
+      }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Collector status check failed', details: error.message }, 500);
     }
     return true;
   }
@@ -1230,6 +1575,59 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, results);
     } catch (err) {
       sendJson(res, { error: err.message }, 500);
+    }
+    return true;
+  }
+
+  // ── Crypto Collector Routes ──────────────────────────────────────────────────
+  // Real-time crypto pricing and news from Kalshi markets + CoinGecko
+
+  // GET /api/trading/crypto/prices
+  // Returns latest crypto prices (BTC, ETH, SOL, XRP, DOGE) from Kalshi prediction markets
+  if (url.pathname === '/api/trading/crypto/prices' && req.method === 'GET') {
+    try {
+      const cryptoCollector = deps.cryptoCollector;
+      if (!cryptoCollector) {
+        return sendJson(res, { error: 'Crypto collector not initialized' }, 503), true;
+      }
+      const prices = cryptoCollector.getLatestPrices();
+      sendJson(res, { timestamp: new Date().toISOString(), prices }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch crypto prices', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/crypto/news
+  // Returns latest crypto news from CoinGecko trending endpoint
+  if (url.pathname === '/api/trading/crypto/news' && req.method === 'GET') {
+    try {
+      const cryptoCollector = deps.cryptoCollector;
+      if (!cryptoCollector) {
+        return sendJson(res, { error: 'Crypto collector not initialized' }, 503), true;
+      }
+      const news = cryptoCollector.getLatestNews();
+      sendJson(res, { timestamp: new Date().toISOString(), news }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch crypto news', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/crypto/prices/historical?limit=100
+  // Returns historical crypto price snapshots (JSONL-based time series)
+  if (url.pathname === '/api/trading/crypto/prices/historical' && req.method === 'GET') {
+    try {
+      const cryptoCollector = deps.cryptoCollector;
+      if (!cryptoCollector) {
+        return sendJson(res, { error: 'Crypto collector not initialized' }, 503), true;
+      }
+      const limitParam = url.searchParams.get('limit');
+      const limit = limitParam ? Number(limitParam) : 100;
+      const prices = cryptoCollector.getHistoricalPrices(limit);
+      sendJson(res, { timestamp: new Date().toISOString(), count: prices.length, prices }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch historical prices', details: error.message }, 500);
     }
     return true;
   }

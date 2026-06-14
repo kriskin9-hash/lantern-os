@@ -1,296 +1,269 @@
 /**
- * kalshi-api.js — Kalshi v2 REST client with RSA-PSS auth
+ * Kalshi v2 API client — the full trade-api surface, for the on-dashboard terminal.
  *
- * Fix for issue #397: Kalshi generates PKCS#1 RSA keys but Node.js
- * crypto.sign() requires PKCS#8. We use crypto.createPrivateKey() which
- * accepts both formats, resolving the "unsupported" decoder error.
+ * Read endpoints (markets / events / orderbook / exchange status) are public and
+ * need no auth. Portfolio reads (balance / positions / orders / fills) and order
+ * placement are authenticated with Kalshi's RSA-PSS request signing.
  *
- * Auth model:
- *   Public endpoints (/markets, /events, /orderbook) — no auth
- *   Authenticated (/portfolio/*, /balance) — RSA-PSS signed headers
- *
- * Env vars:
- *   KALSHI_API_KEY_ID      — your API key ID from kalshi.com/settings/api
- *   KALSHI_PRIVATE_KEY     — PEM content (PKCS#1 or PKCS#8, both accepted)
- *   KALSHI_PRIVATE_KEY_PATH — path to PEM file (fallback if no inline key)
+ * SAFETY — the live boundary is enforced in code, not by trust:
+ *   - Credentials come from env (KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY[_PATH]).
+ *     This module NEVER asks for or stores keys; if they are absent, authed calls
+ *     return {error:'credentials_required'} and the UI prompts YOU to connect them.
+ *   - placeOrder is DRY-RUN by default. A live order requires ALL of:
+ *       (1) KALSHI_TRADING_ENABLED === '1', and
+ *       (2) the kill-switch file data/kalshi/LIVE-KILL-SWITCH is ABSENT, and
+ *       (3) valid credentials.
+ *     Otherwise it logs a planned order to the existing kalshi-live-ledger.jsonl
+ *     and returns {mode:'dry_run'} — nothing hits the exchange.
  */
 
-'use strict';
+"use strict";
 
-const crypto = require('crypto');
-const https  = require('https');
-const fs     = require('fs');
-const path   = require('path');
+const https = require("https");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
-const KALSHI_HOST    = 'trading-api.kalshi.com';
-const KALSHI_API_V2  = '/trade-api/v2';
-const REQUEST_TIMEOUT_MS = 10_000;
+const KALSHI_DIR = path.resolve(__dirname, "..", "..", "..", "data", "kalshi");
+const LEDGER = path.join(KALSHI_DIR, "kalshi-live-ledger.jsonl");
+const KILL_SWITCH = path.join(KALSHI_DIR, "LIVE-KILL-SWITCH");
 
-// ── Private key loader — handles PKCS#1 and PKCS#8 ───────────────────────────
+const ENV = (process.env.KALSHI_ENV || "prod").toLowerCase();
+const HOST = ENV === "demo" ? "demo-api.kalshi.co" : "external-api.kalshi.com";
+const BASE = "/trade-api/v2";
 
-/**
- * Load private key from env or file, normalise to KeyObject.
- * Accepts both PKCS#1 (-----BEGIN RSA PRIVATE KEY-----) and
- * PKCS#8 (-----BEGIN PRIVATE KEY-----) PEM formats.
- * Returns a crypto.KeyObject or null if no key is configured.
- */
+// ── credentials (user-supplied via env; never entered here) ──────────────────
 function loadPrivateKey() {
-  let pem = process.env.KALSHI_PRIVATE_KEY || '';
-
-  if (!pem) {
-    const keyPath = process.env.KALSHI_PRIVATE_KEY_PATH;
-    if (keyPath) {
-      try {
-        pem = fs.readFileSync(path.resolve(keyPath), 'utf8');
-      } catch {
-        return null;
-      }
-    }
-  }
-
-  if (!pem) return null;
-
-  pem = pem.trim();
-
-  // #397 fix: crypto.createPrivateKey accepts both PKCS#1 and PKCS#8.
-  // Node's crypto.sign() with a raw string PEM only accepts PKCS#8 and
-  // throws "unsupported" on PKCS#1. Wrapping in createPrivateKey fixes this.
-  try {
-    return crypto.createPrivateKey({ key: pem, format: 'pem' });
-  } catch (err) {
-    console.error('[kalshi-api] Failed to parse private key:', err.message);
-    return null;
-  }
+  if (process.env.KALSHI_PRIVATE_KEY) return process.env.KALSHI_PRIVATE_KEY;
+  const p = process.env.KALSHI_PRIVATE_KEY_PATH;
+  if (p && fs.existsSync(p)) return fs.readFileSync(p, "utf8");
+  return null;
+}
+function hasCredentials() {
+  return !!(process.env.KALSHI_API_KEY_ID && loadPrivateKey());
+}
+function killSwitchActive() {
+  return fs.existsSync(KILL_SWITCH);
+}
+function tradingEnabled() {
+  return process.env.KALSHI_TRADING_ENABLED === "1";
 }
 
-// ── RSA-PSS signed headers ────────────────────────────────────────────────────
-
-/**
- * Build Kalshi RSA-PSS authentication headers.
- * Returns {} if credentials are not configured (public endpoint fallback).
- */
-function signedHeaders(method, path) {
-  const apiKeyId = process.env.KALSHI_API_KEY_ID || '';
-  const privateKey = loadPrivateKey();
-
-  if (!apiKeyId || !privateKey) return {};
-
+// ── RSA-PSS request signing (Kalshi auth scheme) ─────────────────────────────
+function signedHeaders(method, fullPath) {
   const ts = Date.now().toString();
-  // Kalshi signature message format: timestamp + method + path
-  const msg = `${ts}${method.toUpperCase()}${path}`;
-
-  const signature = crypto.sign(
-    'sha256',
-    Buffer.from(msg),
-    {
-      key:        privateKey,
-      padding:    crypto.constants.RSA_PKCS1_PSS_PADDING,
+  const pem = loadPrivateKey();
+  const msg = ts + method.toUpperCase() + fullPath;
+  const signature = crypto
+    .sign("sha256", Buffer.from(msg), {
+      key: pem,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
       saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST,
-    }
-  ).toString('base64');
-
+    })
+    .toString("base64");
   return {
-    'KALSHI-ACCESS-KEY':       apiKeyId,
-    'KALSHI-ACCESS-TIMESTAMP': ts,
-    'KALSHI-ACCESS-SIGNATURE': signature,
+    "KALSHI-ACCESS-KEY": process.env.KALSHI_API_KEY_ID,
+    "KALSHI-ACCESS-SIGNATURE": signature,
+    "KALSHI-ACCESS-TIMESTAMP": ts,
   };
 }
 
-// ── Core HTTP helper ──────────────────────────────────────────────────────────
+// ── core request ─────────────────────────────────────────────────────────────
+function request(method, endpoint, { auth = false, query = null, body = null } = {}) {
+  return new Promise((resolve) => {
+    if (auth && !hasCredentials()) {
+      return resolve({ ok: false, status: 401, error: "credentials_required" });
+    }
+    let pathOnly = BASE + endpoint;
+    if (query) {
+      const qs = new URLSearchParams(
+        Object.entries(query).filter(([, v]) => v != null && v !== "")
+      ).toString();
+      if (qs) pathOnly += "?" + qs;
+    }
+    const sigPath = (BASE + endpoint); // signature uses path WITHOUT query
+    const headers = { Accept: "application/json", "Content-Type": "application/json" };
+    if (auth) Object.assign(headers, signedHeaders(method, sigPath));
 
-function kalshiRequest(method, apiPath, body = null, authenticated = false) {
-  return new Promise((resolve, reject) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept':       'application/json',
-      ...(authenticated ? signedHeaders(method, `/trade-api/v2${apiPath}`) : {}),
-    };
-
-    const reqBody = body ? JSON.stringify(body) : null;
-    if (reqBody) headers['Content-Length'] = Buffer.byteLength(reqBody);
-
-    const options = {
-      hostname: KALSHI_HOST,
-      path:     `${KALSHI_API_V2}${apiPath}`,
-      method:   method.toUpperCase(),
-      headers,
-      timeout:  REQUEST_TIMEOUT_MS,
-    };
-
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const parsed = JSON.parse(data);
-          if (res.statusCode >= 400) {
-            reject(Object.assign(new Error(`Kalshi ${res.statusCode}`), { status: res.statusCode, body: parsed }));
-          } else {
-            resolve(parsed);
-          }
-        } catch {
-          reject(new Error(`Kalshi parse error (status ${res.statusCode}): ${data.slice(0, 200)}`));
-        }
-      });
-    });
-
-    req.on('timeout', () => { req.destroy(); reject(new Error('Kalshi request timeout')); });
-    req.on('error', reject);
-
-    if (reqBody) req.write(reqBody);
+    const payload = body ? JSON.stringify(body) : null;
+    const req = https.request(
+      { hostname: HOST, path: pathOnly, method, headers, timeout: 15000 },
+      (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => {
+          let parsed = null;
+          try { parsed = data ? JSON.parse(data) : null; } catch { parsed = { raw: data }; }
+          resolve({ ok: res.statusCode < 400, status: res.statusCode, data: parsed });
+        });
+      }
+    );
+    req.on("error", (err) => resolve({ ok: false, status: 0, error: err.message }));
+    req.on("timeout", () => { req.destroy(); resolve({ ok: false, status: 0, error: "timeout" }); });
+    if (payload) req.write(payload);
     req.end();
   });
 }
 
-// ── Public endpoints ──────────────────────────────────────────────────────────
+// ── schema normalization ─────────────────────────────────────────────────────
+// Kalshi's current API returns a decimal schema (yes_ask_dollars: "0.38",
+// orderbook_fp.yes_dollars: [["0.38","6218.00"], …]). The terminal speaks the
+// older integer-cents schema (yes_ask: 38, orderbook.yes: [[38, 6218], …]), so
+// we normalize here — one place — and the UI stays simple and stable.
+function centsFromDollars(s) {
+  const f = parseFloat(s);
+  return Number.isFinite(f) ? Math.round(f * 100) : null;
+}
+function numFromFp(s) {
+  const f = parseFloat(s);
+  return Number.isFinite(f) ? Math.round(f) : null;
+}
+function normalizeMarket(m) {
+  return {
+    ...m,
+    yes_ask: m.yes_ask ?? centsFromDollars(m.yes_ask_dollars),
+    yes_bid: m.yes_bid ?? centsFromDollars(m.yes_bid_dollars),
+    no_ask: m.no_ask ?? centsFromDollars(m.no_ask_dollars),
+    no_bid: m.no_bid ?? centsFromDollars(m.no_bid_dollars),
+    last_price: m.last_price ?? centsFromDollars(m.last_price_dollars),
+    volume: m.volume ?? numFromFp(m.volume_fp),
+  };
+}
+function normalizeBook(side) {
+  return (side || []).map((lvl) => {
+    const [p, s] = lvl;
+    return [centsFromDollars(p) ?? p, numFromFp(s) ?? s];
+  });
+}
 
-/**
- * Get open markets, optionally filtered by series_ticker or category.
- * @param {Object} params — e.g. { series_ticker: 'KXBTU', limit: 100 }
- */
-function getMarkets(params = {}) {
-  const qs = new URLSearchParams({ status: 'open', limit: '100', ...params }).toString();
-  return kalshiRequest('GET', `/markets?${qs}`);
+// ── public market data ───────────────────────────────────────────────────────
+const getExchangeStatus = () => request("GET", "/exchange/status");
+const getEvents = (q = {}) => request("GET", "/events", { query: q });
+const getMarket = (ticker) => request("GET", `/markets/${encodeURIComponent(ticker)}`);
+const getSeries = (q = {}) => request("GET", "/series", { query: q });
+
+async function getMarkets(q = {}) {
+  const r = await request("GET", "/markets", { query: q });
+  if (r.ok && r.data && Array.isArray(r.data.markets)) {
+    r.data.markets = r.data.markets.map(normalizeMarket);
+  }
+  return r;
+}
+
+async function getOrderbook(ticker, depth = 10) {
+  const r = await request("GET", `/markets/${encodeURIComponent(ticker)}/orderbook`, {
+    query: { depth },
+  });
+  if (r.ok && r.data) {
+    const raw = r.data.orderbook || r.data.orderbook_fp;
+    if (raw) {
+      r.data.orderbook = {
+        yes: normalizeBook(raw.yes || raw.yes_dollars),
+        no: normalizeBook(raw.no || raw.no_dollars),
+      };
+    }
+  }
+  return r;
+}
+
+// ── authenticated portfolio ──────────────────────────────────────────────────
+const getBalance = () => request("GET", "/portfolio/balance", { auth: true });
+const getOrders = (q = {}) => request("GET", "/portfolio/orders", { auth: true, query: q });
+
+async function getPositions(q = {}) {
+  const r = await request("GET", "/portfolio/positions", { auth: true, query: q });
+  if (r.ok && r.data && Array.isArray(r.data.market_positions)) {
+    r.data.market_positions = r.data.market_positions.map((p) => ({
+      ...p,
+      position: p.position ?? numFromFp(p.position_fp ?? p.quantity_fp),
+    }));
+  }
+  return r;
+}
+
+async function getFills(q = {}) {
+  const r = await request("GET", "/portfolio/fills", { auth: true, query: q });
+  if (r.ok && r.data && Array.isArray(r.data.fills)) {
+    r.data.fills = r.data.fills.map((f) => ({
+      ...f,
+      ticker: f.ticker || f.market_ticker,
+      count: f.count ?? numFromFp(f.count_fp),
+      yes_price: f.yes_price ?? centsFromDollars(f.yes_price_dollars),
+      no_price: f.no_price ?? centsFromDollars(f.no_price_dollars),
+    }));
+  }
+  return r;
+}
+
+// ── orders (dry-run / kill-switch gated) ─────────────────────────────────────
+function logLedger(entry) {
+  try {
+    fs.mkdirSync(KALSHI_DIR, { recursive: true });
+    fs.appendFileSync(LEDGER, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n");
+  } catch { /* best-effort */ }
 }
 
 /**
- * Get events — useful for discovering crypto prediction markets.
- * @param {Object} params — e.g. { series_ticker: 'KXBTU', limit: 100 }
+ * Place an order. Returns the live result ONLY if trading is enabled, the kill
+ * switch is off, and credentials exist; otherwise records a dry-run plan.
+ * @param {{ticker, side:'yes'|'no', action:'buy'|'sell', count:number, type:'limit'|'market', limitCents?:number}} o
  */
-function getEvents(params = {}) {
-  const qs = new URLSearchParams({ status: 'open', limit: '100', ...params }).toString();
-  return kalshiRequest('GET', `/events?${qs}`);
+async function placeOrder(o) {
+  const blockers = [];
+  if (!tradingEnabled()) blockers.push("trading_disabled (set KALSHI_TRADING_ENABLED=1)");
+  if (killSwitchActive()) blockers.push("kill_switch_active (data/kalshi/LIVE-KILL-SWITCH)");
+  if (!hasCredentials()) blockers.push("credentials_required");
+
+  const clientOrderId = crypto.randomUUID();
+  const base = {
+    ticker: o.ticker, side: o.side, action: o.action, count: o.count,
+    type: o.type || "limit", clientOrderId,
+  };
+  if (o.type !== "market") base.limitCents = o.limitCents;
+
+  if (blockers.length) {
+    logLedger({ event: "dry_run_order_planned", mode: "dry_run", environment: ENV, wouldBlock: blockers, ...base });
+    return { mode: "dry_run", wouldBlock: blockers, order: base };
+  }
+
+  // LIVE path — all gates cleared. Kalshi expects yes_price/no_price in cents.
+  const body = {
+    ticker: o.ticker, action: o.action, side: o.side, count: o.count,
+    type: o.type || "limit", client_order_id: clientOrderId,
+  };
+  if (o.type !== "market") {
+    if (o.side === "yes") body.yes_price = o.limitCents; else body.no_price = o.limitCents;
+  }
+  const res = await request("POST", "/portfolio/orders", { auth: true, body });
+  logLedger({ event: "live_order_submitted", mode: "live", environment: ENV, status: res.status, ...base });
+  return { mode: "live", status: res.status, result: res.data, order: base };
 }
 
-/**
- * Get available series (for discovering crypto tickers like KXBTU, KXETHU).
- */
-function getSeries() {
-  return kalshiRequest('GET', '/series');
+async function cancelOrder(orderId) {
+  if (!tradingEnabled() || killSwitchActive() || !hasCredentials()) {
+    return { mode: "dry_run", wouldBlock: true, orderId };
+  }
+  const res = await request("DELETE", `/portfolio/orders/${encodeURIComponent(orderId)}`, { auth: true });
+  return { mode: "live", status: res.status, result: res.data };
 }
 
-/**
- * Get orderbook for a specific market.
- * @param {string} ticker — market ticker, e.g. 'KXMLBTC5PM-24DEC31-B50000'
- */
-function getOrderbook(ticker) {
-  return kalshiRequest('GET', `/markets/${encodeURIComponent(ticker)}/orderbook`);
-}
-
-/**
- * Get a single market's details.
- */
-function getMarket(ticker) {
-  return kalshiRequest('GET', `/markets/${encodeURIComponent(ticker)}`);
-}
-
-// ── Authenticated endpoints ───────────────────────────────────────────────────
-
-/**
- * Get account balance. Requires KALSHI_API_KEY_ID + KALSHI_PRIVATE_KEY.
- * Returns { balance: number } where balance is in cents.
- */
-function getBalance() {
-  return kalshiRequest('GET', '/portfolio/balance', null, true);
-}
-
-/**
- * Get open positions.
- */
-function getPositions() {
-  return kalshiRequest('GET', '/portfolio/positions', null, true);
-}
-
-/**
- * Get fills (trade history).
- * @param {Object} params — e.g. { limit: 50 }
- */
-function getFills(params = {}) {
-  const qs = new URLSearchParams({ limit: '50', ...params }).toString();
-  return kalshiRequest('GET', `/portfolio/fills?${qs}`, null, true);
-}
-
-/**
- * Get portfolio orders.
- * @param {Object} params — e.g. { status: 'resting', limit: 50 }
- */
-function getOrders(params = {}) {
-  const qs = new URLSearchParams({ limit: '50', ...params }).toString();
-  return kalshiRequest('GET', `/portfolio/orders?${qs}`, null, true);
-}
-
-/**
- * Check if RSA credentials are configured.
- */
-function hasCredentials() {
-  return !!(process.env.KALSHI_API_KEY_ID && (process.env.KALSHI_PRIVATE_KEY || process.env.KALSHI_PRIVATE_KEY_PATH));
-}
-
-// ── Crypto market discovery (issue #398) ─────────────────────────────────────
-
-const CRYPTO_SERIES = ['KXBTU', 'KXETHU', 'KXSOLU', 'KXXRPU', 'KXDOGEU'];
-
-/**
- * Discover BTC/ETH/SOL/XRP/DOGE 15-minute prediction markets.
- * Kalshi's standard /markets feed omits these — they require series_ticker filters.
- * Returns deduplicated list of open crypto markets sorted by close_time ascending.
- */
-async function getCryptoMarkets(limit = 50) {
-  const results = [];
-  const seen = new Set();
-
-  await Promise.allSettled(
-    CRYPTO_SERIES.map(async (ticker) => {
-      try {
-        const data = await getMarkets({ series_ticker: ticker, limit });
-        const markets = data.markets || [];
-        for (const m of markets) {
-          if (!seen.has(m.ticker)) {
-            seen.add(m.ticker);
-            results.push({ ...m, _series: ticker });
-          }
-        }
-      } catch {
-        // Series may not exist for this account tier — skip silently
-      }
-    })
-  );
-
-  // Also try events endpoint for crypto series
-  await Promise.allSettled(
-    CRYPTO_SERIES.map(async (ticker) => {
-      try {
-        const data = await getEvents({ series_ticker: ticker, limit: 20 });
-        const events = data.events || [];
-        for (const ev of events) {
-          for (const m of (ev.markets || [])) {
-            if (!seen.has(m.ticker)) {
-              seen.add(m.ticker);
-              results.push({ ...m, _series: ticker, _from_event: ev.event_ticker });
-            }
-          }
-        }
-      } catch { /* skip */ }
-    })
-  );
-
-  results.sort((a, b) => new Date(a.close_time || 0) - new Date(b.close_time || 0));
-  return results;
+// ── connection / safety snapshot for the UI ──────────────────────────────────
+async function getConnection() {
+  const status = await getExchangeStatus();
+  return {
+    env: ENV,
+    host: HOST,
+    exchangeActive: status.ok ? (status.data?.exchange_active ?? null) : null,
+    credentials: hasCredentials(),
+    tradingEnabled: tradingEnabled(),
+    killSwitch: killSwitchActive(),
+    canTradeLive: tradingEnabled() && !killSwitchActive() && hasCredentials(),
+  };
 }
 
 module.exports = {
-  getMarkets,
-  getEvents,
-  getSeries,
-  getOrderbook,
-  getMarket,
-  getBalance,
-  getPositions,
-  getFills,
-  getOrders,
-  getCryptoMarkets,
-  hasCredentials,
-  loadPrivateKey,   // exported for testing
-  signedHeaders,    // exported for testing
-  CRYPTO_SERIES,
+  getExchangeStatus, getMarkets, getEvents, getMarket, getOrderbook, getSeries,
+  getBalance, getPositions, getOrders, getFills,
+  placeOrder, cancelOrder, getConnection,
+  hasCredentials, killSwitchActive, tradingEnabled,
 };
