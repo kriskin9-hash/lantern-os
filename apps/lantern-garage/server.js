@@ -99,6 +99,7 @@ const routes = [
   require("./routes/leaderboard"),
   require("./routes/self-edit"),
   require("./routes/creator"),
+  require("./routes/creator-entries"),
   require("./routes/surfaces"),
 ];
 
