@@ -214,6 +214,57 @@ def action_get_market_status(args):
         }
 
 
+def _fetch_watchlist_price(ticker):
+    """Fetch price + previous close for a single watchlist ticker (one Alpaca
+    round trip for crypto, two for equities). Run via ThreadPoolExecutor so
+    the 16-ticker watchlist doesn't pay for these sequentially."""
+    try:
+        sym = ticker
+        # Handle crypto naming (e.g., BTCUSD → BTC/USD for Alpaca)
+        if is_crypto(ticker):
+            sym = ticker.replace('USD', '/USD')
+            try:
+                bar = alpaca.get_crypto_bars(sym, '1Hour', limit=2).df
+                if not bar.empty:
+                    price = float(bar['close'].iloc[-1])
+                    prev = float(bar['close'].iloc[-2]) if len(bar) >= 2 else price
+                else:
+                    price = 0
+                    prev = 0
+            except Exception:
+                price = 0
+                prev = 0
+            is_crypto_flag = True
+        else:
+            try:
+                trade = alpaca.get_latest_trade(ticker, feed='iex')
+                price = float(trade.price) if trade else 0
+                day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
+                bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
+                prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
+            except Exception:
+                price = 0
+                prev = 0
+            is_crypto_flag = False
+
+        chg_pct = ((price - prev) / prev * 100) if prev > 0 else 0
+
+        return {
+            'ticker': ticker,
+            'price': round(price, 4),
+            'chg_pct': round(chg_pct, 2),
+            'is_crypto': is_crypto_flag
+        }
+    except Exception as e:
+        log.warning(f"Failed to get price for {ticker}: {str(e)}")
+        return {
+            'ticker': ticker,
+            'price': 0,
+            'chg_pct': 0,
+            'is_crypto': is_crypto(ticker)
+        }
+
+
 def action_get_watchlist_prices(args):
     """
     Get live prices for watchlist tickers
@@ -223,56 +274,19 @@ def action_get_watchlist_prices(args):
     """
     tickers = args.get('tickers', DEFAULT_WATCHLIST)
 
-    results = []
-    for ticker in tickers:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results = {t: {'ticker': t, 'price': 0, 'chg_pct': 0, 'is_crypto': is_crypto(t)} for t in tickers}
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 8), thread_name_prefix="wlprice") as ex:
+        futures = {ex.submit(_fetch_watchlist_price, t): t for t in tickers}
         try:
-            # Get latest bar for the ticker
-            sym = ticker
-            # Handle crypto naming (e.g., BTCUSD → BTC/USD for Alpaca)
-            if is_crypto(ticker):
-                sym = ticker.replace('USD', '/USD')
-                try:
-                    bar = alpaca.get_crypto_bars(sym, '1Hour', limit=2).df
-                    if not bar.empty:
-                        price = float(bar['close'].iloc[-1])
-                        prev = float(bar['close'].iloc[-2]) if len(bar) >= 2 else price
-                    else:
-                        price = 0
-                        prev = 0
-                except:
-                    price = 0
-                    prev = 0
-                is_crypto_flag = True
-            else:
-                try:
-                    trade = alpaca.get_latest_trade(ticker, feed='iex')
-                    price = float(trade.price) if trade else 0
-                    day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
-                    bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
-                    prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
-                except:
-                    price = 0
-                    prev = 0
-                is_crypto_flag = False
+            for fut in as_completed(futures, timeout=30):
+                t = futures[fut]
+                results[t] = fut.result()
+        except TimeoutError:
+            log.warning("get_watchlist_prices: some tickers timed out")
 
-            chg_pct = ((price - prev) / prev * 100) if prev > 0 else 0
-
-            results.append({
-                'ticker': ticker,
-                'price': round(price, 4),
-                'chg_pct': round(chg_pct, 2),
-                'is_crypto': is_crypto_flag
-            })
-        except Exception as e:
-            log.warning(f"Failed to get price for {ticker}: {str(e)}")
-            results.append({
-                'ticker': ticker,
-                'price': 0,
-                'chg_pct': 0,
-                'is_crypto': is_crypto(ticker)
-            })
-
-    return results
+    return [results[t] for t in tickers]
 
 
 def action_get_positions(args):
@@ -458,13 +472,24 @@ def action_get_bars_multi(args):
     tickers = args.get('tickers') or DEFAULT_WATCHLIST
     timeframe = args.get('timeframe', '5m')
 
-    result = {}
-    for ticker in tickers:
-        bars_result = action_get_bars({'ticker': ticker, 'timeframe': timeframe})
-        result[ticker] = {
-            'bars': bars_result.get('bars', []),
-            'count': bars_result.get('count', 0),
-        }
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    result = {ticker: {'bars': [], 'count': 0} for ticker in tickers}
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 8), thread_name_prefix="bars") as ex:
+        futures = {ex.submit(action_get_bars, {'ticker': t, 'timeframe': timeframe}): t for t in tickers}
+        try:
+            for fut in as_completed(futures, timeout=60):
+                t = futures[fut]
+                try:
+                    bars_result = fut.result()
+                    result[t] = {
+                        'bars': bars_result.get('bars', []),
+                        'count': bars_result.get('count', 0),
+                    }
+                except Exception as e:
+                    log.warning(f"get_bars_multi: {t} failed: {e}")
+        except TimeoutError:
+            log.warning("get_bars_multi: some tickers timed out")
 
     return {'bars': result, 'timeframe': timeframe}
 

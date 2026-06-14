@@ -92,6 +92,11 @@
   /* Header chart controls */
   .chart-ctrl{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer}
   .chart-ctrl:hover{color:var(--text0)}
+  /* Chart range presets (1D/5D/1M) */
+  .range-group{display:flex;gap:2px}
+  .range-btn{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer}
+  .range-btn:hover{color:var(--text0)}
+  .range-btn.active{background:var(--bg3);color:var(--text0);border-color:var(--text1)}
   /* Fullscreen ticker chart */
   .fs-bg{position:fixed;inset:0;background:rgba(5,6,8,.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px}
   .fs-bg.hidden{display:none}
@@ -471,10 +476,23 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   }
 }
 
+const _ladderSig = {};
 function renderZoneLadder(ticker, d, currentPrice, canvasEl, overlayEl){
   const canvas  = canvasEl  || document.getElementById('chart-'+ticker);
   const overlay = overlayEl || document.getElementById('overlay-'+ticker);
   if(!overlay) return;
+
+  // Skip the HTML + canvas rebuild when nothing that affects the rendered
+  // output has changed — the 5s price poll re-renders all 16 ladders even
+  // when most prices haven't moved.
+  const bars = barsData[ticker] || [];
+  const sigKey = overlay.id || ticker;
+  const prevSig = _ladderSig[sigKey];
+  if(prevSig && prevSig.overlay===overlay && prevSig.price===currentPrice && prevSig.d===d
+     && prevSig.bars===bars && prevSig.chartType===chartType && prevSig.chartTimeframe===chartTimeframe){
+    return;
+  }
+  _ladderSig[sigKey] = {overlay, price:currentPrice, d, bars, chartType, chartTimeframe};
 
   // Price fallback chain
   let priceLabel = null;
@@ -507,7 +525,6 @@ function renderZoneLadder(ticker, d, currentPrice, canvasEl, overlayEl){
   }
   const pos   = d.position;
   const zones = (d.zones||[]).slice(0,12);
-  const bars  = barsData[ticker] || [];
 
   // Determine display range
   let rMin = currentPrice * 0.97, rMax = currentPrice * 1.03;
@@ -618,14 +635,14 @@ function buildCard(ticker, d){
 <div class="card state-${state}" id="card-${ticker}">
   <div class="card-header">
     <div style="display:flex;align-items:center;gap:8px">
-      <span class="card-ticker">${ticker}</span>${pnlHtml}
+      <span class="card-ticker">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="card-price" id="cp-${ticker}">—</span>
-      <span class="card-state">${state.toUpperCase()}</span>
+      <span class="card-state" id="state-${ticker}">${state.toUpperCase()}</span>
     </div>
   </div>
-  ${confHtml}${watchHtml}
+  <div id="meta-${ticker}">${confHtml}${watchHtml}</div>
   <div class="zone-ladder" id="ladder-${ticker}">
     <canvas class="chart-canvas" id="chart-${ticker}"></canvas>
     <div class="ladder-overlay" id="overlay-${ticker}"></div>
@@ -637,13 +654,61 @@ function buildCard(ticker, d){
 </div>`;
 }
 
+// ── Update an existing card's meta in place (no DOM rebuild) ────────────────
+function updateCardMeta(ticker, d){
+  const card = document.getElementById('card-'+ticker);
+  if(!card) return;
+  const state = tickerState(d);
+  card.className = 'card state-'+state;
+
+  const pos  = d.position;
+  const sig  = d.last_signal||{};
+  const conf = d.confidence || sig.confidence || 0;
+  const dir  = d.direction  || sig.direction  || 'NEUTRAL';
+  const dirClass = dir==='BULLISH'?'bull':dir==='BEARISH'?'bear':'neut';
+  const dirIcon  = dir==='BULLISH'?'▲ LONG ':dir==='BEARISH'?'▼ SHORT':'--- ';
+
+  const pnlEl = document.getElementById('pnl-'+ticker);
+  if(pnlEl){
+    pnlEl.innerHTML = pos
+      ? `<span class="pnl-badge ${pos.pnl_pct>=0?'pnl-pos':'pnl-neg'}">${fmtPct(pos.pnl_pct)}</span>`
+      : '';
+  }
+
+  const stateEl = document.getElementById('state-'+ticker);
+  if(stateEl) stateEl.textContent = state.toUpperCase();
+
+  const metaEl = document.getElementById('meta-'+ticker);
+  if(metaEl){
+    const confHtml = conf
+      ? `<div class="conf-badge ${dirClass}">${dirIcon}${conf}%${d.catalyst?' | '+d.catalyst.slice(0,45):''}</div>`
+      : '';
+    let watchHtml = '';
+    if(state==='watching'){
+      const near = (d.zones||[])[0];
+      if(near) watchHtml = `<div style="font-family:var(--mono);font-size:8px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
+    }
+    metaEl.innerHTML = confHtml + watchHtml;
+  }
+}
+
 // ── Render all cards ─────────────────────────────────────────────────────────
+let lastCardOrder = null;
 function renderCards(){
   const grid = document.getElementById('cardsGrid');
   const sorted = wlPrices.map(t=>t.ticker).sort((a,b)=>{
     const order={open:0,watching:1,quiet:2};
     return order[tickerState(zonesData[a]||{})] - order[tickerState(zonesData[b]||{})];
   });
+
+  // Avoid tearing down + rebuilding all 16 cards (and their canvases) on every
+  // periodic refresh — only do a full rebuild when the card set/order changes.
+  const orderKey = sorted.join(',');
+  if(orderKey === lastCardOrder){
+    sorted.forEach(t => updateCardMeta(t, zonesData[t]||{}));
+    return;
+  }
+  lastCardOrder = orderKey;
   grid.innerHTML = sorted.map(t => buildCard(t, zonesData[t]||{})).join('');
   sorted.forEach(t => renderZoneLadder(t, zonesData[t]||{}, getCurrentPrice(t)));
 }
