@@ -613,8 +613,8 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
     // Conversation-dynamics escalation: if this turn breaks genuinely new ground
     // (high novelty, low echo/repeat), prefer the Claude-first "reasoning" chain.
-    // Escalate-only — never downgrades a keyword-detected coding/reasoning task,
-    // never blocks a provider. See lib/router-gate.js for the honest scope.
+    // Σ₀ Fix: Gate decision has real authority. When gate.escalate=true, escalate.
+    // See lib/router-gate.js for the honest scope.
     if (process.env.ROUTER_GATE === "1") {
       try {
         const { gateDecision } = require("./router-gate");
@@ -624,14 +624,18 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
           .reverse();
         const gate = gateDecision([...priorTurns, { role: "user", text }]);
         const keywordTaskType = taskType;
-        const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
-        if (applied) {
-          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
+
+        // Σ₀ Fix: Gate decision has real authority — escalate if gate says so
+        let applied = false;
+        if (gate.escalate) {
           taskType = "reasoning";
+          applied = true;
+          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
         } else {
-          console.log(`[router-gate] no-op for ${taskType} (${gate.reason})`);
+          console.log(`[router-gate] no-escalate for ${taskType} (${gate.reason})`);
         }
-        // Decision log — lets escalations be labelled against outcomes later.
+
+        // Decision log — validate escalations against outcomes later.
         // Non-fatal; never blocks the request.
         try {
           const { appendJsonlQueued } = require("./file-queue");
