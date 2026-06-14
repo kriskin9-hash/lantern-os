@@ -1,0 +1,1115 @@
+{
+  "pages": [
+    {
+      "url": "/",
+      "statusCode": 200,
+      "buttonCount": 21,
+      "buttons": [
+        {
+          "label": "🌙",
+          "selector": "button",
+          "href": null,
+          "hasAction": false
+        },
+        {
+          "label": "Lantern OS",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        },
+        {
+          "label": "Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "Kingdome",
+          "selector": "a",
+          "href": "/three-doors.html",
+          "hasAction": true
+        },
+        {
+          "label": "Dashboard",
+          "selector": "a",
+          "href": "/flourishing",
+          "hasAction": true
+        },
+        {
+          "label": "Help",
+          "selector": "a",
+          "href": "/knowledgecenter.html",
+          "hasAction": true
+        },
+        {
+          "label": "Open Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "✦ Open Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "💬\n      \n        Journal\n        Write & reflect\n",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "🏯\n      Dream Journey\n      Kingdome of Hearts\n  ",
+          "selector": "a",
+          "href": "/three-doors.html",
+          "hasAction": true
+        },
+        {
+          "label": "⚙️\n      System\n      System Status\n      Live sys",
+          "selector": "a",
+          "href": "/agent-status.html",
+          "hasAction": true
+        },
+        {
+          "label": "🏆\n      Convergence\n      Agent Leaderboard\n     ",
+          "selector": "a",
+          "href": "/leaderboard",
+          "hasAction": true
+        },
+        {
+          "label": "🌍\n      Data\n      Dashboard\n      Your personal ",
+          "selector": "a",
+          "href": "/flourishing",
+          "hasAction": true
+        },
+        {
+          "label": "📓\n      Members Only\n      Full Journal\n      Dee",
+          "selector": "a",
+          "href": "/dream-journal/index.html",
+          "hasAction": true
+        },
+        {
+          "label": "📈\n      Trading\n      AI Trader\n      Real-time c",
+          "selector": "a",
+          "href": "/trading.html",
+          "hasAction": true
+        },
+        {
+          "label": "✦\n      Community\n      Join the Guild\n      Suppo",
+          "selector": "a",
+          "href": "https://www.patreon.com/c/lanterndreamjournal",
+          "hasAction": true
+        },
+        {
+          "label": "⚡\n      Settings\n      AI Providers\n      Configur",
+          "selector": "a",
+          "href": "/settings/providers.html",
+          "hasAction": true
+        },
+        {
+          "label": "📚\n      Help\n      Guides & Help\n      How to get",
+          "selector": "a",
+          "href": "/knowledgecenter.html",
+          "hasAction": true
+        },
+        {
+          "label": "✏️\n      Creator\n      Content Creator\n      Uploa",
+          "selector": "a",
+          "href": "/create.html",
+          "hasAction": true
+        },
+        {
+          "label": "Changelog",
+          "selector": "a",
+          "href": "/changelog.html",
+          "hasAction": true
+        },
+        {
+          "label": "GitHub",
+          "selector": "a",
+          "href": "https://github.com/alex-place/lantern-os",
+          "hasAction": true
+        }
+      ]
+    },
+    {
+      "url": "/create.html",
+      "statusCode": 200,
+      "buttonCount": 18,
+      "buttons": [
+        {
+          "label": "🌙",
+          "selector": "button",
+          "href": null,
+          "hasAction": false
+        },
+        {
+          "label": "Upload Content",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "View Projects",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Choose File",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Remove",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Clear Form",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Save Project",
+          "selector": "button",
+          "href": null,
+          "hasAction": false
+        },
+        {
+          "label": "Run Analysis",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Generate",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Detect",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Delete",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Cancel",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Lantern OS",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        },
+        {
+          "label": "Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "Dashboard",
+          "selector": "a",
+          "href": "/flourishing",
+          "hasAction": true
+        },
+        {
+          "label": "Help",
+          "selector": "a",
+          "href": "/knowledgecenter.html",
+          "hasAction": true
+        },
+        {
+          "label": "Create",
+          "selector": "a",
+          "href": "/create.html",
+          "hasAction": true
+        },
+        {
+          "label": "View",
+          "selector": "a",
+          "href": "/entry.html?id=entry-1781464260642-6toahx05t",
+          "hasAction": true
+        }
+      ]
+    },
+    {
+      "url": "/dashboard.html",
+      "statusCode": 200,
+      "buttonCount": 5,
+      "buttons": [
+        {
+          "label": "☀",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Refresh",
+          "selector": "button",
+          "href": null,
+          "hasAction": false
+        },
+        {
+          "label": "Home",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        },
+        {
+          "label": "Dream Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "Journal",
+          "selector": "a",
+          "href": "/dream-journal/index.html",
+          "hasAction": true
+        }
+      ]
+    },
+    {
+      "url": "/dream-chat.html",
+      "statusCode": 200,
+      "buttonCount": 25,
+      "buttons": [
+        {
+          "label": "+",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "◈",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "⚙",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "🌙",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "📝 Record a thought…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "🔄 Explore a recurring thought…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "✨ Ask about a topic…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "🚪 Start an interactive story…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "💰 Execute a trade…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "📊 View your portfolio…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "📈 Ask for trading signals…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "🌐 Check market status…",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "📎",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "↑",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "×",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Connect",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Test",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Add Key",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "+ Record a Dream",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Lantern OS",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        },
+        {
+          "label": "Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "Explore",
+          "selector": "a",
+          "href": "/three-doors-game.html",
+          "hasAction": true
+        },
+        {
+          "label": "Dashboard",
+          "selector": "a",
+          "href": "/flourishing",
+          "hasAction": true
+        },
+        {
+          "label": "Help",
+          "selector": "a",
+          "href": "/knowledgecenter.html",
+          "hasAction": true
+        },
+        {
+          "label": "Get key →",
+          "selector": "a",
+          "href": "https://console.anthropic.com",
+          "hasAction": true
+        }
+      ]
+    },
+    {
+      "url": "/entry.html",
+      "statusCode": 200,
+      "buttonCount": 0,
+      "buttons": []
+    },
+    {
+      "url": "/settings/providers.html",
+      "statusCode": 200,
+      "buttonCount": 13,
+      "buttons": [
+        {
+          "label": "🌙",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Clear",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Export",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "×",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "💾 Save",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Cancel",
+          "selector": "button",
+          "href": null,
+          "hasAction": true
+        },
+        {
+          "label": "Lantern OS",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        },
+        {
+          "label": "Home",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        },
+        {
+          "label": "Journal",
+          "selector": "a",
+          "href": "/dream-chat.html",
+          "hasAction": true
+        },
+        {
+          "label": "Explore",
+          "selector": "a",
+          "href": "/three-doors-game.html",
+          "hasAction": true
+        },
+        {
+          "label": "Dashboard",
+          "selector": "a",
+          "href": "/flourishing",
+          "hasAction": true
+        },
+        {
+          "label": "Help",
+          "selector": "a",
+          "href": "/knowledgecenter.html",
+          "hasAction": true
+        },
+        {
+          "label": "← Home",
+          "selector": "a",
+          "href": "/",
+          "hasAction": true
+        }
+      ]
+    }
+  ],
+  "allButtons": [
+    {
+      "page": "/",
+      "label": "🌙",
+      "selector": "button",
+      "href": null,
+      "hasAction": false
+    },
+    {
+      "page": "/",
+      "label": "Lantern OS",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "Kingdome",
+      "selector": "a",
+      "href": "/three-doors.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "Dashboard",
+      "selector": "a",
+      "href": "/flourishing",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "Help",
+      "selector": "a",
+      "href": "/knowledgecenter.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "Open Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "✦ Open Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "💬\n      \n        Journal\n        Write & reflect\n",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "🏯\n      Dream Journey\n      Kingdome of Hearts\n  ",
+      "selector": "a",
+      "href": "/three-doors.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "⚙️\n      System\n      System Status\n      Live sys",
+      "selector": "a",
+      "href": "/agent-status.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "🏆\n      Convergence\n      Agent Leaderboard\n     ",
+      "selector": "a",
+      "href": "/leaderboard",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "🌍\n      Data\n      Dashboard\n      Your personal ",
+      "selector": "a",
+      "href": "/flourishing",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "📓\n      Members Only\n      Full Journal\n      Dee",
+      "selector": "a",
+      "href": "/dream-journal/index.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "📈\n      Trading\n      AI Trader\n      Real-time c",
+      "selector": "a",
+      "href": "/trading.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "✦\n      Community\n      Join the Guild\n      Suppo",
+      "selector": "a",
+      "href": "https://www.patreon.com/c/lanterndreamjournal",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "⚡\n      Settings\n      AI Providers\n      Configur",
+      "selector": "a",
+      "href": "/settings/providers.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "📚\n      Help\n      Guides & Help\n      How to get",
+      "selector": "a",
+      "href": "/knowledgecenter.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "✏️\n      Creator\n      Content Creator\n      Uploa",
+      "selector": "a",
+      "href": "/create.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "Changelog",
+      "selector": "a",
+      "href": "/changelog.html",
+      "hasAction": true
+    },
+    {
+      "page": "/",
+      "label": "GitHub",
+      "selector": "a",
+      "href": "https://github.com/alex-place/lantern-os",
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "🌙",
+      "selector": "button",
+      "href": null,
+      "hasAction": false
+    },
+    {
+      "page": "/create.html",
+      "label": "Upload Content",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "View Projects",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Choose File",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Remove",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Clear Form",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Save Project",
+      "selector": "button",
+      "href": null,
+      "hasAction": false
+    },
+    {
+      "page": "/create.html",
+      "label": "Run Analysis",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Generate",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Detect",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Delete",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Cancel",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Lantern OS",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Dashboard",
+      "selector": "a",
+      "href": "/flourishing",
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Help",
+      "selector": "a",
+      "href": "/knowledgecenter.html",
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "Create",
+      "selector": "a",
+      "href": "/create.html",
+      "hasAction": true
+    },
+    {
+      "page": "/create.html",
+      "label": "View",
+      "selector": "a",
+      "href": "/entry.html?id=entry-1781464260642-6toahx05t",
+      "hasAction": true
+    },
+    {
+      "page": "/dashboard.html",
+      "label": "☀",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dashboard.html",
+      "label": "Refresh",
+      "selector": "button",
+      "href": null,
+      "hasAction": false
+    },
+    {
+      "page": "/dashboard.html",
+      "label": "Home",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    },
+    {
+      "page": "/dashboard.html",
+      "label": "Dream Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/dashboard.html",
+      "label": "Journal",
+      "selector": "a",
+      "href": "/dream-journal/index.html",
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "+",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "◈",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "⚙",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "🌙",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "📝 Record a thought…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "🔄 Explore a recurring thought…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "✨ Ask about a topic…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "🚪 Start an interactive story…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "💰 Execute a trade…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "📊 View your portfolio…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "📈 Ask for trading signals…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "🌐 Check market status…",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "📎",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "↑",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "×",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Connect",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Test",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Add Key",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "+ Record a Dream",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Lantern OS",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Explore",
+      "selector": "a",
+      "href": "/three-doors-game.html",
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Dashboard",
+      "selector": "a",
+      "href": "/flourishing",
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Help",
+      "selector": "a",
+      "href": "/knowledgecenter.html",
+      "hasAction": true
+    },
+    {
+      "page": "/dream-chat.html",
+      "label": "Get key →",
+      "selector": "a",
+      "href": "https://console.anthropic.com",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "🌙",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Clear",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Export",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "×",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "💾 Save",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Cancel",
+      "selector": "button",
+      "href": null,
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Lantern OS",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Home",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Journal",
+      "selector": "a",
+      "href": "/dream-chat.html",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Explore",
+      "selector": "a",
+      "href": "/three-doors-game.html",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Dashboard",
+      "selector": "a",
+      "href": "/flourishing",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "Help",
+      "selector": "a",
+      "href": "/knowledgecenter.html",
+      "hasAction": true
+    },
+    {
+      "page": "/settings/providers.html",
+      "label": "← Home",
+      "selector": "a",
+      "href": "/",
+      "hasAction": true
+    }
+  ],
+  "errors": [],
+  "summary": {}
+}
