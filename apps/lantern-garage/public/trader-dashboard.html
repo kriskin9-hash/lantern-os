@@ -85,12 +85,27 @@
   .btn-buy:hover{background:rgba(0,212,170,.22)}
   .btn-sell{background:rgba(255,95,109,.12);color:var(--red);border-color:rgba(255,95,109,.3)}
   .btn-sell:hover{background:rgba(255,95,109,.22)}
-  /* Chart canvas + overlay */
-  .chart-canvas{position:absolute;left:0;right:64px;top:0;bottom:0;width:calc(100% - 64px);height:100%}
-  .ladder-overlay{position:absolute;inset:0}
+  /* Chart canvas + overlay — canvas covers the full ladder and draws its own
+     right-side price axis (52px) + bottom time axis (16px); the HTML overlay
+     (zone bands, S/R labels, price/entry/stop/tp lines) is inset to match
+     that plot area so percentage-based positions line up with the canvas. */
+  .chart-canvas{position:absolute;inset:0;width:100%;height:100%}
+  .ladder-overlay{position:absolute;left:0;right:52px;top:0;bottom:16px}
   /* Header chart controls */
   .chart-ctrl{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer}
   .chart-ctrl:hover{color:var(--text0)}
+  /* Fullscreen ticker chart */
+  .fs-bg{position:fixed;inset:0;background:rgba(5,6,8,.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px}
+  .fs-bg.hidden{display:none}
+  .fs-chart{background:var(--bg1);border:1px solid var(--border);border-radius:6px;width:100%;height:100%;max-width:1400px;display:flex;flex-direction:column}
+  .fs-header{padding:10px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+  .fs-ticker{font-family:var(--mono);font-size:16px;font-weight:600}
+  .fs-price{font-family:var(--mono);font-size:13px;color:var(--text1)}
+  .fs-close{margin-left:auto;cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--text1);
+    padding:5px 10px;border-radius:3px;border:1px solid var(--border);background:var(--bg2)}
+  .fs-close:hover{color:var(--text0)}
+  .fs-body{flex:1;position:relative;margin:14px}
+  .fs-body .zone-ladder{position:absolute;inset:0;height:auto;margin:0}
   /* ── Footer panels ── */
   .fpanel{padding:10px 14px;overflow-y:auto;max-height:180px}
   .panel-title{font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
@@ -167,6 +182,23 @@
 
 </div><!-- /layout -->
 
+<!-- Fullscreen ticker chart -->
+<div class="fs-bg hidden" id="fsBg" onclick="if(event.target===this)closeFullscreenChart()">
+  <div class="fs-chart">
+    <div class="fs-header">
+      <span class="fs-ticker" id="fsTicker">—</span>
+      <span class="fs-price" id="fsPrice">—</span>
+      <span class="fs-close" onclick="closeFullscreenChart()">✕ Close</span>
+    </div>
+    <div class="fs-body">
+      <div class="zone-ladder" id="ladder-fs">
+        <canvas class="chart-canvas" id="chart-fs"></canvas>
+        <div class="ladder-overlay" id="overlay-fs"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let zonesData      = {};
@@ -175,6 +207,7 @@ let activeTicker   = null;
 let barsData       = {};
 let chartType      = 'line';
 let chartTimeframe = '5m';
+let fullscreenTicker = null;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmt(n, d=2){ return n == null ? '—' : Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
@@ -198,8 +231,19 @@ function zlLine(topPct, color, label, textColor){
     background:rgba(10,12,15,.8);padding:1px 3px;border-radius:2px;white-space:nowrap;">${label}</div>`;
 }
 
+// Format a bar timestamp ("2026-06-12 19:55:00+00:00") for the time axis.
+function formatBarTime(ts, tf){
+  const d = new Date(String(ts).replace(' ','T'));
+  if(isNaN(d.getTime())) return '';
+  if(tf==='1d' || tf==='4h') return (d.getMonth()+1)+'/'+d.getDate();
+  return d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+}
+
 // ── Candlestick / line chart renderer ────────────────────────────────────────
-function renderChart(canvas, bars, rMin, rMax, type){
+// Draws the bars in the [0,pw]x[0,ph] plot area, then a price axis (right
+// gutter, AXIS_W) and a time axis (bottom strip, AXIS_H) plus a small
+// timeframe badge in the top-left corner.
+function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if(w<=0 || h<=0) return;
   const dpr = window.devicePixelRatio || 1;
@@ -208,56 +252,89 @@ function renderChart(canvas, bars, rMin, rMax, type){
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,w,h);
-  if(!bars || bars.length < 2 || rMax<=rMin) return;
+  if(rMax<=rMin) return;
 
-  const rng   = rMax - rMin;
-  const y     = p => h - ((p-rMin)/rng)*h;
-  const n     = bars.length;
-  const slotW = w/n;
+  const AXIS_W = 52, AXIS_H = 16;
+  const pw  = Math.max(0, w - AXIS_W);
+  const ph  = Math.max(0, h - AXIS_H);
+  const rng = rMax - rMin;
+  const y   = p => ((rMax-p)/rng)*ph;
 
-  if(type==='candle'){
-    for(let i=0;i<n;i++){
-      const b = bars[i];
-      const x = i*slotW + slotW/2;
-      const up = b.close >= b.open;
-      const color = up ? '#00d4aa' : '#ff5f6d';
-      ctx.strokeStyle = color;
-      ctx.fillStyle   = color;
-      ctx.lineWidth   = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, y(b.high));
-      ctx.lineTo(x, y(b.low));
-      ctx.stroke();
-      const bodyTop = y(Math.max(b.open,b.close));
-      const bodyBot = y(Math.min(b.open,b.close));
-      const bw = Math.max(1, slotW*0.6);
-      ctx.fillRect(x-bw/2, bodyTop, bw, Math.max(1, bodyBot-bodyTop));
-    }
-  }else{
-    const pts = bars.map((b,i)=>[i*slotW + slotW/2, y(b.close)]);
-    // area fill under the line
+  // Price axis: faint gridlines across the plot + labels in the right gutter
+  ctx.font = '9px "IBM Plex Mono",monospace';
+  ctx.lineWidth = 1;
+  const PRICE_TICKS = 4;
+  for(let i=0;i<=PRICE_TICKS;i++){
+    const price = rMin + rng*i/PRICE_TICKS;
+    const yy = Math.round(y(price)) + 0.5;
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
     ctx.beginPath();
-    ctx.moveTo(pts[0][0], h);
-    for(const [x,yy] of pts) ctx.lineTo(x,yy);
-    ctx.lineTo(pts[n-1][0], h);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(74,158,255,.08)';
-    ctx.fill();
-    // line
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for(let i=1;i<n;i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.strokeStyle = '#4a9eff';
-    ctx.lineWidth = 1.3;
+    ctx.moveTo(0, yy);
+    ctx.lineTo(pw, yy);
     ctx.stroke();
+    ctx.fillStyle = '#5c6370';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = i===0 ? 'top' : (i===PRICE_TICKS ? 'bottom' : 'middle');
+    ctx.fillText(fmt(price, price>=100?2:4), pw+4, yy);
+  }
+
+  if(bars && bars.length >= 2){
+    const n = bars.length, slotW = pw/n;
+
+    // Time axis: a few evenly-spaced bar timestamps along the bottom
+    ctx.fillStyle = '#5c6370';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    const TIME_TICKS = 4;
+    for(let i=0;i<=TIME_TICKS;i++){
+      const idx = Math.min(n-1, Math.round(i*(n-1)/TIME_TICKS));
+      const label = formatBarTime(bars[idx].timestamp, timeframe);
+      if(!label) continue;
+      ctx.fillText(label, idx*slotW + slotW/2, h-2);
+    }
+
+    if(type==='candle'){
+      for(let i=0;i<n;i++){
+        const b = bars[i];
+        const x = i*slotW + slotW/2;
+        const up = b.close >= b.open;
+        const color = up ? '#00d4aa' : '#ff5f6d';
+        ctx.strokeStyle = color;
+        ctx.fillStyle   = color;
+        ctx.lineWidth   = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, y(b.high));
+        ctx.lineTo(x, y(b.low));
+        ctx.stroke();
+        const bodyTop = y(Math.max(b.open,b.close));
+        const bodyBot = y(Math.min(b.open,b.close));
+        const bw = Math.max(1, slotW*0.6);
+        ctx.fillRect(x-bw/2, bodyTop, bw, Math.max(1, bodyBot-bodyTop));
+      }
+    }else{
+      const pts = bars.map((b,i)=>[i*slotW + slotW/2, y(b.close)]);
+      // area fill under the line
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], ph);
+      for(const [x,yy] of pts) ctx.lineTo(x,yy);
+      ctx.lineTo(pts[n-1][0], ph);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(74,158,255,.08)';
+      ctx.fill();
+      // line
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for(let i=1;i<n;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.strokeStyle = '#4a9eff';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+    }
   }
 }
 
-function renderZoneLadder(ticker, d, currentPrice){
-  const el = document.getElementById('ladder-'+ticker);
-  if(!el) return;
-  const canvas  = document.getElementById('chart-'+ticker);
-  const overlay = document.getElementById('overlay-'+ticker);
+function renderZoneLadder(ticker, d, currentPrice, canvasEl, overlayEl){
+  const canvas  = canvasEl  || document.getElementById('chart-'+ticker);
+  const overlay = overlayEl || document.getElementById('overlay-'+ticker);
   if(!overlay) return;
 
   // Price fallback chain
@@ -364,8 +441,15 @@ function renderZoneLadder(ticker, d, currentPrice){
     font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:${lineColor};
     background:var(--bg1);padding:1px 4px;border-radius:2px;white-space:nowrap;">${priceText}</div>`;
 
+  // Timeframe badge (top-left, always above the price line/label)
+  if(chartTimeframe){
+    html += `<div style="position:absolute;left:4px;top:2px;z-index:7;
+      font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:600;color:rgba(154,160,173,.9);
+      background:var(--bg1);padding:1px 4px;border-radius:2px;pointer-events:none;">${chartTimeframe.toUpperCase()}</div>`;
+  }
+
   overlay.innerHTML = html;
-  if(canvas) renderChart(canvas, bars, rMin, rMax, chartType);
+  if(canvas) renderChart(canvas, bars, rMin, rMax, chartType, chartTimeframe);
 }
 
 // ── Build one ticker card ───────────────────────────────────────────────────
@@ -481,10 +565,32 @@ function renderWatchlist(){
 
 function focusTicker(t){
   activeTicker = t;
-  const el = document.getElementById('card-'+t);
-  if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
   renderWatchlist();
+  openFullscreenChart(t);
 }
+
+// ── Fullscreen ticker chart ──────────────────────────────────────────────────
+function openFullscreenChart(t){
+  fullscreenTicker = t;
+  document.getElementById('fsTicker').textContent = t;
+  document.getElementById('fsBg').classList.remove('hidden');
+  renderFullscreenChart();
+}
+
+function closeFullscreenChart(){
+  fullscreenTicker = null;
+  document.getElementById('fsBg').classList.add('hidden');
+}
+
+function renderFullscreenChart(){
+  if(!fullscreenTicker) return;
+  const price = getCurrentPrice(fullscreenTicker);
+  document.getElementById('fsPrice').textContent = price ? '$'+fmt(price, price>=100?2:4) : '—';
+  renderZoneLadder(fullscreenTicker, zonesData[fullscreenTicker]||{}, price,
+    document.getElementById('chart-fs'), document.getElementById('overlay-fs'));
+}
+
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeFullscreenChart(); });
 
 // ── Watchlist add/remove ─────────────────────────────────────────────────────
 async function addWatchlistTicker(){
@@ -534,6 +640,7 @@ async function loadZones(){
       const el = document.getElementById('cp-'+t.ticker);
       if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
     });
+    renderFullscreenChart();
   }catch(e){ console.warn('zones load failed',e); }
   finally{ zonesLoading = false; }
 }
@@ -551,6 +658,7 @@ async function loadWatchlistPrices(){
       if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
       renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price);
     });
+    renderFullscreenChart();
   }catch(e){}
   finally{ pricesLoading = false; }
 }
@@ -568,6 +676,7 @@ async function loadBars(){
       barsData[ticker] = bars[ticker].bars || [];
     }
     wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
+    renderFullscreenChart();
   }catch(e){ console.warn('bars load failed', e); }
   finally{ barsLoading = false; }
 }
@@ -575,6 +684,7 @@ async function loadBars(){
 function changeChartType(type){
   chartType = type;
   wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
+  renderFullscreenChart();
 }
 
 function changeTimeframe(tf){
