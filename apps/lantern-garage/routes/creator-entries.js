@@ -5,6 +5,7 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
   const { sendJson, path: pathModule, repoRoot, collectRequestBody } = deps;
   const fs = require("fs");
   const entryStore = require("../lib/entry-store");
+  const { generateProjectThumbnail } = require("../lib/thumbnail-generator");
 
   // =========================================================================
   // GET /api/creator-entries - List all entries
@@ -75,6 +76,21 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
         filePath: body.filePath,
       });
 
+      // Generate thumbnail in background (non-blocking)
+      if (body.filePath && (body.filePath.endsWith(".mp4") || body.filePath.endsWith(".mov") || body.filePath.endsWith(".avi"))) {
+        setImmediate(async () => {
+          try {
+            const thumbnailPath = await generateProjectThumbnail(repoRoot, entry.id, body.filePath);
+            if (thumbnailPath) {
+              entryStore.updateEntry(repoRoot, entry.id, { thumbnail: thumbnailPath });
+              console.log("[creator-entries] ✅ Thumbnail generated for entry " + entry.id);
+            }
+          } catch (err) {
+            console.error("[creator-entries] Thumbnail generation failed:", err.message);
+          }
+        });
+      }
+
       // Add formatted date and send
       const enrichedEntry = {
         ...entry,
@@ -135,6 +151,21 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
       }
 
       entryStore.saveRender(repoRoot, entryId, renderType, body.filePath);
+
+      // Regenerate thumbnail from highlight/render video (non-blocking)
+      if (renderType === "highlight" || renderType.startsWith("variant")) {
+        setImmediate(async () => {
+          try {
+            const thumbnailPath = await generateProjectThumbnail(repoRoot, entryId, body.filePath);
+            if (thumbnailPath) {
+              entryStore.updateEntry(repoRoot, entryId, { thumbnail: thumbnailPath });
+              console.log(`[creator-entries] ✅ Updated thumbnail for ${renderType} video of entry ${entryId}`);
+            }
+          } catch (err) {
+            console.error("[creator-entries] Thumbnail regeneration failed:", err.message);
+          }
+        });
+      }
 
       sendJson(res, { success: true, message: `${renderType} render saved` });
       return true;

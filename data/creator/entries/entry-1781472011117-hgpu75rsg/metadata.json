@@ -1,0 +1,20 @@
+{
+  "id": "entry-1781472011117-hgpu75rsg",
+  "title": "Second Test - Thumbnail Check",
+  "description": "Verifying thumbnail generation works multiple times",
+  "project": "Test Project",
+  "tags": [],
+  "type": "video",
+  "createdAt": "2026-06-14T21:20:11.118Z",
+  "updatedAt": "2026-06-14T21:20:11.253Z",
+  "filePath": "data/test-videos/test.mp4",
+  "thumbnail": "data\\creator\\entries\\entry-1781472011117-hgpu75rsg\\thumbnail.jpg",
+  "analysis": null,
+  "renders": {
+    "highlight": null,
+    "variantA": null,
+    "variantB": null,
+    "variantC": null
+  },
+  "status": "uploaded"
+}

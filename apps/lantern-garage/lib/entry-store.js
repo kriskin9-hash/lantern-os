@@ -123,9 +123,8 @@ function saveRender(repoRoot, entryId, type, filePath) {
 
   // Copy or move file to render directory
   const filename = path.basename(filePath);
-  const destPath = path.join(renderDir, filename);
+  const fullDestPath = path.join(renderDir, filename);
   const fullSourcePath = path.join(repoRoot, filePath);
-  const fullDestPath = path.join(repoRoot, destPath);
 
   if (fs.existsSync(fullSourcePath)) {
     fs.copyFileSync(fullSourcePath, fullDestPath);
