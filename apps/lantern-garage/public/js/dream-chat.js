@@ -265,7 +265,7 @@
       return;
     }
     // !convergence / !convergance — loop + agent status + inspect + version
-    if (/^!convergan?ce$/i.test(text)) {
+    if (/^!converg(?:ence|ance)$/i.test(text)) {
       inputEl.value = "";
       const sysRow = document.createElement("div");
       sysRow.className = "msg-row agent";
@@ -350,7 +350,7 @@
     }
 
     // !convergance log an issue <title> — POST to non-stream handler
-    if (/^!convergan?ce\s+log\s+an?\s+issue\s+/i.test(text)) {
+    if (/^!converg(?:ence|ance)\s+log\s+an?\s+issue\s+/i.test(text)) {
       if (emptyState) emptyState.style.display = "none";
       appendUserBubble(text);
       inputEl.value = "";
