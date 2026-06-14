@@ -11,6 +11,7 @@
 <<<<<<< HEAD
 {"timestamp":"2026-06-11T09:31:15.293Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
 {"timestamp":"2026-06-12T22:42:12.599Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-13T02:08:50.820Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
 {"timestamp":"2026-06-13T09:51:44.473Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
 {"timestamp":"2026-06-13T09:52:04.764Z","event":"door_choice","payload":{"label":"B","name":"🍀 The Cloverfield","sceneKey":"kingdome-garden"}}
 {"timestamp":"2026-06-13T09:52:04.991Z","event":"image_load","payload":{"sceneKey":"cloverfield","source":"pool:caadi","reason":"random (no keyword match)"}}
