@@ -730,7 +730,7 @@ function loadArtifacts(entry) {
       <div class="artifact-name">${artifact.name}</div>
       <div class="artifact-size" id="size-${artifact.path}">...</div>
       <div class="artifact-actions">
-        <a href="/${artifact.path}" class="download-btn" download>
+        <a href="/media/${artifact.path}" class="download-btn" download>
           ⬇️ Download
         </a>
       </div>
@@ -746,7 +746,7 @@ function loadArtifacts(entry) {
 // Fetch file size for display
 async function fetchFileSize(path) {
   try {
-    const response = await fetch(`/${path}`, { method: 'HEAD' });
+    const response = await fetch(`/media/${path}`, { method: 'HEAD' });
     const size = response.headers.get('content-length');
     if (size) {
       const sizeEl = document.getElementById(`size-${path}`);
@@ -770,7 +770,7 @@ function formatFileSize(bytes) {
 function loadVideoPlayers(entry) {
   // Original video
   if (entry.filePath) {
-    const videoPath = "/" + entry.filePath;
+    const videoPath = "/media/" + entry.filePath;
     document.getElementById("original-player").innerHTML = `
       <video controls preload="metadata" style="width: 100%; border-radius: 10px;">
         <source src="${videoPath}" type="video/mp4">
@@ -780,8 +780,8 @@ function loadVideoPlayers(entry) {
   }
 
   // Highlight render
-  if (entry.renders.highlight) {
-    const videoPath = "/" + entry.renders.highlight;
+  if (entry.renders?.highlight) {
+    const videoPath = "/media/" + entry.renders.highlight;
     document.getElementById("highlight-player").innerHTML = `
       <video controls preload="metadata" style="width: 100%; border-radius: 10px;">
         <source src="${videoPath}" type="video/mp4">
@@ -793,8 +793,8 @@ function loadVideoPlayers(entry) {
   // Variants
   const variants = ["variantA", "variantB", "variantC"];
   for (const variant of variants) {
-    if (entry.renders[variant]) {
-      const videoPath = "/" + entry.renders[variant];
+    if (entry.renders?.[variant]) {
+      const videoPath = "/media/" + entry.renders[variant];
       document.getElementById(`${variant}-player`).innerHTML = `
         <video controls preload="metadata" style="width: 100%; border-radius: 10px;">
           <source src="${videoPath}" type="video/mp4">

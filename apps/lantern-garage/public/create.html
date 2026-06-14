@@ -1186,7 +1186,7 @@ async function loadRecentEntries() {
 
       list.innerHTML = sorted.map(entry => {
         const title = entry.title || `Video ${new Date(entry.createdAt).toLocaleDateString()}`;
-        const thumbnail = entry.thumbnail ? '/' + entry.thumbnail : '/placeholder.png';
+        const thumbnail = entry.thumbnail ? '/media/' + entry.thumbnail : '/placeholder.png';
         const createdDate = new Date(entry.createdAt);
         const formattedDate = createdDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
                              ' • ' + createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });

@@ -79,6 +79,7 @@ const deps = {
 const routes = [
   require("./routes/status"),
   require("./routes/ui"),
+  require("./routes/media"), // Video/media streaming (range requests)
   require("./routes/rag"),
   require("./routes/operator"),
   require("./routes/files"),
