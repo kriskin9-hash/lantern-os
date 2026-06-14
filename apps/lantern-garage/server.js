@@ -340,6 +340,37 @@ server.listen(port, host, () => {
   cryptoCollector.start(30000); // 30s interval
   deps.cryptoCollector = cryptoCollector; // Make available to routes
 
+  // ── Kalshi Position Monitor (10s polling) + Convergence Trainer ──
+  const { startMonitoring } = require("./lib/kalshi-position-monitor");
+  const { trainModel } = require("./lib/kalshi-convergence-trainer");
+  startMonitoring();  // Start automated stop-loss monitoring
+  trainModel().catch(e => console.error("[Server] Convergence training failed:", e.message));
+
+  // ── Crypto CIO Live Trainer (15-min market observer + paper-trade signal log) ──
+  // Must run continuously during market hours so resolved windows produce training data.
+  // Gated by KALSHI_CRYPTO_OBSERVER env var (defaults ON when Kalshi creds are present).
+  const enableCryptoObserver = process.env.KALSHI_CRYPTO_OBSERVER !== "false"
+    && !!(process.env.KALSHI_API_KEY_ID || process.env.KALSHI_PRIVATE_KEY || process.env.KALSHI_PRIVATE_KEY_PATH);
+  const cryptoObserverScript = path.join(repoRoot, "experiments", "crypto_live_trader.py");
+  let cryptoObserverProcess = null;
+  if (enableCryptoObserver && fs.existsSync(cryptoObserverScript)) {
+    const pythonExe = process.platform === "win32" ? "python" : "python3";
+    const logDir = path.join(repoRoot, "logs");
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    const observerLogFd = fs.openSync(path.join(logDir, "crypto-observer.log"), "a");
+    cryptoObserverProcess = spawn(pythonExe, [cryptoObserverScript, "--interval", "10", "--edge", "0.06"], {
+      cwd: repoRoot,
+      stdio: ["ignore", observerLogFd, observerLogFd],
+    });
+    cryptoObserverProcess.on("error", (err) => console.error(`[CryptoObserver] Failed to start: ${err.message}`));
+    cryptoObserverProcess.on("exit", (code) => console.warn(`[CryptoObserver] Exited with code ${code} — training data gap from this point`));
+    console.log("[CryptoObserver] Started — logging to logs/crypto-observer.log");
+  } else if (enableCryptoObserver) {
+    console.warn(`[CryptoObserver] Script not found: ${cryptoObserverScript}`);
+  } else {
+    console.log("[CryptoObserver] Disabled (set KALSHI_CRYPTO_OBSERVER=false to suppress, or add Kalshi creds to enable)");
+  }
+
   // Auto-register this node to the mesh
   (async () => {
     try {

@@ -640,6 +640,68 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         return sendJson(res, await cryptoSuggest.getCryptoSuggestions({ limit, collector }), 200), true;
       }
 
+      // GET — Win rate stats (Phase 1 profitability data)
+      if (url.pathname === '/api/trading/kalshi/winrate-stats' && req.method === 'GET') {
+        const { computeWinRate } = require('../lib/kalshi-winrate-tracker');
+        return sendJson(res, computeWinRate(), 200), true;
+      }
+
+      // POST — Start position monitor (automated stop-losses)
+      if (url.pathname === '/api/trading/kalshi/monitor/start' && req.method === 'POST') {
+        const { getMonitor } = require('../lib/kalshi-position-monitor');
+        getMonitor().start();
+        return sendJson(res, { status: 'monitoring started' }, 200), true;
+      }
+
+      // POST — Stop position monitor
+      if (url.pathname === '/api/trading/kalshi/monitor/stop' && req.method === 'POST') {
+        const { getMonitor } = require('../lib/kalshi-position-monitor');
+        getMonitor().stop();
+        return sendJson(res, { status: 'monitoring stopped' }, 200), true;
+      }
+
+      // GET — Get monitored positions
+      if (url.pathname === '/api/trading/kalshi/monitor/positions' && req.method === 'GET') {
+        const { getMonitor } = require('../lib/kalshi-position-monitor');
+        const monitor = getMonitor();
+        return sendJson(res, {
+          monitoring: monitor.monitoring,
+          positions: monitor.getMonitoredPositions(),
+          readyToClose: monitor.getReadyToClose(),
+          stats: monitor.getStats()
+        }, 200), true;
+      }
+
+      // POST — Train convergence model from trade logs
+      if (url.pathname === '/api/trading/kalshi/convergence/train' && req.method === 'POST') {
+        const { trainModel } = require('../lib/kalshi-convergence-trainer');
+        const result = await trainModel();
+        return sendJson(res, result, 200), true;
+      }
+
+      // GET — Get convergence model and stats
+      if (url.pathname === '/api/trading/kalshi/convergence/model' && req.method === 'GET') {
+        const { getTrainer } = require('../lib/kalshi-convergence-trainer');
+        const trainer = getTrainer();
+        return sendJson(res, {
+          model: trainer.getModel(),
+          summary: trainer.getSummary()
+        }, 200), true;
+      }
+
+      // GET — Get convergence accuracy for a ticker
+      if (url.pathname === '/api/trading/kalshi/convergence/accuracy' && req.method === 'GET') {
+        const ticker = q.ticker;
+        if (!ticker) return sendJson(res, { error: 'ticker required' }, 400), true;
+        const { getTrainer } = require('../lib/kalshi-convergence-trainer');
+        const trainer = getTrainer();
+        return sendJson(res, {
+          ticker,
+          accuracy: trainer.getAccuracy(ticker),
+          multiplier: trainer.getTypeMultiplier(trainer.getMarketType(ticker))
+        }, 200), true;
+      }
+
       // GET — Impossibility Engine deck: constraint-elimination over short-window markets
       // Returns same card shape as crypto-intraday + { determined, stateLabel, knowledge, trace }
       if (url.pathname === '/api/trading/kalshi/impossibility-deck' && req.method === 'GET') {
@@ -926,10 +988,12 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     }
   }
 
-  // GET /api/trading/kalshi/positions-deck
+  // GET /api/trading/kalshi/positions-deck?exitsOnly=true
   // Open positions as swipe cards: entry price, current bid, P&L, exit tag.
+  // exitsOnly=true: only show positions marked for exit (STOP-LOSS/TAKE-PROFIT/CONVERGENCE)
   // Parallel market fetches so latency = slowest single market, not sum.
   if (url.pathname === '/api/trading/kalshi/positions-deck' && req.method === 'GET') {
+    const exitsOnly = q.exitsOnly === 'true';
     try {
       const kalshi = require('../lib/kalshi-api');
       const posRes = await kalshi.getPositions({});
@@ -945,7 +1009,11 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
       const active = rawPositions.filter(p => {
         const n = rawCount(p);
-        return Number.isFinite(n) && n !== 0;
+        if (!Number.isFinite(n) || n === 0) return false;
+        // Skip multi-game parlay positions — they can't be individually exited
+        const t = p.ticker || p.market_ticker || '';
+        if (t.includes('MVESPORTS') || t.includes('MVECROSS') || t.includes('MULTIGAME')) return false;
+        return true;
       });
 
       const mkResults = await Promise.all(
@@ -1005,10 +1073,10 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         const minsToClose = m && m.close_time
           ? Math.round((new Date(m.close_time).getTime() - nowMs) / 60000) : null;
 
-        const yesCents = (m && m.yes_ask != null) ? m.yes_ask : 50;
-        const conviction = Math.min(99, Math.round(
+        const yesCents = (m && m.yes_ask != null) ? m.yes_ask : null;
+        const conviction = yesCents != null ? Math.min(99, Math.round(
           heldSide === 'yes' ? yesCents * 1.1 : (100 - yesCents) * 1.1
-        ));
+        )) : 50;
 
         const exitTag = pnlPct <= -30 ? 'STOP-LOSS'
           : pnlPct >= 40 ? 'TAKE-PROFIT'
@@ -1035,7 +1103,7 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
           maxPayoutCents: maxPayout,
           conviction, exitTag, minsToClose,
           close: (m && m.close_time) || '',
-          reason, yesPct: yesCents,
+          reason, yesPct: yesCents, marketFound: m != null,
         });
       }
 
@@ -1043,7 +1111,16 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       const urgency = t => t === 'STOP-LOSS' ? 0 : t === 'FLATTEN' ? 1 : t === 'TAKE-PROFIT' ? 2 : 3;
       cards.sort((a, b) => urgency(a.exitTag) - urgency(b.exitTag) || a.pnlPct - b.pnlPct);
 
-      return sendJson(res, { count: cards.length, generatedAt: new Date().toISOString(), cards }, 200), true;
+      // Filter: show only positions marked for exit if exitsOnly is true
+      const filtered = exitsOnly ? cards.filter(c => c.exitTag) : cards;
+
+      return sendJson(res, {
+        count: filtered.length,
+        totalPositions: cards.length,
+        exitsOnly,
+        generatedAt: new Date().toISOString(),
+        cards: filtered
+      }, 200), true;
     } catch (error) {
       return sendJson(res, { error: 'positions_deck_error', details: error.message }, 502), true;
     }

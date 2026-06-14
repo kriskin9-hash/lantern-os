@@ -13,6 +13,11 @@ const path = require("path");
 
 const KALSHI_DIR = path.resolve(__dirname, "../../../data/kalshi");
 const PAPER_FILE = path.join(KALSHI_DIR, "paper-positions.jsonl");
+
+// Adaptive exits (no longer mechanical bands)
+const { evaluateExit } = require("./kalshi-adaptive-exits");
+
+// Legacy thresholds (deprecated — use evaluateExit instead)
 const STOP_LOSS_PCT  = -30;
 const TAKE_PROFIT_PCT = 40;
 
@@ -90,10 +95,6 @@ async function pollOpen() {
       const pnlCents = currentBid - entryCents;
       const pnlPct   = Math.round((pnlCents / entryCents) * 100);
 
-      const autoExit = pnlPct <= STOP_LOSS_PCT  ? "STOP-LOSS"
-                     : pnlPct >= TAKE_PROFIT_PCT ? "TAKE-PROFIT"
-                     : null;
-
       const minsToClose = market.close_time
         ? Math.round((new Date(market.close_time).getTime() - Date.now()) / 60000)
         : null;
@@ -105,6 +106,15 @@ async function pollOpen() {
           expired: true, pnlPct, pnlCents, currentBid, minsToClose: 0, status: "expired" });
         continue;
       }
+
+      // Use adaptive exit logic (convergence-driven)
+      const eval = evaluateExit(
+        { side, limitCents: entryCents },
+        market,
+        50  // default entry conviction if not tracked
+      );
+
+      const autoExit = eval.shouldExit ? eval.tag : null;
 
       results.push({
         ...pos,

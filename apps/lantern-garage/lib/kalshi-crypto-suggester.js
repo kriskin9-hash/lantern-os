@@ -6,12 +6,24 @@
 "use strict";
 
 const kalshi = require("./kalshi-api");
+const { getWinRate, getCategory } = require("./kalshi-winrate-tracker");
+
+// ── entry filters (profitability-driven) ────────────────────────────────────
+const MIN_CONVERGENCE_ASK = 80;  // only convergence plays ≥80¢ (tighter threshold)
+const MAX_CONVERGENCE_ASK = 90;  // only convergence plays ≤90¢ (profitable remainder)
+const MIN_ENTRY_CONVICTION = 65; // only entry cards ≥65% conviction
+const MIN_CATEGORY_WINRATE = 45; // skip category if <45% win rate
 
 function isShortWindowMarket(m, nowMs) {
-  // Include ANY market closing in 1-6 hours (convergence window)
   const closeMs = new Date(m.close_time).getTime();
   const minsToClose = Math.round((closeMs - nowMs) / 60000);
-  return minsToClose > 0 && minsToClose <= 360; // 0-6 hours
+  if (minsToClose <= 0 || minsToClose > 360) return false;
+  // Skip markets that have already converged (resolved or nearly so)
+  const ya = m.yes_ask || 0;
+  const na = m.no_ask || 0;
+  if (ya < 4 || ya > 96) return false;   // YES already settled
+  if (na < 4 || na > 96) return false;   // NO already settled
+  return true;
 }
 
 function scoreIntraday(m, nowMs) {
@@ -45,7 +57,39 @@ function scoreIntraday(m, nowMs) {
   return urgency + spreadScore + momentumScore;
 }
 
-async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
+// Convergence-profit opportunity: one side is pricing 80-90¢ (near-certain, real margin remains).
+// Sweet spot: buy the winning side before resolution, collect the spread to 100¢.
+// Phase 1 optimization: tighter thresholds + win-rate check
+function isConvergenceOpportunity(m, nowMs) {
+  const ya = m.yes_ask || 0;
+  const na = m.no_ask || 0;
+  const high = Math.max(ya, na);
+  if (high < MIN_CONVERGENCE_ASK || high > MAX_CONVERGENCE_ASK) return false;
+
+  // Skip if category has poor win rate
+  const winRate = getWinRate(m.ticker);
+  if (winRate < MIN_CATEGORY_WINRATE) return false;
+
+  const closeMs = new Date(m.close_time).getTime();
+  const minsToClose = Math.round((closeMs - nowMs) / 60000);
+  if (minsToClose <= 0 || minsToClose > 480) return false;
+  return true;
+}
+
+async function fetchAllCryptoMarkets() {
+  const series = ["KXBTC", "KXETH", "KXSOL", "KXXRP", "KXDOGE", "KXBNB", "KXHYPE",
+                  "KXBTC15M","KXETH15M","KXSOL15M","KXXRP15M","KXDOGE15M","KXBNB15M","KXHYPE15M"];
+  const all = [];
+  for (const s of series) {
+    try {
+      const r = await kalshi.getMarkets({ status: "open", limit: 100, series_ticker: s });
+      if (r.ok && r.data && r.data.markets) all.push(...r.data.markets);
+    } catch (_) {}
+  }
+  return all;
+}
+
+async function getCryptoSuggestions({ limit = 20, collector = null, exitsOnly = false } = {}) {
   let markets = [];
 
   // Try collector cache first
@@ -57,38 +101,91 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
     }
   }
 
-  // Fall back to API
+  // Fall back to API — fetch both short-window AND convergence candidates
+  let allMarkets = [];
   if (markets.length === 0) {
     try {
-      const mk = await kalshi.getMarkets({ status: "open", limit: 500 });
-      markets = (mk.data && mk.data.markets || []).filter(m => isShortWindowMarket(m, nowMs));
+      allMarkets = await fetchAllCryptoMarkets();
+      markets = allMarkets.filter(m => isShortWindowMarket(m, nowMs));
     } catch (e) {
       return { count: 0, cards: [], error: e.message };
     }
+  } else {
+    allMarkets = markets; // collector already has them
   }
 
-  if (markets.length === 0) {
-    return { count: 0, cards: [], note: "No markets closing in next 6 hours" };
-  }
-  const cards = [];
+  const convCards = [];
+  const entryCards = [];
 
-  for (const m of markets) {
+  // ── Convergence-profit cards FIRST (75-97¢ high-probability side) ─────────
+  // Must run before entry loop so high-probability markets become convergence,
+  // not watered-down entry cards.
+  const convMarkets = allMarkets.filter(m => isConvergenceOpportunity(m, nowMs));
+  const convTickers = new Set();
+  for (const m of convMarkets) {
     const closeMs = new Date(m.close_time).getTime();
     const minsToClose = Math.round((closeMs - nowMs) / 60000);
+    if (minsToClose <= 0) continue;
 
-    if (minsToClose <= 0) continue; // expired
+    const yesAsk = m.yes_ask || 0;
+    const noAsk = m.no_ask || 0;
+    const favSide = yesAsk >= noAsk ? "yes" : "no";
+    const favAsk = favSide === "yes" ? yesAsk : noAsk;
+    const profitCents = 100 - favAsk;
+    const denom = yesAsk + noAsk;
+    const yesPct = denom > 0 ? Math.round((yesAsk / denom) * 100) : 50;
+
+    const reason = `${profitCents}¢ profit if correct · ${minsToClose < 60 ? minsToClose + "m" : Math.round(minsToClose/60) + "h"} to close · buy ${favSide.toUpperCase()} at ${favAsk}¢`;
+
+    convTickers.add(m.ticker);
+    convCards.push({
+      kind: "convergence",
+      action: "buy",
+      ticker: m.ticker,
+      title: m.title || m.ticker,
+      yesLabel: m.yes_sub_title || "YES",
+      noLabel: m.no_sub_title || "NO",
+      yesCents: yesAsk,
+      noCents: noAsk,
+      yesPct,
+      favSide,
+      favLabel: favSide === "yes" ? (m.yes_sub_title || "YES") : (m.no_sub_title || "NO"),
+      favAsk,
+      conviction: favAsk,
+      profitCents,
+      reason,
+      minsToClose,
+      close: m.close_time,
+      urgencyLevel: minsToClose <= 15 ? "critical" : minsToClose <= 60 ? "hot" : "normal",
+      convergenceScore: favAsk * 10 + Math.max(0, 480 - minsToClose)
+    });
+  }
+
+  // ── Entry cards (balanced markets, 4-74¢ range) ────────────────────────────
+  // Phase 1: only include high-conviction entries (≥65%) from winning categories
+  for (const m of markets) {
+    if (convTickers.has(m.ticker)) continue; // already a convergence card
+    const closeMs = new Date(m.close_time).getTime();
+    const minsToClose = Math.round((closeMs - nowMs) / 60000);
+    if (minsToClose <= 0) continue;
 
     const score = scoreIntraday(m, nowMs);
+    const conviction = Math.round(Math.min(99, 40 + (score || 0) / 3));
+
+    // Phase 1: skip low-conviction entries
+    if (conviction < MIN_ENTRY_CONVICTION) continue;
+
+    // Phase 1: skip poor-performing categories
+    const winRate = getWinRate(m.ticker);
+    if (winRate < MIN_CATEGORY_WINRATE) continue;
+
     const yesAsk = m.yes_ask || 0;
     const noAsk = m.no_ask || 0;
     const denom = yesAsk + noAsk;
     const yesPct = denom > 0 ? Math.round((yesAsk / denom) * 100) : 50;
 
-    // Determine favorable side: follow the tighter book or recent tick
     let favSide = "yes";
-    if ((m.yes_ask || 99) > (m.no_ask || 99)) {
-      favSide = "no"; // NO is cheaper
-    }
+    if ((m.yes_ask || 99) > (m.no_ask || 99)) favSide = "no";
 
     const spread = Math.abs(yesAsk - noAsk);
     const reason = [
@@ -97,20 +194,20 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
       yesAsk === noAsk ? "even odds" : (yesPct > 50 ? "YES favored" : "NO favored")
     ].join(" · ");
 
-    cards.push({
+    entryCards.push({
       kind: "entry",
       action: "buy",
       ticker: m.ticker,
       title: m.title || m.ticker,
-      yesLabel: "YES",
-      noLabel: "NO",
+      yesLabel: m.yes_sub_title || "YES",
+      noLabel: m.no_sub_title || "NO",
       yesCents: yesAsk,
       noCents: noAsk,
       yesPct,
       favSide,
-      favLabel: favSide === "yes" ? "YES" : "NO",
+      favLabel: favSide === "yes" ? (m.yes_sub_title || "YES") : (m.no_sub_title || "NO"),
       favAsk: favSide === "yes" ? yesAsk : noAsk,
-      conviction: Math.round(Math.min(99, 40 + (score || 0) / 3)),
+      conviction,
       reason,
       minsToClose,
       close: m.close_time,
@@ -119,15 +216,23 @@ async function getCryptoSuggestions({ limit = 20, collector = null } = {}) {
     });
   }
 
-  // Sort by convergence score (urgency + spread + momentum)
-  cards.sort((a, b) => b.convergenceScore - a.convergenceScore);
+  convCards.sort((a, b) => b.convergenceScore - a.convergenceScore);
+  entryCards.sort((a, b) => b.convergenceScore - a.convergenceScore);
+
+  // For crypto: convergence cards are effectively "exits" (lock in profits)
+  // Entry cards are new positions
+  const allCards = exitsOnly ? convCards : [...convCards, ...entryCards];
 
   return {
-    count: cards.length,
+    count: allCards.length,
+    convergenceCount: convCards.length,
+    entryCount: entryCards.length,
     generatedAt: new Date().toISOString(),
-    note: "Crypto intraday markets — 15m, 1h, daily predictions. Peak accuracy window.",
-    cards: cards.slice(0, limit)
+    note: exitsOnly
+      ? "CONVERGENCE PROFITS ONLY — lock in gains on 80-90¢ markets. No new entries shown."
+      : "Crypto intraday markets — convergence-profit + short-window entry signals.",
+    cards: allCards.slice(0, limit)
   };
 }
 
-module.exports = { getCryptoSuggestions, isShortWindowMarket };
+module.exports = { getCryptoSuggestions, isShortWindowMarket, isConvergenceOpportunity };

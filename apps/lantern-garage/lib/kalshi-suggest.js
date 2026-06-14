@@ -18,11 +18,20 @@
 "use strict";
 
 const kalshi = require("./kalshi-api");
+const { getWinRate, getCategory, getCategoryStats } = require("./kalshi-winrate-tracker");
+const { evaluateExit, getMarketState, scoreHold } = require("./kalshi-adaptive-exits");
 
-// ── exit thresholds (acceptable bands for selling ASAP) ──────────────────────
-const STOP_LOSS_PCT = -25;   // down this much vs entry → stop-loss, sell now
-const TAKE_PROFIT_PCT = 25;  // up this much vs entry → lock the gain, sell
-const FLATTEN_MINS = 30;     // this close to settlement → flatten the position
+// ── exit thresholds (DEPRECATED - replaced by adaptive exits) ──────────────────
+// Kept for reference only; adaptive exits now use convergence-based logic
+const STOP_LOSS_PCT = -25;
+const TAKE_PROFIT_PCT = 25;
+const FLATTEN_MINS = 30;     // NOW BLOCKED — no flatten-at-close, let convergence play
+
+// ── entry filters (profitability-driven) ────────────────────────────────────
+const MIN_CONVICTION = 65;   // only enter if ≥65% confidence (was 40%)
+const MAX_SPREAD_CENTS = 2;  // only enter if spread ≤2¢ (was 6¢)
+const MIN_CATEGORY_WINRATE = 45;  // skip category if <45% historical win rate
+const MAX_ENTRY_PRICE_PCT = 5;  // only enter if entry within ±5% of fair value
 
 function num(v) {
   const f = parseFloat(v);
@@ -32,6 +41,31 @@ function num(v) {
 function prevYesCents(m) {
   const f = parseFloat(m.previous_yes_ask_dollars);
   return Number.isFinite(f) ? Math.round(f * 100) : null;
+}
+
+// Check if entry passes profitability filters
+function isEntryTradeable(m, conviction, spread) {
+  // 1. Conviction threshold: must be ≥65%
+  if (conviction < MIN_CONVICTION) return { ok: false, reason: `conviction ${conviction}% < ${MIN_CONVICTION}%` };
+
+  // 2. Spread constraint: must be ≤2¢
+  if (spread > MAX_SPREAD_CENTS) return { ok: false, reason: `spread ${spread}¢ > ${MAX_SPREAD_CENTS}¢` };
+
+  // 3. Category win rate: category must have >45% historical win rate
+  const cat = getCategory(m.ticker);
+  const winRate = getWinRate(m.ticker);
+  if (winRate < MIN_CATEGORY_WINRATE) return { ok: false, reason: `${cat} win rate ${winRate}% < ${MIN_CATEGORY_WINRATE}%` };
+
+  // 4. Fair value bounds: entry price must be within ±5% of mid-price
+  const yesA = m.yes_ask || 0, noA = m.no_ask || 0;
+  const mid = (yesA + noA) / 2;
+  const yesOffPct = mid > 0 ? Math.abs(yesA - mid) / mid * 100 : 0;
+  const noOffPct = mid > 0 ? Math.abs(noA - mid) / mid * 100 : 0;
+  if (yesOffPct > MAX_ENTRY_PRICE_PCT || noOffPct > MAX_ENTRY_PRICE_PCT) {
+    return { ok: false, reason: `entry off fair value by >5%` };
+  }
+
+  return { ok: true };
 }
 
 function favorability(m, nowMs) {
@@ -91,32 +125,40 @@ async function buildExits(mkByTicker, nowMs) {
   const posRes = await kalshi.getPositions({});
   const positions = (posRes.data && posRes.data.market_positions) || [];
   const exits = [];
+
   for (const p of positions) {
     const count = num(p.position) || 0;
-    if (!count) continue;                              // flat — nothing to exit
+    if (!count) continue;
+
     const ticker = p.ticker || p.market_ticker;
     const m = mkByTicker[ticker];
-    const heldSide = count > 0 ? "yes" : "no";         // +YES / -NO
+    const heldSide = count > 0 ? "yes" : "no";
     const qty = Math.abs(count);
-    const sellBid = m ? (heldSide === "yes" ? m.yes_bid : m.no_bid) : null;
     const cost = costBasisCents(p, qty);
-    const pnlPct = (sellBid != null && cost) ? ((sellBid - cost) / cost) * 100 : null;
 
-    const close = m && m.close_time ? Date.parse(m.close_time) : NaN;
-    const mins = Number.isFinite(close) ? Math.max(0, (close - nowMs) / 60000) : Infinity;
+    // Use adaptive exit logic (convergence-driven, not mechanical)
+    const eval = evaluateExit(
+      { side: heldSide, limitCents: cost || 50 },
+      m,
+      p.conviction || 50  // entry conviction if tracked
+    );
 
-    let tag = null, urgency = 0;
-    if (pnlPct != null && pnlPct <= STOP_LOSS_PCT) { tag = "STOP-LOSS"; urgency = 100; }
-    else if (pnlPct != null && pnlPct >= TAKE_PROFIT_PCT) { tag = "TAKE-PROFIT"; urgency = 92; }
-    else if (mins <= FLATTEN_MINS) { tag = "FLATTEN"; urgency = 84; }
-    if (!tag) continue;                                // position within band → hold
+    if (!eval.shouldExit) continue;  // position holding — no exit signal
+
+    const sellBid = eval.exitPrice || (m ? (heldSide === "yes" ? m.yes_bid : m.no_bid) : null);
+    const pnlPct = eval.pnlPct;
 
     const heldLabel = heldSide === "yes"
       ? (m && m.yes_sub_title) || "YES" : (m && m.no_sub_title) || "NO";
-    const pnlTxt = pnlPct != null ? ` ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(0)}%` : "";
-    const reason = tag === "FLATTEN"
-      ? `FLATTEN · ${Math.round(mins)}m to close · sell ${qty} @ ${sellBid != null ? sellBid + "¢" : "mkt"}`
-      : `${tag}${pnlTxt} · sell ${qty} @ ${sellBid != null ? sellBid + "¢" : "mkt"}`;
+
+    // Urgency mapping: CONVERGENCE-DETERMINED is highest priority (let winners run)
+    const urgencyMap = {
+      "CONVERGENCE-DETERMINED": 95,
+      "TAKE-PROFIT": 90,
+      "STOP-LOSS": 100,
+      "CONFIDENCE-COLLAPSE": 85,
+    };
+    const urgency = urgencyMap[eval.tag] || 80;
 
     exits.push({
       kind: "exit", action: "sell",
@@ -126,17 +168,26 @@ async function buildExits(mkByTicker, nowMs) {
       yesPct: m && m.yes_ask != null && m.no_ask != null && m.yes_ask + m.no_ask > 0
         ? Math.round((m.yes_ask / (m.yes_ask + m.no_ask)) * 100) : null,
       favSide: heldSide, favLabel: heldLabel, favAsk: sellBid, qty,
-      conviction: urgency, exitTag: tag, pnlPct: pnlPct != null ? +pnlPct.toFixed(1) : null,
-      reason,
-      minsToClose: Number.isFinite(mins) ? Math.round(mins) : null,
+      conviction: urgency, exitTag: eval.tag, pnlPct: pnlPct != null ? +pnlPct.toFixed(1) : null,
+      reason: eval.reason,
+      minsToClose: m && m.close_time ? Math.round((new Date(m.close_time).getTime() - nowMs) / 60000) : null,
       close: (m && m.close_time) || "",
     });
   }
-  exits.sort((a, b) => b.conviction - a.conviction);   // stop-loss → take-profit → flatten
+
+  // Sort by urgency: STOP-LOSS first (protect capital), then TAKE-PROFIT (lock gains), then CONVERGENCE
+  exits.sort((a, b) => {
+    const priority = { "STOP-LOSS": 3, "CONFIDENCE-COLLAPSE": 2, "TAKE-PROFIT": 1, "CONVERGENCE-DETERMINED": 0 };
+    const pa = priority[a.exitTag] ?? 0;
+    const pb = priority[b.exitTag] ?? 0;
+    if (pa !== pb) return pb - pa;
+    return b.conviction - a.conviction;
+  });
+
   return exits;
 }
 
-async function getSuggestions({ limit = 60, series_ticker = "KXMLBGAME", collector = null } = {}) {
+async function getSuggestions({ limit = 60, series_ticker = "KXMLBGAME", collector = null, exitsOnly = false } = {}) {
   let markets = [];
 
   // Prefer tight-band snapshot from collector (6s fresh, no API call)
@@ -167,6 +218,12 @@ async function getSuggestions({ limit = 60, series_ticker = "KXMLBGAME", collect
     if (m.yes_ask == null && m.no_ask == null) continue;
     if (exitTickers.has(m.ticker)) continue;           // already an exit card
     const f = favorability(m, nowMs);
+    const spread = Math.abs((m.yes_ask || 0) - (m.no_ask || 0));
+
+    // Apply profitability filters — Phase 1 optimization
+    const check = isEntryTradeable(m, f.conviction, spread);
+    if (!check.ok) continue;  // skip non-tradeable entries
+
     const denom = (m.yes_ask || 0) + (m.no_ask || 0);
     const yesPct = denom > 0 ? Math.round((m.yes_ask / denom) * 100) : (m.yes_ask || 0);
     entries.push({
@@ -194,14 +251,17 @@ async function getSuggestions({ limit = 60, series_ticker = "KXMLBGAME", collect
     return b.conviction - a.conviction;
   });
 
-  // EXITS ON TOP (sell ASAP), then entries
-  const cards = [...exits, ...entries].slice(0, limit);
+  // EXITS ON TOP (sell ASAP), then entries (unless exitsOnly is true)
+  const cards = exitsOnly ? exits : [...exits, ...entries];
   return {
     count: cards.length,
     exitCount: exits.length,
+    entryCount: entries.length,
     generatedAt: new Date().toISOString(),
-    note: "Exits (stop-loss / take-profit / flatten) first — sell ASAP — then now-slice favorable entries. Practice mode, gated dry-run.",
-    cards,
+    note: exitsOnly
+      ? "EXITS ONLY — sell positions immediately (stop-loss / take-profit / convergence-determined). No entries shown."
+      : "Exits (stop-loss / take-profit / convergence) first — sell ASAP — then now-slice favorable entries.",
+    cards: cards.slice(0, limit),
   };
 }
 
