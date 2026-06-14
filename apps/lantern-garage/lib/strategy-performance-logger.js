@@ -1,211 +1,149 @@
+/**
+ * Strategy Performance Logger — Phase A Integration
+ *
+ * Logs trade outcomes + performance metrics for strategy fitness evaluation.
+ * Used by kalshi-suggest.js (entry suggestions) and trading.js (execution).
+ *
+ * Schema: { timestamp, commit_hash, strategy_id, regime, pnl, drawdown,
+ *           stability, position_id, market, is_live }
+ */
+
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
-const FileQueue = require("./file-queue");
+const { appendJsonlQueued } = require("./file-queue");
 
-const repoRoot = path.resolve(__dirname, "..", "..", "..");
-const CSF_MEMORY_DIR = path.join(repoRoot, "data", "csf_memory");
-const PERFORMANCE_LOG = path.join(CSF_MEMORY_DIR, "strategy-performance.jsonl");
-
-// Ensure directory exists
-function _ensureDir() {
-  if (!fs.existsSync(CSF_MEMORY_DIR)) {
-    fs.mkdirSync(CSF_MEMORY_DIR, { recursive: true });
-  }
-}
-
-_ensureDir();
-
-// Use file-queue for safe concurrent appends
-let _queue = null;
-function _getQueue() {
-  if (!_queue) {
-    _queue = new FileQueue(PERFORMANCE_LOG);
-  }
-  return _queue;
-}
+const PERF_LOG_PATH = path.resolve(__dirname, "../../data/csf_memory/strategy-performance.jsonl");
 
 /**
- * Log a strategy performance record
- *
- * @param {Object} record - performance measurement
- *   - timestamp (ms, required)
- *   - commit_hash (git SHA or strategy version ID)
- *   - strategy_id (e.g. "2026-06-10-conviction-v3")
- *   - regime (Conviction_Trend | Reversion | Shock | Liquidity_Fragility | Event_Countdown)
- *   - pnl (realized P&L in dollars)
- *   - drawdown (max drawdown %)
- *   - stability (metric 0-1, higher = better)
- *   - position_id (market position identifier)
- *   - market (ticker/market identifier)
- *   - is_live (1 = live, 0 = paper/simulated)
- *   - extra (optional object for additional context)
+ * Get current commit hash for reproducibility tracking
  */
-async function logPerformance(record) {
+function getCurrentCommitHash() {
   try {
-    _ensureDir();
-
-    // Validate required fields
-    if (!record.timestamp) record.timestamp = Date.now();
-    if (!record.commit_hash) record.commit_hash = "unknown";
-    if (!record.strategy_id) record.strategy_id = "default";
-    if (!record.regime) record.regime = "Unknown";
-    if (record.pnl === undefined) record.pnl = 0;
-    if (record.drawdown === undefined) record.drawdown = 0;
-    if (record.stability === undefined) record.stability = 0.5;
-    if (record.is_live === undefined) record.is_live = 0;
-
-    // Serialize to JSONL
-    const line = JSON.stringify({
-      timestamp: record.timestamp,
-      commit_hash: record.commit_hash,
-      strategy_id: record.strategy_id,
-      regime: record.regime,
-      pnl: parseFloat(record.pnl),
-      drawdown: parseFloat(record.drawdown),
-      stability: parseFloat(record.stability),
-      position_id: record.position_id || null,
-      market: record.market || null,
-      is_live: record.is_live,
-      ...(record.extra || {}),
-    });
-
-    // Append via file-queue (safe concurrent appends)
-    await _getQueue().append(line);
-    return true;
-  } catch (error) {
-    console.error("[StrategyPerformanceLogger] Failed to log:", error.message);
-    return false;
+    const { execSync } = require("child_process");
+    const hash = execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+    return hash || "unknown";
+  } catch {
+    return "unknown";
   }
 }
 
 /**
- * Read recent performance records
- *
- * @param {Number} limit - max records to return
- * @param {Object} filter - optional filters
- *   - regime: filter by regime type
- *   - strategy_id: filter by strategy
- *   - minTimestamp: only records after this time
- * @returns {Array<Object>} performance records
+ * Log a single trade's performance metrics
  */
-function readPerformanceRecords(limit = 100, filter = {}) {
-  _ensureDir();
-
-  if (!fs.existsSync(PERFORMANCE_LOG)) {
-    return [];
-  }
-
+async function logPerformance(params) {
   try {
+    const {
+      strategy_id,
+      regime,
+      pnl = 0,
+      drawdown = 0,
+      stability = 0,
+      position_id,
+      market,
+      is_live = false
+    } = params;
+
+    // Ensure log directory exists
+    const dir = path.dirname(PERF_LOG_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const record = {
+      timestamp: new Date().toISOString(),
+      commit_hash: getCurrentCommitHash(),
+      strategy_id,
+      regime,
+      pnl: parseFloat(pnl).toFixed(2),
+      drawdown: parseFloat(drawdown).toFixed(2),
+      stability: parseFloat(stability).toFixed(1),
+      position_id,
+      market,
+      is_live
+    };
+
+    // Append to JSONL log (non-blocking)
+    await appendJsonlQueued(PERF_LOG_PATH, record);
+
+    console.log(`[strategy-performance-logger] Logged: ${strategy_id} / ${regime} / ${record.pnl}% PnL`);
+  } catch (e) {
+    console.error(`[strategy-performance-logger] Failed to log performance:`, e.message);
+  }
+}
+
+/**
+ * Get aggregated strategy fitness metrics
+ */
+function getStrategyFitness(strategy_id = null, regime = null, limit = 50) {
+  try {
+    if (!fs.existsSync(PERF_LOG_PATH)) {
+      return { pnl: 0, drawdown: 0, stability: 0, count: 0, trades: [] };
+    }
+
     const lines = fs
-      .readFileSync(PERFORMANCE_LOG, "utf8")
+      .readFileSync(PERF_LOG_PATH, "utf-8")
       .trim()
       .split("\n")
+      .filter(l => l.length > 0)
+      .slice(-limit);
+
+    const trades = lines
+      .map(line => {
+        try {
+          return JSON.parse(line);
+        } catch {
+          return null;
+        }
+      })
       .filter(Boolean);
 
-    let records = [];
-    for (const line of lines) {
-      try {
-        const rec = JSON.parse(line);
-        records.push(rec);
-      } catch {}
+    // Filter by strategy_id and regime if provided
+    const filtered = trades.filter(t => {
+      if (strategy_id && t.strategy_id !== strategy_id) return false;
+      if (regime && t.regime !== regime) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      return { pnl: 0, drawdown: 0, stability: 0, count: 0, trades: [] };
     }
 
-    // Apply filters
-    if (filter.regime) {
-      records = records.filter(r => r.regime === filter.regime);
-    }
-    if (filter.strategy_id) {
-      records = records.filter(r => r.strategy_id === filter.strategy_id);
-    }
-    if (filter.minTimestamp) {
-      records = records.filter(r => r.timestamp >= filter.minTimestamp);
-    }
-    if (filter.is_live !== undefined) {
-      records = records.filter(r => r.is_live === filter.is_live);
-    }
+    const pnl = filtered.reduce((sum, t) => sum + parseFloat(t.pnl), 0) / filtered.length;
+    const drawdown = filtered.reduce((sum, t) => sum + parseFloat(t.drawdown), 0) / filtered.length;
+    const stability = filtered.reduce((sum, t) => sum + parseFloat(t.stability), 0) / filtered.length;
 
-    // Return most recent first
-    return records.reverse().slice(0, limit);
-  } catch (error) {
-    console.error("[StrategyPerformanceLogger] Failed to read records:", error.message);
-    return [];
+    return {
+      pnl: parseFloat(pnl.toFixed(2)),
+      drawdown: parseFloat(drawdown.toFixed(2)),
+      stability: parseFloat(stability.toFixed(1)),
+      count: filtered.length,
+      trades: filtered
+    };
+  } catch (e) {
+    console.error(`[strategy-performance-logger] Failed to read fitness:`, e.message);
+    return { pnl: 0, drawdown: 0, stability: 0, count: 0, trades: [] };
   }
 }
 
 /**
- * Get fitness score for a strategy in a given regime
- *
- * @param {String} strategy_id
- * @param {String} regime
- * @param {Number} windowMs - lookback window (default 1 hour)
- * @returns {Object} { pnl, drawdown, stability, count, trend }
+ * Clear all performance logs (debug only)
  */
-function getStrategyFitness(strategy_id, regime, windowMs = 3_600_000) {
-  const minTime = Date.now() - windowMs;
-  const records = readPerformanceRecords(1000, {
-    strategy_id,
-    regime,
-    minTimestamp: minTime,
-  });
-
-  if (records.length === 0) {
-    return { pnl: 0, drawdown: 0, stability: 0.5, count: 0, trend: 0 };
-  }
-
-  const pnls = records.map(r => r.pnl);
-  const drawdowns = records.map(r => r.drawdown);
-  const stabilities = records.map(r => r.stability);
-
-  const totalPnL = pnls.reduce((a, b) => a + b, 0);
-  const avgDrawdown = drawdowns.reduce((a, b) => a + b, 0) / drawdowns.length;
-  const avgStability = stabilities.reduce((a, b) => a + b, 0) / stabilities.length;
-
-  // Trend: is PnL improving over time?
-  const trend =
-    records.length > 1
-      ? pnls[0] - pnls[records.length - 1] // positive = improving (newer records first)
-      : 0;
-
-  return {
-    pnl: totalPnL,
-    drawdown: avgDrawdown,
-    stability: avgStability,
-    count: records.length,
-    trend,
-  };
-}
-
-/**
- * Get best strategy for a given regime
- *
- * @param {String} regime
- * @param {Array<String>} strategy_ids - candidates to compare
- * @param {Number} windowMs - lookback window
- * @returns {Object} { strategy_id, fitness }
- */
-function getBestStrategyForRegime(regime, strategy_ids = [], windowMs = 3_600_000) {
-  let best = null;
-  let bestScore = -Infinity;
-
-  for (const sid of strategy_ids) {
-    const fitness = getStrategyFitness(sid, regime, windowMs);
-    // Score: total PnL weighted by stability, penalize drawdown
-    const score = fitness.pnl * fitness.stability - Math.abs(fitness.drawdown) * 0.5;
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = { strategy_id: sid, fitness, score };
+function clearPerformanceLog() {
+  try {
+    if (fs.existsSync(PERF_LOG_PATH)) {
+      fs.unlinkSync(PERF_LOG_PATH);
+      console.log(`[strategy-performance-logger] Cleared log`);
     }
+  } catch (e) {
+    console.error(`[strategy-performance-logger] Failed to clear log:`, e.message);
   }
-
-  return best || { strategy_id: strategy_ids[0] || "default", fitness: { pnl: 0, drawdown: 0, stability: 0.5, count: 0 }, score: 0 };
 }
 
 module.exports = {
   logPerformance,
-  readPerformanceRecords,
   getStrategyFitness,
-  getBestStrategyForRegime,
+  clearPerformanceLog,
+  PERF_LOG_PATH
 };
