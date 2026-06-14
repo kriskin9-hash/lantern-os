@@ -96,6 +96,7 @@ const routes = [
   require("./routes/dreams"),
   require("./routes/keystone"),
   require("./routes/image"),
+  require("./routes/web-images"),
   require("./routes/three-doors-image-pool"),
   require("./routes/flourishing"),
   require("./routes/claims"),
