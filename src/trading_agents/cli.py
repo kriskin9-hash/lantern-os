@@ -45,18 +45,11 @@ try:
         alpaca,
     )
 except ImportError as e:
-    # agents.py not available — evaluate_* actions still work without it
-    scan_all = None
-    get_portfolio_equity = None
-    get_open_positions = None
-    is_market_hours = lambda: False
-    is_crypto = lambda t: False
-    get_profile = lambda t: {}
-    agent_log = []
-    DEFAULT_WATCHLIST = ["SPY", "AAPL", "TSLA", "NVDA", "MSFT"]
-    ASSET_PROFILES = {}
-    alpaca = None
-    _agents_import_error = str(e)
+    print(json.dumps({
+        "error": f"Failed to import agents: {str(e)}",
+        "type": "import_error"
+    }))
+    sys.exit(1)
 
 
 def action_scan_market(args):
@@ -221,6 +214,57 @@ def action_get_market_status(args):
         }
 
 
+def _fetch_watchlist_price(ticker):
+    """Fetch price + previous close for a single watchlist ticker (one Alpaca
+    round trip for crypto, two for equities). Run via ThreadPoolExecutor so
+    the 16-ticker watchlist doesn't pay for these sequentially."""
+    try:
+        sym = ticker
+        # Handle crypto naming (e.g., BTCUSD → BTC/USD for Alpaca)
+        if is_crypto(ticker):
+            sym = ticker.replace('USD', '/USD')
+            try:
+                bar = alpaca.get_crypto_bars(sym, '1Hour', limit=2).df
+                if not bar.empty:
+                    price = float(bar['close'].iloc[-1])
+                    prev = float(bar['close'].iloc[-2]) if len(bar) >= 2 else price
+                else:
+                    price = 0
+                    prev = 0
+            except Exception:
+                price = 0
+                prev = 0
+            is_crypto_flag = True
+        else:
+            try:
+                trade = alpaca.get_latest_trade(ticker, feed='iex')
+                price = float(trade.price) if trade else 0
+                day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
+                bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
+                prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
+            except Exception:
+                price = 0
+                prev = 0
+            is_crypto_flag = False
+
+        chg_pct = ((price - prev) / prev * 100) if prev > 0 else 0
+
+        return {
+            'ticker': ticker,
+            'price': round(price, 4),
+            'chg_pct': round(chg_pct, 2),
+            'is_crypto': is_crypto_flag
+        }
+    except Exception as e:
+        log.warning(f"Failed to get price for {ticker}: {str(e)}")
+        return {
+            'ticker': ticker,
+            'price': 0,
+            'chg_pct': 0,
+            'is_crypto': is_crypto(ticker)
+        }
+
+
 def action_get_watchlist_prices(args):
     """
     Get live prices for watchlist tickers
@@ -230,56 +274,19 @@ def action_get_watchlist_prices(args):
     """
     tickers = args.get('tickers', DEFAULT_WATCHLIST)
 
-    results = []
-    for ticker in tickers:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results = {t: {'ticker': t, 'price': 0, 'chg_pct': 0, 'is_crypto': is_crypto(t)} for t in tickers}
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 8), thread_name_prefix="wlprice") as ex:
+        futures = {ex.submit(_fetch_watchlist_price, t): t for t in tickers}
         try:
-            # Get latest bar for the ticker
-            sym = ticker
-            # Handle crypto naming (e.g., BTCUSD → BTC/USD for Alpaca)
-            if is_crypto(ticker):
-                sym = ticker.replace('USD', '/USD')
-                try:
-                    bar = alpaca.get_crypto_bars(sym, '1Hour', limit=2).df
-                    if not bar.empty:
-                        price = float(bar['close'].iloc[-1])
-                        prev = float(bar['close'].iloc[-2]) if len(bar) >= 2 else price
-                    else:
-                        price = 0
-                        prev = 0
-                except:
-                    price = 0
-                    prev = 0
-                is_crypto_flag = True
-            else:
-                try:
-                    bar = alpaca.get_latest_bar(ticker)
-                    price = float(bar.c) if bar else 0
-                    day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
-                    bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
-                    prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
-                except:
-                    price = 0
-                    prev = 0
-                is_crypto_flag = False
+            for fut in as_completed(futures, timeout=30):
+                t = futures[fut]
+                results[t] = fut.result()
+        except TimeoutError:
+            log.warning("get_watchlist_prices: some tickers timed out")
 
-            chg_pct = ((price - prev) / prev * 100) if prev > 0 else 0
-
-            results.append({
-                'ticker': ticker,
-                'price': round(price, 4),
-                'chg_pct': round(chg_pct, 2),
-                'is_crypto': is_crypto_flag
-            })
-        except Exception as e:
-            log.warning(f"Failed to get price for {ticker}: {str(e)}")
-            results.append({
-                'ticker': ticker,
-                'price': 0,
-                'chg_pct': 0,
-                'is_crypto': is_crypto(ticker)
-            })
-
-    return results
+    return [results[t] for t in tickers]
 
 
 def action_get_positions(args):
@@ -465,104 +472,26 @@ def action_get_bars_multi(args):
     tickers = args.get('tickers') or DEFAULT_WATCHLIST
     timeframe = args.get('timeframe', '5m')
 
-    result = {}
-    for ticker in tickers:
-        bars_result = action_get_bars({'ticker': ticker, 'timeframe': timeframe})
-        result[ticker] = {
-            'bars': bars_result.get('bars', []),
-            'count': bars_result.get('count', 0),
-        }
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    result = {ticker: {'bars': [], 'count': 0} for ticker in tickers}
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 8), thread_name_prefix="bars") as ex:
+        futures = {ex.submit(action_get_bars, {'ticker': t, 'timeframe': timeframe}): t for t in tickers}
+        try:
+            for fut in as_completed(futures, timeout=60):
+                t = futures[fut]
+                try:
+                    bars_result = fut.result()
+                    result[t] = {
+                        'bars': bars_result.get('bars', []),
+                        'count': bars_result.get('count', 0),
+                    }
+                except Exception as e:
+                    log.warning(f"get_bars_multi: {t} failed: {e}")
+        except TimeoutError:
+            log.warning("get_bars_multi: some tickers timed out")
 
     return {'bars': result, 'timeframe': timeframe}
-
-
-def action_evaluate_asset(args):
-    """
-    Evaluate a single asset through the TradingTesseract (Phase 4, issue #325).
-
-    Args: {
-        asset:       str  — ticker symbol, e.g. 'AAPL',
-        zones_data:  dict — optional; if omitted, a scan_market is run first,
-        market_status: dict — optional; if omitted, get_market_status is called,
-        agent_log:   list — optional agent-log entries
-    }
-    Returns: { asset, cube: {time,market,signal,layer,asset_state},
-               confidence, action, evaluated_at }
-    """
-    try:
-        from trading_tesseract import TradingTesseract
-    except ImportError as e:
-        return {'error': f'TradingTesseract not available: {e}', 'type': 'import_error'}
-
-    asset = args.get('asset', '').upper()
-    if not asset:
-        return {'error': 'asset is required', 'type': 'validation_error'}
-
-    # Resolve inputs — use provided data or fetch live
-    zones_data = args.get('zones_data')
-    if zones_data is None:
-        try:
-            scan = action_scan_market({'watchlist': [asset]})
-            zones_data = scan.get('zones', {})
-        except Exception:
-            zones_data = {}
-
-    market_status = args.get('market_status')
-    if market_status is None:
-        try:
-            market_status = action_get_market_status({})
-        except Exception:
-            market_status = {}
-
-    agent_log_entries = args.get('agent_log') or []
-
-    tt = TradingTesseract()
-    return tt.evaluate(asset, zones_data, market_status, agent_log_entries)
-
-
-def action_evaluate_watchlist(args):
-    """
-    Evaluate every asset in a watchlist through the TradingTesseract.
-
-    Args: {
-        watchlist:    list[str] — tickers; defaults to DEFAULT_WATCHLIST,
-        zones_data:   dict      — optional; omit to fetch live,
-        market_status: dict     — optional; omit to fetch live,
-        agent_log:    list      — optional agent-log entries
-    }
-    Returns: { evaluations: [...sorted by confidence desc], evaluated_at }
-    """
-    try:
-        from trading_tesseract import TradingTesseract
-    except ImportError as e:
-        return {'error': f'TradingTesseract not available: {e}', 'type': 'import_error'}
-
-    watchlist = args.get('watchlist') or DEFAULT_WATCHLIST
-
-    zones_data = args.get('zones_data')
-    if zones_data is None:
-        try:
-            scan = action_scan_market({'watchlist': watchlist})
-            zones_data = scan.get('zones', {})
-        except Exception:
-            zones_data = {}
-
-    market_status = args.get('market_status')
-    if market_status is None:
-        try:
-            market_status = action_get_market_status({})
-        except Exception:
-            market_status = {}
-
-    agent_log_entries = args.get('agent_log') or []
-
-    tt = TradingTesseract()
-    results = tt.evaluate_watchlist(watchlist, zones_data, market_status, agent_log_entries)
-    return {
-        'evaluations': results,
-        'evaluated_at': results[0]['evaluated_at'] if results else None,
-        'count': len(results),
-    }
 
 
 def main():
@@ -605,8 +534,6 @@ def main():
         'get_bars': action_get_bars,
         'get_bars_multi': action_get_bars_multi,
         'place_order': action_place_order,
-        'evaluate_asset': action_evaluate_asset,
-        'evaluate_watchlist': action_evaluate_watchlist,
     }
 
     if action not in handlers:
@@ -632,4 +559,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
