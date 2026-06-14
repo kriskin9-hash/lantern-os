@@ -1,16 +1,9 @@
 {
-  "449": {
-    "number": 449,
-    "title": "Creator Dashboard Theme Refresh — Phases 1-5 Complete",
-    "updatedAt": 1781467264000,
-    "firstSeenAt": 1781466325193,
-    "reviewedAt": null
-  },
   "450": {
     "number": 450,
     "title": "fix(convergence): slot-claim bug + trader-dashboard 1D/5D/1M chart range toggle",
-    "updatedAt": 1781467264000,
+    "updatedAt": 1781467744000,
     "firstSeenAt": 1781466807635,
-    "reviewedAt": null
+    "reviewedAt": 1781467781608
   }
 }

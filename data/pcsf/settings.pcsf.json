@@ -2,223 +2,29 @@
   "pcsf_type": "settings",
   "pcsf_version": "1.0.0",
   "component": "settings",
-  "description": "Runtime configuration layer. Declares all env vars the system reads, their purpose, defaults, and current resolved states (key present = true, absent = false — values never stored here).",
-  "generated_at": "2026-06-10T08:42:26.739Z",
+  "description": "Runtime configuration layer. Tracks env-var presence for Lantern OS features.",
+  "generated_at": "2026-06-13T01:51:59.327Z",
   "state": "available",
-  "env_file": ".env",
-  "env_file_loader": "apps/lantern-garage/server.js (startup, regex ^[A-Z0-9_]+)",
-  "hot_reload_route": "POST /api/settings/providers",
   "settings": [
     {
       "key": "ANTHROPIC_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Enables Claude streaming via api.anthropic.com",
-      "get_key_url": "https://console.anthropic.com/settings/keys"
-    },
-    {
-      "key": "ANTHROPIC_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "claude-3-5-haiku-20241022",
-      "state": "present",
-      "purpose": "Override the default Claude model"
+      "state": "present"
     },
     {
       "key": "OPENAI_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Enables ChatGPT streaming via api.openai.com",
-      "get_key_url": "https://platform.openai.com/api-keys"
-    },
-    {
-      "key": "OPENAI_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "gpt-4o-mini",
-      "state": "present",
-      "purpose": "Override the default OpenAI model"
+      "state": "absent"
     },
     {
       "key": "GEMINI_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Enables Gemini streaming via generativelanguage.googleapis.com",
-      "get_key_url": "https://aistudio.google.com/app/apikey"
+      "state": "present"
     },
     {
-      "key": "GEMINI_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "gemini-2.5-flash",
-      "state": "present",
-      "purpose": "Override the default Gemini model. Note: gemini-1.5-flash deprecated on free tier."
+      "key": "DISCORD_TOKEN",
+      "state": "absent"
     },
     {
-      "key": "GOOGLE_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Alias for GEMINI_API_KEY. Checked as fallback if GEMINI_API_KEY is absent."
-    },
-    {
-      "key": "XAI_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Enables Grok streaming via api.x.ai (OpenAI-compatible)",
-      "get_key_url": "https://console.x.ai/"
-    },
-    {
-      "key": "XAI_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "grok-3-mini",
-      "state": "present",
-      "purpose": "Override the default Grok model"
-    },
-    {
-      "key": "OLLAMA_BASE_URL",
-      "group": "provider",
-      "required": false,
-      "default": "http://127.0.0.1:11434",
-      "state": "present",
-      "purpose": "Base URL for local Ollama instance. Defaults to localhost."
-    },
-    {
-      "key": "OLLAMA_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "llama3",
-      "state": "present",
-      "purpose": "Ollama model to use. Must be pulled via 'ollama pull <model>'."
-    },
-    {
-      "key": "ELEVENLABS_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Enables ElevenLabs TTS proxy for calm, high-quality voice output",
-      "get_key_url": "https://elevenlabs.io/app/sign-up"
-    },
-    {
-      "key": "ELEVENLABS_VOICE_ID",
-      "group": "model",
-      "required": false,
-      "default": "Rachel",
-      "state": "absent",
-      "purpose": "ElevenLabs voice ID. Default 'Rachel' is warm and calm."
-    },
-    {
-      "key": "LANTERN_GARAGE_PORT",
-      "group": "server",
-      "required": false,
-      "default": "4177",
-      "state": "present",
-      "purpose": "Port the lantern-garage server binds to."
-    },
-    {
-      "key": "LANTERN_GARAGE_HOST",
-      "group": "server",
-      "required": false,
-      "default": "127.0.0.1",
-      "state": "present",
-      "purpose": "Host the server binds to. Defaults to 0.0.0.0 when PORT env is set (cloud deploy)."
-    },
-    {
-      "key": "LANTERN_CLOUD_MIRROR_URLS",
-      "group": "server",
-      "required": false,
-      "state": "absent",
-      "purpose": "Comma-separated cloud mirror URLs for redundancy reporting."
-    },
-    {
-      "key": "MISTRAL_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "absent",
-      "purpose": "Enables Mistral AI streaming via api.mistral.ai. Codestral for coding, Mistral Large for chat.",
-      "get_key_url": "https://console.mistral.ai/api-keys/"
-    },
-    {
-      "key": "MISTRAL_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "mistral-large-latest",
-      "state": "absent",
-      "purpose": "Override the default Mistral model"
-    },
-    {
-      "key": "COHERE_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "absent",
-      "purpose": "Enables Cohere streaming via api.cohere.com. Command R+ for long-context RAG and summarization.",
-      "get_key_url": "https://dashboard.cohere.com/api-keys"
-    },
-    {
-      "key": "COHERE_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "command-r-plus",
-      "state": "absent",
-      "purpose": "Override the default Cohere model"
-    },
-    {
-      "key": "PERPLEXITY_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "absent",
-      "purpose": "Enables Perplexity search-augmented streaming via api.perplexity.ai. Includes live web citations.",
-      "get_key_url": "https://www.perplexity.ai/settings/api"
-    },
-    {
-      "key": "PERPLEXITY_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "sonar-pro",
-      "state": "absent",
-      "purpose": "Override the default Perplexity model"
-    },
-    {
-      "key": "DEEPSEEK_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "present",
-      "purpose": "Enables DeepSeek streaming via api.deepseek.com. DeepSeek-Reasoner for math and logic.",
-      "get_key_url": "https://platform.deepseek.com/api_keys"
-    },
-    {
-      "key": "DEEPSEEK_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "deepseek-chat",
-      "state": "absent",
-      "purpose": "Override the default DeepSeek model"
-    },
-    {
-      "key": "OPENROUTER_API_KEY",
-      "group": "provider",
-      "required": false,
-      "state": "absent",
-      "purpose": "Enables OpenRouter unified gateway to 100+ models. Fallback and price optimization.",
-      "get_key_url": "https://openrouter.ai/settings/keys"
-    },
-    {
-      "key": "OPENROUTER_MODEL",
-      "group": "model",
-      "required": false,
-      "default": "openai/gpt-4.1-mini",
-      "state": "absent",
-      "purpose": "Override the default OpenRouter model"
+      "key": "KALSHI_API_KEY_ID",
+      "state": "absent"
     }
-  ],
-  "provider_settings_api": {
-    "get": "GET /api/settings/providers — returns {KEY: bool} for all keys (never returns values)",
-    "set": "POST /api/settings/providers {key, value} — writes to .env, hot-reloads process.env",
-    "clear": "POST /api/settings/providers {key, value: ''} — removes from .env and process.env"
-  }
+  ]
 }
