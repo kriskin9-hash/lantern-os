@@ -1892,6 +1892,52 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // ── Trade History Persistence (P3) ──────────────────────────────────
+  // GET /api/trading/history/trades?symbol=BTCUSD&limit=20
+  // Returns completed trades with entry, exit, and P&L
+  if (url.pathname === '/api/trading/history/trades' && req.method === 'GET') {
+    try {
+      const tradingHistory = require('../lib/trading-history-logger');
+      const symbol = url.searchParams.get('symbol');
+      const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+      const trades = tradingHistory.getTradeHistory({ symbol, limit });
+      sendJson(res, { trades, count: trades.length }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch trade history', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/history/signals?symbol=BTCUSD&limit=20&min_confidence=0.7
+  // Returns generated trading signals with confidence scores
+  if (url.pathname === '/api/trading/history/signals' && req.method === 'GET') {
+    try {
+      const tradingHistory = require('../lib/trading-history-logger');
+      const symbol = url.searchParams.get('symbol');
+      const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+      const minConfidence = parseFloat(url.searchParams.get('min_confidence') || '0');
+      const signals = tradingHistory.getSignalHistory({ symbol, limit, min_confidence: minConfidence });
+      sendJson(res, { signals, count: signals.length }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to fetch signal history', details: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/history/stats?symbol=BTCUSD
+  // Returns trade statistics (win rate, average P&L, etc.)
+  if (url.pathname === '/api/trading/history/stats' && req.method === 'GET') {
+    try {
+      const tradingHistory = require('../lib/trading-history-logger');
+      const symbol = url.searchParams.get('symbol');
+      const stats = tradingHistory.getTradeStats({ symbol });
+      sendJson(res, { timestamp: new Date().toISOString(), stats }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'Failed to compute trade statistics', details: error.message }, 500);
+    }
+    return true;
+  }
+
   return false;
 };
 
