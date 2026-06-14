@@ -97,9 +97,9 @@ const routes = [
   require("./routes/trading"),
   require("./routes/agent-performance"),
   require("./routes/leaderboard"),
-  require("./routes/surfaces"),
   require("./routes/self-edit"),
   require("./routes/creator"),
+  require("./routes/surfaces"),
 ];
 
 async function route(req, res) {

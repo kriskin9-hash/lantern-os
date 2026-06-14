@@ -3,32 +3,7 @@
  * Maps model profiles to Ollama models and surface usage
  */
 
+// Empty registry for now
 module.exports = {
-  text: {
-    dream: {
-      profileId: "lantern-csf-dream",
-      ollamaModel: process.env.DREAMCHAT_MODEL || "lantern-csf-dream",
-      surfaces: ["dream-chat", "dream-journal", "three-doors"],
-    },
-    pcsf: {
-      profileId: "lantern-pcsf",
-      ollamaModel: process.env.PCSF_MODEL || "lantern-pcsf",
-      surfaces: ["provider-routing", "privacy", "receipts"],
-    },
-    convergance: {
-      profileId: "lantern-convergance",
-      ollamaModel: process.env.CONVERGENCE_MODEL || "lantern-convergance",
-      surfaces: ["eval", "promotion", "receipts", "task-loop"],
-    },
-  },
-  image: {
-    dream: {
-      modelId: "lantern-csf-dream-image",
-      adapterPath:
-        process.env.LANTERN_IMAGE_LORA ||
-        "models/csf-image/checkpoints/lantern-door-lora-final.safetensors",
-      surfaces: ["dream-journal", "three-doors"],
-      status: "hold-pending-validation",
-    },
-  },
+  // Placeholder
 };

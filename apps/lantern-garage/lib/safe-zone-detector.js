@@ -2,12 +2,6 @@
 // Detects and preserves critical regions in video (facecam, HUD, minimap, killfeed)
 // Ensures these regions never get cropped during editing/export
 
-module.exports = {
-  detectSafeZones,
-  SafeZone,
-  SafeZoneMap,
-};
-
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
@@ -408,3 +402,9 @@ function detectTextPatterns(pixels) {
 
   return Math.min(1, (variance + edges * 100) / 150);
 }
+
+module.exports = {
+  detectSafeZones,
+  SafeZone,
+  SafeZoneMap,
+};

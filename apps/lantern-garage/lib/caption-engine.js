@@ -2,13 +2,6 @@
 // Generates dynamic captions from speech, game events, and highlights
 // Burns captions into video with mobile-safe positioning
 
-module.exports = {
-  generateCaptions,
-  Caption,
-  CaptionStyle,
-  burnCaptionsToVideo,
-};
-
 // ============================================================================
 // CAPTION DATA STRUCTURE
 // ============================================================================
@@ -296,3 +289,10 @@ function formatSRTTime(seconds) {
 function padZero(num) {
   return String(num).padStart(2, "0");
 }
+
+module.exports = {
+  generateCaptions,
+  Caption,
+  CaptionStyle,
+  burnCaptionsToVideo,
+};
