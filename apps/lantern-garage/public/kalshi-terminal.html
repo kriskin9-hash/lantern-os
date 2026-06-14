@@ -87,6 +87,8 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .ribbon{font-size:11px;padding:5px 10px;border-radius:7px;background:rgba(239,68,68,.1);
   border:1px solid var(--danger);color:var(--danger);margin-bottom:8px;font-weight:600;letter-spacing:.04em}
 .ribbon.profit{background:rgba(52,211,153,.08);border-color:var(--green);color:var(--green)}
+.ribbon.urgent{animation:ribbonpulse 1s ease-in-out infinite}
+@keyframes ribbonpulse{0%,100%{opacity:1}50%{opacity:.5}}
 
 /* market meta strip */
 .card-meta{display:flex;gap:12px;align-items:center;padding:8px 0 4px;font-size:11px;
@@ -258,6 +260,9 @@ const API='/api/trading/kalshi';
 const SYNC_MS=5000, DECK_TARGET=20, PREFETCH_AT=10;
 let conn={}, deck=[], idx=0, busy=false, dragging=false, liveMap={}, prefetching=false;
 let lastSyncMs=0, lastDetCount=null;
+// per-ticker snooze state for held (skipped) stop-loss/take-profit position cards
+const positionExitState={};
+const EXIT_SNOOZE_MS=30000;
 
 function toggleTheme(){
   const el=document.documentElement;
@@ -323,6 +328,19 @@ async function syncDeck(){
   // 2. inject brand-new tickers right after current position
   const newCards=fresh.filter(c=>!acted.has(c.ticker)&&!pending.has(c.ticker));
   if(newCards.length) deck.splice(Math.min(idx+1,deck.length),0,...newCards);
+  // 2b. re-inject held (skipped) exit positions whose snooze expired and the
+  // stop-loss/take-profit condition is still active — at the front, marked urgent
+  const now=Date.now();
+  let reinjected=false;
+  for(const fc of fresh){
+    if(!fc.exitTag||!acted.has(fc.ticker)||pending.has(fc.ticker)) continue;
+    const snooze=positionExitState[fc.ticker];
+    if(!snooze||snooze.until>now) continue;
+    deck.splice(idx,0,Object.assign({},fc,{urgent:true}));
+    positionExitState[fc.ticker]={until:now+EXIT_SNOOZE_MS,injected:true};
+    pending.add(fc.ticker);
+    reinjected=true;
+  }
   // 3. prune expired positions (not in fresh), and expired/weak suggestion cards
   for(let i=deck.length-1;i>idx;i--){
     const isPosCard=deck[i].kind==='position'||deck[i].kind==='exit';
@@ -330,14 +348,20 @@ async function syncDeck(){
     const isSugg=!isPosCard;
     if(isSugg&&!isSuggestionTradeable(deck[i])) deck.splice(i,1);
   }
+  // clear snooze state once a position no longer needs an exit (or closed)
+  for(const ticker of Object.keys(positionExitState)){
+    const fc=fresh.find(x=>x.ticker===ticker);
+    if(!fc||!fc.exitTag) delete positionExitState[ticker];
+  }
   // 4. auto-resurface: were at end, new cards have arrived
   if(wasAtEnd&&idx<deck.length){
     document.getElementById('end').style.display='none';
     render(); return;
   }
   if(idx>=deck.length){ maybePrefetch(); return; }
-  // 5. patch front in place (no full re-render — preserves swipe state)
-  if(!dragging) patchFront(deck[idx]);
+  // 5. patch front in place (no full re-render — preserves swipe state),
+  // unless a re-injection changed which card is at the front
+  if(!dragging){ if(reinjected) render(); else patchFront(deck[idx]); }
   const rem=deck.length-idx;
   document.getElementById('progress').textContent=rem>0?`${rem} of ${deck.length} · soonest first`:'';
   maybePrefetch();
@@ -476,8 +500,9 @@ function cardInner(card){
     const feeStr = fee!=null ? `−${fee}¢ fee` : '';
     const tag=card.exitTag;
     const stale=card.marketFound===false;
-    const ribbonCls=tag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
-    const ribbon=tag?`<div class="${ribbonCls}">⚠ ${tag} · net ${netSign}${netPct}%</div>`
+    const ribbonCls=(tag==='TAKE-PROFIT'?'ribbon profit':'ribbon')+(card.urgent?' urgent':'');
+    const ribbonLead=card.urgent?'STILL ':'';
+    const ribbon=tag?`<div class="${ribbonCls}">⚠ ${ribbonLead}${tag} · net ${netSign}${netPct}%</div>`
       :stale?`<div class="ribbon">⏸ MARKET CLOSED — position may have settled</div>`:'';
     const favClass=fav==='yes'?'yes':'no';
     const bidStr=stale?'market closed':`${card.favAsk!=null?card.favAsk+'¢':'mkt'} bid`;
@@ -749,7 +774,14 @@ function blockTake(reason){
 // ── act ───────────────────────────────────────────────────────────────────────
 async function act(dir,fromSwipe){
   if(busy||idx>=deck.length) return;
-  if(dir==='pass'){ if(!fromSwipe) return flyOut('pass'); idx++; render(); return; }
+  if(dir==='pass'){
+    if(!fromSwipe) return flyOut('pass');
+    const heldCard=deck[idx];
+    if(heldCard.kind==='position'&&heldCard.exitTag){
+      positionExitState[heldCard.ticker]={until:Date.now()+EXIT_SNOOZE_MS,injected:true};
+    }
+    idx++; render(); return;
+  }
   if(dir==='take' && !fromSwipe) return flyOut('take');
 
   // ── Guard: refuse bad takes before anything fires ─────────────────────────
