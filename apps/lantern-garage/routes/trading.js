@@ -547,6 +547,50 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         }, 200), true;
       }
 
+      // GET — Observer Engine frontier over current short-window markets
+      // Returns KnowabilityFrontier + TemporalBand + ConvergenceStateField snapshot
+      if (url.pathname === '/api/trading/kalshi/observer-frontier' && req.method === 'GET') {
+        const { createKalshiEngine } = require('../lib/impossibility-engine');
+        const { isShortWindowMarket } = require('../lib/kalshi-crypto-suggester');
+        const { buildKalshiObserver, ConvergenceStateField } = require('../lib/observer-engine');
+        const limit = q.limit ? Number(q.limit) : 50;
+
+        let markets = [];
+        const collector = deps.kalshiCollector;
+        if (collector) {
+          const latest = collector.getLatestMarkets?.();
+          if (latest && latest.length > 0) markets = latest.filter(m => isShortWindowMarket(m, Date.now()));
+        }
+        if (markets.length === 0) {
+          const mk = await kalshi.getMarkets({ status: 'open', limit: 500 });
+          markets = (mk.data?.markets || []).filter(m => isShortWindowMarket(m, Date.now()));
+        }
+
+        // Run IE first — results feed Observer Engine frontier classification
+        const engine = createKalshiEngine();
+        const ieResults = engine.solveAll(markets).map(({ result }) => result);
+
+        const observer = buildKalshiObserver(markets.slice(0, limit), ieResults);
+        const band = observer.emit_band();
+        const csf = new ConvergenceStateField([band]);
+
+        return sendJson(res, {
+          generatedAt: new Date().toISOString(),
+          marketCount: markets.length,
+          frontier: observer.frontier.toJSON(),
+          band: band.toJSON(),
+          csf: csf.toJSON(),
+          summary: {
+            known:        observer.frontier.known.size,
+            recallable:   observer.frontier.recallable.size,
+            observable:   observer.frontier.observable.size,
+            reachable:    observer.frontier.reachable.size,
+            inferable:    observer.frontier.inferable.size,
+            discoverable: observer.frontier.discoverable.size,
+          },
+        }, 200), true;
+      }
+
       // GET — live market data (pass-through query: series_ticker, status, limit, event_ticker)
       if (url.pathname === '/api/trading/kalshi/live-markets' && req.method === 'GET') {
         const r = await kalshi.getMarkets(q);
@@ -627,8 +671,16 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       const posRes = await kalshi.getPositions({});
       const rawPositions = (posRes.data && posRes.data.market_positions) || [];
 
+      // Kalshi v2 API returns position:0 (integer) even when position_fp is non-zero
+      // (fractional contracts). Fall through to position_fp when the integer rounds to 0.
+      const rawCount = p => {
+        const pos = p.position;
+        if (pos != null && pos !== 0) return parseFloat(pos);
+        return parseFloat(p.position_fp ?? p.quantity_fp ?? 0);
+      };
+
       const active = rawPositions.filter(p => {
-        const n = parseFloat(p.position ?? p.quantity_fp ?? 0);
+        const n = rawCount(p);
         return Number.isFinite(n) && n !== 0;
       });
 
@@ -649,16 +701,27 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         return null;
       }
 
+      // Kalshi taker fee: round_up(0.07 × C × P × (1-P)) in cents.
+      // INX / NASDAQ100 markets use the 0.035 rate per fee schedule (Feb 5, 2026).
+      function kalshiFee(contracts, priceCents, ticker = '') {
+        const pc = Math.max(1, Math.min(99, priceCents));
+        const P = pc / 100;
+        const rate = (ticker.startsWith('INX') || ticker.startsWith('NASDAQ100')) ? 0.035 : 0.07;
+        return Math.ceil(rate * contracts * P * (1 - P) * 100); // cents
+      }
+
       const cards = [];
       for (let i = 0; i < active.length; i++) {
         const p = active[i];
         const m = mkResults[i] && mkResults[i].data && mkResults[i].data.market;
         const ticker = p.ticker || p.market_ticker;
-        const count = parseFloat(p.position ?? 0);
+        const count = rawCount(p);
         const heldSide = count > 0 ? 'yes' : 'no';
-        const qty = Math.abs(Math.round(count));
-
-        const entry = entryCents(p, qty) || 50;
+        const absCount = Math.abs(count);
+        // Display qty: round fractional positions up to 1 so the card reads "1 contract"
+        const qty = absCount < 1 ? 1 : Math.abs(Math.round(count));
+        // Entry price: use raw fractional count so exposure/count gives the correct per-contract cost
+        const entry = entryCents(p, absCount || 1) || 50;
         const bidCents = m ? (heldSide === 'yes'
           ? (m.yes_bid ?? Math.round((num(m.yes_bid_dollars) || 0) * 100))
           : (m.no_bid  ?? Math.round((num(m.no_bid_dollars)  || 0) * 100))) : entry;
@@ -666,6 +729,14 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         const pnlCents = bidCents - entry;
         const pnlPct   = Math.round((pnlCents / entry) * 100);
         const maxPayout = qty * 100; // $1 per contract in cents
+
+        // Fee impact: exit fee you'd pay to sell now; entry fee already paid at open
+        const exitFeeCents  = kalshiFee(qty, bidCents, ticker);
+        const entryFeeCents = kalshiFee(qty, entry, ticker);
+        const grossPnlCents = pnlCents * qty;
+        const netPnlCents   = grossPnlCents - entryFeeCents - exitFeeCents;
+        const costBasis     = entry * qty + entryFeeCents;
+        const netPnlPct     = costBasis > 0 ? Math.round((netPnlCents / costBasis) * 100) : 0;
 
         const minsToClose = m && m.close_time
           ? Math.round((new Date(m.close_time).getTime() - nowMs) / 60000) : null;
@@ -680,8 +751,9 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
           : (minsToClose !== null && minsToClose <= 30 && minsToClose >= 0) ? 'FLATTEN'
           : null;
 
-        const pnlSign = pnlPct >= 0 ? '+' : '';
-        const reason = `${heldSide.toUpperCase()} @${entry}¢ entry · ${bidCents}¢ now · ${pnlSign}${pnlPct}%${qty > 1 ? ` · ${qty} contracts` : ''}`;
+        const pnlSign    = pnlPct >= 0 ? '+' : '';
+        const netPnlSign = netPnlPct >= 0 ? '+' : '';
+        const reason = `entry ${entry}¢ · bid ${bidCents}¢ · gross ${pnlSign}${pnlPct}% · fee −${exitFeeCents}¢ · net ${netPnlSign}${netPnlPct}%`;
 
         cards.push({
           kind: 'position', action: 'sell',
@@ -693,7 +765,10 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
           favLabel: heldSide === 'yes' ? ((m && m.yes_sub_title) || 'YES') : ((m && m.no_sub_title) || 'NO'),
           favAsk: bidCents,
           qty, entryCents: entry, currentBidCents: bidCents,
-          pnlCents: pnlCents * qty, pnlPct, maxPayoutCents: maxPayout,
+          pnlCents: grossPnlCents, pnlPct,
+          netPnlCents, netPnlPct,
+          exitFeeCents, entryFeeCents,
+          maxPayoutCents: maxPayout,
           conviction, exitTag, minsToClose,
           close: (m && m.close_time) || '',
           reason, yesPct: yesCents,
