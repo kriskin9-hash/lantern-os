@@ -12,7 +12,7 @@ const tradingStore = require('../lib/trading-store');
 const tradingNews = require('../lib/trading-news');
 const { recordOrder, recordSignal, queryRecentTradingRecords } = tradingMemory;
 const { TradingPriceFeed } = require('../lib/trader-price-feed');
-const { getStrategyFitness } = require('../lib/strategy-performance-logger');
+const { getStrategyFitness, logPerformance } = require('../lib/strategy-performance-logger');
 
 // Shared price feed instance (caches ticks for 1 min)
 let _priceFeed = null;
@@ -1057,7 +1057,31 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         const body = await collectRequestBody(req);
         const { id, exitTag, exitPriceCents, pnlPct } = body ? JSON.parse(body) : {};
         if (!id) return sendJson(res, { error: 'id required' }, 400), true;
-        return sendJson(res, paperLedger.closePosition(id, { exitTag, exitPriceCents, pnlPct }), 200), true;
+
+        const result = paperLedger.closePosition(id, { exitTag, exitPriceCents, pnlPct });
+
+        // Σ₀ Phase A: Log trade performance metrics for strategy fitness aggregation
+        if (result && result.position) {
+          const pos = result.position;
+          try {
+            // Infer regime from exit tag
+            const regime = exitTag === 'STOP-LOSS' ? 'MEAN' : exitTag === 'TAKE-PROFIT' ? 'TREND' : 'PIVOT';
+            await logPerformance({
+              strategy_id: pos.ticker || pos.market_ticker || 'unknown',
+              regime,
+              pnl: pnlPct ?? pos.pnlPct ?? 0,
+              drawdown: pos.maxDrawdown ?? 0,
+              stability: pos.stability ?? 0.5,
+              position_id: id,
+              market: pos.ticker || pos.market_ticker || 'unknown',
+              is_live: false // paper trading
+            });
+          } catch (err) {
+            console.error(`[trading] Failed to log performance for position ${id}:`, err.message);
+          }
+        }
+
+        return sendJson(res, result, 200), true;
       }
     } catch (error) {
       return sendJson(res, { error: 'kalshi_api_error', details: error.message }, 502), true;
