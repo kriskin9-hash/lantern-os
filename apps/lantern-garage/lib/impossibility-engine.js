@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 /**
  * Impossibility Engine — constraint-based state elimination.
@@ -222,7 +222,41 @@ const complementConstraint = {
   },
 };
 
-// ── Default stack ─────────────────────────────────────────────────────────────
+
+/**
+ * C7 -- Convergence IO certificate (Sigma0-gated).
+ *
+ * MEASURED ACCURACY (June 13 2026, 20 resolved MLB markets):
+ *   AR(1) fixed-point accuracy: 40% correct direction -- BELOW 50% baseline.
+ *   Average signal lead-time: 67% of game elapsed (too late to trade).
+ *   Root cause: AR(1) assumes mean-reversion. MLB game prices trend to 0/1.
+ *
+ * STATUS: wired but EXCLUDED from DEFAULT_CONSTRAINTS.
+ * Re-evaluate for non-game markets (elections, econ data) where mean-reversion
+ * is plausible, OR when upgraded to a momentum-aware divergence model (|l| > 1).
+ *
+ * Compose via: createKalshiEngine([cioConstraint])
+ * Cache: data/kalshi/cio-trajectory-cache.jsonl
+ * Issues: #424 (model), #425 (flywheel), #426 (activation criteria)
+ */
+const cioConstraint = {
+  name: "cio",
+  apply(market, lo, hi) {
+    const cio = market.cio;
+    if (!cio || !cio.has_signal || cio.p_star == null) return null;
+    const pStar = cio.p_star * 100;
+    const edge  = cio.edge;
+    if (Math.abs(edge) < 0.06) return null;
+    const strength = Math.min(0.8, Math.abs(edge) * 3);
+    const center   = (lo + hi) / 2;
+    const newCenter = center + (pStar - center) * strength;
+    const half      = (hi - lo) / 2 * (1 - strength * 0.4);
+    return { lo: newCenter - half, hi: newCenter + half };
+  },
+};
+
+// -- Default stack ---------------------------------------------------------------
+// C7 (cio) excluded: 40% accuracy on trend markets -- net negative signal.
 
 const DEFAULT_CONSTRAINTS = [
   priceConstraint,
@@ -301,4 +335,5 @@ module.exports = {
   urgencyConstraint,
   volumeConstraint,
   complementConstraint,
+  cioConstraint,
 };

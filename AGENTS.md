@@ -1,4 +1,4 @@
-# AGENTS.md — Lantern OS
+﻿# AGENTS.md — Lantern OS
 
 A focused guide for AI coding agents. **Read this before touching anything.**
 
