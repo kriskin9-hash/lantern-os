@@ -106,11 +106,11 @@ const routes = [
   require("./routes/trading"),
   require("./routes/agent-performance"),
   require("./routes/leaderboard"),
+  require("./routes/agent-status"),
   require("./routes/surfaces"),
   require("./routes/self-edit"),
   require("./routes/features"),
   require("./routes/personal-cube"),
-  require("./routes/agent-status"),
   require("./routes/pr-review"),
 ];
 

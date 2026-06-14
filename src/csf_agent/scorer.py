@@ -112,7 +112,7 @@ def score_issues(
         body_vec = embedder.embed(body_tokens)
         sim = _cosine_sim(kw_vec, body_vec)
 
-        t = _recency_bonus(issue.get("created_at", ""))
+        t = _recency_bonus(issue.get("createdAt", "") or issue.get("created_at", ""))
 
         score = round(_W_Z * z + _W_Y * y + _W_SIM * sim + _W_T * t, 4)
 
