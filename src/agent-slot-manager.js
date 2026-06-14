@@ -6,38 +6,49 @@
 const fs = require("fs");
 const path = require("path");
 
+const REPO_ROOT = path.resolve(__dirname, "..");
+
 class AgentSlotManager {
-  constructor(configPath) {
+  constructor(configPath, statePath) {
     this.configPath = configPath || path.join(process.env.HOME || process.env.USERPROFILE, ".claude", "agent-slots.json");
+    this.statePath = statePath || path.join(REPO_ROOT, "data", "agent-slots-state.json");
     this.slots = new Map();
     this.health = new Map();
     this.load();
   }
 
   /**
-   * Load configuration from agent-slots.json
+   * Load configuration from agent-slots.json, then overlay persisted runtime state.
    */
   load() {
     try {
       const data = JSON.parse(fs.readFileSync(this.configPath, "utf8"));
       if (!data.slots) throw new Error("No slots defined in configuration");
 
+      let savedState = {};
+      try {
+        savedState = JSON.parse(fs.readFileSync(this.statePath, "utf8"));
+      } catch {
+        // No state file yet — start fresh
+      }
+
       for (const slot of data.slots) {
+        const s = savedState[slot.id] || {};
         this.slots.set(slot.id, {
           ...slot,
-          status: "idle",
-          currentWork: null,
-          workStartTime: null,
-          completedCount: 0,
-          failedCount: 0,
-          lastHeartbeat: new Date(),
+          status: s.status || "idle",
+          currentWork: s.currentWork || null,
+          workStartTime: s.workStartTime ? new Date(s.workStartTime) : null,
+          completedCount: s.completedCount || 0,
+          failedCount: s.failedCount || 0,
+          lastHeartbeat: s.lastHeartbeat ? new Date(s.lastHeartbeat) : new Date(),
         });
 
         this.health.set(slot.id, {
           healthy: true,
           lastCheck: new Date(),
           failureCount: 0,
-          message: "Initialized",
+          message: s.status === "stale" ? "Recovered from stale state" : "Initialized",
         });
       }
 
@@ -46,6 +57,28 @@ class AgentSlotManager {
     } catch (err) {
       console.error(`[SlotManager] Failed to load configuration: ${err.message}`);
       throw err;
+    }
+  }
+
+  /**
+   * Persist runtime slot state to data/agent-slots-state.json.
+   */
+  save() {
+    const state = {};
+    for (const [id, slot] of this.slots) {
+      state[id] = {
+        status: slot.status,
+        currentWork: slot.currentWork,
+        workStartTime: slot.workStartTime,
+        completedCount: slot.completedCount,
+        failedCount: slot.failedCount,
+        lastHeartbeat: slot.lastHeartbeat,
+      };
+    }
+    try {
+      fs.writeFileSync(this.statePath, JSON.stringify(state, null, 2));
+    } catch (err) {
+      console.error(`[SlotManager] Failed to save state: ${err.message}`);
     }
   }
 
@@ -76,6 +109,7 @@ class AgentSlotManager {
     slot.workStartTime = new Date();
     slot.lastHeartbeat = new Date();
 
+    this.save();
     return slot;
   }
 
@@ -92,6 +126,7 @@ class AgentSlotManager {
     slot.workStartTime = null;
     slot.lastHeartbeat = new Date();
 
+    this.save();
     return {
       slot: slot.id,
       work: result.workId,
@@ -121,6 +156,7 @@ class AgentSlotManager {
       health.message = `Unhealthy: ${health.failureCount} consecutive failures`;
     }
 
+    this.save();
     return {
       slot: slot.id,
       error,
