@@ -547,6 +547,136 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         }, 200), true;
       }
 
+      // GET — Decisive Deck: ONE action per market (buy or sell, not both)
+      // Consolidates all positions + suggestions into high-conviction trades only
+      // WITH regime detection + strategy fitness scoring (Phase C MVP)
+      if (url.pathname === '/api/trading/kalshi/decisive-deck' && req.method === 'GET') {
+        const suggest = require('../lib/kalshi-suggest');
+        const { createKalshiEngine, engineResultToCard } = require('../lib/impossibility-engine');
+        const { isShortWindowMarket } = require('../lib/kalshi-crypto-suggester');
+        const cryptoSuggest = require('../lib/kalshi-crypto-suggester');
+        const RegimeDetector = require('../lib/regime-detector');
+        const performanceLogger = require('../lib/strategy-performance-logger');
+        const strategyRegistry = require('../lib/strategy-registry');
+        const collector = deps.kalshiCollector || null;
+        const nowMs = Date.now();
+
+        try {
+          // Initialize regime detector
+          const regimeDetector = new RegimeDetector();
+
+          // Step 1: Get all suggestions in parallel
+          const [suggestions, ieCards, cryptoCards] = await Promise.all([
+            suggest.getSuggestions({ limit: 100, collector }),
+            (async () => {
+              let markets = [];
+              if (collector) {
+                const latest = collector.getLatestMarkets?.();
+                if (latest?.length > 0) markets = latest.filter(m => isShortWindowMarket(m, nowMs));
+              }
+              if (markets.length === 0) {
+                const mk = await kalshi.getMarkets({ status: 'open', limit: 500 });
+                markets = (mk.data?.markets || []).filter(m => isShortWindowMarket(m, nowMs));
+              }
+              if (markets.length === 0) return [];
+              const engine = createKalshiEngine();
+              const solved = engine.solveAll(markets);
+              return solved.slice(0, 20).map(({ market, result }) => engineResultToCard(market, result));
+            })(),
+            cryptoSuggest.getCryptoSuggestions({ limit: 15, collector }).catch(() => ({ cards: [] })),
+          ]);
+
+          // Step 2: Extract cards from suggestions (already includes exits + entries)
+          const existingCards = suggestions.cards || [];
+          const cryptoCardsList = cryptoCards.cards || [];
+          const allSignals = [...existingCards, ...ieCards, ...cryptoCardsList];
+
+          // Step 3: Detect regime + score strategies per market
+          const activeStrategies = strategyRegistry.getActiveStrategies();
+          const strategyIds = activeStrategies.map(s => s.strategy_id);
+
+          // Enrich cards with regime detection + strategy fitness
+          const enrichedCards = allSignals.map(card => {
+            // Detect regime for this market
+            const regime = regimeDetector.detect(card.market || {});
+
+            // Score available strategies for this regime
+            const bestStrategy = performanceLogger.getBestStrategyForRegime(regime, strategyIds);
+
+            return {
+              ...card,
+              regime,
+              best_strategy: bestStrategy.strategy_id,
+              strategy_fitness: bestStrategy.fitness,
+              strategy_score: bestStrategy.score,
+            };
+          });
+
+          // Step 4: Consolidate: one action per ticker (exits take priority)
+          const decisiveMap = new Map();
+
+          // Sort so exits come first, then by strategy fitness + conviction
+          enrichedCards.sort((a, b) => {
+            const aIsExit = a.kind === 'exit' ? 0 : 1;
+            const bIsExit = b.kind === 'exit' ? 0 : 1;
+            if (aIsExit !== bIsExit) return aIsExit - bIsExit;
+
+            // Tie-breaker: strategy fitness score
+            const aStrategyScore = a.strategy_score || 0;
+            const bStrategyScore = b.strategy_score || 0;
+            if (Math.abs(aStrategyScore - bStrategyScore) > 0.1) {
+              return bStrategyScore - aStrategyScore;
+            }
+
+            // Final tie-breaker: conviction
+            return (b.conviction || 0) - (a.conviction || 0);
+          });
+
+          // Take first action per ticker (exits first, then highest fitness strategy + conviction entry)
+          for (const card of enrichedCards) {
+            if (!decisiveMap.has(card.ticker)) {
+              // Only add entries if conviction > 70% OR strategy has positive recent fitness
+              const hasPositiveFitness = card.strategy_fitness?.pnl > 0;
+              if (card.kind === 'exit' || (card.conviction || 0) >= 70 || hasPositiveFitness) {
+                decisiveMap.set(card.ticker, card);
+              }
+            }
+          }
+
+          // Step 5: Rank by conviction × time-weight × strategy fitness
+          const allCards = Array.from(decisiveMap.values());
+          allCards.forEach(card => {
+            const timeWeight = (card.minsToClose ?? 60) < 60 ? 1.2 : (card.minsToClose ?? 60) < 240 ? 1.0 : 0.7;
+            const strategyWeight = Math.min(1.5, 1.0 + (card.strategy_fitness?.stability || 0.5) * 0.5);
+            card.decisionScore = (card.conviction || 0) * timeWeight * strategyWeight;
+          });
+          allCards.sort((a, b) => (b.decisionScore || 0) - (a.decisionScore || 0));
+
+          // Step 6: Return top 6 trades (focused, decisive deck)
+          const decisive = allCards.slice(0, 6);
+
+          return sendJson(res, {
+            count: decisive.length,
+            generatedAt: new Date().toISOString(),
+            note: 'Decisive Deck: ONE action per market (regime-aware strategy selection)',
+            regime_stats: {
+              regimes_detected: [...new Set(decisive.map(c => c.regime))],
+              strategies_active: strategyIds,
+            },
+            cards: decisive.map(c => ({
+              ...c,
+              // Expose regime + strategy info to human for validation
+              regime: c.regime,
+              best_strategy: c.best_strategy,
+              strategy_fitness: c.strategy_fitness,
+            })),
+          }, 200), true;
+        } catch (error) {
+          console.error('[Decisive Deck] error:', error.message);
+          return sendJson(res, { count: 0, cards: [], error: error.message }, 500), true;
+        }
+      }
+
       // GET — Observer Engine frontier over current short-window markets
       // Returns KnowabilityFrontier + TemporalBand + ConvergenceStateField snapshot
       if (url.pathname === '/api/trading/kalshi/observer-frontier' && req.method === 'GET') {
