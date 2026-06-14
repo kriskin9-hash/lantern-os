@@ -26,7 +26,7 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .stage{position:relative;width:min(440px,94vw);height:min(500px,62vh)}
 
 .card{position:absolute;inset:0;background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;
+  border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;
   box-shadow:var(--shadow);will-change:transform;touch-action:none;cursor:grab;user-select:none}
 .card.front{box-shadow:var(--shadow-hover);z-index:2}
 .card.peek{transform:scale(.94) translateY(16px);filter:brightness(.72);z-index:1;pointer-events:none;border-color:var(--border)}
@@ -34,17 +34,17 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .card.exit{border-color:var(--danger)}
 
 /* card content */
-.card-top{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:2px}
+.card-top{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:4px;gap:8px}
 .card-klass{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:10px}
 .card-klass.position{color:var(--accent)}.card-klass.exit{color:var(--danger)}.card-klass.engine,.card-klass.suggestion{color:var(--gold)}.card-klass.crypto{color:var(--green)}
 .countdown{font-weight:600;font-family:ui-monospace,monospace;font-size:11px}
 .countdown.soon{color:var(--gold)}.countdown.now{color:var(--danger)}
 
-.card-q{font-size:19px;font-weight:700;line-height:1.3;margin:8px 0 8px;color:var(--text);
-  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card-q{font-size:18px;font-weight:700;line-height:1.4;margin:6px 0 10px;color:var(--text);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
 
 /* favorable hero */
-.fav{border-radius:10px;padding:13px;margin:4px 0 10px;border:1px solid var(--border);background:var(--bg)}
+.fav{border-radius:10px;padding:12px;margin:8px 0 12px;border:1px solid var(--border);background:var(--bg)}
 .fav.yes{border-color:var(--green)}.fav.no{border-color:var(--danger)}
 .fav-tag{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .fav-act{font-size:21px;font-weight:800;margin:6px 0 4px;line-height:1.2;
@@ -63,7 +63,7 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .ribbon.profit{background:rgba(52,211,153,.08);border-color:var(--green);color:var(--green)}
 
 /* sides */
-.sides{display:flex;gap:8px;margin-top:auto}
+.sides{display:flex;gap:8px;margin-top:auto;padding-top:8px}
 .side{flex:1;border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;background:var(--bg)}
 .side .lbl{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .side .pct{font-family:ui-monospace,monospace;font-size:18px;font-weight:700;margin-top:2px}
@@ -339,6 +339,11 @@ async function maybePrefetch(){
   finally{ prefetching=false; }
 }
 
+function cleanTitle(title,ticker){
+  if(!title) return ticker||'Market';
+  const clean=title.split(',')[0].trim();
+  return clean.length>50?clean.slice(0,47)+'…':clean;
+}
 function convColor(v){ return v>=66?'var(--green)':v>=45?'var(--gold)':'var(--muted)'; }
 function fmtCountdown(card){
   if(card.close){
@@ -381,10 +386,10 @@ function cardInner(card){
       <div class="stamp take">SELL</div><div class="stamp pass">HOLD</div>
       ${ribbon}
       <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span><span class="card-klass position">YOUR POSITION</span></div>
-      <h3 class="card-q">${card.title||card.ticker}</h3>
+      <h3 class="card-q">${cleanTitle(card.title,card.ticker)}</h3>
       <div class="fav ${favClass}">
         <div class="fav-tag">${card.qty||1} × ${fav.toUpperCase()} · cash out</div>
-        <div class="fav-act">● SELL ${card.favLabel||fav.toUpperCase()}</div>
+        <div class="fav-act">● SELL ${cleanTitle(card.favLabel,fav)}</div>
         <div class="fav-px">@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} bid · ${card.qty||1} contract${(card.qty||1)>1?'s':''}</div>
         <div class="conv-row">
           <div class="conv-bar"><div class="conv-fill" style="width:${Math.min(100,Math.abs(netPct)*2)}%;background:${pnlColor}"></div></div>
@@ -403,9 +408,10 @@ function cardInner(card){
   const ribbonClass=isExit&&card.exitTag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
   const ribbon=isExit?`<div class="${ribbonClass}">⚠ SELL NOW · ${card.exitTag}${card.pnlPct!=null?' '+(card.pnlPct>=0?'+':'')+card.pnlPct+'%':''}</div>`:'';
   const klLabel=card.kind==='crypto'?'crypto':isExit?'exit':'signal';
+  const favLbl=card.favLabel?cleanTitle(card.favLabel,fav):fav.toUpperCase();
   const act=isSell
-    ? `● SELL ${card.favLabel||fav.toUpperCase()}`
-    : `${fav==='yes'?'▲':'▼'} BUY ${card.favLabel||fav.toUpperCase()}`;
+    ? `● SELL ${favLbl}`
+    : `${fav==='yes'?'▲':'▼'} BUY ${favLbl}`;
   const px=isSell
     ? `@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · ${card.qty||1} contract${(card.qty||1)>1?'s':''}`
     : `@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} · 1 contract`;
@@ -418,7 +424,7 @@ function cardInner(card){
     <div class="stamp take">${isSell?'SELL':'TAKE'}</div><div class="stamp pass">PASS</div>
     ${ribbon}
     <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span>${stateBadge}<span class="card-klass ${klLabel}">${klLabel.toUpperCase()}</span></div>
-    <h3 class="card-q">${card.title||card.ticker}</h3>
+    <h3 class="card-q">${cleanTitle(card.title,card.ticker)}</h3>
     <div class="fav ${favClass}">
       <div class="fav-tag">${isSell?'High-priority exit':'Favorable now'}</div>
       <div class="fav-act">${act}</div>
