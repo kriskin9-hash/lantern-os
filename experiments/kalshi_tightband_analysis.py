@@ -90,10 +90,10 @@ def load_trajectories(path: Path) -> dict:
     return trajs
 
 
-def cio_sliding_window(snaps: list, model: CIOConvergenceModel) -> Optional[Tuple[int, float, float]]:
+def cio_sliding_window(snaps: list, model: CIOConvergenceModel, close_ts: str = None) -> Optional[Tuple[int, float, float]]:
     snap_objs = [Snapshot(ya, na) for (_, _, ya, na) in snaps]
     for i in range(MIN_POINTS, len(snap_objs) + 1):
-        traj = MarketTrajectory(snap_objs[:i], outcome=-1)
+        traj = MarketTrajectory(snap_objs[:i], outcome=-1, close_ts=close_ts)
         p_star, has_signal = model.predict(traj)
         price_now = snap_objs[i - 1].yes_mid
         edge = p_star - price_now
@@ -109,7 +109,7 @@ def build_cache(trajs: dict, model: CIOConvergenceModel) -> List[dict]:
         if len(snaps) < MIN_POINTS:
             continue
         snap_objs = [Snapshot(ya, na) for (_, _, ya, na) in snaps]
-        traj = MarketTrajectory(snap_objs, outcome=-1)
+        traj = MarketTrajectory(snap_objs, outcome=-1, close_ts=info.get("close_time"))
         p_star, has_signal = model.predict(traj)
         price_now = snap_objs[-1].yes_mid
         edge = p_star - price_now if has_signal else 0.0
@@ -150,7 +150,7 @@ def main() -> None:
 
     lead_times = []
     for ticker, info in resolved.items():
-        cert = cio_sliding_window(info["snaps"], model)
+        cert = cio_sliding_window(info["snaps"], model, close_ts=info.get("close_time"))
         if cert is None:
             continue
         cert_idx, p_star, edge = cert

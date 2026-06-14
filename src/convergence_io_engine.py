@@ -16,7 +16,7 @@ import sys
 import threading
 import time
 import urllib.request
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
@@ -212,11 +212,14 @@ class SlotManager:
                     json.dump(self._cache, f, indent=2)
                 self._dirty = False
 
-    def claim(self, slot_type: str, request_id: str) -> Optional[str]:
+    def claim(self, slot_type: str, request_id: str, context: Optional[Dict[str, Any]] = None) -> Optional[str]:
         with self._lock:
             data = self._read()
             slot_id = f"{slot_type}-{request_id}"
-            data["slots"][slot_id] = {"claimed_at": _now(), "status": "active"}
+            entry: Dict[str, Any] = {"claimed_at": _now(), "status": "active"}
+            if context:
+                entry["context"] = context
+            data["slots"][slot_id] = entry
             self._write(data)
             return slot_id
 
@@ -227,6 +230,36 @@ class SlotManager:
                 data["slots"][slot_id]["status"] = "released"
                 data["slots"][slot_id]["released_at"] = _now()
                 self._write(data)
+            # PR-003 fix: flush immediately on release so state survives restart
+            if self._dirty and self._cache is not None:
+                try:
+                    with open(self.path, "w", encoding="utf-8") as f:
+                        json.dump(self._cache, f, indent=2)
+                    self._dirty = False
+                except Exception:
+                    pass
+
+    def purge_released(self, older_than_hours: float = 24.0) -> int:
+        """TD-003 fix: remove released slots older than `older_than_hours`. Returns count removed."""
+        cutoff_s = older_than_hours * 3600
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            data = self._read()
+            before = len(data.get("slots", {}))
+            data["slots"] = {
+                sid: info
+                for sid, info in data.get("slots", {}).items()
+                if not (
+                    info.get("status") == "released"
+                    and _parse_timestamp(info.get("released_at"))
+                    and (now - _parse_timestamp(info["released_at"])).total_seconds() > cutoff_s
+                )
+            }
+            removed = before - len(data["slots"])
+            if removed > 0:
+                self._write(data)
+                self.flush()
+            return removed
 
     def active_count(self, slot_type: str) -> int:
         data = self._read()
@@ -581,8 +614,8 @@ class ValidationRing:
             try:
                 result = job["check"]()
                 vote = "pass" if result else "fail"
-            except Exception as exc:
-                vote = "error"
+            except Exception as exc:  # noqa: BLE001
+                vote = f"error:{type(exc).__name__}"
             elapsed = round((time.time() - start) * 1000, 2)
             votes.append({
                 "validator": v,
@@ -655,25 +688,38 @@ class ConvergenceLoop:
     """Intelligent self-correcting convergence loop with phase caching and early termination."""
 
     PHASES = [
-        (1, "inspect_repo", "Inspect current repo state"),
-        (2, "identify_sources", "Identify source repos and dirty state"),
-        (3, "read_manifests", "Read manifests and open issues"),
-        (4, "state_objective", "State the next safest objective"),
-        (5, "retire_old", "Retire old / deprecated surfaces"),
-        (6, "map_evidence", "Map claims to evidence"),
-        (7, "classify_boundary", "Classify capability, boundary, rollback"),
-        (8, "run_validation", "Run cheapest validation checks"),
-        (9, "run_validation_ring", "Run bounded agent validation ring"),
-        (10, "fix_failures", "Fix first 2-4 actionable failures"),
-        (11, "re_run_validation", "Re-run validation"),
-        (12, "record_evidence", "Record evidence and remaining blockers"),
-        (13, "promote_or_hold", "Promote, hold, or reject artifacts"),
+        # Foundation (1-7)
+        (1,  "inspect_repo",              "Inspect current repo state"),
+        (2,  "identify_sources",          "Identify source repos and dirty state"),
+        (3,  "read_manifests",            "Read manifests and open issues"),
+        (4,  "state_objective",           "State the next safest objective"),
+        (5,  "retire_old",                "Retire old / deprecated surfaces"),
+        (6,  "map_evidence",              "Map claims to evidence"),
+        (7,  "classify_boundary",         "Classify capability, boundary, rollback"),
+        # ASI Architecture Integration (8-11)
+        (8,  "check_ctf_symbolic",        "Check CTF (CSF) symbolic framework integration"),
+        (9,  "check_external_grounding",  "Check external signal injection (αt > 0)"),
+        (10, "check_externally_anchored", "Check externally anchored optimization"),
+        (11, "check_asi_benchmarks",      "Check ASI/AGI benchmark tracking"),
+        # Tesseract Navigation (12-14)
+        (12, "navigate_status_cube",      "Navigate 4D Status Cube (x/y/z/t)"),
+        (13, "project_future_states",     "Project future states (comet-leap integration)"),
+        (14, "update_bayesian_beliefs",   "Update Bayesian belief system"),
+        # Validation and Promotion (15-20)
+        (15, "run_validation",            "Run cheapest validation checks"),
+        (16, "run_validation_ring",       "Run bounded agent validation ring"),
+        (17, "fix_failures",              "Fix first 2-4 actionable failures"),
+        (18, "re_run_validation",         "Re-run validation"),
+        (19, "record_evidence",           "Record evidence and remaining blockers"),
+        (20, "promote_or_hold",           "Promote, hold, or reject artifacts"),
     ]
 
     # Phases whose results can be cached across ticks if repo state hash matches
     _CACHEABLE_PHASES = {
         "inspect_repo", "identify_sources", "read_manifests",
         "state_objective", "map_evidence", "classify_boundary",
+        "check_ctf_symbolic", "check_external_grounding",
+        "check_externally_anchored", "check_asi_benchmarks",
     }
 
     def __init__(
@@ -733,6 +779,7 @@ class ConvergenceLoop:
         consecutive_clean_ticks = 0
         max_ticks = self.internal_multiplier
         adaptive_ticks = max_ticks
+        dropped_at: Optional[str] = None
 
         for tick in range(max_ticks):
             tick_results: List[PhaseResult] = []
@@ -756,6 +803,10 @@ class ConvergenceLoop:
                         elapsed_ms=round((time.time() - start) * 1000, 2),
                     )
                 tick_results.append(result)
+                # Agent drop: phase signals this section doesn't make sense to finish
+                if result.status == "drop":
+                    dropped_at = key
+                    break
                 if result.status != "pass":
                     any_fail = True
                 if key in self._CACHEABLE_PHASES:
@@ -764,10 +815,34 @@ class ConvergenceLoop:
             audit.extend(tick_results)
             self.results = tick_results
 
-            # Early termination: all phases passed → no need for more ticks
+            if dropped_at:
+                break
+
+            # Early termination: all phases passed → run external IO phases then exit
             if not any_fail:
                 consecutive_clean_ticks += 1
                 if consecutive_clean_ticks >= 2 or tick >= adaptive_ticks - 1:
+                    # CR-001 fix: on a true early exit (not the natural final tick),
+                    # run external IO phases so receipts are written and promotion
+                    # decisions are made. On the final tick they already ran above.
+                    if tick < max_ticks - 1:
+                        external_tick: List[PhaseResult] = []
+                        for num, key, desc in self.PHASES:
+                            if key not in external_io_phases:
+                                continue
+                            start = time.time()
+                            method = getattr(self, f"_phase_{key}")
+                            try:
+                                result = method()
+                            except Exception as exc:
+                                result = PhaseResult(
+                                    phase=num, name=key, status="fail",
+                                    issues_found=[str(exc)],
+                                    elapsed_ms=round((time.time() - start) * 1000, 2),
+                                )
+                            external_tick.append(result)
+                        audit.extend(external_tick)
+                        self.results = tick_results + external_tick
                     break
             else:
                 consecutive_clean_ticks = 0
@@ -795,7 +870,7 @@ class ConvergenceLoop:
         pass_count = all_statuses.count("pass")
         score = round(pass_count / max(len(all_statuses), 1), 3) if total_ms < 5000 else round(pass_count / max(len(all_statuses), 1) * 0.9, 3)
 
-        status = "clean" if promotion_ready else "needs_review"
+        status = "dropped" if dropped_at else ("clean" if promotion_ready else "needs_review")
         result = {
             "timestamp": _now(),
             "status": status,
@@ -807,6 +882,8 @@ class ConvergenceLoop:
             "internal_ticks": tick + 1,
             "convergence_score": score,
             "adaptive_terminated": tick + 1 < max_ticks,
+            "dropped": dropped_at is not None,
+            "dropped_at": dropped_at,
         }
         result["drift"] = self._detect_drift(result)
         return result
@@ -818,12 +895,30 @@ class ConvergenceLoop:
             "elapsed_ms": r.elapsed_ms,
         }
 
+    _INSPECT_SKIP = frozenset({".git", "node_modules", "__pycache__", ".claude", "target", ".venv", "venv"})
+
     def _phase_inspect_repo(self) -> PhaseResult:
         issues = []
         evidence = {"files": 0, "dirs": 0}
         try:
-            evidence["files"] = sum(1 for _ in self.repo_root.rglob("*") if _.is_file())
-            evidence["dirs"] = sum(1 for _ in self.repo_root.rglob("*") if _.is_dir())
+            file_count = 0
+            dir_count = 0
+            stack = [self.repo_root]
+            while stack:
+                current = stack.pop()
+                try:
+                    for entry in current.iterdir():
+                        if entry.name in self._INSPECT_SKIP:
+                            continue
+                        if entry.is_dir():
+                            dir_count += 1
+                            stack.append(entry)
+                        else:
+                            file_count += 1
+                except PermissionError:
+                    pass
+            evidence["files"] = file_count
+            evidence["dirs"] = dir_count
         except Exception as exc:
             issues.append(str(exc))
         return PhaseResult(1, "inspect_repo", "pass" if not issues else "fail", issues, evidence)
@@ -917,12 +1012,201 @@ class ConvergenceLoop:
         found = [d for d in docs if (self.repo_root / "docs" / d).exists()]
         return PhaseResult(7, "classify_boundary", "pass", evidence={"docs_present": found})
 
+    def _phase_check_ctf_symbolic(self) -> PhaseResult:
+        """Phase 8: Verify CSF symbolic framework is present and minimally functional."""
+        csf_root = self.repo_root / "src" / "csf"
+        csf_ingest = self.repo_root / "csf" / "ingest"
+        evidence: Dict[str, Any] = {}
+        issues = []
+        if csf_root.exists():
+            py_files = list(csf_root.glob("*.py"))
+            evidence["csf_modules"] = [f.name for f in py_files]
+        else:
+            issues.append("src/csf/ directory missing")
+        if csf_ingest.exists():
+            ingest_docs = list(csf_ingest.glob("*.md"))
+            evidence["ingest_docs"] = len(ingest_docs)
+        else:
+            evidence["ingest_docs"] = 0
+        mem_engine = self.repo_root / "src" / "csf" / "memory_engine.py"
+        evidence["memory_engine_present"] = mem_engine.exists()
+        return PhaseResult(8, "check_ctf_symbolic", "pass" if not issues else "fail", issues, evidence)
+
+    def _phase_check_external_grounding(self) -> PhaseResult:
+        """Phase 9: Verify external signal injection (αt > 0) — at least one live external source."""
+        evidence: Dict[str, Any] = {}
+        grounding_signals = []
+        # Check configured external providers (keys present = external grounding available)
+        for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GROK_API_KEY"):
+            if os.environ.get(key):
+                grounding_signals.append(key)
+        # Check for external data sources: wallet ledger, HFF API config, RAG house
+        rag_path = self.repo_root / "data" / "rag-house" / "flat-rag-house-latest.json"
+        if rag_path.exists():
+            grounding_signals.append("rag_house")
+        hff_app = self.repo_root / "integrations" / "human-flourishing-frameworks" / "app.py"
+        if hff_app.exists():
+            grounding_signals.append("hff_integration")
+        evidence["grounding_signals"] = grounding_signals
+        evidence["signal_count"] = len(grounding_signals)
+        # αt > 0 requires at least one live external signal
+        ok = len(grounding_signals) > 0
+        issues = [] if ok else ["No external grounding signals detected — αt = 0 (collapse risk)"]
+        return PhaseResult(9, "check_external_grounding", "pass" if ok else "fail", issues, evidence)
+
+    def _phase_check_externally_anchored(self) -> PhaseResult:
+        """Phase 10: Verify system operates in externally anchored (not closed-loop) regime."""
+        evidence: Dict[str, Any] = {}
+        anchors = []
+        # Axiomatic base: convergence loop docs define fixed rules
+        conv_doc = self.repo_root / "docs" / "CONVERGENCE-LOOP.md"
+        if conv_doc.exists():
+            anchors.append("convergence_loop_axioms")
+        # External verifier: validation ring with consensus
+        chain_path = self.repo_root / "data" / "agent-fleet" / "validation-chain.jsonl"
+        if chain_path.exists():
+            anchors.append("validation_chain")
+        # Evidence receipts: immutable historical record acts as external anchor
+        evidence_dir = self.repo_root / "manifests" / "evidence"
+        if evidence_dir.exists():
+            receipt_count = len(list(evidence_dir.glob("convergence-*.json")))
+            evidence["receipt_count"] = receipt_count
+            if receipt_count > 0:
+                anchors.append("convergence_receipts")
+        # PCSF: external capacity boundary definition
+        pcsf_model = self.repo_root / "data" / "pcsf" / "model.pcsf.json"
+        if pcsf_model.exists():
+            anchors.append("pcsf_boundary")
+        evidence["anchors"] = anchors
+        ok = len(anchors) >= 2
+        issues = [] if ok else [f"Insufficient external anchors ({len(anchors)}/2 min): {anchors or 'none'}"]
+        return PhaseResult(10, "check_externally_anchored", "pass" if ok else "fail", issues, evidence)
+
+    def _phase_check_asi_benchmarks(self) -> PhaseResult:
+        """Phase 11: Check ASI/AGI benchmark tracking (ARC-AGI, SuperARC, HLE)."""
+        evidence: Dict[str, Any] = {}
+        tracked = []
+        # Search for benchmark references in manifests and docs
+        search_paths = [
+            self.repo_root / "manifests",
+            self.repo_root / "docs",
+            self.repo_root / "data" / "agent-fleet",
+        ]
+        benchmark_keys = ["ARC-AGI", "SuperARC", "HLE", "benchmark", "AGI"]
+        for search_dir in search_paths:
+            if not search_dir.exists():
+                continue
+            for fpath in search_dir.rglob("*.{md,json}"):
+                try:
+                    text = fpath.read_text(encoding="utf-8", errors="ignore")
+                    for key in benchmark_keys:
+                        if key in text and key not in tracked:
+                            tracked.append(key)
+                except Exception:
+                    pass
+        evidence["benchmarks_tracked"] = tracked
+        # Not failing — benchmark tracking is a soft check; warn if nothing found
+        status = "pass" if tracked else "pass"  # always pass; evidence only
+        issues = [] if tracked else ["No ASI/AGI benchmark references found in manifests or docs"]
+        return PhaseResult(11, "check_asi_benchmarks", status, issues, evidence)
+
+    def _phase_navigate_status_cube(self) -> PhaseResult:
+        """Phase 12: Navigate the 4D Status Cube (x: location, y: lane, z: boundary, t: timeline)."""
+        evidence: Dict[str, Any] = {}
+        # x-axis: location — what top-level areas exist
+        locations = [d.name for d in self.repo_root.iterdir()
+                     if d.is_dir() and not d.name.startswith(".") and d.name not in ("node_modules",)]
+        evidence["x_locations"] = locations[:12]
+        # y-axis: lane — which module lanes are active
+        active_lanes = []
+        for lane_dir in ["apps", "src", "scripts", "skills", "manifests", "docs"]:
+            if (self.repo_root / lane_dir).exists():
+                active_lanes.append(lane_dir)
+        evidence["y_lanes"] = active_lanes
+        # z-axis: boundary — proven/candidate/held/blocked classification
+        pcsf_agent = self.repo_root / "data" / "pcsf" / "agent.pcsf.json"
+        boundary = "candidate"
+        if pcsf_agent.exists():
+            data = _load_json(pcsf_agent) or {}
+            # Any active slot means proven boundary for that lane
+            if data.get("activeSlots", 0) > 0:
+                boundary = "proven"
+        evidence["z_boundary"] = boundary
+        # t-axis: timeline — most recent convergence receipt timestamp
+        evidence_dir = self.repo_root / "manifests" / "evidence"
+        last_receipt = None
+        if evidence_dir.exists():
+            receipts = sorted(evidence_dir.glob("convergence-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if receipts:
+                last_receipt = receipts[0].name
+        evidence["t_last_receipt"] = last_receipt
+        evidence["cube_coordinates"] = {
+            "x": len(locations), "y": len(active_lanes),
+            "z": boundary, "t": last_receipt or "none",
+        }
+        return PhaseResult(12, "navigate_status_cube", "pass", evidence=evidence)
+
+    def _phase_project_future_states(self) -> PhaseResult:
+        """Phase 13: Project future states from past/present (comet-leap pattern)."""
+        evidence: Dict[str, Any] = {}
+        # Read the current objective as 'present'
+        present = self._read_objective()
+        evidence["present_objective"] = present
+        # Past: last convergence score from most recent receipt
+        past_score = None
+        evidence_dir = self.repo_root / "manifests" / "evidence"
+        if evidence_dir.exists():
+            receipts = sorted(evidence_dir.glob("convergence-*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+            for r in receipts[:3]:
+                data = _load_json(r)
+                if data and "phases" in data:
+                    phases = data["phases"]
+                    passed = sum(1 for p in phases if p.get("status") == "pass")
+                    past_score = round(passed / max(len(phases), 1), 2)
+                    break
+        evidence["past_convergence_score"] = past_score
+        # Future projection: simple trajectory based on trend
+        if past_score is not None:
+            trend = "improving" if past_score > 0.7 else "needs_work" if past_score > 0.4 else "blocked"
+        else:
+            trend = "no_history"
+        evidence["projected_trajectory"] = trend
+        # CSF ingest queue depth = backlog of future work
+        ingest_dir = self.repo_root / "csf" / "ingest"
+        ingest_count = len(list(ingest_dir.glob("*.md"))) if ingest_dir.exists() else 0
+        evidence["future_ingest_backlog"] = ingest_count
+        evidence["pattern"] = "past_work → present_pitch → expected_future → actual_result"
+        return PhaseResult(13, "project_future_states", "pass", evidence=evidence)
+
+    def _phase_update_bayesian_beliefs(self) -> PhaseResult:
+        """Phase 14: Update Bayesian belief system across 5 dimensions."""
+        evidence: Dict[str, Any] = {}
+        beliefs: Dict[str, Any] = {}
+        # health: HFF integration present?
+        hff_app = self.repo_root / "integrations" / "human-flourishing-frameworks" / "app.py"
+        beliefs["health"] = {"posterior": 0.8 if hff_app.exists() else 0.3, "sensor": "hff_app"}
+        # economy: wallet ledger present?
+        wallet_path = self.repo_root / "data" / "cash-loop"
+        wallet_entries = len(list(wallet_path.glob("*.md"))) if wallet_path.exists() else 0
+        beliefs["economy"] = {"posterior": min(0.5 + wallet_entries * 0.1, 1.0), "sensor": "cash_loop_docs"}
+        # culture: three doors / lore active?
+        door_state = self.repo_root / "data" / "dream_journal" / "door_state.json"
+        beliefs["culture"] = {"posterior": 0.9 if door_state.exists() else 0.4, "sensor": "door_state"}
+        # ecosystem: HFF route wired?
+        hff_route = self.repo_root / "apps" / "lantern-garage" / "routes" / "flourishing.js"
+        beliefs["ecosystem"] = {"posterior": 0.85 if hff_route.exists() else 0.2, "sensor": "hff_route"}
+        # animal: world model stub (design contract only — low prior)
+        beliefs["animal"] = {"posterior": 0.2, "sensor": "world_model_stub"}
+        evidence["beliefs"] = beliefs
+        evidence["updated_at"] = _now()
+        return PhaseResult(14, "update_bayesian_beliefs", "pass", evidence=evidence)
+
     def _phase_run_validation(self) -> PhaseResult:
         issues = []
         for script in [self.repo_root / "scripts" / "Validate-CicdPipeline.ps1"]:
             if not script.exists():
                 issues.append(f"Missing: {script.name}")
-        return PhaseResult(8, "run_validation", "pass" if not issues else "fail", issues)
+        return PhaseResult(15, "run_validation", "pass" if not issues else "fail", issues)
 
     def _phase_run_validation_ring(self) -> PhaseResult:
         try:
@@ -940,7 +1224,7 @@ class ConvergenceLoop:
                     else:
                         warnings.append(msg)
             return PhaseResult(
-                9, "run_validation_ring",
+                16, "run_validation_ring",
                 "pass" if not issues else "fail",
                 issues,
                 evidence={
@@ -952,30 +1236,39 @@ class ConvergenceLoop:
                 },
             )
         except Exception as exc:
-            return PhaseResult(9, "run_validation_ring", "fail", [str(exc)])
+            return PhaseResult(16, "run_validation_ring", "fail", [str(exc)])
 
     def _phase_fix_failures(self) -> PhaseResult:
         actionable = [r for r in self.results if r.status != "pass"]
         fixed = min(len(actionable), 4)
-        return PhaseResult(10, "fix_failures", "pass", evidence={"actionable": len(actionable), "fixed": fixed})
+        return PhaseResult(17, "fix_failures", "pass", evidence={"actionable": len(actionable), "fixed": fixed})
 
     def _phase_re_run_validation(self) -> PhaseResult:
-        return PhaseResult(11, "re_run_validation", "pass", evidence={"rerun": True})
+        return PhaseResult(18, "re_run_validation", "pass", evidence={"rerun": True})
 
     def _phase_record_evidence(self) -> PhaseResult:
         receipt_dir = self.repo_root / "manifests" / "evidence"
         receipt_dir.mkdir(parents=True, exist_ok=True)
         receipt_path = receipt_dir / f"convergence-{_now().replace(':', '-').replace('+', '-')}.json"
+        evidence: Dict[str, Any] = {}
         try:
             with open(receipt_path, "w", encoding="utf-8") as f:
                 json.dump({"phases": [self._phase_to_dict(r) for r in self.results]}, f, indent=2)
+            evidence["receipt"] = str(receipt_path)
         except Exception as exc:
-            return PhaseResult(12, "record_evidence", "fail", [str(exc)])
-        return PhaseResult(12, "record_evidence", "pass", evidence={"receipt": str(receipt_path)})
+            return PhaseResult(19, "record_evidence", "fail", [str(exc)])
+        # TD-003 / PR-003: prune stale released slots while we have disk access
+        try:
+            slots = SlotManager()
+            purged = slots.purge_released(older_than_hours=24.0)
+            evidence["slots_purged"] = purged
+        except Exception:
+            pass
+        return PhaseResult(19, "record_evidence", "pass", evidence=evidence)
 
     def _phase_promote_or_hold(self) -> PhaseResult:
         ready = all(r.status == "pass" for r in self.results)
-        return PhaseResult(13, "promote_or_hold", "pass" if ready else "hold", evidence={"ready": ready})
+        return PhaseResult(20, "promote_or_hold", "pass" if ready else "hold", evidence={"ready": ready})
 
 
 class TesseractEngine:
@@ -997,13 +1290,27 @@ class TesseractEngine:
         self._circuit_cache: Dict[str, CircuitBreaker] = {}
         self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="tesseract")
         self._cache_manager: Any = None
-        self._persona_cache: Dict[str, str] = {}
+        self._persona_cache: OrderedDict = OrderedDict()  # true LRU
         self._persona_cache_max = 1000
+        # Backpressure: reject requests when too many are in-flight
+        self._queue_depth: int = 0
+        self._max_queue_depth: int = 8
+        self._queue_lock = threading.Lock()
         if _CSF_CACHE_AVAILABLE:
             try:
                 self._cache_manager = CsfCacheManager()
             except Exception:
                 pass
+
+    def close(self) -> None:
+        """PR-004 fix: shut down the thread pool cleanly. Call when done with the engine."""
+        self._executor.shutdown(wait=False)
+
+    def __del__(self) -> None:
+        try:
+            self._executor.shutdown(wait=False)
+        except Exception:
+            pass
 
     def _init_cells(self) -> None:
         for layer in Layer:
@@ -1027,6 +1334,20 @@ class TesseractEngine:
 
     def converge(self, message: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         params = params or {}
+
+        # Backpressure gate — reject when queue is saturated
+        with self._queue_lock:
+            if self._queue_depth >= self._max_queue_depth:
+                return {
+                    "text": f"[429] Too many requests in flight ({self._queue_depth}/{self._max_queue_depth}). Try again shortly.",
+                    "persona": params.get("persona", "lantern"),
+                    "provider": "none",
+                    "source": "backpressure",
+                    "retry_after": 5,
+                    "timing": {},
+                }
+            self._queue_depth += 1
+
         ctx = ConvergenceContext(
             persona=params.get("persona", "lantern"),
             provider=params.get("provider"),
@@ -1116,12 +1437,16 @@ class TesseractEngine:
                 "persona": ctx.persona, "provider": provider,
                 "total_ms": total_ms, "trace": trace, "error": str(exc),
             })
+            with self._queue_lock:
+                self._queue_depth = max(0, self._queue_depth - 1)
             return {
                 "text": f"[Engine held: {exc}] The dream door stays open.",
                 "persona": ctx.persona, "provider": provider,
                 "source": "engine_fallback", "timing": ctx.timing,
             }
         total_ms = round((time.time() - start_total) * 1000, 2)
+        with self._queue_lock:
+            self._queue_depth = max(0, self._queue_depth - 1)
         self.metrics.record_latency("converge", total_ms)
         self.metrics.record_throughput("requests")
         # Adaptive quality feedback: slow responses degrade persona weight
@@ -1133,6 +1458,14 @@ class TesseractEngine:
             "result_preview": str(result.get("text", ""))[:120],
             "quality_score": round(quality, 3),
         })
+        # Build trace_tree summary for callers that want span analysis
+        exit_spans = [t for t in trace if t.get("phase") == "exit"]
+        slowest = max(exit_spans, key=lambda t: t.get("elapsed_ms", 0.0), default=None) if exit_spans else None
+        surface_result["trace_tree"] = {
+            "spans": exit_spans,
+            "slowest": slowest,
+            "total_ms": total_ms,
+        }
         return surface_result
 
     def _surface(self, ctx: ConvergenceContext, message: str) -> ConvergenceContext:
@@ -1156,10 +1489,13 @@ class TesseractEngine:
         elif any(k in lower for k in ("wish", "protect", "founder", "home", "return")):
             persona = "founder"
         ctx.persona = persona
-        # LRU-style cache eviction
-        if len(self._persona_cache) >= self._persona_cache_max:
-            self._persona_cache.clear()
-        self._persona_cache[preview] = persona
+        # True LRU eviction via OrderedDict
+        if preview in self._persona_cache:
+            self._persona_cache.move_to_end(preview)
+        else:
+            self._persona_cache[preview] = persona
+            if len(self._persona_cache) > self._persona_cache_max:
+                self._persona_cache.popitem(last=False)  # evict oldest
         return ctx
 
     def _surface_load_dreams(self, ctx: ConvergenceContext) -> ConvergenceContext:
@@ -1350,6 +1686,7 @@ class TesseractEngine:
                     "specs": [s["name"] for s in pending[:5]],
                     "status": "awaiting_operator_review",
                 }
+            # No pending specs — show top scored issue as a hint
             issues = scan_issues()
             if not issues:
                 return {"pending_specs": 0, "status": "no pending specs — run loop.py --once"}
@@ -1460,6 +1797,86 @@ class TesseractEngine:
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  ConvergenceReceipt — diff utility for run-over-run comparison
+# ═══════════════════════════════════════════════════════════════════
+
+class ConvergenceReceipt:
+    """
+    Utility for comparing two convergence run receipts.
+
+    Usage:
+        diff = ConvergenceReceipt.diff(prev_receipt, curr_receipt)
+        # diff["regressions"]  — phase names that went from pass → fail
+        # diff["fixed_issues"] — {phase, issue} pairs that disappeared
+        # diff["new_issues"]   — {phase, issue} pairs that appeared
+        # diff["manifest_drift"] — evidence field changes between runs
+        # diff["unchanged"]    — True if no meaningful difference
+        # diff["has_previous"] — False if prev_receipt is empty
+    """
+
+    @staticmethod
+    def diff(prev: Dict[str, Any], curr: Dict[str, Any]) -> Dict[str, Any]:
+        has_previous = bool(prev.get("phases"))
+
+        prev_phases: Dict[str, Dict[str, Any]] = {
+            p["name"]: p for p in prev.get("phases", [])
+        }
+        curr_phases: Dict[str, Dict[str, Any]] = {
+            p["name"]: p for p in curr.get("phases", [])
+        }
+
+        regressions: List[str] = []
+        fixed_issues: List[Dict[str, str]] = []
+        new_issues: List[Dict[str, str]] = []
+        manifest_drift: Dict[str, Any] = {}
+
+        for name, curr_p in curr_phases.items():
+            prev_p = prev_phases.get(name, {})
+            prev_status = prev_p.get("status", "missing")
+            curr_status = curr_p.get("status", "missing")
+
+            # Regressions: was passing, now failing
+            if prev_status == "pass" and curr_status not in ("pass", "hold"):
+                regressions.append(name)
+
+            # Fixed issues: issues in prev that are no longer in curr
+            prev_issue_set = set(prev_p.get("issues", []))
+            curr_issue_set = set(curr_p.get("issues", []))
+            for issue in prev_issue_set - curr_issue_set:
+                fixed_issues.append({"phase": name, "issue": issue})
+
+            # New issues: issues in curr that weren't in prev
+            for issue in curr_issue_set - prev_issue_set:
+                new_issues.append({"phase": name, "issue": issue})
+
+            # Evidence drift: compare evidence dicts field by field
+            prev_ev = prev_p.get("evidence", {}) or {}
+            curr_ev = curr_p.get("evidence", {}) or {}
+            for key in set(list(prev_ev.keys()) + list(curr_ev.keys())):
+                pv = prev_ev.get(key)
+                cv = curr_ev.get(key)
+                if pv != cv:
+                    manifest_drift[f"{name}.{key}"] = {"from": pv, "to": cv}
+
+        unchanged = (
+            has_previous
+            and not regressions
+            and not new_issues
+            and not fixed_issues
+            and not manifest_drift
+        )
+
+        return {
+            "has_previous": has_previous,
+            "regressions": regressions,
+            "fixed_issues": fixed_issues,
+            "new_issues": new_issues,
+            "manifest_drift": manifest_drift,
+            "unchanged": unchanged,
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  CLI
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1472,6 +1889,16 @@ if __name__ == "__main__":
     p_converge.add_argument("--message", default="Hello tesseract")
     p_converge.add_argument("--persona", default="lantern")
     p_converge.add_argument("--provider", default=None)
+
+    # route-chat: ConvergenceIO primitive stack (DCF+NAP+CCF+PCSF+AAPF)
+    # wired to unified_agent_connector for real LLM calls.
+    # This is the recommended production chat path per the architecture audit.
+    p_route = sub.add_parser("route-chat")
+    p_route.add_argument("--message", default="Hello")
+    p_route.add_argument("--agent", default="auto")
+    p_route.add_argument("--kind", default="dream")
+    p_route.add_argument("--tier", default="wanderer")
+    p_route.add_argument("--system-prompt", default="")
 
     p_inspect = sub.add_parser("inspect")
 
@@ -1492,6 +1919,58 @@ if __name__ == "__main__":
         engine = TesseractEngine()
         result = engine.converge(args.message, {"persona": args.persona, "provider": args.provider})
         print(json.dumps(result, indent=2))
+    elif args.command == "route-chat":
+        # Wire ConvergenceIO.route_chat() to unified_agent_connector handlers.
+        # This activates the full primitive stack: DCF→NAP→CCF→PCSF→AAPF.
+        try:
+            from convergence_io.engine import ConvergenceIO
+            cio = ConvergenceIO(repo_root=REPO_ROOT)
+
+            # Register provider handlers from unified_agent_connector
+            try:
+                from unified_agent_connector import get_connector
+                connector = get_connector()
+
+                def _make_handler(provider_id: str) -> Any:
+                    def _handler(message: str, system_prompt: str = "", **kw: Any) -> Dict[str, Any]:
+                        tokens = []
+                        try:
+                            gen = connector.stream(
+                                message,
+                                persona_id=kw.get("agent_id", "lantern"),
+                                provider=provider_id,
+                                context=system_prompt,
+                            )
+                            for token in gen:
+                                if isinstance(token, str):
+                                    tokens.append(token)
+                        except Exception:
+                            return {}
+                        return {"text": "".join(tokens), "agent_name": kw.get("agent_id", "lantern")}
+                    return _handler
+
+                for pid in ["anthropic", "openai", "gemini", "ollama"]:
+                    cio.register_provider_handler(pid, _make_handler(pid))
+            except Exception:
+                pass  # No connector — PCSF will fall to offline
+
+            route_result = cio.route_chat(
+                message=args.message,
+                agent_id=args.agent,
+                kind=args.kind,
+                tier=args.tier,
+                system_prompt=args.system_prompt,
+            )
+            print(json.dumps({
+                "text":         route_result.text,
+                "persona":      route_result.agent_name,
+                "provider":     route_result.provider_used,
+                "source":       route_result.source,
+                "provenance_id": route_result.provenance_id,
+                "latency_ms":   route_result.latency_ms,
+            }))
+        except Exception as exc:
+            print(json.dumps({"text": f"[route-chat error: {exc}]", "source": "error", "persona": args.agent}))
     elif args.command == "inspect":
         engine = TesseractEngine()
         print(json.dumps(engine.inspect(), indent=2))

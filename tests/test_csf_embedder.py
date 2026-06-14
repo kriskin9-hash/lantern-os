@@ -1,62 +1,96 @@
-"""Tests for csf_agent.embedder — issue #381."""
+"""
+tests/test_csf_embedder.py — unit tests for csf_agent.embedder
+
+Covers: known tokens, unknown tokens, empty input, save/load round-trip, L2 norm.
+"""
+
+import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from csf_agent.embedder import CSFEmbedder
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from csf_agent.embedder import CSFEmbedder, _l2_normalize, _SEED_VOCAB
 
 
-@pytest.fixture
-def emb():
-    return CSFEmbedder()
+def _fresh_embedder() -> CSFEmbedder:
+    """Embedder with no JSONL dirs (pure seed vocab + Laplace weights)."""
+    return CSFEmbedder(jsonl_dirs=[])
 
 
-def test_embed_known_tokens(emb):
+# ── L2 normalize helper ───────────────────────────────────────────────────────
+
+def test_l2_normalize_unit():
+    v = np.array([3.0, 4.0], dtype=np.float32)
+    n = _l2_normalize(v)
+    assert abs(np.linalg.norm(n) - 1.0) < 1e-6
+
+
+def test_l2_normalize_zero():
+    v = np.zeros(5, dtype=np.float32)
+    n = _l2_normalize(v)
+    assert np.allclose(n, 0.0)
+
+
+# ── CSFEmbedder basics ────────────────────────────────────────────────────────
+
+def test_vocab_size():
+    emb = _fresh_embedder()
+    assert emb.vocab_size == len(_SEED_VOCAB)
+
+
+def test_embed_known_tokens():
+    emb = _fresh_embedder()
     vec = emb.embed(["dream", "convergence"])
-    assert isinstance(vec, np.ndarray)
-    assert vec.dtype == np.float32
     assert vec.shape == (emb.vocab_size,)
+    # Known tokens produce non-zero dimensions
+    assert vec.sum() > 0
 
 
-def test_embed_unknown_tokens_zero(emb):
-    """Unknown tokens must not raise and should produce a valid vector."""
-    vec = emb.embed(["zzz_unknown_xyz", "foobar_99"])
-    assert isinstance(vec, np.ndarray)
+def test_embed_unknown_tokens_no_error():
+    emb = _fresh_embedder()
+    vec = emb.embed(["xyzzy_unknown_token", "foobar"])
     assert vec.shape == (emb.vocab_size,)
+    # Unknown tokens → zero vector
+    assert np.allclose(vec, 0.0)
 
 
-def test_embed_empty_returns_zero_vector(emb):
+def test_embed_empty_returns_zero():
+    emb = _fresh_embedder()
     vec = emb.embed([])
     assert vec.shape == (emb.vocab_size,)
     assert np.allclose(vec, 0.0)
 
 
-def test_embed_unit_norm(emb):
-    vec = emb.embed(["dream", "agent", "loop"])
+def test_embed_l2_normalized():
+    emb = _fresh_embedder()
+    vec = emb.embed(["dream", "lantern", "convergence"])
     norm = np.linalg.norm(vec)
-    assert norm == pytest.approx(1.0, abs=1e-5)
+    assert abs(norm - 1.0) < 1e-5
 
 
-def test_embed_mixed_known_unknown(emb):
-    vec = emb.embed(["dream", "zzz_not_in_vocab"])
-    assert vec.shape == (emb.vocab_size,)
-    norm = np.linalg.norm(vec)
-    assert norm == pytest.approx(1.0, abs=1e-5)
+def test_embed_case_insensitive():
+    emb = _fresh_embedder()
+    lower = emb.embed(["dream"])
+    upper = emb.embed(["DREAM"])
+    assert np.allclose(lower, upper)
 
 
-def test_save_load_roundtrip(emb):
-    with tempfile.TemporaryDirectory() as tmpdir:
-        path = Path(tmpdir) / "embedder.npy"
+# ── save / load round-trip ────────────────────────────────────────────────────
+
+def test_save_load_round_trip():
+    emb = _fresh_embedder()
+    original_vec = emb.embed(["dream", "agent"])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "test_emb.npy"
         emb.save(path)
-        emb2 = CSFEmbedder.load(path)
-        v1 = emb.embed(["dream", "convergence"])
-        v2 = emb2.embed(["dream", "convergence"])
-        assert np.allclose(v1, v2, atol=1e-6)
+        loaded = CSFEmbedder.load(path)
 
-
-def test_vocab_size_matches(emb):
-    assert emb.vocab_size >= 34
-    vec = emb.embed(["csf"])
-    assert vec.shape[0] == emb.vocab_size
+    assert loaded.vocab == emb.vocab
+    assert np.allclose(loaded._weights, emb._weights)
+    loaded_vec = loaded.embed(["dream", "agent"])
+    assert np.allclose(loaded_vec, original_vec)

@@ -1,5 +1,5 @@
 /**
- * Image Generation Route
+ * Image Generation & Gallery Route
  *
  * POST /api/image/generate  — generate an image
  *   Body: { prompt?: string, version?: "v8"|"v9"|"v10", width?: number, height?: number, seed?: number }
@@ -7,6 +7,14 @@
  *   Otherwise falls back to procedural Python generation.
  *
  * GET /api/image/list — list generated images in data/images/
+ *
+ * POST /api/image/upload — upload image from base64
+ *   Body: { data: string (base64), name?: string }
+ *   Returns: { id, filename, url, timestamp }
+ *
+ * GET /api/images — list gallery images with metadata
+ *
+ * DELETE /api/images/:id — remove image from gallery
  *
  * GET /api/image/pool/random — pick a random image from CAAD pool
  *   Priority: THREE_DOORS_IMAGE_POOL_DIR env var → data/images/caadi/
@@ -17,11 +25,12 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { saveImage, listImages, deleteImage } = require("../lib/image-handler");
 
 const MAX_PROMPT_LEN = 1000;
 
 module.exports = function imageRoutes(req, res, url, deps) {
-  const { sendJson, collectRequestBody } = deps;
+  const { sendJson, collectRequestBody, sendFile } = deps;
 
   if (req.method === "POST" && url.pathname === "/api/image/generate") {
     collectRequestBody(req, async (body) => {
@@ -100,6 +109,78 @@ module.exports = function imageRoutes(req, res, url, deps) {
       sendJson(res, { images: [], error: err.message });
     }
     return true;
+  }
+
+  // Gallery API: Upload image from base64
+  if (req.method === "POST" && url.pathname === "/api/image/upload") {
+    collectRequestBody(req, (body) => {
+      try {
+        const data = JSON.parse(body || "{}");
+        const base64 = data.data || "";
+        const name = data.name || "image.png";
+
+        if (!base64) {
+          sendJson(res, { error: "Missing image data" }, 400);
+          return;
+        }
+
+        const buffer = Buffer.from(base64.replace(/^data:image\/[^;]+;base64,/, ""), "base64");
+        const result = saveImage(buffer, name);
+
+        sendJson(res, result);
+      } catch (err) {
+        sendJson(res, { error: err.message }, 500);
+      }
+    });
+    return true;
+  }
+
+  // Gallery API: List gallery images
+  if (req.method === "GET" && url.pathname === "/api/images") {
+    try {
+      const images = listImages();
+      sendJson(res, { images, count: images.length });
+    } catch (err) {
+      sendJson(res, { error: err.message, images: [] }, 500);
+    }
+    return true;
+  }
+
+  // Gallery API: Delete image
+  if (req.method === "DELETE" && url.pathname.match(/^\/api\/images\/(.+)$/)) {
+    const imageId = url.pathname.match(/^\/api\/images\/(.+)$/)[1];
+    try {
+      const success = deleteImage(imageId);
+      if (success) {
+        sendJson(res, { success: true, id: imageId });
+      } else {
+        sendJson(res, { error: "Image not found" }, 404);
+      }
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
+    }
+    return true;
+  }
+
+  // Serve gallery images
+  if (req.method === "GET" && url.pathname.startsWith("/images/")) {
+    try {
+      const filename = url.pathname.slice("/images/".length);
+      if (filename.includes("..") || filename.includes("/")) {
+        sendJson(res, { error: "forbidden" }, 403);
+        return true;
+      }
+      const imagePath = path.join(deps.repoRoot || process.cwd(), "data", "images", filename);
+      if (!fs.existsSync(imagePath)) {
+        sendJson(res, { error: "not found" }, 404);
+        return true;
+      }
+      sendFile(res, imagePath);
+      return true;
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
+      return true;
+    }
   }
 
   return false;

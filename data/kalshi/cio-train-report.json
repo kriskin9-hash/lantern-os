@@ -1,27 +1,71 @@
 ﻿{
-  "tickers": 199,
-  "train_tickers": 160,
-  "val_tickers": 39,
-  "avg_depth": 22.0,
-  "train_transitions": 3360,
-  "val_transitions": 819,
-  "persistence_rmse": 0.001229,
-  "model_rmse": 0.001244,
-  "improvement_pct": -1.23,
-  "verdict": "no better than persistence",
-  "drift_grid": { "0.2": -0.000181, "0.35": -0.000188, "0.5": -0.000202, "0.65": -0.000213, "0.8": -0.000216 },
-  "vol_grid": { "0.2": 0.001834, "0.35": 0.001565, "0.5": 0.001362, "0.65": 0.001202, "0.8": 0.00107 },
-  "tightband_eval": {
-    "dataset": "tight-band-2026-06-13.jsonl",
-    "timestamps": 6090,
-    "interval_seconds": 6,
-    "markets": 96,
-    "resolved_markets": 20,
-    "cio_signal_markets": 20,
-    "accuracy_direction": 0.40,
-    "avg_lead_time_pct": 0.673,
-    "conclusion": "AR(1) fixed-point is anti-correlated with outcomes on trending markets. Game prices trend to 0/1, not mean-revert. CIO fires at 67% elapsed, below coin-flip accuracy. C7 excluded from DEFAULT_CONSTRAINTS.",
-    "next_direction": "Replace AR(1) with a momentum-aware model (trend extrapolation gated by S0 lyapunov divergence instead of convergence certificate). Re-test on in-game markets where trend = information.",
-    "run_date": "2026-06-14"
-  }
+    "val_transitions":  819,
+    "model_rmse":  0.001244,
+    "persistence_rmse":  0.001229,
+    "momentum_eval":  {
+                          "usable_resolved":  2,
+                          "cio_signal_markets":  2,
+                          "markets":  86,
+                          "model":  "momentum-aware dual-regime (Issue 424)",
+                          "active_signal":  {
+                                                "price_now":  0.657,
+                                                "ticker":  "KXMLBGAME-26JUN151840MIAPHI-PHI",
+                                                "edge":  0.343,
+                                                "side":  "YES",
+                                                "close":  "2026-06-18"
+                                            },
+                          "interval_seconds":  6,
+                          "regime_ingame":  {
+                                                "min_move":  0.12,
+                                                "horizon_h":  4,
+                                                "window":  40
+                                            },
+                          "conclusion":  "100% on 2 usable resolved markets (was 40% with AR(1)). Pre-game regime correctly detects 1.7h line drift. PHI flagged as strong YES signal. Needs in-game validation tonight.",
+                          "accuracy_direction":  1,
+                          "avg_lead_time_pct":  0.411,
+                          "resolved_markets":  6,
+                          "timestamps":  7134,
+                          "regime_pregame":  {
+                                                 "min_move":  0.03,
+                                                 "horizon_h":  "\u003e=4.0",
+                                                 "window":  1000
+                                             },
+                          "dataset":  "tight-band-2026-06-14.jsonl",
+                          "run_date":  "2026-06-14",
+                          "active_pregame_signals":  1
+                      },
+    "tickers":  199,
+    "drift_grid":  {
+                       "0.8":  -0.000216,
+                       "0.65":  -0.000213,
+                       "0.2":  -0.000181,
+                       "0.35":  -0.000188,
+                       "0.5":  -0.000202
+                   },
+    "improvement_pct":  -1.23,
+    "verdict":  "no better than persistence",
+    "train_transitions":  3360,
+    "val_tickers":  39,
+    "tightband_eval":  {
+                           "dataset":  "tight-band-2026-06-13.jsonl",
+                           "cio_signal_markets":  20,
+                           "markets":  96,
+                           "interval_seconds":  6,
+                           "conclusion":  "AR(1) fixed-point is anti-correlated with outcomes on trending markets. Game prices trend to 0/1, not mean-revert. CIO fires at 67% elapsed, below coin-flip accuracy. C7 excluded from DEFAULT_CONSTRAINTS.",
+                           "timestamps":  6090,
+                           "avg_lead_time_pct":  0.673,
+                           "next_direction":  "Replace AR(1) with a momentum-aware model (trend extrapolation gated by S0 lyapunov divergence instead of convergence certificate). Re-test on in-game markets where trend = information.",
+                           "accuracy_direction":  0.4,
+                           "resolved_markets":  20,
+                           "run_date":  "2026-06-14"
+                       },
+    "vol_grid":  {
+                     "0.8":  0.00107,
+                     "0.65":  0.001202,
+                     "0.2":  0.001834,
+                     "0.35":  0.001565,
+                     "0.5":  0.001362
+                 },
+    "train_tickers":  160,
+    "avg_depth":  22
 }

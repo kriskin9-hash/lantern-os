@@ -21,7 +21,16 @@ class TraderAgent {
     this.pythonTimeout = config.pythonTimeout || 30000; // 30s timeout
     this.alpacaKey = process.env.ALPACA_API_KEY;
     this.alpacaSecret = process.env.ALPACA_SECRET_KEY;
-    this.watchlist = this._parseWatchlist(process.env.TRADER_WATCHLIST);
+    this.watchlistPath = path.join(__dirname, '..', '..', '..', 'data', 'lantern-garage', 'trading', 'watchlist.json');
+    this.watchlist = this._loadWatchlist();
+
+    // Limit concurrent Python subprocesses — running too many at once (e.g. on
+    // initial dashboard load, which fires ~6 calls simultaneously) makes each
+    // one slow enough to blow past pythonTimeout even though a single call
+    // normally finishes in well under it.
+    this._pyQueue = [];
+    this._pyActive = 0;
+    this._pyConcurrency = config.pythonConcurrency || 3;
   }
 
   _parseWatchlist(envString) {
@@ -31,6 +40,54 @@ class TraderAgent {
     } catch {
       return envString.split(',').map(s => s.trim());
     }
+  }
+
+  _loadWatchlist() {
+    try {
+      const raw = fs.readFileSync(this.watchlistPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.tickers) && parsed.tickers.length > 0) {
+        return parsed.tickers;
+      }
+    } catch {
+      // file missing or invalid — fall back to env/default
+    }
+    return this._parseWatchlist(process.env.TRADER_WATCHLIST);
+  }
+
+  _saveWatchlist() {
+    fs.mkdirSync(path.dirname(this.watchlistPath), { recursive: true });
+    fs.writeFileSync(this.watchlistPath, JSON.stringify({ tickers: this.watchlist }, null, 2));
+  }
+
+  /**
+   * Add a ticker to the persisted watchlist
+   */
+  addTicker(ticker) {
+    const t = String(ticker || '').trim().toUpperCase();
+    if (!/^[A-Z]{1,10}$/.test(t)) {
+      throw new Error('ticker must be 1-10 letters');
+    }
+    if (!this.watchlist.includes(t)) {
+      this.watchlist.push(t);
+      this._saveWatchlist();
+      this.clearCache();
+    }
+    return this.watchlist;
+  }
+
+  /**
+   * Remove a ticker from the persisted watchlist
+   */
+  removeTicker(ticker) {
+    const t = String(ticker || '').trim().toUpperCase();
+    const next = this.watchlist.filter((x) => x !== t);
+    if (next.length !== this.watchlist.length) {
+      this.watchlist = next;
+      this._saveWatchlist();
+      this.clearCache();
+    }
+    return this.watchlist;
   }
 
   /**
@@ -44,9 +101,12 @@ class TraderAgent {
     }
 
     try {
+      // Scanning the full watchlist (16 tickers, technical analysis per
+      // ticker) regularly takes 45-60s — well beyond the default
+      // pythonTimeout, so give it its own longer budget.
       const result = await this._callPython('scan_market', {
         watchlist: this.watchlist
-      });
+      }, 90000);
 
       this.cache[cacheKey] = {
         data: result,
@@ -143,7 +203,7 @@ class TraderAgent {
    */
   async getWatchlistPrices() {
     const cacheKey = 'watchlist_prices';
-    if (this.cache[cacheKey] && Date.now() - this.cache[cacheKey].time < 30000) { // 30s
+    if (this.cache[cacheKey] && Date.now() - this.cache[cacheKey].time < 30000) { // 30s — Alpaca rate-limit headroom (16 tickers x ~2 calls/ticker)
       return this.cache[cacheKey].data;
     }
 
@@ -224,6 +284,46 @@ class TraderAgent {
   }
 
   /**
+   * Place a manual paper order (buy/sell) via Alpaca, optionally with a
+   * stop-loss / take-profit bracket.
+   * Returns: { status: 'placed'|'error', order_id, ticker, side, qty, type, submitted_at }
+   */
+  async placeOrder({ ticker, side, qty, type, limitPrice, timeInForce, stopLoss, takeProfit }) {
+    const result = await this._callPython('place_order', {
+      ticker, side, qty, type, limit_price: limitPrice, time_in_force: timeInForce,
+      stop_loss: stopLoss, take_profit: takeProfit,
+    });
+    if (result && result.status === 'placed') this.clearCache();
+    return result;
+  }
+
+  /**
+   * Get OHLCV bars for multiple tickers in one subprocess call (used for
+   * chart refreshes — far cheaper than one call per ticker).
+   * Returns: { bars: { TICKER: { bars: [...], count } }, timeframe }
+   */
+  async getBarsMulti(tickers, timeframe = '5m') {
+    const cacheKey = `bars_multi_${timeframe}`;
+    if (this.cache[cacheKey] && Date.now() - this.cache[cacheKey].time < 20000) { // 20s
+      return this.cache[cacheKey].data;
+    }
+
+    try {
+      const result = await this._callPython('get_bars_multi', { tickers, timeframe });
+
+      this.cache[cacheKey] = {
+        data: result,
+        time: Date.now()
+      };
+
+      return result;
+    } catch (error) {
+      console.error('[TraderAgent] Get bars multi failed:', error.message);
+      return { bars: {}, timeframe, error: error.message };
+    }
+  }
+
+  /**
    * Clear cache (useful for testing or forcing refresh)
    */
   clearCache() {
@@ -231,16 +331,39 @@ class TraderAgent {
   }
 
   /**
-   * Call Python trading agent via subprocess
-   *
-   * This spawns a Python process that imports the trading agents module,
-   * calls the requested function with arguments, and returns JSON output.
+   * Call Python trading agent via subprocess, queued so that at most
+   * `_pyConcurrency` subprocesses run at once.
    *
    * @param {string} action - Function to call (e.g., 'scan_market', 'get_zones')
    * @param {object} args - Arguments to pass to the function
    * @returns {Promise<object>} Parsed JSON response from Python
    */
-  _callPython(action, args) {
+  _callPython(action, args, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      this._pyQueue.push({ action, args, timeoutMs, resolve, reject });
+      this._drainPyQueue();
+    });
+  }
+
+  _drainPyQueue() {
+    while (this._pyActive < this._pyConcurrency && this._pyQueue.length > 0) {
+      const job = this._pyQueue.shift();
+      this._pyActive++;
+      this._runPython(job.action, job.args, job.timeoutMs)
+        .then(job.resolve, job.reject)
+        .finally(() => {
+          this._pyActive--;
+          this._drainPyQueue();
+        });
+    }
+  }
+
+  /**
+   * Spawn a Python process that imports the trading agents module, calls the
+   * requested function with arguments, and returns JSON output.
+   */
+  _runPython(action, args, timeoutMs) {
+    const effectiveTimeout = timeoutMs || this.pythonTimeout;
     return new Promise((resolve, reject) => {
       // Validate Python path exists
       if (!fs.existsSync(this.pythonPath)) {
@@ -267,12 +390,12 @@ class TraderAgent {
       const timeout = setTimeout(() => {
         timedOut = true;
         proc.kill('SIGTERM');
-      }, this.pythonTimeout);
+      }, effectiveTimeout);
 
       const proc = spawn('python', [pythonScript, action, JSON.stringify(args)], {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
-        timeout: this.pythonTimeout
+        timeout: effectiveTimeout
       });
 
       let stdout = '';
@@ -290,7 +413,7 @@ class TraderAgent {
         clearTimeout(timeout);
 
         if (timedOut) {
-          return reject(new Error(`Python process timeout (${this.pythonTimeout}ms) for action: ${action}`));
+          return reject(new Error(`Python process timeout (${effectiveTimeout}ms) for action: ${action}`));
         }
 
         if (code !== 0) {

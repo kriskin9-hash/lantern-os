@@ -20,7 +20,7 @@ import sys
 import json
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 # Setup logging to stderr so stdout stays clean for JSON
 logging.basicConfig(
@@ -45,11 +45,18 @@ try:
         alpaca,
     )
 except ImportError as e:
-    print(json.dumps({
-        "error": f"Failed to import agents: {str(e)}",
-        "type": "import_error"
-    }))
-    sys.exit(1)
+    # agents.py not available — evaluate_* actions still work without it
+    scan_all = None
+    get_portfolio_equity = None
+    get_open_positions = None
+    is_market_hours = lambda: False
+    is_crypto = lambda t: False
+    get_profile = lambda t: {}
+    agent_log = []
+    DEFAULT_WATCHLIST = ["SPY", "AAPL", "TSLA", "NVDA", "MSFT"]
+    ASSET_PROFILES = {}
+    alpaca = None
+    _agents_import_error = str(e)
 
 
 def action_scan_market(args):
@@ -247,8 +254,9 @@ def action_get_watchlist_prices(args):
                 try:
                     bar = alpaca.get_latest_bar(ticker)
                     price = float(bar.c) if bar else 0
-                    bars = alpaca.get_bars(ticker, '1Day', limit=2).df
-                    prev = float(bars['close'].iloc[-2]) if len(bars) >= 2 else price
+                    day_start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime('%Y-%m-%d')
+                    bars = alpaca.get_bars(ticker, '1Day', start=day_start, limit=2, feed='iex', sort='desc').df
+                    prev = float(bars['close'].iloc[1]) if len(bars) >= 2 else price
                 except:
                     price = 0
                     prev = 0
@@ -347,12 +355,20 @@ def action_get_bars(args):
 
     alpaca_tf = timeframe_map.get(timeframe, '1Hour')
 
+    # Alpaca's bars endpoint returns no bars at all if `start` is omitted,
+    # so request a lookback window wide enough to cover ~100 bars even
+    # accounting for weekends/holidays/after-hours gaps.
+    lookback_days = {
+        '1m': 7, '5m': 14, '15m': 21, '1h': 30, '4h': 60, '1d': 200,
+    }
+    start = (datetime.now(timezone.utc) - timedelta(days=lookback_days.get(timeframe, 30))).strftime('%Y-%m-%d')
+
     try:
         if is_crypto(ticker):
             sym = ticker.replace('USD', '/USD')
-            bars_df = alpaca.get_crypto_bars(sym, alpaca_tf, limit=100).df
+            bars_df = alpaca.get_crypto_bars(sym, alpaca_tf, start=start, limit=100, sort='desc').df.iloc[::-1]
         else:
-            bars_df = alpaca.get_bars(ticker, alpaca_tf, limit=100).df
+            bars_df = alpaca.get_bars(ticker, alpaca_tf, start=start, limit=100, feed='iex', sort='desc').df.iloc[::-1]
 
         bars = []
         for idx, row in bars_df.iterrows():
@@ -382,6 +398,173 @@ def action_get_bars(args):
         }
 
 
+def action_place_order(args):
+    """
+    Place a manual paper order via Alpaca. Optionally attaches a bracket
+    (stop-loss / take-profit) for non-crypto tickers.
+
+    Args: {ticker, side: "buy"|"sell", qty: number, type?: "market"|"limit",
+           limit_price?: number, time_in_force?: "day"|"gtc",
+           stop_loss?: number, take_profit?: number}
+    Returns: {status: "placed"|"error", order_id, ticker, side, qty, type,
+              stop_loss, take_profit, submitted_at}
+    """
+    ticker = args.get('ticker')
+    side = str(args.get('side', '')).lower()
+    qty = args.get('qty')
+    order_type = str(args.get('type') or 'market').lower()
+    limit_price = args.get('limit_price')
+    stop_loss = args.get('stop_loss')
+    take_profit = args.get('take_profit')
+
+    if not ticker or side not in ('buy', 'sell') or not qty or float(qty) <= 0:
+        return {'status': 'error', 'error': 'ticker, side (buy/sell), and positive qty are required'}
+
+    try:
+        sym = ticker.replace('USD', '/USD') if is_crypto(ticker) else ticker
+        tif = args.get('time_in_force') or ('gtc' if is_crypto(ticker) else 'day')
+
+        order_kwargs = dict(
+            symbol=sym,
+            qty=qty,
+            side=side,
+            type=order_type,
+            time_in_force=tif,
+            limit_price=round(float(limit_price), 4) if limit_price else None,
+        )
+
+        # Bracket orders (stop-loss / take-profit legs) — Alpaca doesn't
+        # support these for crypto, so fall back to a plain order there.
+        if (stop_loss or take_profit) and not is_crypto(ticker):
+            order_kwargs['order_class'] = 'bracket'
+            if take_profit:
+                order_kwargs['take_profit'] = {'limit_price': round(float(take_profit), 4)}
+            if stop_loss:
+                order_kwargs['stop_loss'] = {'stop_price': round(float(stop_loss), 4)}
+
+        order = alpaca.submit_order(**order_kwargs)
+        return {
+            'status': 'placed', 'order_id': order.id, 'ticker': ticker,
+            'side': side, 'qty': qty, 'type': order_type,
+            'stop_loss': stop_loss, 'take_profit': take_profit,
+            'submitted_at': str(getattr(order, 'submitted_at', '') or ''),
+        }
+    except Exception as e:
+        log.error(f"place_order failed for {ticker}: {str(e)}")
+        return {'status': 'error', 'error': str(e), 'ticker': ticker}
+
+
+def action_get_bars_multi(args):
+    """
+    Get OHLCV bars for multiple tickers in a single process call (avoids
+    spawning one Python process per ticker for chart refreshes).
+
+    Args: {tickers: ["SPY", "AAPL", ...], timeframe: "5m"}
+    Returns: {bars: {TICKER: {bars: [...], count: N}}, timeframe: "5m"}
+    """
+    tickers = args.get('tickers') or DEFAULT_WATCHLIST
+    timeframe = args.get('timeframe', '5m')
+
+    result = {}
+    for ticker in tickers:
+        bars_result = action_get_bars({'ticker': ticker, 'timeframe': timeframe})
+        result[ticker] = {
+            'bars': bars_result.get('bars', []),
+            'count': bars_result.get('count', 0),
+        }
+
+    return {'bars': result, 'timeframe': timeframe}
+
+
+def action_evaluate_asset(args):
+    """
+    Evaluate a single asset through the TradingTesseract (Phase 4, issue #325).
+
+    Args: {
+        asset:       str  — ticker symbol, e.g. 'AAPL',
+        zones_data:  dict — optional; if omitted, a scan_market is run first,
+        market_status: dict — optional; if omitted, get_market_status is called,
+        agent_log:   list — optional agent-log entries
+    }
+    Returns: { asset, cube: {time,market,signal,layer,asset_state},
+               confidence, action, evaluated_at }
+    """
+    try:
+        from trading_tesseract import TradingTesseract
+    except ImportError as e:
+        return {'error': f'TradingTesseract not available: {e}', 'type': 'import_error'}
+
+    asset = args.get('asset', '').upper()
+    if not asset:
+        return {'error': 'asset is required', 'type': 'validation_error'}
+
+    # Resolve inputs — use provided data or fetch live
+    zones_data = args.get('zones_data')
+    if zones_data is None:
+        try:
+            scan = action_scan_market({'watchlist': [asset]})
+            zones_data = scan.get('zones', {})
+        except Exception:
+            zones_data = {}
+
+    market_status = args.get('market_status')
+    if market_status is None:
+        try:
+            market_status = action_get_market_status({})
+        except Exception:
+            market_status = {}
+
+    agent_log_entries = args.get('agent_log') or []
+
+    tt = TradingTesseract()
+    return tt.evaluate(asset, zones_data, market_status, agent_log_entries)
+
+
+def action_evaluate_watchlist(args):
+    """
+    Evaluate every asset in a watchlist through the TradingTesseract.
+
+    Args: {
+        watchlist:    list[str] — tickers; defaults to DEFAULT_WATCHLIST,
+        zones_data:   dict      — optional; omit to fetch live,
+        market_status: dict     — optional; omit to fetch live,
+        agent_log:    list      — optional agent-log entries
+    }
+    Returns: { evaluations: [...sorted by confidence desc], evaluated_at }
+    """
+    try:
+        from trading_tesseract import TradingTesseract
+    except ImportError as e:
+        return {'error': f'TradingTesseract not available: {e}', 'type': 'import_error'}
+
+    watchlist = args.get('watchlist') or DEFAULT_WATCHLIST
+
+    zones_data = args.get('zones_data')
+    if zones_data is None:
+        try:
+            scan = action_scan_market({'watchlist': watchlist})
+            zones_data = scan.get('zones', {})
+        except Exception:
+            zones_data = {}
+
+    market_status = args.get('market_status')
+    if market_status is None:
+        try:
+            market_status = action_get_market_status({})
+        except Exception:
+            market_status = {}
+
+    agent_log_entries = args.get('agent_log') or []
+
+    tt = TradingTesseract()
+    results = tt.evaluate_watchlist(watchlist, zones_data, market_status, agent_log_entries)
+    return {
+        'evaluations': results,
+        'evaluated_at': results[0]['evaluated_at'] if results else None,
+        'count': len(results),
+    }
+
+
 def main():
     """Main CLI entry point"""
     if len(sys.argv) < 2:
@@ -393,7 +576,9 @@ def main():
                 'get_market_status',
                 'get_watchlist_prices',
                 'get_positions',
-                'get_bars'
+                'get_bars',
+                'get_bars_multi',
+                'place_order'
             ]
         }))
         sys.exit(1)
@@ -418,6 +603,10 @@ def main():
         'get_watchlist_prices': action_get_watchlist_prices,
         'get_positions': action_get_positions,
         'get_bars': action_get_bars,
+        'get_bars_multi': action_get_bars_multi,
+        'place_order': action_place_order,
+        'evaluate_asset': action_evaluate_asset,
+        'evaluate_watchlist': action_evaluate_watchlist,
     }
 
     if action not in handlers:
@@ -443,3 +632,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
