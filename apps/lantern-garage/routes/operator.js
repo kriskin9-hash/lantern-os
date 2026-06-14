@@ -47,6 +47,7 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       const proc = spawn(py, [path.join(repoRoot, "src", "convergence_io_engine.py"), "loop"], {
         cwd: repoRoot,
         timeout: 60000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
       });
       let stdout = "";
       let stderr = "";
@@ -70,6 +71,7 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       const proc = spawn(py, [path.join(repoRoot, "src", "convergence_io_engine.py"), "inspect"], {
         cwd: repoRoot,
         timeout: 15000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
       });
       let stdout = "";
       proc.stdout.on("data", (d) => { stdout += d; });
