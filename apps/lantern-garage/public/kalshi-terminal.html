@@ -1,169 +1,186 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kalshi Swipe — Lantern OS</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/site.css">
+<title>Kalshi Terminal — Lantern OS</title>
 <style>
-  :root{
-    --bg0:#0a0c10;--bg1:#12151c;--bg2:#1a1f29;--border:#2a313d;
-    --text:#e8eaf0;--text2:#a4adbf;--text3:#7b8498;
-    --green:#00d4aa;--red:#ff5f6d;--amber:#f5a623;--blue:#4a9eff;
-    --mono:'IBM Plex Mono',ui-monospace,monospace;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg0);color:var(--text);font-family:system-ui,-apple-system,sans-serif;
-    font-size:14px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-  a{color:var(--blue);text-decoration:none}
-  .topbar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--bg1);
-    border-bottom:1px solid var(--border);flex-wrap:wrap}
-  .brand{font-weight:700;letter-spacing:.04em}
-  .chip{font-family:var(--mono);font-size:10px;padding:3px 8px;border-radius:4px;background:var(--bg2);
-    border:1px solid var(--border);color:var(--text2)}
-  .chip b{color:var(--text)}
-  .chip.live{background:rgba(255,95,109,.15);border-color:var(--red);color:var(--red)}
-  .chip.dry{background:rgba(0,212,170,.12);border-color:var(--green);color:var(--green)}
-  .chip.fresh{border-color:var(--blue);color:var(--blue)}
-  .note{font-size:11px;color:var(--text3);text-align:center;padding:6px 16px}
-  .deck{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    position:relative;padding:8px 16px 0;min-height:0}
-  .stage{position:relative;width:min(440px,94vw);height:min(520px,64vh)}
-  .card{position:absolute;inset:0;background:linear-gradient(160deg,var(--bg2),var(--bg1));
-    border:1px solid var(--border);border-radius:18px;padding:20px;display:flex;flex-direction:column;
-    box-shadow:0 18px 50px rgba(0,0,0,.45);will-change:transform;touch-action:none;cursor:grab;user-select:none}
-  .card.peek{transform:scale(.94) translateY(14px);filter:brightness(.7);z-index:1;pointer-events:none}
-  .card.front{z-index:2}
-  .card-top{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);
-    font-size:11px;color:var(--text3)}
-  .countdown{font-weight:600}
-  .countdown.soon{color:var(--amber)}.countdown.now{color:var(--red)}
-  .card-q{font-size:20px;font-weight:600;line-height:1.25;margin:12px 0 8px}
-  /* favorable hero */
-  .fav{border-radius:14px;padding:14px;margin:4px 0 12px;border:1px solid;background:var(--bg0)}
-  .fav.yes{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
-  .fav.no{border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset}
-  .fav-tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--text3)}
-  .fav-act{font-size:24px;font-weight:700;margin:3px 0}
-  .fav.yes .fav-act{color:var(--green)}.fav.no .fav-act{color:var(--red)}
-  .fav-px{font-family:var(--mono);font-size:13px;color:var(--text2)}
-  .conv-row{display:flex;align-items:center;gap:8px;margin-top:10px}
-  .conv-bar{flex:1;height:7px;border-radius:4px;background:var(--bg1);overflow:hidden;border:1px solid var(--border)}
-  .conv-fill{height:100%;border-radius:4px}
-  .conv-num{font-family:var(--mono);font-size:11px;color:var(--text2);min-width:54px;text-align:right}
-  .reason{font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:7px;min-height:13px}
-  /* exit card ribbon */
-  .ribbon{font-family:var(--mono);font-size:10px;padding:6px 10px;border-radius:8px;
-    background:rgba(255,95,109,.15);border:1px solid var(--red);color:var(--red);
-    margin-bottom:10px;letter-spacing:.05em;text-transform:uppercase;font-weight:600}
-  .ribbon.profit{background:rgba(0,212,170,.12);border-color:var(--green);color:var(--green)}
-  /* exit cards: darker bg + distinct border for sell urgency */
-  .card.exit{background:linear-gradient(160deg,#1a1f29,#12151c);border-color:#3a3a4a}
-  .card.exit .fav{background:rgba(0,0,0,.4)}
-  /* context odds */
-  .sides{display:flex;gap:10px;margin-top:auto}
-  .side{flex:1;border:1px solid var(--border);border-radius:9px;padding:7px;text-align:center;background:var(--bg0)}
-  .side .lbl{font-size:10px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .side .pct{font-family:var(--mono);font-size:18px;font-weight:600;margin-top:2px}
-  .side.yes .pct{color:var(--green)}.side.no .pct{color:var(--red)}
-  /* stamps */
-  .stamp{position:absolute;top:22px;font-family:var(--mono);font-weight:800;font-size:26px;
-    letter-spacing:.08em;padding:4px 12px;border-radius:8px;border:3px solid;opacity:0}
-  .stamp.take{left:20px;color:var(--green);border-color:var(--green);transform:rotate(-12deg)}
-  .stamp.pass{right:20px;color:var(--red);border-color:var(--red);transform:rotate(12deg)}
-  /* actions */
-  .actions{display:flex;gap:34px;align-items:center;justify-content:center;padding:14px}
-  .abtn{width:66px;height:66px;border-radius:50%;border:2px solid var(--border);background:var(--bg1);
-    font-size:26px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .1s,border-color .1s}
-  .abtn:hover{transform:scale(1.08)}
-  .abtn.pass{border-color:var(--red);color:var(--red)}
-  .abtn.take{border-color:var(--green);color:var(--green)}
-  .alabels{display:flex;gap:34px;justify-content:center;padding-bottom:6px}
-  .alabels span{width:66px;text-align:center;font-family:var(--mono);font-size:9px;color:var(--text3)}
-  .progress{font-family:var(--mono);font-size:10px;color:var(--text3);text-align:center;padding:2px}
-  .end{text-align:center;color:var(--text2);font-size:15px;display:none;flex-direction:column;gap:12px;align-items:center}
-  .reload{font-family:var(--mono);font-size:12px;padding:8px 16px;border-radius:6px;border:1px solid var(--blue);
-    background:rgba(74,158,255,.12);color:var(--blue);cursor:pointer}
-  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(80px);
-    background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;
-    font-family:var(--mono);font-size:11px;max-width:90vw;opacity:0;transition:.25s;z-index:50;white-space:pre-wrap}
-  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-  .toast.dry{border-color:var(--green)}.toast.live{border-color:var(--red)}.toast.err{border-color:var(--amber)}
-  /* impossibility engine state badge */
-  .state-badge{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.12em;
-    padding:2px 7px;border-radius:4px;border:1px solid;vertical-align:middle}
-  .state-badge.DETERMINED{color:var(--green);border-color:var(--green);background:rgba(0,212,170,.1)}
-  .state-badge.CONFIDENT{color:var(--amber);border-color:var(--amber);background:rgba(245,166,35,.1)}
-  .state-badge.UNCERTAIN{color:var(--text3);border-color:var(--border)}
-  .engine-trace{font-family:var(--mono);font-size:9px;color:var(--text3);margin-top:4px;
-    display:flex;gap:4px;flex-wrap:wrap}
-  .trace-chip{padding:1px 5px;border-radius:3px;background:var(--bg1);border:1px solid var(--border)}
-  /* sync bar */
-  .sync-bar{height:2px;background:var(--border);overflow:hidden;flex-shrink:0}
-  .sync-fill{height:100%;background:var(--blue);transform-origin:left;will-change:transform}
-  /* sync dot in freshness chip */
-  @keyframes sdotpulse{0%{transform:scale(1.8);opacity:1}100%{transform:scale(1);opacity:.7}}
-  .sdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text3);
-    vertical-align:middle;margin-right:5px;transition:background .3s}
-  .sdot.live{background:var(--green);animation:sdotpulse .4s ease-out}
-  /* paper book */
-  .pbook{padding:6px 16px 10px;max-height:160px;overflow-y:auto;border-top:1px solid var(--border)}
-  .pbook-hdr{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--text3);margin-bottom:5px;
-    display:flex;justify-content:space-between;align-items:center}
-  .prow{font-family:var(--mono);font-size:11px;display:flex;gap:8px;align-items:center;
-    padding:4px 8px;border-radius:5px;background:var(--bg1);margin-bottom:3px;border:1px solid var(--border)}
-  .prow.sl{border-color:var(--red)}.prow.tp{border-color:var(--green)}
-  .pticker{color:var(--text2);min-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pside-yes{color:var(--green)}.pside-no{color:var(--red)}
-  .ppnl{min-width:44px;text-align:right}
-  .ppnl.pos{color:var(--green)}.ppnl.neg{color:var(--red)}
-  .ptag{font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid}
-  .ptag.sl{color:var(--red);border-color:var(--red)}.ptag.tp{color:var(--green);border-color:var(--green)}
-  .pclose{margin-left:auto;cursor:pointer;color:var(--text3);font-size:13px;background:none;border:none;padding:2px 4px}
-  .pclose:hover{color:var(--text)}
+body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* ── nav status indicators ───────────────────────────────── */
+.nav-stat{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.nav-stat b{color:var(--text);font-weight:600}
+
+/* ── mode bar ────────────────────────────────────────────── */
+.mode-bar{font-size:12px;text-align:center;padding:5px 16px;
+  background:var(--surface);border-bottom:1px solid var(--border);color:var(--muted)}
+
+/* ── sync progress bar ───────────────────────────────────── */
+.sync-bar{height:2px;background:var(--border);overflow:hidden;flex-shrink:0}
+.sync-fill{height:100%;background:var(--accent);transform-origin:left;will-change:transform}
+
+/* ── card stage ──────────────────────────────────────────── */
+.deck{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;padding:8px 16px 0;min-height:0}
+.stage{position:relative;width:min(440px,94vw);height:min(500px,62vh)}
+
+.card{position:absolute;inset:0;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius);padding:20px;display:flex;flex-direction:column;
+  box-shadow:var(--shadow);will-change:transform;touch-action:none;cursor:grab;user-select:none}
+.card.front{box-shadow:var(--shadow-hover);z-index:2}
+.card.peek{transform:scale(.94) translateY(16px);filter:brightness(.72);z-index:1;pointer-events:none;border-color:var(--border)}
+.card.peek2{transform:scale(.88) translateY(32px);filter:brightness(.55);z-index:0;pointer-events:none;border-color:var(--border)}
+.card.exit{border-color:var(--danger)}
+
+/* card content */
+.card-top{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);margin-bottom:2px}
+.card-klass{font-weight:700;letter-spacing:.08em;text-transform:uppercase;font-size:10px}
+.card-klass.position{color:var(--accent)}.card-klass.exit{color:var(--danger)}.card-klass.engine,.card-klass.suggestion{color:var(--gold)}.card-klass.crypto{color:var(--green)}
+.countdown{font-weight:600;font-family:ui-monospace,monospace;font-size:11px}
+.countdown.soon{color:var(--gold)}.countdown.now{color:var(--danger)}
+
+.card-q{font-size:17px;font-weight:600;line-height:1.3;margin:8px 0 6px;color:var(--text);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* favorable hero */
+.fav{border-radius:10px;padding:13px;margin:4px 0 10px;border:1px solid var(--border);background:var(--bg)}
+.fav.yes{border-color:var(--green)}.fav.no{border-color:var(--danger)}
+.fav-tag{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.fav-act{font-size:18px;font-weight:700;margin:4px 0 2px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fav.yes .fav-act{color:var(--green)}.fav.no .fav-act{color:var(--danger)}
+.fav-px{font-size:12px;color:var(--muted);font-family:ui-monospace,monospace}
+.conv-row{display:flex;align-items:center;gap:8px;margin-top:10px}
+.conv-bar{flex:1;height:5px;border-radius:3px;background:var(--surface2);overflow:hidden}
+.conv-fill{height:100%;border-radius:3px}
+.conv-num{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);min-width:54px;text-align:right}
+.reason{font-size:11px;color:var(--muted);margin-top:6px;min-height:13px;font-family:ui-monospace,monospace}
+
+/* exit ribbon */
+.ribbon{font-size:11px;padding:5px 10px;border-radius:7px;background:rgba(239,68,68,.1);
+  border:1px solid var(--danger);color:var(--danger);margin-bottom:8px;font-weight:600;letter-spacing:.04em}
+.ribbon.profit{background:rgba(52,211,153,.08);border-color:var(--green);color:var(--green)}
+
+/* sides */
+.sides{display:flex;gap:8px;margin-top:auto}
+.side{flex:1;border:1px solid var(--border);border-radius:8px;padding:7px;text-align:center;background:var(--bg)}
+.side .lbl{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side .pct{font-family:ui-monospace,monospace;font-size:18px;font-weight:700;margin-top:2px}
+.side.yes .pct{color:var(--green)}.side.no .pct{color:var(--danger)}
+
+/* stamps */
+.stamp{position:absolute;top:22px;font-weight:800;font-size:23px;letter-spacing:.06em;
+  padding:4px 12px;border-radius:8px;border:3px solid;opacity:0}
+.stamp.take{left:20px;color:var(--green);border-color:var(--green);transform:rotate(-12deg)}
+.stamp.pass{right:20px;color:var(--danger);border-color:var(--danger);transform:rotate(12deg)}
+
+/* IE state badge */
+.state-badge{font-size:10px;font-weight:700;letter-spacing:.1em;padding:2px 6px;border-radius:4px;border:1px solid;vertical-align:middle}
+.state-badge.DETERMINED{color:var(--green);border-color:var(--green);background:rgba(52,211,153,.1)}
+.state-badge.CONFIDENT{color:var(--gold);border-color:var(--gold);background:rgba(251,191,36,.1)}
+.state-badge.UNCERTAIN{color:var(--muted);border-color:var(--border)}
+.engine-trace{font-family:ui-monospace,monospace;font-size:9px;color:var(--muted);margin-top:4px;display:flex;gap:4px;flex-wrap:wrap}
+.trace-chip{padding:1px 5px;border-radius:3px;background:var(--surface);border:1px solid var(--border)}
+
+/* progress + end screen */
+.progress{font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);text-align:center;padding:3px}
+.end{text-align:center;color:var(--muted);font-size:15px;display:none;flex-direction:column;gap:12px;align-items:center}
+.reload{font-size:12px;padding:8px 20px;border-radius:8px;border:1px solid var(--accent);
+  background:rgba(6,182,212,.1);color:var(--accent);cursor:pointer;font-weight:600}
+
+/* action buttons — use site.css btn-primary / btn-ghost */
+.actions{display:flex;gap:12px;align-items:center;justify-content:center;padding:12px 16px 8px}
+
+/* focus visible for keyboard navigation */
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* visually hidden heading for screen readers */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border-width:0}
+
+/* toast */
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(80px);
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 16px;
+  font-size:12px;font-family:ui-monospace,monospace;max-width:90vw;opacity:0;transition:.25s;z-index:50;white-space:pre-wrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.dry{border-color:var(--green)}.toast.live{border-color:var(--danger)}.toast.err{border-color:var(--gold)}
+
+/* freshness dot pulse (extends site.css .dot) */
+@keyframes dotpulse{0%{transform:scale(1.7);opacity:1}100%{transform:scale(1);opacity:.8}}
+#sdot{vertical-align:middle;margin-right:4px;transition:background .3s}
+#sdot.pulse{animation:dotpulse .5s ease-out}
+
+/* simulated book */
+.pbook{padding:6px 16px 10px;max-height:140px;overflow-y:auto;border-top:1px solid var(--border);flex-shrink:0}
+.pbook-hdr{font-size:10px;letter-spacing:.1em;color:var(--muted);margin-bottom:5px;
+  display:flex;justify-content:space-between;align-items:center;text-transform:uppercase;font-weight:600}
+.prow{font-size:12px;display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:8px;
+  background:var(--surface);margin-bottom:3px;border:1px solid var(--border)}
+.prow.sl{border-color:var(--danger)}.prow.tp{border-color:var(--green)}
+.pticker{color:var(--muted);min-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.pside-yes{color:var(--green);font-weight:600}.pside-no{color:var(--danger);font-weight:600}
+.ppnl{min-width:44px;text-align:right;font-family:ui-monospace,monospace;font-size:11px}
+.ppnl.pos{color:var(--green)}.ppnl.neg{color:var(--danger)}
+.ptag{font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid;font-weight:600}
+.ptag.sl{color:var(--danger);border-color:var(--danger)}.ptag.tp{color:var(--green);border-color:var(--green)}
+.pclose{margin-left:auto;cursor:pointer;color:var(--muted);font-size:13px;background:none;border:none;padding:2px 4px}
+.pclose:hover{color:var(--text)}
 </style>
 </head>
 <body>
-<div class="topbar">
-  <span class="brand">Kalshi Swipe</span>
-  <span class="chip" id="cEnv">env —</span>
-  <span class="chip" id="cBal">balance —</span>
-  <span class="chip" id="cCreds">creds —</span>
-  <span class="chip" id="cMode">mode —</span>
-  <span class="chip fresh" id="cFresh"><span class="sdot" id="sdot"></span>—</span>
-  <a href="/trader-dashboard.html" style="margin-left:auto;font-size:11px">← Dashboard</a>
-</div>
-<div class="sync-bar"><div class="sync-fill" id="syncFill"></div></div>
-<div class="note" id="note">Green / swipe right = take the favorable position · Red / swipe left = pass. Live now-slice, refreshed every 6s. Practice mode.</div>
 
-<div class="deck">
-  <div class="stage" id="stage"></div>
-  <div class="end" id="end">
-    <div>No open positions</div>
-    <div style="font-size:12px;color:var(--text3)">Checking for new positions every 5s automatically.</div>
-    <button class="reload" onclick="syncDeck()">↻ Refresh</button>
+<h1 class="sr-only">Kalshi Terminal — Swipe Deck</h1>
+
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/kalshi-terminal.html" class="active">Kalshi Swipe</a>
+    <a href="/trader-dashboard.html">Dashboard</a>
   </div>
-</div>
-<div class="progress" id="progress"></div>
-<div class="actions">
-  <button class="abtn pass" id="bPass" aria-label="Pass" onclick="act('pass')">✗</button>
-  <button class="abtn take" id="bTake" aria-label="Take favorable position" onclick="act('take')">✓</button>
-</div>
-<div class="alabels"><span>Pass</span><span>Take it</span></div>
+  <div class="nav-actions">
+    <span class="nav-stat" id="cEnv" aria-label="Environment status"><span class="dot" id="envDot"></span>—</span>
+    <span class="nav-stat" id="cBal" aria-label="Account balance">—</span>
+    <span class="nav-stat" id="cCreds" aria-label="Credentials status">—</span>
+    <span id="cMode" aria-label="Trading mode"><span class="pill held">—</span></span>
+    <span class="nav-stat" id="cFresh" aria-label="Data freshness"><span class="dot" id="sdot"></span>—</span>
+  </div>
+</nav>
 
-<div class="toast" id="toast"></div>
+<div class="sync-bar" role="presentation"><div class="sync-fill" id="syncFill"></div></div>
+<div class="mode-bar" id="note" role="complementary" aria-label="Mode instructions">Loading…</div>
 
-<div class="pbook" id="pbook" style="display:none">
+<main class="deck">
+  <article class="stage" id="stage" role="region" aria-label="Current market position"></article>
+  <div class="end" id="end" role="status" aria-label="No positions available">
+    <div>No open positions</div>
+    <div style="font-size:12px;color:var(--muted)">Checking for new positions every 5s automatically.</div>
+    <button class="btn-ghost" onclick="syncDeck()">↻ Refresh</button>
+  </div>
+</main>
+
+<div class="progress" id="progress" aria-live="polite" aria-label="Deck progress" role="status"></div>
+<div class="actions" role="region" aria-label="Card action buttons">
+  <button class="btn-ghost" id="bPass" aria-label="Pass on current position" onclick="act('pass')" style="font-size:15px">← Pass</button>
+  <button class="btn-primary" id="bTake" aria-label="Take current position" onclick="act('take')" style="font-size:15px">Take it →</button>
+</div>
+
+<div class="toast" id="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+<aside class="pbook" id="pbook" style="display:none" aria-label="Open paper positions">
   <div class="pbook-hdr">
-    <span>PAPER BOOK</span>
-    <span id="pbook-count" style="color:var(--text3)"></span>
+    <h2 style="font-size:10px;letter-spacing:.1em;color:var(--muted);margin:0;display:inline-block;text-transform:uppercase;font-weight:600">Simulated Book</h2>
+    <span id="pbook-count" style="color:var(--muted)"></span>
   </div>
   <div id="pbook-rows"></div>
-</div>
+</aside>
 
 <script>
 const API='/api/trading/kalshi';
-const SYNC_MS=5000;
-let conn={}, deck=[], idx=0, busy=false, dragging=false, liveMap={};
+const SYNC_MS=5000, DECK_TARGET=20, PREFETCH_AT=10;
+let conn={}, deck=[], idx=0, busy=false, dragging=false, liveMap={}, prefetching=false;
 let lastSyncMs=0, lastDetCount=null;
 
 async function j(path,opts){ try{const r=await fetch(API+path,opts);return await r.json();}catch(e){return{error:e.message};} }
@@ -171,17 +188,25 @@ const c=v=>v==null?'—':v;
 
 async function loadConnection(){
   conn=await j('/connection');
-  cEnv.innerHTML='env <b>'+c(conn.env)+'</b>';
-  cCreds.innerHTML='creds <b style="color:'+(conn.credentials?'var(--green)':'var(--red)')+'">'+(conn.credentials?'connected':'none')+'</b>';
-  const live=conn.canTradeLive, m=document.getElementById('cMode');
-  m.className='chip '+(live?'live':'dry'); m.innerHTML=live?'LIVE':'DRY-RUN';
-  document.getElementById('note').textContent = live
-    ? '⚠ LIVE: "Take it" sells the position at current bid. Right=cash out, left=hold.'
-    : '⚠ DRY-RUN: orders not sent. Right=cash out, left=hold. Set KALSHI_TRADING_ENABLED=1 for live.';
+  const envDot=document.getElementById('envDot');
+  if(envDot) envDot.className='dot '+(conn.env==='prod'?'online':'warn');
+  document.getElementById('cEnv').innerHTML=`<span class="dot ${conn.env==='prod'?'online':'warn'}" id="envDot"></span><b>${c(conn.env)}</b>`;
+  const credOk=conn.credentials;
+  document.getElementById('cCreds').innerHTML=credOk
+    ?'<span class="dot online"></span>creds'
+    :'<span class="dot offline"></span><span style="color:var(--danger)">no creds</span>';
+  const live=conn.canTradeLive;
+  document.getElementById('cMode').innerHTML=live
+    ?'<span class="pill live">LIVE</span>'
+    :'<span class="pill held">DRY-RUN</span>';
+  document.getElementById('note').textContent=live
+    ?'⚠ LIVE MODE — swipe right sells the position at current bid. Left = hold.'
+    :'Practice mode — orders not sent. Set KALSHI_TRADING_ENABLED=1 for live trading.';
 }
 async function loadBalance(){
   const d=await j('/balance');
-  cBal.innerHTML='balance <b>'+(d.error?'—':'$'+(d.balance_dollars!=null?d.balance_dollars:((d.balance||0)/100).toFixed(2)))+'</b>';
+  const amt=d.error?'—':'$'+(d.balance_dollars!=null?d.balance_dollars:((d.balance||0)/100).toFixed(2));
+  document.getElementById('cBal').innerHTML=`<b>${amt}</b>`;
 }
 
 // ── syncDeck: initial load + live merge every SYNC_MS ────────────────────────
@@ -193,7 +218,6 @@ async function syncDeck(){
   markFresh(d.count);
 
   if(deck.length===0){
-    // first load
     deck=fresh; idx=0;
     document.getElementById('end').style.display='none';
     render(); return;
@@ -211,9 +235,10 @@ async function syncDeck(){
   // 2. inject brand-new tickers right after current position
   const newCards=fresh.filter(c=>!acted.has(c.ticker)&&!pending.has(c.ticker));
   if(newCards.length) deck.splice(Math.min(idx+1,deck.length),0,...newCards);
-  // 3. prune expired (not in fresh) from pending — never prune the current front
+  // 3. prune expired positions (not in fresh) — keep IE/crypto fill cards
   for(let i=deck.length-1;i>idx;i--){
-    if(!freshSet.has(deck[i].ticker)) deck.splice(i,1);
+    const isPosCard=deck[i].kind==='position'||deck[i].kind==='exit';
+    if(isPosCard&&!freshSet.has(deck[i].ticker)) deck.splice(i,1);
   }
   // 4. auto-resurface: were at end, new cards have arrived
   if(wasAtEnd&&idx<deck.length){
@@ -225,12 +250,13 @@ async function syncDeck(){
   if(!dragging) patchFront(deck[idx]);
   const rem=deck.length-idx;
   document.getElementById('progress').textContent=rem>0?`${rem} of ${deck.length} · soonest first`:'';
+  maybePrefetch();
 }
 
 function markFresh(count){
   lastSyncMs=Date.now(); lastDetCount=count;
   const dot=document.getElementById('sdot');
-  if(dot){ dot.className='sdot live'; setTimeout(()=>{if(dot) dot.className='sdot';},600); }
+  if(dot){ dot.classList.add('pulse'); setTimeout(()=>dot.classList.remove('pulse'),500); }
   const fill=document.getElementById('syncFill');
   if(fill){
     fill.style.transition='none'; fill.style.transform='scaleX(1)';
@@ -244,19 +270,44 @@ function updateFreshnessChip(){
   const chip=document.getElementById('cFresh'); if(!chip) return;
   const age=lastSyncMs?Math.floor((Date.now()-lastSyncMs)/1000):null;
   const ageStr=age==null?'—':age<2?'live':age<60?`${age}s ago`:`${Math.floor(age/60)}m ago`;
-  const cnt=lastDetCount!=null?` · <b>${lastDetCount} pos</b>`:'';
-  chip.innerHTML=`<span class="sdot" id="sdot"></span>${ageStr}${cnt}`;
+  const cnt=lastDetCount!=null?` · <b>${lastDetCount}</b>`:'';
+  chip.innerHTML=`<span class="dot ${age!=null&&age<30?'online':'warn'}" id="sdot"></span>${ageStr}${cnt}`;
 }
 
-function convColor(v){ return v>=66?'var(--green)':v>=45?'var(--amber)':'var(--text3)'; }
+// ── blended deck prefetch (20-card buffer) ────────────────────────────────────
+async function maybePrefetch(){
+  if(prefetching) return;
+  const remaining=deck.length-idx;
+  if(remaining>=PREFETCH_AT) return;
+  prefetching=true;
+  try {
+    const pendingTickers=new Set(deck.slice(idx).map(c=>c.ticker));
+    const [ie, cry]=await Promise.all([
+      j('/impossibility-deck').then(d=>d.cards||[]),
+      j('/crypto-intraday').then(d=>d.cards||[]),
+    ]);
+    const ieDet=ie.filter(c=>c.stateLabel==='DETERMINED'&&!pendingTickers.has(c.ticker));
+    const ieConf=ie.filter(c=>c.stateLabel==='CONFIDENT'&&!pendingTickers.has(c.ticker));
+    const fill=cry.filter(c=>!pendingTickers.has(c.ticker));
+    const toAdd=[...ieDet,...ieConf,...fill].slice(0,DECK_TARGET-remaining);
+    if(!toAdd.length) return;
+    deck.push(...toAdd);
+    const rem=deck.length-idx;
+    document.getElementById('progress').textContent=rem>0?`${rem} of ${deck.length} · soonest first`:'';
+    if(!dragging&&idx<deck.length) render();
+  } catch(_){}
+  finally{ prefetching=false; }
+}
+
+function convColor(v){ return v>=66?'var(--green)':v>=45?'var(--gold)':'var(--muted)'; }
 function fmtCountdown(card){
   if(card.close){
     const ms=Date.parse(card.close)-Date.now();
     if(isFinite(ms)){
       const s=Math.max(0,Math.floor(ms/1000));
       const h=Math.floor(s/3600), m=Math.floor(s%3600/60), ss=s%60;
-      const txt = h>0?`${h}h ${m}m`: m>0?`${m}m ${ss}s`:`${ss}s`;
-      const cls = s<300?'now': s<3600?'soon':'';
+      const txt=h>0?`${h}h ${m}m`:m>0?`${m}m ${ss}s`:`${ss}s`;
+      const cls=s<300?'now':s<3600?'soon':'';
       return {txt:'⏱ '+txt, cls};
     }
   }
@@ -273,29 +324,33 @@ function cardInner(card){
 
   // ── Position card (open Kalshi holding) ─────────────────────────────────────
   if(isPosition){
-    const pnlPct=card.pnlPct||0;
-    const pnlColor=pnlPct>=0?'var(--green)':'var(--red)';
-    const pnlSign=pnlPct>=0?'+':'';
-    const pnlDollars=card.pnlCents!=null?(card.pnlCents>=0?'+':'')+((card.pnlCents/100).toFixed(2)):null;
-    const maxPayout=card.maxPayoutCents!=null?'$'+(card.maxPayoutCents/100).toFixed(2):null;
+    const netPct = card.netPnlPct != null ? card.netPnlPct : (card.pnlPct||0);
+    const grossPct = card.pnlPct||0;
+    const pnlColor = netPct>=0?'var(--green)':'var(--danger)';
+    const netSign  = netPct>=0?'+':'';
+    const grossSign= grossPct>=0?'+':'';
+    const netDollars = card.netPnlCents!=null?(card.netPnlCents>=0?'+':'')+((card.netPnlCents/100).toFixed(2)):null;
+    const fee = card.exitFeeCents;
+    const feeStr = fee!=null ? `−${fee}¢ fee` : '';
+    const maxPayout = card.maxPayoutCents!=null?'$'+(card.maxPayoutCents/100).toFixed(2):null;
     const tag=card.exitTag;
     const ribbonCls=tag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
-    const ribbon=tag?`<div class="${ribbonCls}">⚠ ${tag} · ${pnlSign}${pnlPct}%</div>`:'';
+    const ribbon=tag?`<div class="${ribbonCls}">⚠ ${tag} · net ${netSign}${netPct}%</div>`:'';
     const favClass=fav==='yes'?'yes':'no';
     return `
       <div class="stamp take">SELL</div><div class="stamp pass">HOLD</div>
       ${ribbon}
-      <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span><span>position</span></div>
-      <div class="card-q">${card.title||card.ticker}</div>
+      <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span><span class="card-klass position">YOUR POSITION</span></div>
+      <h3 class="card-q">${card.title||card.ticker}</h3>
       <div class="fav ${favClass}">
         <div class="fav-tag">${card.qty||1} × ${fav.toUpperCase()} · cash out</div>
         <div class="fav-act">● SELL ${card.favLabel||fav.toUpperCase()}</div>
         <div class="fav-px">@ ${card.favAsk!=null?card.favAsk+'¢':'mkt'} bid · ${card.qty||1} contract${(card.qty||1)>1?'s':''}</div>
         <div class="conv-row">
-          <div class="conv-bar"><div class="conv-fill" style="width:${Math.min(100,Math.abs(pnlPct)*2)}%;background:${pnlColor}"></div></div>
-          <div class="conv-num" style="color:${pnlColor}">${pnlSign}${pnlPct}%</div>
+          <div class="conv-bar"><div class="conv-fill" style="width:${Math.min(100,Math.abs(netPct)*2)}%;background:${pnlColor}"></div></div>
+          <div class="conv-num" style="color:${pnlColor}">${netSign}${netPct}%${feeStr?' net':''}</div>
         </div>
-        <div class="reason">entry ${card.entryCents||'?'}¢${maxPayout?' · max payout '+maxPayout:''}${pnlDollars?` <span style="float:right;color:${pnlColor}">${pnlDollars}</span>`:''}</div>
+        <div class="reason">entry ${card.entryCents||'?'}¢ · gross ${grossSign}${grossPct}% · <span style="color:var(--muted)">${feeStr||'no fee data'}</span>${netDollars?` <span style="float:right;color:${pnlColor}">${netDollars}</span>`:''}</div>
       </div>
       <div class="sides">
         <div class="side yes"><div class="lbl">${card.yesLabel||'YES'}</div><div class="pct">${card.yesPct==null?'—':card.yesPct+'%'}</div></div>
@@ -303,11 +358,11 @@ function cardInner(card){
       </div>`;
   }
 
-  // ── Entry / exit card (original engine cards) ────────────────────────────────
+  // ── Entry / exit card (engine suggestions) ───────────────────────────────────
   const favClass=isExit?(card.exitTag==='TAKE-PROFIT'?'yes':'no'):fav;
   const ribbonClass=isExit&&card.exitTag==='TAKE-PROFIT'?'ribbon profit':'ribbon';
   const ribbon=isExit?`<div class="${ribbonClass}">⚠ SELL NOW · ${card.exitTag}${card.pnlPct!=null?' '+(card.pnlPct>=0?'+':'')+card.pnlPct+'%':''}</div>`:'';
-  const tag=isExit?'High-priority exit':'Favorable now';
+  const klLabel=card.kind==='crypto'?'crypto':isExit?'exit':'signal';
   const act=isSell
     ? `● SELL ${card.favLabel||fav.toUpperCase()}`
     : `${fav==='yes'?'▲':'▼'} BUY ${card.favLabel||fav.toUpperCase()}`;
@@ -322,10 +377,10 @@ function cardInner(card){
   return `
     <div class="stamp take">${isSell?'SELL':'TAKE'}</div><div class="stamp pass">PASS</div>
     ${ribbon}
-    <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span>${stateBadge}<span>${isExit?'position':'engine'}</span></div>
-    <div class="card-q">${card.title||card.ticker}</div>
+    <div class="card-top"><span class="countdown ${cd.cls}">${cd.txt}</span>${stateBadge}<span class="card-klass ${klLabel}">${klLabel.toUpperCase()}</span></div>
+    <h3 class="card-q">${card.title||card.ticker}</h3>
     <div class="fav ${favClass}">
-      <div class="fav-tag">${tag}</div>
+      <div class="fav-tag">${isSell?'High-priority exit':'Favorable now'}</div>
       <div class="fav-act">${act}</div>
       <div class="fav-px">${px}</div>
       <div class="conv-row">
@@ -349,9 +404,12 @@ function patchFront(card){
 function render(){
   const stage=document.getElementById('stage');
   const remaining=deck.length-idx;
-  document.getElementById('progress').textContent = remaining>0 ? `${remaining} of ${deck.length} · soonest first` : '';
+  document.getElementById('progress').textContent=remaining>0?`${remaining} of ${deck.length} · soonest first`:'';
   if(idx>=deck.length){ stage.innerHTML=''; document.getElementById('end').style.display='flex'; return; }
   let html='';
+  if(deck[idx+2]){
+    html+=`<div class="card peek2">${cardInner(deck[idx+2])}</div>`;
+  }
   if(deck[idx+1]){
     const peekExit=deck[idx+1].kind==='exit'?' exit':'';
     html+=`<div class="card peek${peekExit}">${cardInner(deck[idx+1])}</div>`;
@@ -360,9 +418,10 @@ function render(){
   html+=`<div class="card front${frontExit}" id="front">${cardInner(deck[idx])}</div>`;
   stage.innerHTML=html;
   attachSwipe(document.getElementById('front'));
+  maybePrefetch();
 }
 
-// tick countdown + freshness age every second
+// tick countdown + freshness every second
 setInterval(()=>{
   updateFreshnessChip();
   if(dragging||idx>=deck.length) return;
@@ -402,12 +461,11 @@ function flyOut(dir){
   setTimeout(()=>act(dir,true),180);
 }
 
-// ── act: take favorable / pass ───────────────────────────────────────────────
+// ── act ───────────────────────────────────────────────────────────────────────
 async function act(dir,fromSwipe){
   if(busy||idx>=deck.length) return;
   if(dir==='pass'){ if(!fromSwipe) return flyOut('pass'); idx++; render(); return; }
   if(dir==='take' && !fromSwipe) return flyOut('take');
-  // take favorable position (buy) OR close held position (sell)
   busy=true;
   try {
     const card=deck[idx];
@@ -446,8 +504,8 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='ArrowLeft') act('pass');
 });
 
-// ── paper book: track dry-run entries, poll P&L, auto-exit ───────────────────
-const closingIds = new Set(); // prevent double-close race
+// ── simulated book ────────────────────────────────────────────────────────────
+const closingIds=new Set();
 
 function recordPaperTrade(card){
   j('/paper-trade',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -455,7 +513,7 @@ function recordPaperTrade(card){
       side:card.favSide,action:'buy',count:1,limitCents:card.favAsk||50})});
 }
 
-async function closePaper(id, exitTag){
+async function closePaper(id,exitTag){
   if(closingIds.has(id)) return;
   closingIds.add(id);
   await j('/paper-close',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -463,38 +521,33 @@ async function closePaper(id, exitTag){
 }
 
 async function pollPaperBook(){
-  const d = await j('/paper-positions');
-  const positions = (d.positions||[]).filter(p=>!p.resolved&&!p.expired&&!p.error);
-  const el = document.getElementById('pbook');
+  const d=await j('/paper-positions');
+  const positions=(d.positions||[]).filter(p=>!p.resolved&&!p.expired&&!p.error);
+  const el=document.getElementById('pbook');
   if(positions.length===0){ el.style.display='none'; return; }
   el.style.display='';
-  document.getElementById('pbook-count').textContent = positions.length+' open';
-
-  // Auto-exit triggered positions
+  document.getElementById('pbook-count').textContent=positions.length+' open';
   for(const p of positions){
-    if(p.autoExit && !closingIds.has(p.id)){
-      closePaper(p.id, p.autoExit);
-    }
+    if(p.autoExit&&!closingIds.has(p.id)) closePaper(p.id,p.autoExit);
   }
-
-  const rows = positions.map(p=>{
-    const pct = p.pnlPct;
-    const pnlClass = pct==null?'': pct>=0?'pos':'neg';
-    const pnlTxt = pct==null?'...':(pct>=0?'+':'')+pct+'%';
-    const rowCls = p.autoExit==='STOP-LOSS'?'sl': p.autoExit==='TAKE-PROFIT'?'tp':'';
-    const tag = p.autoExit
-      ? `<span class="ptag ${p.autoExit==='STOP-LOSS'?'sl':'tp'}">${p.autoExit}</span>`
-      : (p.minsToClose!=null?`<span style="color:var(--text3)">${p.minsToClose}m</span>`:'');
-    const sideClass = p.side==='yes'?'pside-yes':'pside-no';
+  const rows=positions.map(p=>{
+    const pct=p.pnlPct;
+    const pnlClass=pct==null?'':pct>=0?'pos':'neg';
+    const pnlTxt=pct==null?'...':(pct>=0?'+':'')+pct+'%';
+    const rowCls=p.autoExit==='STOP-LOSS'?'sl':p.autoExit==='TAKE-PROFIT'?'tp':'';
+    const tag=p.autoExit
+      ?`<span class="ptag ${p.autoExit==='STOP-LOSS'?'sl':'tp'}">${p.autoExit}</span>`
+      :(p.minsToClose!=null?`<span style="color:var(--muted)">${p.minsToClose}m</span>`:'');
+    const sideClass=p.side==='yes'?'pside-yes':'pside-no';
     return `<div class="prow ${rowCls}">
       <span class="pticker">${(p.title||p.ticker).slice(0,28)}</span>
       <span class="${sideClass}">${p.side.toUpperCase()} @${p.entryCents||'?'}¢</span>
       <span class="ppnl ${pnlClass}">${pnlTxt}</span>
       ${tag}
-      <button class="pclose" onclick="closePaper('${p.id}','MANUAL');pollPaperBook()">×</button>
+      <button class="pclose" aria-label="Close ${(p.title||p.ticker).slice(0,28)} position" onclick="closePaper('${p.id}','MANUAL');pollPaperBook()">×</button>
     </div>`;
   }).join('');
-  document.getElementById('pbook-rows').innerHTML = rows;
+  document.getElementById('pbook-rows').innerHTML=rows;
 }
 
 function init(){
