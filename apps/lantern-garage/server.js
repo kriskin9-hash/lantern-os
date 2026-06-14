@@ -313,6 +313,9 @@ function shutdown(signal) {
   if (cloudflaredProcess && !cloudflaredProcess.killed) {
     cloudflaredProcess.kill("SIGTERM");
   }
+  if (deps.kalshiCollector) {
+    deps.kalshiCollector.stop();
+  }
   prWatcher.stop();
   server.close(() => {
     process.exit(0);
@@ -323,6 +326,17 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 server.listen(port, host, () => {
   console.log(`Lantern Garage app listening on ${host}:${port}`);
+
+  // ── Kalshi Tight-Band Collector (6s polling) ──
+  const kalshiCollector = require("./lib/kalshi-collector");
+  kalshiCollector.start();
+  deps.kalshiCollector = kalshiCollector; // Make available to routes
+
+  // ── Crypto Price & News Collector (30s polling) ──
+  const CryptoCollector = require("./lib/crypto-collector");
+  const cryptoCollector = new CryptoCollector();
+  cryptoCollector.start(30000); // 30s interval
+  deps.cryptoCollector = cryptoCollector; // Make available to routes
 
   // Auto-register this node to the mesh
   (async () => {
