@@ -37,6 +37,8 @@ const SystemConsistencyValidator = require("./lib/system-consistency-validator")
 const DriftBaselineTracker = require("./lib/drift-baseline-tracker");
 const DriftReconciliationEngine = require("./lib/drift-reconciliation-engine");
 const SystemStabilityIndex = require("./lib/system-stability-index");
+const SystemAuditTracer = require("./lib/system-audit-tracer");
+const AuditReplayEngine = require("./lib/audit-replay-engine");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -426,6 +428,16 @@ server.listen(port, host, () => {
   const stabilityIndex = new SystemStabilityIndex();
   deps.stabilityIndex = stabilityIndex;
   console.log("[System Stability] Initialized — holistic health scoring enabled");
+
+  // ── Phase 3.8: Audit & Decision Traceability ──
+  const auditLogPath = path.join(repoRoot, "data", "trading", "audit-log.jsonl");
+  const systemAuditTracer = new SystemAuditTracer(auditLogPath);
+  deps.systemAuditTracer = systemAuditTracer;
+  console.log("[System Audit] Tracer initialized — immutable audit log at", auditLogPath);
+
+  const auditReplayEngine = new AuditReplayEngine(systemAuditTracer);
+  deps.auditReplayEngine = auditReplayEngine;
+  console.log("[Audit Replay] Engine initialized — full timeline reconstruction enabled");
 
   // Periodic drift baseline updates and stability monitoring
   setInterval(() => {
