@@ -157,10 +157,22 @@ html, body {
 .footer-inner a:hover { color: var(--text); text-decoration: underline; }
 .footer-inner .sep { color: var(--border); }
 .footer-inner .ml { margin-left: auto; }
+.footer-meta { color: var(--muted); opacity: 0.75; }
 .footer-brand {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+/* Screen-reader-only text */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 @media (max-width: 640px) { .footer-inner .ml { margin-left: 0; width: 100%; } }
 

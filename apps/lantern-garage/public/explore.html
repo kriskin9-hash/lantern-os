@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
   <link rel="manifest" href="/manifest.json">
+  <script>
+    /* Theme bootstrap — set before first paint to avoid flash of wrong theme */
+    (function() {
+      try {
+        var stored = localStorage.getItem('lantern-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored ? stored === 'dark' : prefersDark;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/css/site.css">
   <title>Explore & Discover — Lantern OS</title>
   <style>
@@ -209,18 +222,15 @@
 
   </main>
 
-  <div class="status-bar">
-    <div class="dot online" id="status-dot"></div>
-    <span id="status-label">connecting…</span>
-    <span class="status-bar-right" id="status-right">Lantern OS</span>
-  </div>
-
 </div>
 
 <!-- ── Site footer ── -->
 <footer class="site-footer">
   <div class="footer-inner">
-    <span class="footer-brand"><span class="mandala-icon spin-slow" aria-hidden="true"></span> Lantern OS</span>
+    <span class="footer-brand">
+      <span class="dot online" id="status-dot" title="Server status"></span>
+      <span class="mandala-icon spin-slow" aria-hidden="true"></span> Lantern OS
+    </span>
     <span class="sep">·</span>
     <a href="/">Home</a>
     <a href="/dream-chat.html">Journal</a>
@@ -230,7 +240,8 @@
     <a href="/knowledgecenter.html">Help</a>
     <span class="sep">·</span>
     <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">GitHub</a>
-    <span class="sep ml">Open source · runs locally · no account needed</span>
+    <span class="footer-meta ml">Open source · runs locally · no account needed</span>
+    <span class="visually-hidden" id="status-label">connecting…</span>
   </div>
 </footer>
 
