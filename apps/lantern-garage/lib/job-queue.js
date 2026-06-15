@@ -27,6 +27,12 @@ class Job {
     this.progressMessage = "Queued";
     this.result = null;
     this.error = null;
+    // Rich progress state for TaskProgressPanel
+    this.stages = [];        // [{id, name, weight, status, startedAt, endedAt}]
+    this.logs = [];          // [{ts, msg}] — capped at 200 lines
+    this.liveStats = {};     // {analyzedSec, totalSec, highlightsFound, topScore, …}
+    this.etaSeconds = null;
+    this.currentStageId = null;
   }
 
   start() {
@@ -39,18 +45,71 @@ class Job {
     this.progressMessage = message;
   }
 
+  // ── Stage tracking ─────────────────────────────────────────────────────────
+
+  setStages(stageDefs) {
+    this.stages = stageDefs.map(s => ({ ...s, status: "pending", startedAt: null, endedAt: null }));
+  }
+
+  startStage(stageId) {
+    const now = new Date().toISOString();
+    for (const s of this.stages) {
+      if (s.id === stageId) {
+        s.status = "running";
+        s.startedAt = now;
+      } else if (s.status === "running") {
+        s.status = "done";
+        s.endedAt = now;
+      }
+    }
+    this.currentStageId = stageId;
+  }
+
+  completeStage(stageId, failed = false) {
+    const s = this.stages.find(x => x.id === stageId);
+    if (s) { s.status = failed ? "failed" : "done"; s.endedAt = new Date().toISOString(); }
+    if (this.currentStageId === stageId) this.currentStageId = null;
+  }
+
+  appendLog(msg) {
+    this.logs.push({ ts: new Date().toISOString(), msg: String(msg) });
+    if (this.logs.length > 200) this.logs = this.logs.slice(-200);
+  }
+
+  setLiveStats(stats) {
+    Object.assign(this.liveStats, stats);
+  }
+
+  setEta(seconds) {
+    this.etaSeconds = (seconds != null && isFinite(seconds)) ? Math.max(0, Math.round(seconds)) : null;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   complete(result) {
     this.status = JobStatus.COMPLETE;
     this.completedAt = new Date().toISOString();
     this.progress = 100;
     this.progressMessage = "Complete";
     this.result = result;
+    this.etaSeconds = 0;
+    // Mark any lingering stages as done
+    for (const s of this.stages) {
+      if (s.status === "pending" || s.status === "running") {
+        s.status = "done";
+        s.endedAt = this.completedAt;
+      }
+    }
   }
 
   fail(error) {
     this.status = JobStatus.FAILED;
     this.completedAt = new Date().toISOString();
     this.error = error instanceof Error ? error.message : String(error);
+    // Mark running stage as failed
+    for (const s of this.stages) {
+      if (s.status === "running") { s.status = "failed"; s.endedAt = this.completedAt; }
+    }
   }
 
   cancel() {
@@ -65,6 +124,11 @@ class Job {
       status: this.status,
       progress: this.progress,
       progressMessage: this.progressMessage,
+      stages: this.stages,
+      logs: this.logs,
+      liveStats: this.liveStats,
+      etaSeconds: this.etaSeconds,
+      currentStageId: this.currentStageId,
       createdAt: this.createdAt,
       startedAt: this.startedAt,
       completedAt: this.completedAt,

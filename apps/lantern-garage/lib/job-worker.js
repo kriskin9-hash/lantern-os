@@ -11,6 +11,39 @@ const { reencodeToShortForm, renderSegments, probeSource, burnCaptionsToVideo } 
 const { analyzeForCrop } = require("./safe-zone-v2");
 const ci = require("../../../src/creator-intelligence");
 
+// Stage manifests — defines named stages and their progress weight for each job type.
+// Weights must sum to 100.
+const STAGE_MANIFESTS = {
+  analyze: [
+    { id: "load",       name: "Loading Video",        weight: 5  },
+    { id: "metadata",   name: "Extracting Metadata",  weight: 5  },
+    { id: "frame_scan", name: "Scanning Frames",      weight: 25 },
+    { id: "motion",     name: "Motion Analysis",      weight: 15 },
+    { id: "highlights", name: "Detecting Highlights", weight: 15 },
+    { id: "ranking",    name: "Ranking Moments",      weight: 10 },
+    { id: "scoring",    name: "Scoring & Variants",   weight: 15 },
+    { id: "saving",     name: "Saving Results",       weight: 10 },
+  ],
+  export: [
+    { id: "prepare",   name: "Preparing Render",      weight: 10 },
+    { id: "safezones", name: "Detecting Safe Zones",  weight: 15 },
+    { id: "encode",    name: "Encoding Video",        weight: 55 },
+    { id: "captions",  name: "Burning Captions",      weight: 10 },
+    { id: "validate",  name: "Validating Output",     weight: 10 },
+  ],
+  safezones: [
+    { id: "sample",  name: "Sampling Frames",    weight: 30 },
+    { id: "detect",  name: "Detecting Regions",  weight: 40 },
+    { id: "overlay", name: "Rendering Overlay",  weight: 20 },
+    { id: "save",    name: "Saving Results",     weight: 10 },
+  ],
+  caption: [
+    { id: "parse",    name: "Parsing Timeline",    weight: 30 },
+    { id: "generate", name: "Generating Captions", weight: 50 },
+    { id: "save",     name: "Saving Captions",     weight: 20 },
+  ],
+};
+
 class JobWorker {
   constructor(jobQueue, repoRoot) {
     this.jobQueue = jobQueue;
@@ -46,53 +79,98 @@ class JobWorker {
   async executeJob(job) {
     this.currentJob = job;
 
+    // Idle watchdog — if a job emits no progress for idleMs it is considered
+    // wedged (e.g. a hung ffmpeg). We fail it with a timeout and release the
+    // worker so one stuck job can never poison the whole queue forever.
+    const idleMs = Number(process.env.LANTERN_JOB_IDLE_TIMEOUT_MS) || 5 * 60 * 1000;
+    let lastProgressAt = Date.now();
+    let watchdog = null;
+
+    const flush = () => this.jobQueue.updateJob(job);
+
+    const onProgress = (percent, msg) => {
+      lastProgressAt = Date.now();
+      job.setProgress(percent, msg);
+      // Linear ETA from elapsed time and overall progress
+      if (percent > 5 && job.startedAt) {
+        const elapsedMs = Date.now() - new Date(job.startedAt).getTime();
+        const totalEstMs = elapsedMs / (percent / 100);
+        job.setEta(Math.round((totalEstMs - elapsedMs) / 1000));
+      }
+      flush();
+    };
+
+    // Rich context object passed to job handlers for stage/log/liveStats updates
+    const ctx = {
+      progress: onProgress,
+      stage: (stageId) => {
+        lastProgressAt = Date.now();
+        job.startStage(stageId);
+        flush();
+      },
+      log: (msg) => {
+        lastProgressAt = Date.now();
+        job.appendLog(msg);
+        flush();
+      },
+      liveStats: (stats) => {
+        lastProgressAt = Date.now();
+        job.setLiveStats(stats);
+        flush();
+      },
+    };
+
     try {
       job.start();
-      this.jobQueue.updateJob(job);
-
+      // Initialize named stages for this job type
+      const stageDefs = STAGE_MANIFESTS[job.type];
+      if (stageDefs) job.setStages(stageDefs);
+      flush();
       console.log(`[job-worker] Processing job ${job.id} (${job.type})`);
 
-      let result;
+      const watchdogPromise = new Promise((_, reject) => {
+        watchdog = setInterval(() => {
+          if (Date.now() - lastProgressAt > idleMs) {
+            clearInterval(watchdog); watchdog = null;
+            reject(new Error(`timeout: no progress for ${Math.round(idleMs / 60000)} min`));
+          }
+        }, 15000);
+      });
 
-      switch (job.type) {
-        case "analyze":
-          result = await processAnalyzeJob(job, this.repoRoot, (percent, msg) => {
-            job.setProgress(percent, msg);
-            this.jobQueue.updateJob(job);
-          });
-          break;
+      const handlerPromise = (async () => {
+        switch (job.type) {
+          case "analyze": return processAnalyzeJob(job, this.repoRoot, ctx);
+          case "caption": return processCaptionJob(job, this.repoRoot, ctx);
+          case "export": return processExportJob(job, this.repoRoot, ctx);
+          case "safezones": return processSafeZonesJob(job, this.repoRoot, ctx);
+          default: throw new Error(`Unknown job type: ${job.type}`);
+        }
+      })();
 
-        case "caption":
-          result = await processCaptionJob(job, this.repoRoot, (percent, msg) => {
-            job.setProgress(percent, msg);
-            this.jobQueue.updateJob(job);
-          });
-          break;
-
-        case "export":
-          result = await processExportJob(job, this.repoRoot, (percent, msg) => {
-            job.setProgress(percent, msg);
-            this.jobQueue.updateJob(job);
-          });
-          break;
-
-        case "safezones":
-          result = await processSafeZonesJob(job, this.repoRoot, (percent, msg) => {
-            job.setProgress(percent, msg);
-            this.jobQueue.updateJob(job);
-          });
-          break;
-
-        default:
-          throw new Error(`Unknown job type: ${job.type}`);
-      }
-
+      const result = await Promise.race([handlerPromise, watchdogPromise]);
       job.complete(result);
       console.log(`[job-worker] Completed job ${job.id}`);
     } catch (error) {
       job.fail(error);
       console.error(`[job-worker] Failed job ${job.id}:`, error.message);
+      // Persist a structured failure on the project so the dashboard can show
+      // exactly which stage failed and why, instead of a silent hang.
+      if (job.type === "analyze" && job.input && job.input.entryId) {
+        try {
+          const entryStore = require("./entry-store");
+          const failedStage = job.stages.find(s => s.status === "failed") || null;
+          entryStore.recordAnalysisError(this.repoRoot, job.input.entryId, {
+            stage: (failedStage && failedStage.name) || job.progressMessage || "unknown",
+            error: error.message,
+            at: new Date().toISOString(),
+            jobId: job.id,
+          });
+        } catch (e) {
+          console.error("[job-worker] persist analysis error failed:", e.message);
+        }
+      }
     } finally {
+      if (watchdog) clearInterval(watchdog);
       this.jobQueue.updateJob(job);
       this.currentJob = null;
     }
@@ -103,7 +181,7 @@ class JobWorker {
 // JOB HANDLERS
 // ============================================================================
 
-async function processAnalyzeJob(job, repoRoot, updateProgress) {
+async function processAnalyzeJob(job, repoRoot, ctx) {
   const { videoPath, options } = job.input;
 
   // Verify file exists
@@ -112,16 +190,48 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
     throw new Error(`Video file not found: ${videoPath}`);
   }
 
-  updateProgress(10, "Starting video analysis");
+  ctx.stage("load");
+  ctx.progress(5, "Starting analysis");
+  ctx.log("Analysis started");
 
-  // Run highlight analysis
-  const timeline = await analyzeVideoForHighlights(fullPath, options || {});
+  // Mark the project as analyzing so a reopened project reflects live state.
+  if (job.input.entryId) {
+    try { require("./entry-store").updateEntry(repoRoot, job.input.entryId, { status: "analyzing" }); } catch {}
+  }
 
-  updateProgress(70, "Analyzing highlights");
+  ctx.stage("metadata");
+  ctx.progress(8, "Reading video metadata");
+  ctx.log("Reading video metadata");
+
+  // Highlight engine status keys → stage transitions
+  const stageFromKey = { loading_video: "load", analyzing_motion: "frame_scan", detecting_highlights: "highlights" };
+  let highlightsFoundSoFar = 0;
+
+  // Run highlight analysis — streams real sub-stage progress (8→66%) so the bar
+  // never sits at a single number.
+  const timeline = await analyzeVideoForHighlights(fullPath, options || {}, (percent, statusKey, message) => {
+    const nextStage = stageFromKey[statusKey];
+    if (nextStage && job.currentStageId !== nextStage) {
+      ctx.stage(nextStage);
+    }
+    ctx.progress(percent, message || statusKey);
+    ctx.log(message || statusKey);
+
+    // Parse "Analyzing motion (13s / 120s)" for live stats
+    const motionMatch = message && message.match(/Analyzing motion \((\d+)s \/ (\d+)s\)/);
+    if (motionMatch) {
+      ctx.liveStats({ analyzedSec: parseInt(motionMatch[1]), totalSec: parseInt(motionMatch[2]) });
+    }
+  });
+
+  ctx.stage("ranking");
+  ctx.progress(70, "Scoring highlights");
+  ctx.log("Scoring highlights");
 
   // Generate captions automatically
   const captions = generateCaptions(timeline, null, "gaming");
-  updateProgress(85, "Generated captions");
+  ctx.progress(80, "Generated captions");
+  ctx.log(`Generated ${captions.length} captions`);
 
   // V10 scoring + variants — computed from the REAL analysis timeline. Every
   // value is traceable to selected segments; nothing mocked (this replaces the
@@ -132,13 +242,26 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
   const gaming = (options || {}).gaming !== false;
   let scoreV10 = null;
   let variantsV10 = null;
+
+  ctx.stage("scoring");
   try {
     scoreV10 = ci.scoreVideoV10(timelineJSON, { gaming });
     variantsV10 = ci.generateVariantsV10(timelineJSON, { gaming });
-    updateProgress(95, `Generated ${variantsV10.variants.length} ranked variants`);
+    ctx.progress(93, `Generated ${variantsV10.variants.length} ranked variants`);
+    ctx.log(`Generated ${variantsV10.variants.length} ranked variants`);
+    if (scoreV10 && scoreV10.viralProbability != null) {
+      ctx.liveStats({ topScore: (scoreV10.viralProbability * 100).toFixed(1) });
+    }
+    highlightsFoundSoFar = Array.isArray(timelineJSON.highlights) ? timelineJSON.highlights.length : 0;
+    ctx.liveStats({ highlightsFound: highlightsFoundSoFar });
   } catch (e) {
     console.error("[job-worker] V10 scoring/variants failed:", e.message);
+    ctx.log(`Scoring error (non-fatal): ${e.message}`);
   }
+
+  ctx.stage("saving");
+  ctx.progress(96, "Saving results");
+  ctx.log("Saving analysis results");
 
   // Store results
   const resultsDir = path.join(repoRoot, "data", "creator", "analyses");
@@ -174,16 +297,28 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
       });
       // Stamp completion times for the stages this analyze produced, so the
       // workspace can show "Analysis ✓ <timestamp>" after any refresh.
-      const stages = ["analyzed"];
-      if (variantsV10 && variantsV10.variants && variantsV10.variants.length) stages.push("variants");
-      if (captions && captions.length) stages.push("captions");
-      entryStore.touchStages(repoRoot, job.input.entryId, stages);
+      const entryStages = ["analyzed"];
+      if (variantsV10 && variantsV10.variants && variantsV10.variants.length) entryStages.push("variants");
+      if (captions && captions.length) entryStages.push("captions");
+      entryStore.touchStages(repoRoot, job.input.entryId, entryStages);
+      // Audit trail + clear any prior failure now that analysis succeeded.
+      entryStore.addAnalysisRun(repoRoot, job.input.entryId, {
+        jobId: job.id,
+        status: "complete",
+        startedAt: job.startedAt,
+        finishedAt: new Date().toISOString(),
+        highlightCount: Array.isArray(timelineJSON.highlights) ? timelineJSON.highlights.length : 0,
+        durationSec: timelineJSON.duration || null,
+        analysisCapped: !!(timelineJSON.metadata && timelineJSON.metadata.analysisCapped),
+      });
+      entryStore.clearAnalysisError(repoRoot, job.input.entryId);
     } catch (e) {
       console.error("[job-worker] persist V10 results to entry failed:", e.message);
     }
   }
 
-  updateProgress(100, "Analysis complete");
+  ctx.log("Analysis complete");
+  ctx.progress(100, "Analysis complete");
 
   return {
     timeline: timelineJSON,
@@ -194,15 +329,19 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
   };
 }
 
-async function processCaptionJob(job, repoRoot, updateProgress) {
+async function processCaptionJob(job, repoRoot, ctx) {
   const { highlightTimeline, strategy } = job.input;
 
-  updateProgress(20, "Parsing timeline");
+  ctx.stage("parse");
+  ctx.progress(20, "Parsing timeline");
+  ctx.log("Parsing highlight timeline");
 
   // Generate captions with specified strategy
   const captions = generateCaptions(highlightTimeline, null, strategy || "gaming");
 
-  updateProgress(60, `Generated ${captions.length} captions`);
+  ctx.stage("generate");
+  ctx.progress(60, `Generated ${captions.length} captions`);
+  ctx.log(`Generated ${captions.length} captions`);
 
   // Store captions in multiple formats
   const captionsDir = path.join(repoRoot, "data", "creator", "captions");
@@ -210,6 +349,7 @@ async function processCaptionJob(job, repoRoot, updateProgress) {
     fs.mkdirSync(captionsDir, { recursive: true });
   }
 
+  ctx.stage("save");
   const vttPath = path.join(captionsDir, `${job.id}.vtt`);
   const srtPath = path.join(captionsDir, `${job.id}.srt`);
   const jsonPath = path.join(captionsDir, `${job.id}.json`);
@@ -219,7 +359,8 @@ async function processCaptionJob(job, repoRoot, updateProgress) {
   fs.writeFileSync(srtPath, generateSRT(captions));
   fs.writeFileSync(jsonPath, generateJSON(captions));
 
-  updateProgress(100, "Captions saved");
+  ctx.log("Saved VTT, SRT, JSON caption files");
+  ctx.progress(100, "Captions saved");
 
   return {
     captionCount: captions.length,
@@ -227,10 +368,12 @@ async function processCaptionJob(job, repoRoot, updateProgress) {
   };
 }
 
-async function processExportJob(job, repoRoot, updateProgress) {
+async function processExportJob(job, repoRoot, ctx) {
   const { videoPath, variant, format } = job.input;
 
-  updateProgress(10, `Starting export (${format})`);
+  ctx.stage("prepare");
+  ctx.progress(10, `Starting export (${format})`);
+  ctx.log(`Starting export — format: ${format}`);
 
   // Verify video exists
   const fullPath = path.join(repoRoot, videoPath);
@@ -257,13 +400,16 @@ async function processExportJob(job, repoRoot, updateProgress) {
   let cropPlan = null;
   const useSafeZones = job.input.useSafeZones === true || ci.isEnabled("safeZoneV2");
   if (job.input.fit === "crop" && useSafeZones) {
-    updateProgress(20, "Detecting safe zones (facecam/HUD)");
+    ctx.stage("safezones");
+    ctx.progress(20, "Detecting safe zones (facecam/HUD)");
+    ctx.log("Sampling frames for safe-zone detection");
     try {
       const meta = await probeSource(fullPath);
       // Guard: if dimensions are unavailable (probe failed), the crop rect normalization
       // base would be wrong — skip detection and fall back to naive center crop.
       if (!meta.width || !meta.height) {
         cropPlan = { status: "unavailable", note: "fell back to center crop", reason: "source dimensions unknown (probe failed)" };
+        ctx.log("Safe-zone detection unavailable — falling back to center crop");
       } else {
         const plan = await analyzeForCrop(fullPath, {
           srcWidth: meta.width,
@@ -272,28 +418,34 @@ async function processExportJob(job, repoRoot, updateProgress) {
         if (plan.status === "ok" && plan.cropPlan && plan.cropPlan.mode === "horizontal") {
           cropRect = plan.cropPlan.cropRect;
           cropPlan = { ...plan.cropPlan, regions: plan.regions, framesSampled: plan.framesSampled };
+          ctx.log(`Safe zones detected — ${(plan.regions || []).length} region(s)`);
         } else {
           cropPlan = { status: plan.status, note: "fell back to center crop", reason: plan.reason };
+          ctx.log(`Safe-zone detection: ${plan.status} — center crop`);
         }
       }
     } catch (e) {
       console.error("[job-worker] safe-zone crop plan failed:", e.message);
       cropPlan = { status: "error", note: "fell back to center crop", reason: e.message };
+      ctx.log(`Safe-zone error (non-fatal): ${e.message}`);
     }
   }
 
   // A variant export supplies a segment cut-list -> trim+concat render.
   // Otherwise re-encode the whole clip to spec.
+  ctx.stage("encode");
   const segments = Array.isArray(job.input.segments) ? job.input.segments : null;
   let encodeInfo;
   if (segments && segments.length) {
-    updateProgress(30, `Rendering ${segments.length} segments to short-form (1080x1920)`);
+    ctx.progress(30, `Rendering ${segments.length} segments to short-form (1080x1920)`);
+    ctx.log(`Rendering ${segments.length} highlight segments`);
     encodeInfo = await renderSegments(fullPath, exportFile, segments, {
       width: job.input.width, height: job.input.height, fps: job.input.fps,
       fit: job.input.fit, cropRect, maxDuration: job.input.maxDuration,
     });
   } else {
-    updateProgress(30, "Re-encoding to short-form (1080x1920)");
+    ctx.progress(30, "Re-encoding to short-form (1080x1920)");
+    ctx.log("Re-encoding to 9:16 short-form");
     encodeInfo = await reencodeToShortForm(fullPath, exportFile, {
       width: job.input.width,
       height: job.input.height,
@@ -312,7 +464,9 @@ async function processExportJob(job, repoRoot, updateProgress) {
   // and burn them into the rendered video via ffmpeg subtitles filter. Non-fatal: if
   // no captions are available or the burn fails, the un-captioned render is kept.
   if (job.input.burnCaptions && fs.existsSync(exportFile)) {
-    updateProgress(85, "Burning captions into video");
+    ctx.stage("captions");
+    ctx.progress(85, "Burning captions into video");
+    ctx.log("Burning captions into rendered video");
     let captionData = job.input.captionData || null;
     if (!captionData && job.input.entryId) {
       try {
@@ -328,15 +482,19 @@ async function processExportJob(job, repoRoot, updateProgress) {
         await burnCaptionsToVideo(exportFile, burnedFile, captionData);
         fs.renameSync(burnedFile, exportFile);
         encodeInfo.captionsBurned = captionData.length;
+        ctx.log(`Burned ${captionData.length} captions`);
         console.log(`[job-worker] Burned ${captionData.length} captions into ${exportFile}`);
       } catch (e) {
         console.error("[job-worker] caption burn failed (non-fatal):", e.message);
         encodeInfo.captionsBurnFailed = e.message;
+        ctx.log(`Caption burn failed (non-fatal): ${e.message}`);
       }
     }
   }
 
-  updateProgress(90, "Validating output");
+  ctx.stage("validate");
+  ctx.progress(90, "Validating output");
+  ctx.log("Running export quality validation");
 
   // Verify output exists
   if (!fs.existsSync(exportFile)) {
@@ -401,7 +559,8 @@ async function processExportJob(job, repoRoot, updateProgress) {
     }
   }
 
-  updateProgress(100, "Export complete");
+  ctx.log("Export complete");
+  ctx.progress(100, "Export complete");
 
   return {
     format,
@@ -414,40 +573,72 @@ async function processExportJob(job, repoRoot, updateProgress) {
   };
 }
 
-async function processSafeZonesJob(job, repoRoot, updateProgress) {
+async function processSafeZonesJob(job, repoRoot, ctx) {
   const { videoPath } = job.input;
   const fullPath = path.join(repoRoot, videoPath);
   if (!fs.existsSync(fullPath)) {
     throw new Error(`Video not found: ${videoPath}`);
   }
 
-  updateProgress(15, "Sampling frames for facecam/HUD detection");
+  ctx.stage("sample");
+  ctx.progress(15, "Sampling frames for facecam/HUD detection");
+  ctx.log("Sampling frames for region detection");
 
+  ctx.stage("detect");
   const meta = await probeSource(fullPath);
   let result;
   if (!meta.width || !meta.height) {
     result = { status: "unavailable", reason: "source dimensions unknown (probe failed)" };
+    ctx.log("Detection unavailable — source dimensions unknown");
   } else {
     const plan = await analyzeForCrop(fullPath, { srcWidth: meta.width, srcHeight: meta.height });
     result = plan; // { status, regions, cropPlan, framesSampled, ... } — honest "unavailable" when detection fails
+    const regionCount = Array.isArray(plan.regions) ? plan.regions.length : 0;
+    ctx.log(`Detection complete — ${regionCount} region(s) found (${plan.framesSampled || 0} frames sampled)`);
+    ctx.liveStats({ regionsFound: regionCount, framesSampled: plan.framesSampled || 0 });
   }
 
-  updateProgress(85, "Persisting safe zones");
+  // Render a debug overlay (detected boxes drawn on a real frame) so the user
+  // can VISUALLY verify the detections. Persisted into the project, served via /media.
+  let overlayRel = null;
+  if (result.status === "ok" && Array.isArray(result.regions) && job.input.entryId) {
+    try {
+      const { renderSafeZoneOverlay } = require("./safe-zone-v2");
+      const entryStore = require("./entry-store");
+      const dir = entryStore.getEntryDir(repoRoot, job.input.entryId);
+      fs.mkdirSync(dir, { recursive: true });
+      const outAbs = path.join(dir, "safezone-overlay.jpg");
+      ctx.stage("overlay");
+      ctx.progress(75, "Rendering safe-zone overlay");
+      ctx.log("Rendering detection overlay image");
+      const ov = await renderSafeZoneOverlay(fullPath, result.regions, outAbs, { at: 1 });
+      if (ov.ok) overlayRel = path.relative(repoRoot, outAbs).split(path.sep).join("/");
+    } catch (e) {
+      console.error("[job-worker] safezone overlay render failed:", e.message);
+      ctx.log(`Overlay render failed (non-fatal): ${e.message}`);
+    }
+  }
+
+  ctx.stage("save");
+  ctx.progress(85, "Persisting safe zones");
+  ctx.log("Saving safe-zone data to project");
 
   // Persist onto the project so crop previews reload after a refresh.
   if (job.input.entryId) {
     try {
       const entryStore = require("./entry-store");
       entryStore.updateEntry(repoRoot, job.input.entryId, {
-        safezones: { ...result, computedAt: new Date().toISOString() },
+        safezones: { ...result, overlay: overlayRel, computedAt: new Date().toISOString() },
       });
       entryStore.touchStages(repoRoot, job.input.entryId, ["safezones"]);
     } catch (e) {
       console.error("[job-worker] persist safezones failed:", e.message);
+      ctx.log(`Persist failed (non-fatal): ${e.message}`);
     }
   }
 
-  updateProgress(100, "Safe zone detection complete");
+  ctx.log("Safe zone detection complete");
+  ctx.progress(100, "Safe zone detection complete");
   return result;
 }
 
