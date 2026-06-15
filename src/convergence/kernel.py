@@ -44,6 +44,8 @@ class Kernel:
         self.convergence_records: List[ConvergenceRecord] = []
         self.current_task: Optional[Task] = None
         self.completed_tasks: List[str] = []
+        self.components: Dict[str, bool] = {}
+        self.health: Dict[str, Any] = {}
 
         # Ensure memory file exists
         self.memory_path.parent.mkdir(parents=True, exist_ok=True)
@@ -51,9 +53,13 @@ class Kernel:
             self.memory_path.touch()
 
     def initialize(self) -> bool:
-        """Bootstrap the Kernel and verify all systems operational.
+        """Bootstrap the Kernel: load memory, wire all core objects, health-check.
 
-        Returns: True if all systems initialized successfully
+        Wires the four core objects (Memory, Task, Tool, ConvergenceRecord) and the
+        optional Convergence components (router, verify) when present, then records a
+        startup health check in `self.health`.
+
+        Returns: True if core systems initialized successfully.
         """
         try:
             # Load existing memory from disk
@@ -63,10 +69,47 @@ class Kernel:
             assert self.memory_path.exists(), "Memory file not found"
             assert self.memory_path.parent.exists(), "Memory directory not found"
 
-            return True
+            # Startup health check across all wired objects/stages.
+            self.health = self.health_check()
+            self.components = self.health["components"]
+            return self.health["ok"]
         except Exception as e:
             print(f"Kernel initialization failed: {e}")
             return False
+
+    def health_check(self) -> Dict[str, Any]:
+        """Report operational status of each core object and loop stage.
+
+        Core objects (memory, tools registry, convergence records) gate `ok`.
+        The router (wq-006) and verify (wq-007) modules are optional capabilities:
+        reported, but their absence does not fail the core.
+        """
+        components: Dict[str, bool] = {
+            "memory": self.memory_path.exists() and self.memory_path.parent.exists(),
+            "tools_registry": isinstance(self.tools, dict),
+            "convergence_records": isinstance(self.convergence_records, list),
+        }
+        try:
+            from .convergence_router import route_to_record  # noqa: F401
+            components["router"] = True
+        except Exception:
+            components["router"] = False
+        try:
+            from .verify import verify_with_test  # noqa: F401
+            components["verify"] = True
+        except Exception:
+            components["verify"] = False
+
+        core_ok = (components["memory"] and components["tools_registry"]
+                   and components["convergence_records"])
+        return {
+            "ok": core_ok,
+            "components": components,
+            "memory_count": len(self.memory),
+            "tools_count": len(self.tools),
+            "records_count": len(self.convergence_records),
+            "completed_tasks": len(self.completed_tasks),
+        }
 
     def register_tool(self, tool: Tool) -> None:
         """Register an executable tool with the Kernel.
