@@ -112,24 +112,61 @@ function fetchRss(symbols) {
   });
 }
 
+// Validate watchlist config for integrity
+function validateWatchlistConfig(tickers) {
+  if (!Array.isArray(tickers)) {
+    console.warn("[NewsCollector] Invalid config: tickers must be an array");
+    return false;
+  }
+
+  if (tickers.length === 0) {
+    console.warn("[NewsCollector] Invalid config: tickers array is empty");
+    return false;
+  }
+
+  const seen = new Set();
+  for (const ticker of tickers) {
+    // Check format: A-Z only, 1-5 chars for stocks, up to 6 for indices
+    if (!/^[A-Z^]{1,6}$/.test(ticker)) {
+      console.warn(`[NewsCollector] Invalid ticker format: "${ticker}" (must be A-Z/^, 1-6 chars)`);
+      return false;
+    }
+
+    // Check for duplicates
+    if (seen.has(ticker)) {
+      console.warn(`[NewsCollector] Duplicate ticker in config: "${ticker}"`);
+      return false;
+    }
+    seen.add(ticker);
+  }
+
+  return true;
+}
+
+// Compute config hash for mutation detection
+function hashWatchlist(tickers) {
+  const crypto = require("crypto");
+  return crypto.createHash("sha256").update(JSON.stringify(tickers)).digest("hex").slice(0, 12);
+}
+
 function loadWatchlist() {
   // Try config/watchlist.json first (new config-based approach)
   try {
     const raw = fs.readFileSync(CONFIG_WATCHLIST_PATH, "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed.tickers) && parsed.tickers.length > 0) {
+    if (validateWatchlistConfig(parsed.tickers)) {
       console.log("[NewsCollector] Loaded watchlist from config:", parsed.tickers.length, "tickers");
       return parsed.tickers;
     }
-  } catch {
-    // config file missing or invalid, try legacy path
+  } catch (e) {
+    console.warn("[NewsCollector] Config load failed:", e.message);
   }
 
   // Fall back to legacy data/lantern-garage/trading/watchlist.json
   try {
     const raw = fs.readFileSync(LEGACY_WATCHLIST_PATH, "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed.tickers) && parsed.tickers.length > 0) {
+    if (validateWatchlistConfig(parsed.tickers)) {
       console.log("[NewsCollector] Loaded watchlist from legacy path:", parsed.tickers.length, "tickers");
       return parsed.tickers;
     }
@@ -184,16 +221,31 @@ class NewsCollector {
   }
 
   async collectOnce() {
-    console.log("[NewsCollector] collectOnce() starting at", new Date().toISOString());
+    const cycleStartTime = new Date().toISOString();
+    const cycleId = Math.floor(Date.now() / 1000);  // Use unix timestamp as cycle ID
 
-    // Load watchlist dynamically on each cycle (allows config changes to be picked up)
-    const allTickers = loadWatchlist();
+    console.log("[NewsCollector] collectOnce() starting at", cycleStartTime);
+
+    // SNAPSHOT ISOLATION: Load config ONCE per cycle and freeze it
+    // This prevents mid-cycle mutations from affecting the current batch
+    const rawTickers = loadWatchlist();
+    const configSnapshot = JSON.parse(JSON.stringify(rawTickers));  // Deep copy for isolation
+    const snapshotHash = hashWatchlist(configSnapshot);
 
     // Stock-style tickers only (e.g. excludes BTCUSD/ETHUSD/SOLUSD, which
     // don't have Yahoo Finance equity RSS feeds — crypto news is handled by
     // crypto-collector.js).
-    const tickers = allTickers.filter((t) => /^[A-Z]{1,5}$/.test(t));
-    console.log("[NewsCollector] Active tickers for this cycle:", tickers.join(", "));
+    const tickers = configSnapshot.filter((t) => /^[A-Z]{1,5}$/.test(t));
+
+    // Log cycle metadata for debugging and stability validation
+    console.log("[NewsCollector] Cycle metadata:", {
+      cycleId,
+      tickersLoaded: configSnapshot.length,
+      tickersActive: tickers.length,
+      snapshotHash,
+      configVersion: cycleStartTime,
+      mutationsDetected: false  // Placeholder for future mutation detection
+    });
 
     const now = Date.now();
     const minDelayBetweenFeeds = 60000; // 1 minute between feeds to avoid rate limiting
