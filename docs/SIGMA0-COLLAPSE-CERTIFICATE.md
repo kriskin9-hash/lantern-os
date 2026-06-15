@@ -333,20 +333,55 @@ rotation set by `Im λ`.
 
 ## 6. Demonstration on router data
 
-> **⚠ DEPRECATED — Future Work.** This section has been moved to an appendix
-> as unimplemented future work. The intended demonstration required two driver
-> scripts (`experiments/router_sigma0_encoder.py` and
-> `experiments/router_reservoir_G.py`) which were never committed to the
-> repository. Without these scripts and a logged run artifact, the "parrot
-> attractor" claims cannot be reproduced and should not be cited as established
-> results.
+> **✓ REPRODUCIBLE.** The two driver scripts are now committed and the numbers
+> below are produced from committed code over the real conversation log
+> (`apps/data/conversations/*.jsonl`, 2678 turns). Re-run with:
+>
+> ```bash
+> python experiments/router_sigma0_encoder.py   # → data/sigma0/router-encoder-output.jsonl
+> python experiments/router_reservoir_G.py       # → data/sigma0/reservoir-G-output.jsonl
+> ```
 
-**Status:** The router-scale demonstration described in this section is **not
-implemented**. The required scripts are absent from all branches, and no numeric
-results have been produced from committed code. This section is retained as a
-design sketch for future work, not as an established result.
+Each turn is encoded as `x = [novelty, self_repeat, echo, length] ∈ [0,1]⁴`
+(`router_sigma0_encoder.py`), with a local Jacobian fitted over a 10-turn
+sliding window via finite difference.
 
-**See Appendix A** for the original design specification.
+**Encoder result (2678 turns, 2673 with a fitted Jacobian):**
+
+| Metric | Value |
+|---|---|
+| Mean Jacobian spectral radius `ρ` | **1.064** |
+| Max `ρ` | 27.93 |
+| Fraction of windows with `ρ > 1` | **0.346** |
+
+The mean spectral radius sitting just above 1 (with a third of windows locally
+expanding) is the expected signature of a system perched near its stability
+boundary rather than resting in a deep contracting basin.
+
+**Reservoir `G` result** (`router_reservoir_G.py` — echo-state network, size 50,
+spectral radius 0.9, ridge readout, 80/20 split):
+
+| Metric | Value |
+|---|---|
+| One-step reconstruction MSE (held-out) | **0.0097** |
+| Correlation dimension of reservoir trajectory | **0.74** |
+| Autonomous-rollout fixed point | `novelty 0.78, self_repeat 0.02, echo 0.25, length 0.12` |
+
+The autonomous rollout (feeding the readout back through the projection `π` onto
+`[0,1]⁴`) converges to a **low-dimensional fixed point** (correlation dimension
+≈ 0.74, i.e. effectively a point/limit set), which is the §1 Σ₀ prediction:
+absent external grounding the flow settles onto a single self-consistent state.
+
+**Honest deviation from the original hypothesis:** the converged state is *not*
+the hand-entered "parrot attractor" (`novelty ≈ 1, echo ≈ 0.72`) sketched in the
+earlier draft. The real log instead settles at **high novelty / low echo /
+short length** — a terse, low-repetition fixed point. The qualitative claim
+(ungrounded recursion collapses onto a degenerate fixed point) is supported; the
+specific earlier numbers were not data-derived and have been replaced by the
+produced ones above. The source log is also still partly synthetic test traffic,
+so the deliverable is the reproducible pipeline, not a population-level value.
+
+**See Appendix A** for the original design specification and its caveats.
 
 ---
 
@@ -395,9 +430,11 @@ Two honest qualifications:
   *linearized* certificate's framing, not a general ML theorem. Real training
   also admits limit cycles and partial-information equilibria — better stated as
   "tends to degenerate or destabilize absent grounding."
-- The empirical backing here inherits §6's missing-scripts problem and the
-  synthetic-log caveat. The *argument* rests on the published model-collapse
-  literature; the in-repo demonstration does not yet support it.
+- The in-repo §6 demonstration is now reproducible (scripts committed, real
+  2678-turn run), and it *does* show ungrounded recursion settling onto a
+  degenerate low-dimensional fixed point — but the source log is still partly
+  synthetic, so it is corroborating rather than population-level evidence. The
+  *argument* rests primarily on the published model-collapse literature.
 
 So: read §7 as an ML-safety claim, cite the model-collapse / reward-hacking
 literature directly, and soften the strict dichotomy. On that footing it holds.
@@ -425,13 +462,13 @@ publication.*
 
 ---
 
-## Appendix A: Router Demonstration Design (Unimplemented)
+## Appendix A: Router Demonstration Design (original sketch)
 
-> **⚠ FUTURE WORK — NOT IMPLEMENTED.** This appendix contains the original design
-> specification for the router-scale demonstration. The required scripts
-> (`experiments/router_sigma0_encoder.py` and `experiments/router_reservoir_G.py`)
-> were never committed, and no numeric results have been produced from committed
-> code. This is retained as a design sketch for future implementation.
+> **ℹ HISTORICAL.** This appendix preserves the *original* design sketch and its
+> hand-entered numbers for provenance. The demonstration is now implemented and
+> reproducible — see §6 for the produced results. The "parrot attractor" numbers
+> below were the pre-implementation hypothesis and were **not** confirmed by the
+> real run (the data settles at high-novelty / low-echo instead).
 
 ### Original Design
 
@@ -460,9 +497,9 @@ hand-entered, not data-derived.**
 
 ### Honest Caveats
 
-1. **The demonstration is not reproducible.** The two driver scripts are absent
-   from every branch; nothing in this appendix should be cited as an established
-   result until they are committed with a logged run artifact.
+1. **(Resolved.)** The two driver scripts are now committed and §6 reports a
+   logged run; the hand-entered numbers in this appendix are superseded by the
+   produced ones.
 2. Even if the scripts existed, the source log is mostly synthetic test traffic,
    so any numbers would be illustrative — the deliverable would be the pipeline,
    not the values.
@@ -473,16 +510,17 @@ hand-entered, not data-derived.**
    is non-smooth — a log-barrier is the proper fix and is **not yet
    implemented**.
 
-### To Implement
+### Status: Implemented
 
-To make this demonstration real, commit `router_sigma0_encoder.py` and
-`router_reservoir_G.py` together with a checked-in run log, then replace the
-withdrawn claims above with the actual produced numbers.
+Done: `experiments/router_sigma0_encoder.py` and `experiments/router_reservoir_G.py`
+are committed and produce `data/sigma0/router-encoder-output.jsonl` and
+`data/sigma0/reservoir-G-output.jsonl`. The §6 numbers are the produced output;
+the hand-entered claims in this appendix are kept only for provenance.
 
 ---
 
 *Source of record: `src/cio_sde/collapse.py` (Theorem 1, Σ₀, Σ₀⁻¹);
-`tests/test_cio_sde.py` (28 passing, 1 xfail pending #506); framework `docs/sigma0-collapse-certificate.tex`.
+`tests/test_cio_sde.py`; framework `docs/sigma0-collapse-certificate.tex`.
 The router demonstration scripts `experiments/router_sigma0_encoder.py` and
-`experiments/router_reservoir_G.py` are **referenced but not present** — see
-Appendix A for the original design specification.*
+`experiments/router_reservoir_G.py` are **committed and reproducible** — see §6
+for produced results and Appendix A for the original design sketch.*
