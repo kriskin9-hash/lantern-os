@@ -35,7 +35,7 @@ jobs:
             [ .[]
               | select(.baseRefName == "master" and .headRefName != "gh-pages")
               | .lane = (.headRefName | split("/")[0])
-              | .lane = (if (["claude","gemini","codex","devin","grok","openai"] | index(.lane)) then .lane else "human" end)
+              | .lane = (if (.lane | IN("claude","gemini","codex","devin","grok","openai")) then .lane else "human" end)
             ]
             | group_by(.lane)
             | map(select(length > 1))
