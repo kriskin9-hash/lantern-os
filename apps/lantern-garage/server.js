@@ -34,6 +34,9 @@ const { JobWorker } = require("./lib/job-worker");
 const { PrWatcher } = require("./lib/pr-watcher");
 const { TradeStateEngine } = require("./lib/trade-state-engine");
 const SystemConsistencyValidator = require("./lib/system-consistency-validator");
+const DriftBaselineTracker = require("./lib/drift-baseline-tracker");
+const DriftReconciliationEngine = require("./lib/drift-reconciliation-engine");
+const SystemStabilityIndex = require("./lib/system-stability-index");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -410,6 +413,54 @@ server.listen(port, host, () => {
       }
     }, 5000); // Check every 5 seconds
   }
+
+  // ── Phase 3.7: Drift Tolerance & Reconciliation ──
+  const driftBaseline = new DriftBaselineTracker();
+  deps.driftBaseline = driftBaseline;
+  console.log("[Drift Baseline] Initialized — learning expected system behavior");
+
+  const driftReconciliation = new DriftReconciliationEngine(driftBaseline);
+  deps.driftReconciliation = driftReconciliation;
+  console.log("[Drift Reconciliation] Initialized — will self-correct transient drifts");
+
+  const stabilityIndex = new SystemStabilityIndex();
+  deps.stabilityIndex = stabilityIndex;
+  console.log("[System Stability] Initialized — holistic health scoring enabled");
+
+  // Periodic drift baseline updates and stability monitoring
+  setInterval(() => {
+    const uiState = {
+      activeTrades: tradeStateEngine.getOpenPositions().length,
+      displayedTrades: tradeStateEngine.getRecent(20),
+      pnl: 0,
+      timestamp: Date.now(),
+      tapeEntries: tradeStateEngine.getRecent(100).length
+    };
+
+    // Run reconciliation
+    const reconciliation = driftReconciliation.reconcile(
+      tradeStateEngine,
+      uiState,
+      systemConsistencyValidator.streamBuffer,
+      { watchlist: ['SPY', 'AAPL', 'TSLA', 'NVDA'] }
+    );
+
+    // Record measurement for stability index
+    stabilityIndex.record({
+      hasDrift: reconciliation.status !== 'ok',
+      reconciliationSuccessRate: reconciliation.successCount / (reconciliation.successCount + Math.max(1, reconciliation.failureCount)),
+      uiLag: uiState.timestamp ? Date.now() - uiState.timestamp : 0,
+      eventLossRate: reconciliation.checks.find(c => c.type === 'event_loss')?.result?.severity ? 0.05 : 0,
+      criticalIssues: reconciliation.checks.filter(c => c.result.status === 'critical').length
+    });
+
+    if (process.env.DRIFT_RECONCILIATION_DEBUG === 'true') {
+      console.log('[Drift Reconciliation] Actions needed:', reconciliation.actions.length);
+      if (reconciliation.actions.length > 0) {
+        console.log('[Drift Reconciliation] Sample actions:', reconciliation.actions.slice(0, 2));
+      }
+    }
+  }, 5000); // Every 5 seconds
 
   // ── Kalshi Position Monitor (10s polling) + Convergence Trainer ──
   const { startMonitoring } = require("./lib/kalshi-position-monitor");

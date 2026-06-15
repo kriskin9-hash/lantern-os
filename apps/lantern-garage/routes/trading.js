@@ -489,13 +489,16 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
-  // GET /api/trading/consistency-report — Phase 3.6 Cross-System Consistency
+  // GET /api/trading/consistency-report — Phase 3.7 Drift Tolerance + Reconciliation
   if (url.pathname === '/api/trading/consistency-report' && req.method === 'GET') {
     const engine = deps.tradeStateEngine;
     const validator = deps.systemConsistencyValidator;
+    const baseline = deps.driftBaseline;
+    const reconciliation = deps.driftReconciliation;
+    const stabilityIndex = deps.stabilityIndex;
 
-    if (!engine || !validator) {
-      sendJson(res, { error: 'Consistency validator not available' }, 503);
+    if (!engine || !validator || !baseline || !reconciliation || !stabilityIndex) {
+      sendJson(res, { error: 'Validators not available' }, 503);
       return true;
     }
 
@@ -504,34 +507,70 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       const uiState = {
         activeTrades: engine.getOpenPositions ? engine.getOpenPositions().length : 0,
         displayedTrades: engine.getRecent(20),
-        pnl: 0, // Would be calculated from actual positions
-        timestamp: Date.now()
+        pnl: 0,
+        timestamp: Date.now(),
+        tapeEntries: engine.getRecent(100).length
       };
 
-      // Run validation
-      const result = validator.validate(engine, uiState, {
-        watchlist: ['SPY', 'AAPL', 'TSLA', 'NVDA'],
-        activeSymbols: Array.from(new Set(
-          Array.from(engine.trades.values()).map(t => t.symbol).filter(Boolean)
-        )),
-        collectorActive: true
-      });
+      // Get baseline metrics
+      const baselineMetrics = baseline.getBaseline();
 
-      // Return consistency report
-      const report = validator.getConsistencyReport();
-      sendJson(res, {
-        status: report.status,
-        passRate: report.passRate,
-        totalValidations: report.totalValidations,
-        lastValidation: result,
-        summary: report,
-        timestamp: Date.now()
-      }, 200);
+      // Get reconciliation report
+      const reconciliationReport = reconciliation.getReport();
 
+      // Get stability index
+      const stabilityReport = stabilityIndex.getReport();
+
+      // Construct Phase 3.7 report
+      const report = {
+        phase: "3.7",
+        timestamp: Date.now(),
+
+        // Overall system health
+        systemHealth: {
+          stabilityIndex: stabilityReport.stabilityIndex,
+          status: stabilityReport.status,
+          message: stabilityReport.message,
+          canExecuteTrades: stabilityIndex.canExecuteTrades(0.8),
+          trend: stabilityReport.trend,
+          confidence: stabilityReport.confidence
+        },
+
+        // Baseline learning
+        baseline: baselineMetrics,
+
+        // Reconciliation status
+        reconciliation: {
+          successRate: reconciliationReport.successRate,
+          totalCycles: reconciliationReport.totalReconciliationCycles,
+          lastReport: reconciliationReport.lastReconciliation
+        },
+
+        // Phase 3.6 strict validation (for reference)
+        strictValidation: {
+          totalValidations: validator.validationHistory.length,
+          passRate: validator.validationHistory.filter(v => v.overallValid).length /
+                    Math.max(1, validator.validationHistory.length) * 100,
+          note: "Phase 3.6 strict validation — Phase 3.7 focuses on tolerance-based health"
+        },
+
+        // Guidance for AI execution
+        aiExecutionGuidance: {
+          safeToExecute: stabilityIndex.canExecuteTrades(0.8).canExecute,
+          requiredStabilityIndex: 0.8,
+          currentStabilityIndex: parseFloat(stabilityReport.stabilityIndex),
+          gap: parseFloat(stabilityReport.stabilityIndex) - 0.8,
+          recommendation: parseFloat(stabilityReport.stabilityIndex) >= 0.8
+            ? "System is healthy enough for autonomous execution"
+            : "Wait for stability index to recover before autonomous trading"
+        }
+      };
+
+      sendJson(res, report, 200);
       return true;
     } catch (e) {
-      console.error('[Trading Routes] Consistency validation error:', e.message);
-      sendJson(res, { error: 'Consistency check failed', details: e.message }, 500);
+      console.error('[Trading Routes] Consistency report error:', e.message);
+      sendJson(res, { error: 'Report generation failed', details: e.message }, 500);
       return true;
     }
   }
