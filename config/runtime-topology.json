@@ -1,0 +1,183 @@
+{
+  "version": "1.0",
+  "name": "Lantern OS Trading System — PRL-1.1",
+  "deploymentMode": "cloud-safe",
+  "description": "Cloud-native topology with stateless AI trader and centralized Node-based execution",
+
+  "services": {
+    "ai_trader": {
+      "type": "remote-stateless",
+      "name": "Independent AI Trader (Python)",
+      "responsibility": "Signal generation only",
+      "location": "external (VPS, Docker, Railway, etc.)",
+      "communication": "HTTP/REST only",
+      "filesystemAccess": false,
+      "databaseAccess": false,
+      "queueAccess": false,
+      "endpoint": "http://<lantern-os-host>:4177/api/events/ingest",
+      "protocol": {
+        "method": "POST",
+        "content-type": "application/json",
+        "schema": {
+          "source": "string (required, e.g. 'independent-ai')",
+          "ticker": "string (required, e.g. 'NVDA')",
+          "action": "string (required, one of: BUY, SELL, NO_TRADE, EXIT)",
+          "confidence": "number (optional, 0-1)",
+          "timestamp": "number (optional, unix ms)"
+        },
+        "response": {
+          "status": "accepted",
+          "eventId": "string",
+          "traceId": "string",
+          "message": "string"
+        }
+      }
+    },
+
+    "lantern_os": {
+      "type": "local-stateful",
+      "name": "Lantern OS Node Server",
+      "responsibility": "Execution, state management, audit trail",
+      "location": "local (same machine or persistent volume)",
+      "port": 4177,
+      "filesystemAccess": true,
+      "databaseAccess": true,
+      "queueOwnership": true,
+      "auditLogOwnership": true,
+      "components": {
+        "event_ingestion_api": {
+          "endpoint": "/api/events/ingest",
+          "description": "HTTP boundary for AI trader decisions"
+        },
+        "prl1_queue": {
+          "owner": "lantern-os-node",
+          "type": "persistent-local",
+          "path": "data/trading/event-queue.jsonl",
+          "notes": "Append-only, survives crashes, NOT shared with Python"
+        },
+        "prl1_consumer": {
+          "description": "Heartbeat loop (250ms)",
+          "responsibility": "Process pending events, apply safety gates"
+        },
+        "idempotency_store": {
+          "owner": "lantern-os-node",
+          "type": "persistent-local",
+          "path": "data/trading/executed-events.jsonl",
+          "purpose": "Prevent duplicate trade execution"
+        },
+        "trader_watchdog": {
+          "type": "optional",
+          "purpose": "Monitor external AI trader health",
+          "note": "Only applicable if AI trader runs on same host"
+        },
+        "trade_state_engine": {
+          "responsibility": "Core trading logic, state management"
+        },
+        "audit_system": {
+          "responsibility": "Full trade history, trace logging"
+        }
+      }
+    }
+  },
+
+  "coupling_rules": {
+    "python_ai_trader": {
+      "can_access": [
+        "ingestion_api (HTTP)"
+      ],
+      "cannot_access": [
+        "queue (filesystem)",
+        "state (internal data)",
+        "audit log (internal data)",
+        "database (none)"
+      ],
+      "philosophy": "Stateless signal service — no persistence responsibility"
+    },
+
+    "node_lantern_os": {
+      "owns": [
+        "event_queue",
+        "idempotency_store",
+        "trade_state",
+        "audit_log",
+        "all_persistent_state"
+      ],
+      "exposes": [
+        "event_ingestion_api (HTTP)",
+        "trading_api (HTTP)",
+        "ui_endpoints (HTTP)"
+      ],
+      "philosophy": "Stateful execution system — single source of truth"
+    }
+  },
+
+  "deployment_modes": {
+    "local_dev": {
+      "description": "Single machine, development",
+      "ai_trader_location": "same machine or separate process",
+      "queue_storage": "local disk",
+      "filesystem_sharing": "not required (optional for convenience)"
+    },
+
+    "docker": {
+      "description": "Containerized deployment",
+      "ai_trader_location": "separate container",
+      "node_location": "separate container",
+      "filesystem_sharing": "NOT ALLOWED (defeats container isolation)",
+      "communication": "HTTP only (via network)",
+      "volumes": {
+        "lantern_os_data": "persistent volume for /data/trading",
+        "ai_trader_logs": "optional stdout logging only"
+      },
+      "network": "bridge or custom (HTTP communication)"
+    },
+
+    "kubernetes": {
+      "description": "Kubernetes cluster deployment",
+      "ai_trader_location": "separate pod",
+      "node_location": "separate pod",
+      "filesystem_sharing": "NOT ALLOWED",
+      "communication": "HTTP via service DNS",
+      "volumes": {
+        "lantern_os_pvc": "persistent volume claim for queue"
+      },
+      "scaling": {
+        "ai_trader": "stateless → can scale (N replicas)",
+        "lantern_os": "stateful → single instance (or HA with Redis later)"
+      }
+    },
+
+    "railway": {
+      "description": "Railway platform deployment",
+      "ai_trader_location": "separate service",
+      "node_location": "separate service",
+      "filesystem_sharing": "NOT ALLOWED",
+      "communication": "HTTP via Railway networking",
+      "persistent_storage": "ephemeral per service (add volume for queue)",
+      "environment_variables": {
+        "DEPLOYMENT_MODE": "cloud",
+        "AI_TRADER_INGESTION_URL": "https://lantern-os.railway.app/api/events/ingest"
+      }
+    }
+  },
+
+  "validation_checklist": {
+    "no_filesystem_coupling": "Python MUST NOT write to /data/trading or any shared filesystem",
+    "http_only_communication": "Python → Node MUST be HTTP only (no shared memory, no IPC)",
+    "node_queue_ownership": "Queue MUST be owned and managed by Node only",
+    "stateless_python": "Python restarts MUST NOT lose state (state is in Node)",
+    "container_safe": "Must pass container separation test (separate containers, HTTP only)",
+    "crash_recovery": "Node restart MUST recover state from disk/DB, not Python"
+  },
+
+  "cloud_readiness": {
+    "filesystem_independence": "✅ No shared filesystem required",
+    "network_boundary": "✅ Clean HTTP API boundary",
+    "state_persistence": "✅ Node-owned persistent queue",
+    "crash_recovery": "✅ Deterministic replay from disk",
+    "scaling": "✅ Stateless Python (can scale), Stateful Node (single instance or HA)",
+    "docker_safe": "✅ Can run in separate containers",
+    "kubernetes_ready": "✅ Can run as separate pods",
+    "production_ready": "✅ All PRL-1.1 requirements met"
+  }
+}

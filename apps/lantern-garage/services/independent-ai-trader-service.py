@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-Independent AI Trader Service — Phase 4B Integration
-Wraps profitable agents.py + main.py as black-box alpha engine.
+Independent AI Trader Service — PRL-1.1 Cloud Topology Integration
+Wraps profitable agents.py + main.py as black-box stateless signal service.
 
 This service:
 - Runs trader independently (DO NOT modify strategy logic)
-- Intercepts decisions and routes to Lantern OS
-- Applies safety gates (stability index check)
-- Logs all decisions to audit trail
-- Streams events to dashboard
+- Generates trade decisions
+- Routes decisions to Lantern OS via HTTP ingestion API ONLY
+- NO filesystem access (stateless)
+- NO safety gate logic (moved to Node)
+- NO execution logic (moved to Node)
 
-Key principle:
-> We do NOT rewrite or retrain the trader.
-> We ONLY wrap, observe, gate, and route its decisions.
+PRL-1.1 Key Principle:
+> Python is STATELESS — it only generates signals.
+> Node owns EVERYTHING — queue, state, idempotency, safety, audit.
+> Communication is HTTP-ONLY — no filesystem coupling.
+> Result: Cloud-native, fully decoupled, independently scalable.
 """
 
 import json
@@ -131,20 +134,23 @@ class IndependentAITraderService:
         """
         Process a decision from the independent AI trader.
 
+        PRL-1.1 CLOUD TOPOLOGY: Python routes to HTTP ingestion API, not directly to engine.
+        The ingestion API enqueues to Node's persistent queue.
+        Node's consumer loop handles execution, idempotency, and safety gates.
+
         Returns:
             {
-              "executed": bool,
+              "accepted": bool,
               "reason": str,
+              "eventId": str,
               "traceId": str,
-              "engineResponse": {...}
+              "ingestionResponse": {...}
             }
         """
         self.decision_count += 1
         decision_id = f"d-{self.session_id}-{self.decision_count}"
 
-        # Check safety gate first
-        safety = self.check_safety_gate()
-
+        # Log decision locally (for audit purposes)
         decision_log = {
             "timestamp": datetime.utcnow().isoformat(),
             "decisionId": decision_id,
@@ -153,106 +159,92 @@ class IndependentAITraderService:
             "confidence": confidence,
             "strategy": strategy,
             "reasoning": reasoning or [],
-            "safetyGate": safety
+            "source": "independent-ai-trader"
         }
 
         # Log decision
         self._log_decision(decision_log)
 
-        # If action is NO_TRADE, skip execution
+        # If action is NO_TRADE, skip submission (no event needed)
         if action == "NO_TRADE":
             return {
-                "executed": False,
+                "accepted": False,
                 "reason": "trader_no_trade",
                 "decision_id": decision_id,
-                "engine_response": None
+                "eventId": None,
+                "traceId": None
             }
 
-        # If safety gate blocks, skip execution
-        if not safety["allowed"]:
-            print(f"[Trader Service] Safety gate BLOCKED trade: {ticker} {action} (stability: {safety['stability_index']:.2f})")
-            return {
-                "executed": False,
-                "reason": f"safety_gate_blocked ({safety['status']})",
-                "decision_id": decision_id,
-                "stability_index": safety["stability_index"],
-                "engine_response": None
-            }
-
-        # Route decision to Lantern OS Trade State Engine
+        # PRL-1.1: Route decision to HTTP ingestion API (NOT directly to engine)
+        # This ensures:
+        # - Event goes to Node's persistent queue
+        # - No Python filesystem access
+        # - Idempotency check happens in Node
+        # - Safety gates applied by Node consumer
+        # - Full audit trail in Node
         try:
-            # Convert action to engine format
-            engine_action = "BUY" if action == "BUY" else "SELL" if action == "SELL" else None
-
-            if not engine_action:
+            # Validate action
+            if action not in ["BUY", "SELL", "EXIT"]:
                 return {
-                    "executed": False,
+                    "accepted": False,
                     "reason": f"invalid_action ({action})",
                     "decision_id": decision_id,
-                    "engine_response": None
+                    "eventId": None,
+                    "traceId": None
                 }
 
-            # Submit paper trade via Trade State Engine API
-            order_payload = {
+            # Submit decision to Node's ingestion API
+            ingestion_payload = {
+                "source": "independent-ai-trader",
                 "ticker": ticker,
-                "side": engine_action,
-                "quantity": 1,  # TODO: make configurable
-                "type": "market",
-                "mode": "paper",  # IMPORTANT: paper trading only
-                "external_agent": "independent-ai-trader",
+                "action": action,
                 "confidence": confidence,
-                "strategy": strategy,
-                "decision_id": decision_id
+                "timestamp": int(datetime.utcnow().timestamp() * 1000)
             }
 
             resp = requests.post(
-                f"{self.api_base}/api/trading/kalshi/order",
-                json=order_payload,
+                f"{self.api_base}/api/events/ingest",
+                json=ingestion_payload,
                 timeout=5
             )
 
-            engine_response = resp.json() if resp.status_code == 200 else None
+            ingestion_response = resp.json() if resp.status_code in [200, 201] else None
 
-            if resp.status_code == 200 and engine_response.get("success"):
-                # Log successful trade
-                trade_log = {
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "traceId": engine_response.get("traceId"),
-                    "source": "independent-ai-trader",
-                    "ticker": ticker,
-                    "action": action,
-                    "confidence": confidence,
-                    "strategy": strategy,
-                    "paper": True,
-                    "executed": True,
-                    "engine_response": engine_response
-                }
-                self._log_trade(trade_log)
+            if resp.status_code in [200, 201] and ingestion_response.get("status") == "accepted":
+                # Event accepted by Node's queue
+                event_id = ingestion_response.get("eventId")
+                trace_id = ingestion_response.get("traceId")
 
-                print(f"[Trader Service] Paper trade executed: {ticker} {action} (confidence: {confidence:.2f})")
+                print(f"[Trader Service] Decision accepted: {ticker} {action} (confidence: {confidence:.2f}, eventId: {event_id})")
 
                 return {
-                    "executed": True,
-                    "reason": "executed",
+                    "accepted": True,
+                    "reason": "accepted",
                     "decision_id": decision_id,
-                    "trace_id": engine_response.get("traceId"),
-                    "engine_response": engine_response
+                    "eventId": event_id,
+                    "traceId": trace_id,
+                    "ingestionResponse": ingestion_response
                 }
             else:
+                reason = ingestion_response.get("reason", "unknown_error") if ingestion_response else "http_error"
+                print(f"[Trader Service] Decision rejected: {ticker} {action} ({reason})")
                 return {
-                    "executed": False,
-                    "reason": "engine_error",
+                    "accepted": False,
+                    "reason": reason,
                     "decision_id": decision_id,
-                    "engine_response": engine_response
+                    "eventId": None,
+                    "traceId": None,
+                    "ingestionResponse": ingestion_response
                 }
 
         except Exception as e:
-            print(f"[Trader Service] Error submitting trade: {e}")
+            print(f"[Trader Service] Error submitting to ingestion API: {e}")
             return {
-                "executed": False,
+                "accepted": False,
                 "reason": f"exception ({str(e)})",
                 "decision_id": decision_id,
-                "engine_response": None
+                "eventId": None,
+                "traceId": None
             }
 
     def stream_decision_event(

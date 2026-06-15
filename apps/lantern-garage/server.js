@@ -39,6 +39,10 @@ const DriftReconciliationEngine = require("./lib/drift-reconciliation-engine");
 const SystemStabilityIndex = require("./lib/system-stability-index");
 const SystemAuditTracer = require("./lib/system-audit-tracer");
 const AuditReplayEngine = require("./lib/audit-replay-engine");
+const PersistentEventQueue = require("./core/persistent-event-queue");
+const IdempotencyStore = require("./core/idempotency-store");
+const EventQueueConsumer = require("./core/event-queue-consumer");
+const TraderWatchdog = require("./core/trader-watchdog");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -62,6 +66,18 @@ jobWorker.start(2000); // Poll every 2 seconds for new jobs
 // PR Watcher — auto-reviews PRs idle for 3min via Keystone fleet
 const prWatcher = new PrWatcher({ repoRoot, port, idleMs: Number(process.env.PR_WATCHER_IDLE_MS || 3 * 60_000) });
 
+// Initialize PRL-1: Production Reliability Layer 1 (crash-safe event queue + execution)
+const queuePath = path.join(repoRoot, "data", "trading", "event-queue.jsonl");
+const persistentEventQueue = new PersistentEventQueue(queuePath);
+const idempotencyStore = new IdempotencyStore(path.join(repoRoot, "data", "trading", "executed-events.jsonl"));
+const systemAuditTracer = new SystemAuditTracer(path.join(repoRoot, "data", "trading", "audit-log.jsonl"));
+const eventQueueConsumer = new EventQueueConsumer(persistentEventQueue, idempotencyStore, { auditTracer: systemAuditTracer });
+const traderWatchdog = new TraderWatchdog(repoRoot, persistentEventQueue, systemAuditTracer);
+
+// Start PRL-1 components
+eventQueueConsumer.start();
+traderWatchdog.start();
+
 // Shared dependency bundle passed to every route module
 const deps = {
   fs, path,
@@ -84,6 +100,7 @@ const deps = {
   operatorNotesPath, cloudMirrorsPath, cloudMirrorUrls,
   maxConversationTextLength, maxDreamerTextLength,
   openaiApiKey,
+  persistentEventQueue, idempotencyStore, systemAuditTracer, eventQueueConsumer, traderWatchdog,
   "__dirname": __dirname,
 };
 
@@ -110,6 +127,7 @@ const routes = [
   require("./routes/cubes"),
   require("./routes/csf"),
   require("./routes/training"),
+  require("./routes/event-ingestion"),
   require("./routes/trading"),
   require("./routes/agent-performance"),
   require("./routes/leaderboard"),
