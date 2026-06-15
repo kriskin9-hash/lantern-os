@@ -19,6 +19,12 @@
     --tv-grid:rgba(255,255,255,.06);--tv-axis:rgba(255,255,255,.65);
     --tv-candle-up:#26a69a;--tv-candle-down:#ef5350;
   }
+  :root.light-mode{
+    --bg0:#f8f9fa;--bg1:#ffffff;--bg2:#f0f1f3;--bg3:#e5e7eb;
+    --border:#d1d5db;--text0:#111827;--text1:#4b5563;--text2:#9ca3af;
+    --tv-text-primary:#111827;--tv-text-secondary:#6b7280;
+    --tv-grid:rgba(0,0,0,.05);--tv-axis:rgba(0,0,0,.6);
+  }
   html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px;overflow-x:hidden}
   /* ── Layout ── */
   .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px 1fr auto;height:100vh}
@@ -57,6 +63,10 @@
   .wl-remove:hover{color:var(--red)}
   /* ── Ticker cards grid ── */
   .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+  /* ── Loading state ── */
+  .dashboard-loading{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:80px 20px;color:var(--text1);font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+  .dashboard-loading img{width:56px;height:56px;animation:dashboard-spin 3s linear infinite;filter:drop-shadow(0 0 8px rgba(74,158,255,.35))}
+  @keyframes dashboard-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
   .card{background:rgba(15,18,28,.95);border:1px solid rgba(255,255,255,.06);border-radius:12px;overflow:hidden;transition:border-color .15s}
   .card:hover{border-color:rgba(255,255,255,.12)}
   .card.state-open{border-color:rgba(0,212,170,.35);grid-column:span 2}
@@ -127,12 +137,12 @@
   /* Order ticket modal */
   .ot-bg{position:fixed;inset:0;background:rgba(5,6,8,.85);z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px}
   .ot-bg.hidden{display:none}
-  .ot-modal{background:var(--bg1);border:1px solid var(--border);border-radius:6px;width:100%;max-width:340px;font-family:var(--mono)}
+  .ot-modal{background:var(--bg1);border:1px solid var(--border);border-radius:6px;width:100%;max-width:340px;font-family:var(--mono);display:flex;flex-direction:column;max-height:90vh;overflow:hidden}
   .ot-header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
   .ot-header .ot-ticker{font-size:14px;font-weight:600;flex:1}
   .ot-close{cursor:pointer;font-size:11px;color:var(--text1);padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2)}
   .ot-close:hover{color:var(--text0)}
-  .ot-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+  .ot-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1}
   .ot-side-row{display:flex;gap:6px}
   .ot-side-btn{flex:1;text-align:center;padding:8px 6px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);font-size:12px;cursor:pointer;line-height:1.6}
   .ot-side-btn .ot-side-label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text2)}
@@ -209,6 +219,7 @@
     <button class="range-btn" data-range="1M" onclick="changeRange('1M')">1M</button>
   </div>
   <div class="pulse"></div>
+  <button id="themeToggle" class="chart-ctrl" onclick="toggleTheme()" style="margin-left:auto" title="Toggle dark/light mode">◐ Theme</button>
   <a href="/trading-news.html" class="nav-link">News →</a>
   <a href="/trader-dashboard.html" class="nav-link" style="margin-left:8px">← Hub</a>
 </div>
@@ -224,7 +235,12 @@
 
 <!-- Main: ticker cards -->
 <div class="main">
-  <div class="cards-grid" id="cardsGrid"></div>
+  <div class="cards-grid" id="cardsGrid">
+    <div class="dashboard-loading" id="dashboardLoading">
+      <img src="/mandala.svg" alt="" aria-hidden="true">
+      <span>Loading market data&hellip;</span>
+    </div>
+  </div>
 </div>
 
 <!-- Footer -->
@@ -363,11 +379,12 @@ let zonesData      = {};
 let wlPrices       = [];
 let activeTicker   = null;
 let barsData       = {};
-let chartType      = 'line';
+let chartType      = 'candle';
 let chartTimeframe = '5m';
 let fullscreenTicker = null;
 let otTicker = null, otSide = 'buy', otOrderType = 'market';
 const TICK_SIZE = 0.01;
+let isDarkMode = localStorage.getItem('lanternTheme') !== 'light';
 
 // ── Chart layout + zoom/pan state ────────────────────────────────────────────
 // AXIS_W: right-gutter width reserved for price labels. AXIS_H: bottom-strip
@@ -573,24 +590,7 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   if(bars && bars.length >= 2){
     const n = bars.length, slotW = pw/n;
 
-    // Time axis: a few evenly-spaced bar timestamps along the bottom. The
-    // first/last ticks are edge-aligned (left/right) instead of centered so
-    // their labels stay within the plot area and never bleed into the price
-    // gutter on the right or get clipped on the left.
-    ctx.fillStyle = CHART_AXIS_COLOR;
-    ctx.textBaseline = 'bottom';
-    const TIME_TICKS = 4;
-    const firstD = new Date(String(bars[0].timestamp).replace(' ','T'));
-    const lastD  = new Date(String(bars[n-1].timestamp).replace(' ','T'));
-    const multiDay = !isNaN(firstD.getTime()) && !isNaN(lastD.getTime()) && firstD.toDateString() !== lastD.toDateString();
-    for(let i=0;i<=TIME_TICKS;i++){
-      const idx = Math.min(n-1, Math.round(i*(n-1)/TIME_TICKS));
-      const label = formatBarTime(bars[idx].timestamp, timeframe, multiDay);
-      if(!label) continue;
-      if(i===0){ ctx.textAlign='left'; ctx.fillText(label, 2, h-2); }
-      else if(i===TIME_TICKS){ ctx.textAlign='right'; ctx.fillText(label, pw-2, h-2); }
-      else { ctx.textAlign='center'; ctx.fillText(label, idx*slotW + slotW/2, h-2); }
-    }
+    // Time axis labels removed for cleaner TradingView-style appearance
 
     if(type==='candle'){
       for(let i=0;i<n;i++){
@@ -1480,9 +1480,28 @@ async function fullRefresh(){
   renderCards();
 }
 
+// ── Theme toggle ─────────────────────────────────────────────────────────────
+function toggleTheme(){
+  isDarkMode = !isDarkMode;
+  applyTheme();
+  localStorage.setItem('lanternTheme', isDarkMode ? 'dark' : 'light');
+}
+function applyTheme(){
+  const root = document.documentElement;
+  if(isDarkMode){
+    root.classList.remove('light-mode');
+  }else{
+    root.classList.add('light-mode');
+  }
+  renderCards();
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 function startDashboard(){
+  applyTheme();
   syncRangeButtons(chartTimeframe);
+  document.getElementById('chartTypeSelect').value = chartType;
+  document.getElementById('fsChartTypeSelect').value = chartType;
   fullRefresh();
   loadBars();
   loadAgentLog();
