@@ -22,7 +22,10 @@ Reading it:
 This is the certificate's §4 "canary" done correctly. The doc proposed a signal
 built from eigenvalues of A_s; the right early-warning is an innovation-consistency
 test (Bar-Shalom, Li & Kirubarajan, *Estimation with Applications to Tracking and
-Navigation*, 2001 — the NIS χ² test), i.e. surprise relative to uncertainty.
+Navigation*, 2001 § Chapter 5 — the NIS χ² test), i.e. surprise relative to
+uncertainty. The NIS = νᵀ S⁻¹ ν is the canonical measure of model-reality
+mismatch in Kalman filtering; values >> m indicate the model is overconfident
+and has drifted from the truth (the spook event).
 
 The engine's `CovarianceField` propagates Σ (the Kalman-Bucy Riccati) but never
 fuses an observation into x. `kalman_update` here is that missing measurement step;
