@@ -1,8 +1,14 @@
 /**
  * PR Watcher — polls open GitHub PRs every 60s.
- * After a PR has been idle (no updatedAt change) for IDLE_MS (default 3min),
- * pulls the diff + body, sends to Keystone chat for review, posts result as
- * a PR comment via `gh pr review`.
+ * After a PR has been idle for IDLE_MS (default 3min), pulls the diff + body,
+ * sends to Keystone chat for review, and posts the result as a PR comment.
+ *
+ * Reviews are keyed to the PR's HEAD COMMIT SHA: each commit is reviewed at most
+ * once. This is deliberate — posting a comment bumps the PR's `updatedAt`, so a
+ * timer keyed on `updatedAt` re-triggers on its own comment and spams the PR
+ * forever (this is exactly the bug that produced 200+ duplicate reviews). A
+ * comment does not change the head SHA; a real push does. Failed reviews (e.g. no
+ * LLM provider configured) are NOT posted and back off instead of hammering.
  *
  * State persisted to data/pr-watcher/state.json so reviews survive restarts.
  */
@@ -14,6 +20,7 @@ const http = require("http");
 
 const POLL_MS = 60_000;
 const IDLE_MS = 3 * 60_000;
+const FAIL_BACKOFF_MS = 30 * 60_000; // after a failed review, wait this long before retrying
 
 class PrWatcher {
   constructor({ repoRoot, port = 4177, idleMs = IDLE_MS } = {}) {
@@ -49,8 +56,8 @@ class PrWatcher {
       idleThresholdMs: this.idleMs,
       pollIntervalMs: POLL_MS,
       tracked: entries.length,
-      pending: entries.filter((e) => !e.reviewedAt).length,
-      reviewed: entries.filter((e) => !!e.reviewedAt).length,
+      pending: entries.filter((e) => e.reviewedSha !== e.headSha).length,
+      reviewed: entries.filter((e) => e.reviewedSha && e.reviewedSha === e.headSha).length,
       prs: entries,
     };
   }
@@ -59,6 +66,35 @@ class PrWatcher {
     const key = String(number);
     if (!this.state[key]) return { ok: false, error: "pr_not_tracked" };
     return this._reviewPr(this.state[key]);
+  }
+
+  // ── pure decision helpers (unit-tested in tests/test_pr_watcher.js) ──────────
+
+  /**
+   * Should we review this PR right now? Review at most once per head commit SHA,
+   * only after it has been idle, and not while backing off from a failed attempt.
+   */
+  _shouldReview(entry, now) {
+    if (!entry || !entry.headSha) return false;
+    if (entry.reviewedSha === entry.headSha) return false;          // already reviewed THIS commit
+    if (now - (entry.shaSeenAt || 0) < this.idleMs) return false;    // not idle yet
+    if (entry.lastAttemptAt && now - entry.lastAttemptAt < FAIL_BACKOFF_MS) return false; // backoff
+    return true;
+  }
+
+  /** Parse an /api/dream/chat response into { ok, text, error }. */
+  static _parseChatResponse(raw) {
+    let j;
+    try {
+      j = JSON.parse(raw);
+    } catch {
+      const text = String(raw || "").trim();
+      return text ? { ok: true, text } : { ok: false, error: "empty_response" };
+    }
+    if (j.error || j.online === false) return { ok: false, error: j.error || "provider_offline" };
+    const text = j.reply || j.response;
+    if (!text || !String(text).trim()) return { ok: false, error: "no_review_text" };
+    return { ok: true, text: String(text) };
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
@@ -97,29 +133,37 @@ class PrWatcher {
     for (const pr of prs) {
       const key = String(pr.number);
       seen.add(key);
-
+      const headSha = pr.headRefOid || null;
       const prev = this.state[key];
-      const updatedAt = new Date(pr.updatedAt).getTime();
 
       if (!prev) {
-        this.state[key] = { number: pr.number, title: pr.title, updatedAt, firstSeenAt: now, reviewedAt: null };
+        this.state[key] = {
+          number: pr.number, title: pr.title, headSha,
+          shaSeenAt: now, firstSeenAt: now,
+          reviewedSha: null, reviewedAt: null, lastAttemptAt: null, attempts: 0,
+        };
         console.log(`[PR Watcher] Tracking new PR #${pr.number}: "${pr.title}"`);
         this._saveState();
         continue;
       }
 
-      if (updatedAt > prev.updatedAt) {
-        this.state[key].updatedAt = updatedAt;
-        this.state[key].reviewedAt = null;
-        console.log(`[PR Watcher] PR #${pr.number} updated — resetting review timer`);
+      prev.title = pr.title;
+      // A NEW COMMIT (head SHA changed) — not a comment — resets the idle clock and
+      // makes the PR eligible for a fresh review. Comments leave the SHA unchanged,
+      // so the watcher's own comment can no longer re-trigger it.
+      if (headSha && headSha !== prev.headSha) {
+        prev.headSha = headSha;
+        prev.shaSeenAt = now;
+        prev.lastAttemptAt = null;
+        console.log(`[PR Watcher] PR #${pr.number} has a new commit — eligible for review after idle`);
         this._saveState();
         continue;
       }
 
-      const idleSince = now - prev.updatedAt;
-      if (!prev.reviewedAt && idleSince >= this.idleMs) {
-        console.log(`[PR Watcher] PR #${pr.number} idle ${Math.round(idleSince / 1000)}s — starting fleet review`);
-        this._reviewPr(this.state[key]).catch((err) => {
+      if (this._shouldReview(prev, now)) {
+        const idleSince = now - prev.shaSeenAt;
+        console.log(`[PR Watcher] PR #${pr.number} idle ${Math.round(idleSince / 1000)}s at ${String(headSha).slice(0, 7)} — starting fleet review`);
+        this._reviewPr(prev).catch((err) => {
           console.error(`[PR Watcher] Review failed for #${pr.number}:`, err.message);
         });
       }
@@ -136,6 +180,7 @@ class PrWatcher {
 
   async _reviewPr(entry) {
     const { number, title } = entry;
+    const reviewSha = entry.headSha;
     console.log(`[PR Watcher] Fetching diff for PR #${number}`);
 
     let diff, prMeta;
@@ -146,13 +191,14 @@ class PrWatcher {
       ]);
     } catch (err) {
       console.error(`[PR Watcher] Could not fetch PR #${number}:`, err.message);
+      entry.lastAttemptAt = Date.now();
+      this._saveState();
       return { ok: false, error: err.message };
     }
 
     const MAX_DIFF = 12_000;
     const truncated = diff.length > MAX_DIFF;
     const diffExcerpt = truncated ? diff.slice(0, MAX_DIFF) + "\n\n[... diff truncated — review first 12KB ...]" : diff;
-
     const labels = (prMeta.labels || []).map((l) => l.name).join(", ") || "none";
 
     const message = [
@@ -171,32 +217,41 @@ class PrWatcher {
       "Be specific — cite file and line. End with a clear verdict: APPROVE, REQUEST_CHANGES, or COMMENT.",
     ].join("\n");
 
-    let reviewText;
-    try {
-      reviewText = await this._keystoneChat(message);
-    } catch (err) {
-      console.error(`[PR Watcher] Keystone chat failed for #${number}:`, err.message);
-      return { ok: false, error: err.message };
+    const review = await this._keystoneChat(message);
+
+    // Do NOT post when the review failed (e.g. no provider configured). Posting the
+    // error JSON as a "review" is what produced the no_provider_configured spam.
+    if (!review.ok) {
+      entry.lastAttemptAt = Date.now();
+      entry.attempts = (entry.attempts || 0) + 1;
+      this._saveState();
+      console.warn(`[PR Watcher] Skipping comment on #${number}: review unavailable (${review.error}); backing off`);
+      return { ok: false, error: review.error };
     }
 
     try {
       await this._gh(
         "pr", "comment", String(number),
-        "--body", `🤖 **Fleet Auto-Review** *(idle for ${Math.round(this.idleMs / 60000)}min — triggered automatically)*\n\n${reviewText}`
+        "--body", `🤖 **Fleet Auto-Review** *(idle for ${Math.round(this.idleMs / 60000)}min — triggered automatically)*\n\n${review.text}`
       );
       console.log(`[PR Watcher] Review posted on PR #${number}`);
     } catch (err) {
       console.error(`[PR Watcher] Failed to post comment on #${number}:`, err.message);
+      entry.lastAttemptAt = Date.now();
+      this._saveState();
       return { ok: false, error: err.message };
     }
 
-    this.state[String(number)].reviewedAt = Date.now();
+    // Mark THIS commit reviewed — a later comment won't re-trigger; only a new push will.
+    entry.reviewedSha = reviewSha;
+    entry.reviewedAt = Date.now();
+    entry.lastAttemptAt = Date.now();
     this._saveState();
-    return { ok: true, number, reviewText };
+    return { ok: true, number, reviewText: review.text };
   }
 
   _keystoneChat(message) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const body = JSON.stringify({
         message,
         user: "pr-watcher",
@@ -215,18 +270,11 @@ class PrWatcher {
         (res) => {
           let out = "";
           res.on("data", (c) => (out += c));
-          res.on("end", () => {
-            try {
-              const j = JSON.parse(out);
-              resolve(j.reply || j.response || JSON.stringify(j));
-            } catch {
-              resolve(out);
-            }
-          });
+          res.on("end", () => resolve(PrWatcher._parseChatResponse(out)));
         }
       );
-      req.on("error", reject);
-      req.setTimeout(120_000, () => req.destroy(new Error("keystone chat timeout")));
+      req.on("error", (err) => resolve({ ok: false, error: err.message }));
+      req.setTimeout(120_000, () => { req.destroy(); resolve({ ok: false, error: "keystone_chat_timeout" }); });
       req.write(body);
       req.end();
     });
@@ -235,7 +283,7 @@ class PrWatcher {
   _listOpenPrs() {
     return new Promise((resolve, reject) => {
       execFile(
-        "gh", ["pr", "list", "--state", "open", "--json", "number,title,updatedAt,headRefName"],
+        "gh", ["pr", "list", "--state", "open", "--json", "number,title,updatedAt,headRefName,headRefOid"],
         { cwd: this.repoRoot, timeout: 15_000 },
         (err, stdout) => {
           if (err) return reject(err);
