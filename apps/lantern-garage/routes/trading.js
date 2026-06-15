@@ -504,6 +504,23 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   if (req.method === 'GET' && DASHBOARD_PROXY_ROUTES[url.pathname]) {
     try {
       const proxyPath = DASHBOARD_PROXY_ROUTES[url.pathname];
+
+      // Special handling: /api/news-feed is served from local CSF data, not external service
+      if (proxyPath === '/api/news-feed') {
+        const limit = Number(url.searchParams.get('limit')) || 50;
+        const records = tradingNews.queryRecentNews({ limit });
+        const ticker_news = records.filter(r => r.symbols && r.symbols.length > 0);
+        const broad_news = records.filter(r => !r.symbols || r.symbols.length === 0);
+        const data = {
+          ticker_news: ticker_news.slice(0, Math.ceil(limit / 2)),
+          broad_news: broad_news.slice(0, Math.ceil(limit / 2)),
+          count: records.length,
+          source: 'local-csf'
+        };
+        sendJson(res, data, 200);
+        return true;
+      }
+
       const data = await callDashboard(proxyPath);
       // CSF memory wiring: write orders, agent-log, and news to CSF on state change
       if (proxyPath === '/api/orders' && Array.isArray(data?.orders || data)) {
@@ -513,10 +530,6 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (proxyPath === '/api/agent-log' && Array.isArray(data?.logs || data)) {
         const logs = data.logs || data;
         for (const s of logs) { recordSignal(s).catch(() => {}); }
-      }
-      if (proxyPath === '/api/news-feed') {
-        const items = [...(data?.ticker_news || []), ...(data?.broad_news || [])];
-        for (const item of items) { tradingNews.recordNewsItem(item).catch(() => {}); }
       }
       sendJson(res, data, 200);
     } catch (error) {
@@ -995,8 +1008,10 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
       // GET — live market data (pass-through query: series_ticker, status, limit, event_ticker)
       if (url.pathname === '/api/trading/kalshi/live-markets' && req.method === 'GET') {
-        const r = await kalshi.getMarkets(q);
-        return sendJson(res, r.data || { error: r.error }, r.status || 200), true;
+        // Return cached data (collected on schedule) instead of direct API call.
+        // This prevents rate limiting and ensures consistent state across all clients (#439).
+        const cached = deps.kalshiMarketsCollector ? deps.kalshiMarketsCollector.getCached() : { markets: [] };
+        return sendJson(res, cached, 200), true;
       }
       if (url.pathname === '/api/trading/kalshi/events-list' && req.method === 'GET') {
         const r = await kalshi.getEvents(q);
@@ -1028,13 +1043,34 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const o = body ? JSON.parse(body) : {};
-        return sendJson(res, await kalshi.placeOrder(o), 200), true;
+        const result = await kalshi.placeOrder(o);
+        // Return correct HTTP status based on order result
+        const httpStatus = result.mode === 'dry_run' ? 200 : (result.status || 200);
+        const isError = result.status && result.status >= 400;
+        const response = {
+          success: !isError && (result.mode === 'dry_run' || result.status === 200),
+          error: isError ? `Kalshi API error: ${result.status}` : null,
+          mode: result.mode,
+          status: result.status,
+          orderId: result.result?.order_id,
+          order: result.order
+        };
+        return sendJson(res, response, isError ? result.status : 200), true;
       }
       // POST — cancel order  { orderId }
       if (url.pathname === '/api/trading/kalshi/order/cancel' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const { orderId } = body ? JSON.parse(body) : {};
-        return sendJson(res, await kalshi.cancelOrder(orderId), 200), true;
+        const result = await kalshi.cancelOrder(orderId);
+        const isError = result.status && result.status >= 400;
+        const response = {
+          success: !isError && (result.mode === 'dry_run' || result.status === 200),
+          error: isError ? `Kalshi API error: ${result.status}` : null,
+          mode: result.mode,
+          status: result.status,
+          orderId
+        };
+        return sendJson(res, response, isError ? result.status : 200), true;
       }
 
       // ── Paper trading ledger (dry-run position tracking) ───────────────────
@@ -1473,6 +1509,27 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       sendJson(res, { ok: true }, 201);
     } catch (error) {
       sendJson(res, { error: 'News record failed', details: error.message }, 400);
+    }
+    return true;
+  }
+
+  // GET /api/news-feed
+  // Serve news feed from collected local data (bypasses external dashboard service).
+  // Returns {ticker_news, broad_news, count} matching dashboard API format.
+  if (url.pathname === '/api/news-feed' && req.method === 'GET') {
+    try {
+      const limit = Number(url.searchParams.get('limit')) || 50;
+      const records = tradingNews.queryRecentNews({ limit });
+      const ticker_news = records.filter(r => r.symbols && r.symbols.length > 0);
+      const broad_news = records.filter(r => !r.symbols || r.symbols.length === 0);
+      sendJson(res, {
+        ticker_news: ticker_news.slice(0, Math.ceil(limit / 2)),
+        broad_news: broad_news.slice(0, Math.ceil(limit / 2)),
+        count: records.length,
+        source: 'local-csf'
+      }, 200);
+    } catch (error) {
+      sendJson(res, { error: 'News feed query failed', ticker_news: [], broad_news: [], count: 0 }, 500);
     }
     return true;
   }

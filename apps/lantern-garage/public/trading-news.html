@@ -67,6 +67,11 @@
       color: var(--muted);
     }
 
+    /* ── loading state (initial fetch) ── */
+    .dashboard-loading{ text-align:center; padding:60px; display:flex; flex-direction:column; align-items:center; gap:14px; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.15em; text-transform:uppercase; }
+    .dashboard-loading img{ width:56px; height:56px; animation:dashboard-spin 3s linear infinite; filter:drop-shadow(0 0 8px rgba(74,158,255,.35)); }
+    @keyframes dashboard-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
     /* ── News Overview stats ── */
     .stat-row{ display:flex; gap:28px; flex-wrap:wrap; }
     .stat-block{ display:flex; flex-direction:column; gap:3px; }
@@ -205,7 +210,7 @@
 
     <div class="card full-width">
       <h2>Headlines</h2>
-      <div id="newsContainer"><div class="loading">Loading news...</div></div>
+      <div id="newsContainer"><div class="dashboard-loading" id="dashboardLoading"><img src="/mandala.svg" alt="" aria-hidden="true"><span>Loading news&hellip;</span></div></div>
     </div>
   </div>
 </div>
@@ -374,18 +379,32 @@ function toggleTickerFilter(ticker, btn) {
 }
 
 function loadNews() {
+  console.log('[trading-news] loadNews tick:', new Date().toISOString());
   fetch('/api/trading/dashboard/news-feed')
     .then(r => r.json())
     .then(data => {
+      console.log('[trading-news] API response:', {
+        timestamp: new Date().toISOString(),
+        tickerCount: data?.ticker_news?.length ?? 0,
+        broadCount: data?.broad_news?.length ?? 0,
+        hasError: !!data?.error,
+        source: data?.source,
+        rawData: JSON.stringify(data).slice(0, 200)
+      });
       const tickerNews = data.ticker_news || [];
       const broadNews = data.broad_news || [];
       if (data.error || (tickerNews.length === 0 && broadNews.length === 0)) {
+        console.log('[trading-news] Feed empty, falling back to CSF');
         loadNewsFromCSF();
         return;
       }
+      console.log('[trading-news] Using dashboard feed data:', tickerNews.length + broadNews.length, 'articles');
       processNews(tickerNews, broadNews, true);
     })
-    .catch(() => loadNewsFromCSF());
+    .catch(err => {
+      console.warn('[trading-news] Dashboard fetch failed:', err);
+      loadNewsFromCSF();
+    });
 }
 
 // Fallback when the dashboard news-feed (port 5050) has no data: pull
@@ -414,6 +433,8 @@ function processNews(ticker_news, broad_news, persistToCSF) {
   // Deduplicate by id
   const seen = new Set();
   allNews = allNews.filter(n => { if(seen.has(n.id)) return false; seen.add(n.id); return true; });
+
+  console.log('[trading-news] processNews: rendering', allNews.length, 'articles');
 
   // Set accurate period label
   if (allNews.length > 0) {
@@ -455,7 +476,7 @@ function processNews(ticker_news, broad_news, persistToCSF) {
 }
 
 loadNews();
-setInterval(loadNews, 300000); // refresh every 5 min
+setInterval(loadNews, 10000); // DEBUG: 10s for observability testing (prod: 60000+ for 1min+)
 </script>
 <script src="/js/theme-toggle.js"></script>
 </body>

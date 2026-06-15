@@ -51,6 +51,11 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
   position:relative;padding:8px 16px 0;min-height:0}
 .stage{position:relative;width:min(440px,94vw);height:min(500px,62vh)}
 
+/* ── loading state ── */
+.dashboard-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.15em;text-transform:uppercase}
+.dashboard-loading img{width:56px;height:56px;animation:dashboard-spin 3s linear infinite;filter:drop-shadow(0 0 8px rgba(74,158,255,.35))}
+@keyframes dashboard-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
 .card{position:absolute;inset:0;background:var(--surface);border:1px solid var(--border);
   border-radius:10px;padding:18px;display:flex;flex-direction:column;
   box-shadow:var(--shadow);will-change:transform;touch-action:none;cursor:grab;user-select:none}
@@ -221,7 +226,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 
 <main class="deck">
-  <article class="stage" id="stage" role="region" aria-label="Current market position"></article>
+  <article class="stage" id="stage" role="region" aria-label="Current market position">
+    <div class="dashboard-loading" id="dashboardLoading">
+      <img src="/mandala.svg" alt="" aria-hidden="true">
+      <span>Loading positions&hellip;</span>
+    </div>
+  </article>
   <div class="end" id="end" role="status" aria-label="No positions available">
     <div>No open positions</div>
     <div style="font-size:12px;color:var(--muted)">Checking for new positions every 5s automatically.</div>
@@ -823,8 +833,18 @@ function showResult(res,card){
     t.className='toast dry show';
     t.textContent=`DRY-RUN · take ${lbl} @ ${card.favAsk||'?'}¢\nplanned, not sent (${(res.wouldBlock||[]).join('; ')})`;
   } else if(res.mode==='live'){
-    t.className='toast live show'; t.textContent=`LIVE · took ${lbl} (status ${res.status})`;
-  } else { t.className='toast err show'; t.textContent=JSON.stringify(res).slice(0,140); }
+    // Check for actual success, not just that it's live
+    if(res.success === true && res.status < 400){
+      t.className='toast live show'; t.textContent=`LIVE · took ${lbl} @ ${card.favAsk||'?'}¢`;
+    } else {
+      // Show error if success is false or status is 4xx/5xx
+      t.className='toast err show'; t.textContent=`ERROR · ${res.error || `status ${res.status}`}`;
+    }
+  } else if(res.error){
+    t.className='toast err show'; t.textContent=`ERROR · ${res.error}`;
+  } else {
+    t.className='toast err show'; t.textContent=JSON.stringify(res).slice(0,140);
+  }
   clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3200);
 }
 
