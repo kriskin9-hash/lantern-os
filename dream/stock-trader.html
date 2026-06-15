@@ -1467,6 +1467,10 @@ async function loadBars(){
     for(const ticker of Object.keys(bars)){
       barsData[ticker] = bars[ticker].bars || [];
     }
+    // Hide loading spinner and render charts
+    const loadingEl = document.getElementById('dashboardLoading');
+    if(loadingEl) loadingEl.style.display = 'none';
+
     wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
     updateRegimeBadges();
     renderFullscreenChart();
