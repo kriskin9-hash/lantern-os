@@ -423,6 +423,30 @@ def test_certificate_cross_term_bound():
     assert cert.alpha <= alpha_sym + cross_norm + 1e-4  # should not exceed small-gain bound
 
 
+def test_certificate_full_spectrum_abscissa():
+    """Authoritative full-spectrum test (§1.2): exact max Re λ(A) on the full Jacobian,
+    tighter than the conservative small-gain `alpha` bound."""
+    # symmetric: both measures agree
+    sym = collapse_certificate((-0.8 * torch.eye(3)).unsqueeze(0))
+    assert sym.spectral_abscissa == pytest.approx(-0.8, abs=1e-4)
+    assert sym.full_contracting is True
+
+    # non-normal but genuinely contracting (Re λ ≈ −0.45): small-gain over-rejects,
+    # full spectrum correctly certifies contraction.
+    A = torch.tensor([[-0.3, 1.5], [-0.5, -0.6]])
+    cert = collapse_certificate(A.unsqueeze(0))
+    assert cert.spectral_abscissa < 0          # full spectrum: contracting
+    assert cert.full_contracting is True
+    assert cert.alpha > 0                       # small-gain bound: over-conservative
+    assert cert.guaranteed is False             # ...so small-gain alone says not-guaranteed
+
+    # marginal rotation: α(A_s) is negative but the full spectrum is a center (Re λ = 0)
+    rot = torch.tensor([[-1.0, 0.0, 0.0], [0.0, 0.0, 2.0], [0.0, -2.0, 0.0]])
+    rc = collapse_certificate(rot.unsqueeze(0))
+    assert rc.spectral_abscissa == pytest.approx(0.0, abs=1e-4)
+    assert rc.full_contracting is False
+
+
 def test_log_barrier_smooth_projection():
     """Log-barrier provides smooth boundary instead of hard clamp."""
     m = _model()

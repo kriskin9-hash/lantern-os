@@ -130,8 +130,14 @@ center that never collapses in its rotating plane.
 
 **Recommended:** report **both** `α = max λᵢ(A_s)` (the energy abscissa, exact
 under the §1 hypothesis) **and** `max Re λ(A)` on the full Jacobian (the
-authoritative contraction test). `collapse_certificate()` currently computes
-only the former.
+authoritative contraction test). As of [#505], `collapse_certificate()` now
+computes **both**: `alpha` (a conservative small-gain bound `max λ(A_s) + ‖A−A_s‖₂`)
+and `spectral_abscissa` (the exact `max Re λ(A)` via `eig`, with a `full_contracting`
+flag). The full-spectrum test is tighter — it certifies genuinely-contracting
+non-normal systems that the small-gain bound over-rejects (see
+`test_certificate_full_spectrum_abscissa`).
+
+[#505]: https://github.com/alex-place/lantern-os/issues/505
 
 ### 1.3 What the test actually checks
 

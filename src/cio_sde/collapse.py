@@ -178,15 +178,22 @@ class CollapseCertificate:
     (the system may wander or diverge instead).
     """
     guaranteed: bool
-    alpha: float            # spectral abscissa of active modes (V̇ ≤ 2α V)
+    alpha: float            # small-gain bound: max λ(A_s) + ‖A−A_s‖₂ (conservative)
     contraction_rate: float # |α| when guaranteed, else 0
     null_dim: int           # dimension of the invariant manifold
     active_dim: int
+    # Authoritative full-spectrum test (§1.2): the EXACT spectral abscissa of the
+    # full (possibly non-normal) Jacobian. max Re λ(A) < 0 is necessary for strict
+    # contraction; it is tighter than the conservative small-gain `alpha` bound.
+    spectral_abscissa: float = float("nan")  # max Re λ(A) on the full A (via eig)
+    full_contracting: bool = False           # spectral_abscissa < −margin
 
     def summary(self) -> str:
         verdict = "GUARANTEED" if self.guaranteed else "NOT guaranteed"
         return (
-            f"collapse {verdict}: α={self.alpha:+.4f} "
+            f"collapse {verdict}: α={self.alpha:+.4f} (small-gain) "
+            f"maxReλ(A)={self.spectral_abscissa:+.4f} "
+            f"({'contracting' if self.full_contracting else 'non-contracting'}) "
             f"rate={self.contraction_rate:.4f} "
             f"null_dim={self.null_dim} active_dim={self.active_dim}"
         )
@@ -209,19 +216,30 @@ def collapse_certificate(A: Tensor, eig_eps: float = 1e-2,
     Abar = A.mean(0) if A.dim() == 3 else A
     A_s = 0.5 * (Abar + Abar.T)
     evals = torch.linalg.eigvalsh(A_s)
+
+    # Authoritative full-spectrum abscissa (§1.2): exact max Re λ(A) on the FULL,
+    # possibly non-normal, Jacobian via `eigvals` (complex). This is the tight
+    # necessary condition for strict contraction; the small-gain `alpha` below is
+    # a conservative upper bound that can over-reject genuinely-contracting non-
+    # normal systems.
+    spectral_abscissa = float(torch.linalg.eigvals(Abar).real.max().item())
+    full_contracting = spectral_abscissa < -margin
+
     null_mask = evals.abs() < eig_eps
     active = evals[~null_mask]
     null_dim = int(null_mask.sum().item())
     if active.numel() == 0:
         # entirely null — already on the manifold, trivially collapsed
         return CollapseCertificate(True, float("-inf"), float("inf"),
-                                   null_dim, 0)
-    
+                                   null_dim, 0,
+                                   spectral_abscissa=spectral_abscissa,
+                                   full_contracting=full_contracting)
+
     # Small-gain bound for non-normal case
     alpha_sym = float(active.max().item())
     cross_term_norm = torch.linalg.norm(Abar - A_s, ord=2).item()
     alpha = alpha_sym + cross_term_norm  # conservative bound
-    
+
     guaranteed = alpha < -margin
     return CollapseCertificate(
         guaranteed=guaranteed,
@@ -229,6 +247,8 @@ def collapse_certificate(A: Tensor, eig_eps: float = 1e-2,
         contraction_rate=(-alpha if guaranteed else 0.0),
         null_dim=null_dim,
         active_dim=int(active.numel()),
+        spectral_abscissa=spectral_abscissa,
+        full_contracting=full_contracting,
     )
 
 
