@@ -21,12 +21,12 @@
     --card-bg:rgba(15,18,28,.95);--panel-bg:rgba(15,18,28,.95);
   }
   :root.light-mode{
-    --bg0:#ffffff;--bg1:#f5f5f5;--bg2:#e8e8e8;--bg3:#d0d0d0;
-    --border:#808080;--text0:#000000;--text1:#1a1a1a;--text2:#404040;
-    --tv-text-primary:#000000;--tv-text-secondary:#1a1a1a;
-    --tv-grid:rgba(0,0,0,.1);--tv-axis:rgba(0,0,0,.85);
-    --tv-candle-up:#26a69a;--tv-candle-down:#ef5350;
-    --card-bg:#ffffff;--panel-bg:#f5f5f5;
+    --bg0:#ffffff;--bg1:#fafafa;--bg2:#f0f0f0;--bg3:#e8e8e8;
+    --border:#d8d8d8;--text0:#1a1a1a;--text1:#333333;--text2:#666666;
+    --tv-text-primary:#1a1a1a;--tv-text-secondary:#404040;
+    --tv-grid:rgba(0,0,0,.06);--tv-axis:rgba(0,0,0,.8);
+    --tv-candle-up:#16a085;--tv-candle-down:#c0392b;
+    --card-bg:#ffffff;--panel-bg:#fafafa;
   }
   html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px;overflow-x:hidden}
 
@@ -70,6 +70,9 @@
   .wl-item:hover{background:rgba(255,255,255,.05)}
   .wl-item.active{background:rgba(74,158,255,.12);border-left:3px solid var(--blue)}
   .wl-item:focus{outline:2px solid var(--blue);outline-offset:-2px}
+  :root.light-mode .wl-item{border-bottom:1px solid #e8e8e8}
+  :root.light-mode .wl-item:hover{background:#f5f5f5}
+  :root.light-mode .wl-item.active{background:rgba(74,158,255,.08);border-left-color:#4a9eff}
   .wl-row{display:flex;justify-content:space-between;align-items:baseline}
   .wl-sym{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text0)}
   .wl-price{font-family:var(--mono);font-size:11px;color:var(--text1)}
@@ -97,6 +100,8 @@
   @keyframes dashboard-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
   .card{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .15s}
   .card:hover{border-color:var(--text1)}
+  :root.light-mode .card{border-color:#e0e0e0}
+  :root.light-mode .card:hover{border-color:#999}
   .card.state-open{border-color:rgba(0,212,170,.35);grid-column:span 2}
   .card.state-watching{border-color:rgba(74,158,255,.25)}
   .card.state-quiet{opacity:.75}
@@ -138,6 +143,10 @@
   .btn-sell{background:rgba(255,95,109,.12);color:var(--red);border-color:rgba(255,95,109,.3)}
   .btn-sell:hover{background:rgba(255,95,109,.22)}
   .btn-sell:focus{outline:2px solid var(--blue)}
+  :root.light-mode .btn-buy{background:rgba(22,160,133,.08);color:#16a085;border-color:rgba(22,160,133,.25)}
+  :root.light-mode .btn-buy:hover{background:rgba(22,160,133,.15)}
+  :root.light-mode .btn-sell{background:rgba(192,57,43,.08);color:#c0392b;border-color:rgba(192,57,43,.25)}
+  :root.light-mode .btn-sell:hover{background:rgba(192,57,43,.15)}
   /* Chart canvas + overlay — canvas covers the full ladder and draws its own
      right-side price axis (52px) + bottom time axis (16px); the HTML overlay
      (zone bands, S/R labels, price/entry/stop/tp lines) is inset to match
@@ -147,12 +156,17 @@
   /* Header chart controls */
   .chart-ctrl{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
   .chart-ctrl:hover{color:var(--text0);background:var(--bg3)}
+  :root.light-mode .chart-ctrl{background:#f5f5f5;border-color:#e0e0e0;color:#333}
+  :root.light-mode .chart-ctrl:hover{background:#e8e8e8;color:#000}
   /* Chart range presets (1D/5D/1M) */
   .range-group{display:flex;gap:2px;role:'group';aria-label:'Chart time range selector'}
   .range-btn{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,border-color .15s,color .15s;outline:none;tabindex:0}
   .range-btn:hover{color:var(--text0);background:var(--bg3)}
   .range-btn:focus{outline:2px solid var(--blue)}
   .range-btn.active{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18);color:#fff}
+  :root.light-mode .range-btn{background:#f5f5f5;border-color:#e0e0e0;color:#333}
+  :root.light-mode .range-btn:hover{background:#e8e8e8;color:#000}
+  :root.light-mode .range-btn.active{background:#4a9eff;border-color:#4a9eff;color:#fff}
   /* Fullscreen ticker chart */
   .fs-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px}
   .fs-bg.hidden{display:none}
@@ -598,8 +612,16 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr,0,0,dpr,0,0);
 
-  // Dark background for better contrast
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg1').trim();
+  // Get colors from CSS variables (respects light/dark mode)
+  const root = getComputedStyle(document.documentElement);
+  const bgColor = root.getPropertyValue('--bg1').trim();
+  const gridColor = root.getPropertyValue('--tv-grid').trim();
+  const axisColor = root.getPropertyValue('--tv-axis').trim();
+  const candleUp = root.getPropertyValue('--tv-candle-up').trim() || '#26a69a';
+  const candleDown = root.getPropertyValue('--tv-candle-down').trim() || '#ef5350';
+
+  // Background
+  ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, w, h);
 
   if(rMax<=rMin) return;
@@ -609,6 +631,9 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   const rng = rMax - rMin;
   const y   = p => ((rMax-p)/rng)*ph;
 
+  // Store colors for use in candle/line rendering
+  const chartColors = { candleUp, candleDown, gridColor, axisColor };
+
   // Price axis: faint gridlines across the plot + labels in the right gutter
   ctx.font = CHART_AXIS_FONT;
   ctx.lineWidth = 1;
@@ -616,12 +641,12 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   for(let i=0;i<=PRICE_TICKS;i++){
     const price = rMin + rng*i/PRICE_TICKS;
     const yy = Math.round(y(price)) + 0.5;
-    ctx.strokeStyle = CHART_GRID_COLOR;
+    ctx.strokeStyle = chartColors.gridColor;
     ctx.beginPath();
     ctx.moveTo(0, yy);
     ctx.lineTo(pw, yy);
     ctx.stroke();
-    ctx.fillStyle = CHART_AXIS_COLOR;
+    ctx.fillStyle = chartColors.axisColor;
     ctx.textAlign = 'left';
     ctx.textBaseline = i===0 ? 'top' : (i===PRICE_TICKS ? 'bottom' : 'middle');
     ctx.fillText(fmt(price, price>=100?2:4), pw+4, yy);
@@ -638,7 +663,7 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
         const b = bars[i];
         const x = Math.round(i*slotW + slotW/2);
         const up = b.close >= b.open;
-        const color = up ? CHART_CANDLE_UP : CHART_CANDLE_DOWN;
+        const color = up ? chartColors.candleUp : chartColors.candleDown;
 
         // Wick (high-low line)
         ctx.strokeStyle = color;
