@@ -56,7 +56,7 @@ anti-collapse operator $\Sigma_0^{-1}$ (empirically shown, not proven, to suppre
 collapse), and an early-warning signal. We read the construction as a small, honest
 warning about recursively self-improving systems: absent external grounding, the
 linearized dynamics admit only collapse or divergence. Theorem~1 is machine-checked
-($20/20$ tests passing) for the symmetric case. The other components are heuristics,
+($28$ passing, $1$ xfail pending \#506) for the symmetric case. The other components are heuristics,
 labelled as such; one referenced demonstration is not currently reproducible (its
 scripts are absent from the repository); the AI-safety reading is the keeper and
 stands on its own.
@@ -369,8 +369,8 @@ publication.
   \texttt{ReconstructionOperator}.
 \item \texttt{src/cio\_sde/surprise.py} --- \texttt{SurpriseMonitor} and the Kalman
   measurement update (the missing inference step).
-\item \texttt{tests/test\_cio\_sde.py} --- 20 automated tests, all passing (Theorem~1
-  exercised in the symmetric case only).
+\item \texttt{tests/test\_cio\_sde.py} --- 28 passing, 1 xfail (surprise$\leftrightarrow\Sigma_0$
+  integration pending \#506); Theorem~1 exercised in the symmetric case only.
 \item Runnable, deterministic experiments present in the repo:
   \texttt{sigma0\_reconstruction.py} (recoverability floor),
   \texttt{sigma0\_horse\_blinders.py} (the surprise canary),

@@ -4,12 +4,27 @@
 account of why an ungrounded self-improving system tends to collapse or diverge.*
 
 Status: **Theorem 1 is proven and machine-checked** (`src/cio_sde/collapse.py`,
-`tests/test_cio_sde.py`, 20 passing) **for the symmetric / normal case**. The
-collapse trigger (§2), the anti-collapse operator (§3), and the early-warning
-readout (§4) are control-design heuristics — empirically supported, not
+`tests/test_cio_sde.py` — 28 passing, 1 xfail pending [#506]) **for the symmetric /
+normal case**. The collapse trigger (§2), the anti-collapse operator (§3), and the
+early-warning readout (§4) are control-design heuristics — empirically supported, not
 theorems. The §6 demonstration is **not currently reproducible**: its two driver
 scripts are absent from the repository (see the flag in §6). Read the per-section
 status lines before relying on any claim here.
+
+**Status taxonomy & open research.** Each claim is one of: **PROVEN** (theorem +
+machine-checked), **MEASURED** (empirical, with a test/run pointer), **HEURISTIC**
+(operational design, not derived from the theorem), or **UNIMPLEMENTED** (described
+but not present in code). Open gaps are tracked as GitHub issues and cross-linked
+here so status cannot silently drift:
+- [#504] — §6 demo driver scripts (`router_sigma0_encoder.py`, `router_reservoir_G.py`) are **UNIMPLEMENTED** (absent from the repo).
+- [#505] — non-normal-Jacobian handling for Theorem 1 (the conditional gap in §1).
+- [#506] — surprise↔Σ₀ anti-collapse integration is **UNIMPLEMENTED**: `engine.forward_step` does not yet consume `m.surprise_monitor`, so `surprise_spook` is never emitted; `test_surprise_monitor_integration` is `xfail` until it lands.
+- [#507] — real-data grounding for the demonstration.
+
+[#504]: https://github.com/alex-place/lantern-os/issues/504
+[#505]: https://github.com/alex-place/lantern-os/issues/505
+[#506]: https://github.com/alex-place/lantern-os/issues/506
+[#507]: https://github.com/alex-place/lantern-os/issues/507
 
 ---
 
@@ -461,7 +476,7 @@ withdrawn claims above with the actual produced numbers.
 ---
 
 *Source of record: `src/cio_sde/collapse.py` (Theorem 1, Σ₀, Σ₀⁻¹);
-`tests/test_cio_sde.py` (20 passing); framework `docs/sigma0-collapse-certificate.tex`.
+`tests/test_cio_sde.py` (28 passing, 1 xfail pending #506); framework `docs/sigma0-collapse-certificate.tex`.
 The router demonstration scripts `experiments/router_sigma0_encoder.py` and
 `experiments/router_reservoir_G.py` are **referenced but not present** — see
 Appendix A for the original design specification.*
