@@ -380,7 +380,8 @@ function toggleTickerFilter(ticker, btn) {
 
 function loadNews() {
   console.log('[trading-news] loadNews tick:', new Date().toISOString());
-  fetch('/api/trading/dashboard/news-feed')
+  // Primary source: local news feed (fetched from live Yahoo Finance RSS via news-collector)
+  fetch('/api/news-feed')
     .then(r => r.json())
     .then(data => {
       console.log('[trading-news] API response:', {
@@ -404,15 +405,15 @@ function loadNews() {
       }));
 
       if (data.error || (tickerNews.length === 0 && broadNews.length === 0)) {
-        console.log('[trading-news] Feed empty, falling back to CSF');
+        console.log('[trading-news] Feed empty, falling back to CSF query');
         loadNewsFromCSF();
         return;
       }
-      console.log('[trading-news] Using dashboard feed data:', tickerNews.length + broadNews.length, 'articles');
+      console.log('[trading-news] Using local news feed:', tickerNews.length + broadNews.length, 'articles from', data.source);
       processNews(tickerNews, broadNews, true);
     })
     .catch(err => {
-      console.warn('[trading-news] Dashboard fetch failed:', err);
+      console.warn('[trading-news] News feed fetch failed:', err);
       loadNewsFromCSF();
     });
 }
