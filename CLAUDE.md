@@ -137,6 +137,23 @@ Six agent personas are defined in `apps/lantern-garage/lib/dream-chat.js`: `lant
 
 `src/mcp_server/server.py` is a FastAPI + SSE service exposing MCP tools (`queue_status`, `task_intake`, `dispatch_work`, `boot_check`, `list_skills`, `get_status`). Only register tools here that have real implementations.
 
+### Trading System (Sprint 1.5)
+
+The Kalshi trading terminal (`apps/lantern-garage/public/kalshi-terminal.html`) is a swipe-deck UI backed by 60+ REST endpoints in `apps/lantern-garage/routes/trading.js`. Full endpoint reference: **[docs/trading-api-reference.md](docs/trading-api-reference.md)**.
+
+Key runtime components:
+| Module | Responsibility |
+|--------|----------------|
+| `kalshi-api.js` | Kalshi REST client (auth, order placement, market data) |
+| `kalshi-collector.js` | 6s polling loop; 429 backoff with `Retry-After`; exposes `getStatus()` |
+| `kalshi-suggest.js` | Tight-band entry suggestion engine |
+| `convergence-router.js` | Deterministic routing cache — 120 Keystone routes, >70% hit rate |
+| `trading-history-logger.js` | Trade/signal history JSONL persistence |
+
+Live data flow: `kalshi-collector` → server snapshot → UI polls `/api/trading/kalshi/decisive-deck` (no UI-direct Kalshi calls).
+
+CIO accuracy tracking: `python experiments/kalshi_tightband_analysis.py` appends each run to `data/kalshi/cio-accuracy-log.jsonl` (date, n_resolved, accuracy, avg_lead_time).
+
 ### CSF (Convergence-Fitted Searchable Format)
 
 `src/csf/` and `csf/` contain a custom binary archive format used for memory exports and symbolic data compression. See `caad/README.md` for the CADD (Context Archive for Dream Data) spec built on top of CSF.

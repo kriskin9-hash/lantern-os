@@ -42,6 +42,7 @@ MIN_POINTS = 6
 CERT_EDGE   = 0.08
 
 CACHE_OUT = Path(__file__).resolve().parents[1] / "data" / "kalshi" / "cio-trajectory-cache.jsonl"
+ACCURACY_LOG = Path(__file__).resolve().parents[1] / "data" / "kalshi" / "cio-accuracy-log.jsonl"
 
 
 def load_trajectories(path: Path) -> dict:
@@ -176,6 +177,21 @@ def main() -> None:
               f"{n_correct/len(lead_times)*100:.0f}% correct direction")
         avg_lead = sum(x[0] for x in lead_times) / len(lead_times)
         print(f"Average lead-time: first signal at {avg_lead:.1%} of trajectory elapsed")
+
+        # Append run to longitudinal accuracy log (#425)
+        import datetime
+        log_row = {
+            "date": datetime.date.today().isoformat(),
+            "run_at": datetime.datetime.utcnow().isoformat() + "Z",
+            "n_resolved": len(lead_times),
+            "n_correct": n_correct,
+            "accuracy": round(n_correct / len(lead_times), 4),
+            "avg_lead_time": round(avg_lead, 4),
+        }
+        ACCURACY_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with ACCURACY_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(log_row) + "\n")
+        print(f"Appended accuracy row to {ACCURACY_LOG.name}")
     else:
         print("No Σ0-certified edges found in resolved markets.")
 
