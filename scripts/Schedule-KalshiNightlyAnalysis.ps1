@@ -14,8 +14,12 @@ $Script    = Join-Path $RepoRoot "experiments\kalshi_tightband_analysis.py"
 $LogFile   = Join-Path $RepoRoot "data\kalshi\nightly-analysis.log"
 
 # Detect python from PATH; fall back to py launcher
-$Python = (Get-Command python -ErrorAction SilentlyContinue)?.Source
-if (-not $Python) { $Python = (Get-Command py -ErrorAction SilentlyContinue)?.Source }
+$PythonCmd = Get-Command python -ErrorAction SilentlyContinue
+if ($PythonCmd) { $Python = $PythonCmd.Source }
+if (-not $Python) {
+    $PyCmd = Get-Command py -ErrorAction SilentlyContinue
+    if ($PyCmd) { $Python = $PyCmd.Source }
+}
 if (-not $Python) { throw "Python not found on PATH. Install Python 3.10+ and retry." }
 
 $Action  = New-ScheduledTaskAction -Execute $Python `
