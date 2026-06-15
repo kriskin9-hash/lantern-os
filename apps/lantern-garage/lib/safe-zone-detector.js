@@ -235,7 +235,14 @@ async function detectSafeZones(videoPath, frameData) {
     );
   }
 
-  return new SafeZoneMap(frameData.width, frameData.height);
+  // Bug fix (V10): the detected zones were previously discarded — the returned
+  // map was constructed empty. Add the detected zones so callers actually
+  // receive them.
+  const map = new SafeZoneMap(frameData.width, frameData.height);
+  for (const zone of zones) {
+    map.addZone(zone);
+  }
+  return map;
 }
 
 // ============================================================================

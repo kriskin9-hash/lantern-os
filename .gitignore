@@ -113,6 +113,12 @@ archive/**/worktrees/**
 *-old*
 *-backup*
 
+# Exceptions: legitimately-named Creator V10 source + docs (not old-version junk)
+!docs/creator-v10/**
+!apps/lantern-garage/lib/safe-zone-v2.js
+!apps/lantern-garage/lib/caption-engine-v3.js
+!apps/lantern-garage/lib/variant-engine-v2.js
+
 # IDE / tool artifacts
 .claude/
 .claude-plugin/

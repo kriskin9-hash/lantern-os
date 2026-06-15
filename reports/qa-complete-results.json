@@ -1,0 +1,208 @@
+{
+  "pages": {
+    "/": {
+      "status": 200,
+      "buttonCount": 25,
+      "title": "Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/agent-leaderboard.html": {
+      "status": 200,
+      "buttonCount": 10,
+      "title": "Agent Leaderboard — Lanterns",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/agent-status.html": {
+      "status": 200,
+      "buttonCount": 12,
+      "title": "Agent Status — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/changelog.html": {
+      "status": 200,
+      "buttonCount": 12,
+      "title": "Changelog — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/courtney.html": {
+      "status": 200,
+      "buttonCount": 5,
+      "title": "Dream Journal — Orion by Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/create.html": {
+      "status": 200,
+      "buttonCount": 56,
+      "title": "Creator Dashboard — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/dashboard.html": {
+      "status": 200,
+      "buttonCount": 5,
+      "title": "Dashboard — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/dream-chat.html": {
+      "status": 200,
+      "buttonCount": 32,
+      "title": "Journal",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/dream-chat-v1.html": {
+      "status": 200,
+      "buttonCount": 3,
+      "title": "Dream Journal",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/dream-chat-orion.html": {
+      "status": 200,
+      "buttonCount": 8,
+      "title": "Dream Journal · Orion — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/dream-journal/": {
+      "status": 200,
+      "buttonCount": 14,
+      "title": "Journal — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/entry.html": {
+      "status": 200,
+      "buttonCount": 0,
+      "title": "Entry Details — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/flourishing.html": {
+      "status": 200,
+      "buttonCount": 48,
+      "title": "Dashboard",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/hff.html": {
+      "status": 200,
+      "buttonCount": 2,
+      "title": "HFF Scientific Dashboard — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/knowledgecenter.html": {
+      "status": 200,
+      "buttonCount": 20,
+      "title": "Knowledge Center — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/observer-mesh-cube.html": {
+      "status": 200,
+      "buttonCount": 4,
+      "title": "Observer Mesh Cube — ORION v1.0",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/outreach.html": {
+      "status": 200,
+      "buttonCount": 25,
+      "title": "Lantern OS Outreach Program",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/pricing.html": {
+      "status": 200,
+      "buttonCount": 13,
+      "title": "Lantern OS — Pricing",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/proof.html": {
+      "status": 200,
+      "buttonCount": 13,
+      "title": "Lantern OS — Live Proof",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/rag-house.html": {
+      "status": 200,
+      "buttonCount": 19,
+      "title": "RAG House — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/settings/providers.html": {
+      "status": 200,
+      "buttonCount": 15,
+      "title": "AI Settings",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/three-doors.html": {
+      "status": 200,
+      "buttonCount": 15,
+      "title": "Kingdome of Hearts — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/three-doors-game.html": {
+      "status": 200,
+      "buttonCount": 15,
+      "title": "Kingdome of Hearts",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/trader-dashboard.html": {
+      "status": 200,
+      "buttonCount": 1,
+      "title": "Lantern Trader",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/trading.html": {
+      "status": 200,
+      "buttonCount": 12,
+      "title": "Trading — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/trading-news.html": {
+      "status": 200,
+      "buttonCount": 11,
+      "title": "Trading News — Lantern OS",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/upgrade-lab.html": {
+      "status": 200,
+      "buttonCount": 12,
+      "title": "Lantern OS Upgrade Lab",
+      "hasErrors": false,
+      "loaded": true
+    },
+    "/wish-door.html": {
+      "status": 200,
+      "buttonCount": 10,
+      "title": "The Wish Door — Lantern Dreamer",
+      "hasErrors": false,
+      "loaded": true
+    }
+  },
+  "stats": {
+    "total": 28,
+    "working": 28,
+    "errors": 0,
+    "buttons": 417
+  },
+  "issues": [],
+  "recommendations": []
+}

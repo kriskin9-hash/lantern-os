@@ -5,6 +5,8 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
   const { sendJson, path: pathModule, repoRoot, collectRequestBody } = deps;
   const fs = require("fs");
   const entryStore = require("../lib/entry-store");
+  const { generateProjectThumbnail } = require("../lib/thumbnail-generator");
+  const ci = require("../../../src/creator-intelligence");
 
   // =========================================================================
   // GET /api/creator-entries - List all entries
@@ -75,6 +77,21 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
         filePath: body.filePath,
       });
 
+      // Generate thumbnail in background (non-blocking)
+      if (body.filePath && (body.filePath.endsWith(".mp4") || body.filePath.endsWith(".mov") || body.filePath.endsWith(".avi"))) {
+        setImmediate(async () => {
+          try {
+            const thumbnailPath = await generateProjectThumbnail(repoRoot, entry.id, body.filePath);
+            if (thumbnailPath) {
+              entryStore.updateEntry(repoRoot, entry.id, { thumbnail: thumbnailPath });
+              console.log("[creator-entries] ✅ Thumbnail generated for entry " + entry.id);
+            }
+          } catch (err) {
+            console.error("[creator-entries] Thumbnail generation failed:", err.message);
+          }
+        });
+      }
+
       // Add formatted date and send
       const enrichedEntry = {
         ...entry,
@@ -134,9 +151,67 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
         return true;
       }
 
+      // ── Quality gate (Phase 7): validate the render before accepting it ──
+      // Runs real ffprobe. Blocks an out-of-spec export unless body.force is set.
+      // Result is always persisted so the verdict is traceable in the dashboard.
+      const renderFullPath = pathModule.join(repoRoot, body.filePath);
+      const rawValidation = await ci.validateExport(renderFullPath, {
+        ...(body.validation || {}),
+        captionsExpected: body.captionsExpected === true,
+        captionBurnConfirmed: body.captionBurnConfirmed === true,
+      });
+      // Normalize: ci.validateExport must always return {ok, skipped, ...}.
+      // Guard against unexpected shapes so the dashboard never receives undefined.
+      const validation = (rawValidation && typeof rawValidation === "object")
+        ? rawValidation
+        : { ok: false, skipped: false, blockedReasons: ["validateExport returned invalid shape"] };
+
+      try {
+        entryStore.saveValidation(repoRoot, entryId, renderType, validation);
+      } catch (e) {
+        console.error("[creator-entries] saveValidation failed:", e.message);
+      }
+
+      if (!validation.ok && !validation.skipped && body.force !== true) {
+        // Export blocked — report the concrete reasons, do not save the render.
+        sendJson(res, {
+          error: "Export blocked by ExportValidator",
+          blocked: true,
+          validation,
+        }, 422);
+        return true;
+      }
+
       entryStore.saveRender(repoRoot, entryId, renderType, body.filePath);
 
-      sendJson(res, { success: true, message: `${renderType} render saved` });
+      // Continuous-learning: record the accepted export (first-party, non-fatal)
+      try {
+        ci.training.recordExport(entryId, { renderType, validated: validation.ok === true });
+      } catch (e) {
+        console.error("[creator-entries] recordExport failed:", e.message);
+      }
+
+      // Regenerate thumbnail from highlight/render video (non-blocking)
+      if (renderType === "highlight" || renderType.startsWith("variant")) {
+        setImmediate(async () => {
+          try {
+            const thumbnailPath = await generateProjectThumbnail(repoRoot, entryId, body.filePath);
+            if (thumbnailPath) {
+              entryStore.updateEntry(repoRoot, entryId, { thumbnail: thumbnailPath });
+              console.log(`[creator-entries] ✅ Updated thumbnail for ${renderType} video of entry ${entryId}`);
+            }
+          } catch (err) {
+            console.error("[creator-entries] Thumbnail regeneration failed:", err.message);
+          }
+        });
+      }
+
+      sendJson(res, {
+        success: true,
+        message: `${renderType} render saved`,
+        validation,
+        forced: !validation.ok && body.force === true ? true : undefined,
+      });
       return true;
     } catch (error) {
       console.error("[creator-entries] Render save error:", error.message);
@@ -187,6 +262,24 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
       return true;
     } catch (error) {
       console.error("[creator-entries] Update error:", error.message);
+      sendJson(res, { error: error.message }, 500);
+      return true;
+    }
+  }
+
+  // =========================================================================
+  // DELETE /api/creator-entries/:id - Delete entry
+  // =========================================================================
+  const deleteMatch = url.pathname.match(/^\/api\/creator-entries\/([^/]+)$/);
+  if (deleteMatch && req.method === "DELETE") {
+    try {
+      const entryId = deleteMatch[1];
+      entryStore.deleteEntry(repoRoot, entryId);
+
+      sendJson(res, { success: true, message: "Entry deleted" });
+      return true;
+    } catch (error) {
+      console.error("[creator-entries] Delete error:", error.message);
       sendJson(res, { error: error.message }, 500);
       return true;
     }

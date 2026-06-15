@@ -1,0 +1,94 @@
+{
+  "pages": {
+    "/": {
+      "url": "/",
+      "status": 200,
+      "buttonCount": 25
+    },
+    "/create.html": {
+      "url": "/create.html",
+      "status": 200,
+      "buttonCount": 56
+    },
+    "/dashboard.html": {
+      "url": "/dashboard.html",
+      "status": 200,
+      "buttonCount": 5
+    },
+    "/dream-chat.html": {
+      "url": "/dream-chat.html",
+      "status": 200,
+      "buttonCount": 32
+    },
+    "/entry.html": {
+      "url": "/entry.html",
+      "status": 404,
+      "buttonCount": 0
+    },
+    "/settings/providers.html": {
+      "url": "/settings/providers.html",
+      "status": 200,
+      "buttonCount": 15
+    },
+    "create.html": {
+      "url": "/create.html",
+      "loaded": true,
+      "sections": {
+        "Hero Section": true,
+        "Tool Cards": true,
+        "Project Grid": false,
+        "Upload Area": true
+      }
+    },
+    "entry.html": {
+      "url": "/entry.html",
+      "loaded": true,
+      "videoPlayers": 0,
+      "statusTimeline": false,
+      "artifacts": 0
+    }
+  },
+  "apiCalls": [
+    {
+      "time": "2026-06-14T20:49:47.389Z",
+      "method": "GET",
+      "url": "http://127.0.0.1:4177/api/creator-entries"
+    }
+  ],
+  "buttons": {
+    "upload": {
+      "found": true,
+      "clickable": true
+    },
+    "view-projects": {
+      "found": true
+    },
+    "tool-cards": {
+      "count": 4,
+      "tools": [
+        {
+          "title": "Highlight Detection",
+          "desc": "Find the best moments automatically with motion, a"
+        },
+        {
+          "title": "Generate Variants",
+          "desc": "Create A/B/C retention variants optimized for diff"
+        },
+        {
+          "title": "Generate Captions",
+          "desc": "Automatically generate captions and subtitles from"
+        },
+        {
+          "title": "Safe Zones",
+          "desc": "Detect safe areas for text and graphics on your vi"
+        }
+      ]
+    },
+    "delete": {
+      "found": true,
+      "count": 20
+    }
+  },
+  "errors": [],
+  "recommendations": []
+}

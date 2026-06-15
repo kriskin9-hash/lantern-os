@@ -123,9 +123,8 @@ function saveRender(repoRoot, entryId, type, filePath) {
 
   // Copy or move file to render directory
   const filename = path.basename(filePath);
-  const destPath = path.join(renderDir, filename);
+  const fullDestPath = path.join(renderDir, filename);
   const fullSourcePath = path.join(repoRoot, filePath);
-  const fullDestPath = path.join(repoRoot, destPath);
 
   if (fs.existsSync(fullSourcePath)) {
     fs.copyFileSync(fullSourcePath, fullDestPath);
@@ -137,6 +136,18 @@ function saveRender(repoRoot, entryId, type, filePath) {
     entry.renders[type] = path.relative(repoRoot, fullDestPath);
     updateEntry(repoRoot, entryId, { renders: entry.renders });
   }
+}
+
+function saveValidation(repoRoot, entryId, type, result) {
+  // Persist an ExportValidator result on the entry, keyed by render type.
+  // Merged (not replaced) so each render type keeps its own validation record.
+  const entry = getEntry(repoRoot, entryId);
+  if (!entry) {
+    throw new Error(`Entry ${entryId} not found`);
+  }
+  const validations = { ...(entry.validations || {}) };
+  validations[type] = result;
+  return updateEntry(repoRoot, entryId, { validations });
 }
 
 function saveThumbnail(repoRoot, entryId, filePath) {
@@ -192,6 +203,18 @@ function formatTimestamp(isoString) {
   }
 }
 
+function deleteEntry(repoRoot, entryId) {
+  const entryDir = getEntryDir(repoRoot, entryId);
+
+  if (!fs.existsSync(entryDir)) {
+    throw new Error(`Entry ${entryId} not found`);
+  }
+
+  // Recursively delete the entry directory
+  fs.rmSync(entryDir, { recursive: true, force: true });
+  return true;
+}
+
 module.exports = {
   generateEntryId,
   createEntry,
@@ -200,8 +223,10 @@ module.exports = {
   saveAnalysis,
   getAnalysis,
   saveRender,
+  saveValidation,
   saveThumbnail,
   listEntries,
   formatTimestamp,
   getEntryDir,
+  deleteEntry,
 };

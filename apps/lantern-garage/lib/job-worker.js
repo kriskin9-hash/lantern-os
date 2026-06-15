@@ -5,9 +5,11 @@
 const fs = require("fs");
 const path = require("path");
 const { analyzeVideoForHighlights } = require("./highlight-engine");
-const { generateVariants } = require("./retention-engine");
 const { generateCaptions } = require("./caption-engine");
 const { detectSafeZones } = require("./safe-zone-detector");
+const { reencodeToShortForm, renderSegments, probeSource, burnCaptionsToVideo } = require("./video-export");
+const { analyzeForCrop } = require("./safe-zone-v2");
+const ci = require("../../../src/creator-intelligence");
 
 class JobWorker {
   constructor(jobQueue, repoRoot) {
@@ -110,13 +112,26 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
 
   updateProgress(70, "Analyzing highlights");
 
-  // Generate variants automatically
-  const variants = generateVariants(timeline);
-  updateProgress(85, "Generated 3 variants");
-
   // Generate captions automatically
   const captions = generateCaptions(timeline, null, "gaming");
-  updateProgress(95, "Generated captions");
+  updateProgress(85, "Generated captions");
+
+  // V10 scoring + variants — computed from the REAL analysis timeline. Every
+  // value is traceable to selected segments; nothing mocked (this replaces the
+  // old retention-engine variants whose metrics used Math.random()).
+  // Guard: analyzeVideoForHighlights may return either a HighlightTimeline
+  // instance (with .toJSON()) or a plain object — handle both.
+  const timelineJSON = typeof timeline.toJSON === "function" ? timeline.toJSON() : timeline;
+  const gaming = (options || {}).gaming !== false;
+  let scoreV10 = null;
+  let variantsV10 = null;
+  try {
+    scoreV10 = ci.scoreVideoV10(timelineJSON, { gaming });
+    variantsV10 = ci.generateVariantsV10(timelineJSON, { gaming });
+    updateProgress(95, `Generated ${variantsV10.variants.length} ranked variants`);
+  } catch (e) {
+    console.error("[job-worker] V10 scoring/variants failed:", e.message);
+  }
 
   // Store results
   const resultsDir = path.join(repoRoot, "data", "creator", "analyses");
@@ -129,19 +144,35 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
     jobId: job.id,
     videoPath,
     analysisTimestamp: new Date().toISOString(),
-    timeline: timeline.toJSON(),
-    variants: variants.map((v) => v.toJSON()),
+    timeline: timelineJSON,
+    variants: variantsV10 ? variantsV10.variants : [],
     captions: captions.map((c) => c.toJSON()),
+    scoreV10,
   };
 
   fs.writeFileSync(resultFile, JSON.stringify(results, null, 2));
 
+  // Persist the V10 score + ranked variants + captions onto the entry when tied to one.
+  if (job.input.entryId) {
+    try {
+      const entryStore = require("./entry-store");
+      entryStore.updateEntry(repoRoot, job.input.entryId, {
+        scoreV10: scoreV10 || undefined,
+        variantsV10: variantsV10 ? variantsV10.variants : undefined,
+        captions: captions.map((c) => c.toJSON()),
+      });
+    } catch (e) {
+      console.error("[job-worker] persist V10 results to entry failed:", e.message);
+    }
+  }
+
   updateProgress(100, "Analysis complete");
 
   return {
-    timeline: timeline.toJSON(),
-    variants: variants.map((v) => v.toJSON()),
+    timeline: timelineJSON,
+    variants: variantsV10 ? variantsV10.variants : [],
     captions: captions.map((c) => c.toJSON()),
+    scoreV10,
     resultsFile: resultFile,
   };
 }
@@ -196,19 +227,128 @@ async function processExportJob(job, repoRoot, updateProgress) {
     fs.mkdirSync(exportsDir, { recursive: true });
   }
 
-  updateProgress(30, "Processing video");
-
-  // For now: mock export (in production: use FFmpeg to actual re-encode)
   const exportFile = path.join(exportsDir, `${job.id}-${format}.mp4`);
 
-  // Simulate export by copying file (real implementation: re-encode with FFmpeg)
-  fs.copyFileSync(fullPath, exportFile);
+  // ── SafeZoneDetectorV2 crop plan (V10) ──
+  // For crop mode, optionally compute a crop window that avoids slicing through
+  // facecam/HUD candidates. Honest fallback: if detection is unavailable or
+  // low-confidence, leave cropRect unset → naive center crop.
+  let cropRect = null;
+  let cropPlan = null;
+  const useSafeZones = job.input.useSafeZones === true || ci.isEnabled("safeZoneV2");
+  if (job.input.fit === "crop" && useSafeZones) {
+    updateProgress(20, "Detecting safe zones (facecam/HUD)");
+    try {
+      const meta = await probeSource(fullPath);
+      // Guard: if dimensions are unavailable (probe failed), the crop rect normalization
+      // base would be wrong — skip detection and fall back to naive center crop.
+      if (!meta.width || !meta.height) {
+        cropPlan = { status: "unavailable", note: "fell back to center crop", reason: "source dimensions unknown (probe failed)" };
+      } else {
+        const plan = await analyzeForCrop(fullPath, {
+          srcWidth: meta.width,
+          srcHeight: meta.height,
+        });
+        if (plan.status === "ok" && plan.cropPlan && plan.cropPlan.mode === "horizontal") {
+          cropRect = plan.cropPlan.cropRect;
+          cropPlan = { ...plan.cropPlan, regions: plan.regions, framesSampled: plan.framesSampled };
+        } else {
+          cropPlan = { status: plan.status, note: "fell back to center crop", reason: plan.reason };
+        }
+      }
+    } catch (e) {
+      console.error("[job-worker] safe-zone crop plan failed:", e.message);
+      cropPlan = { status: "error", note: "fell back to center crop", reason: e.message };
+    }
+  }
 
-  updateProgress(90, "Verifying output");
+  // A variant export supplies a segment cut-list -> trim+concat render.
+  // Otherwise re-encode the whole clip to spec.
+  const segments = Array.isArray(job.input.segments) ? job.input.segments : null;
+  let encodeInfo;
+  if (segments && segments.length) {
+    updateProgress(30, `Rendering ${segments.length} segments to short-form (1080x1920)`);
+    encodeInfo = await renderSegments(fullPath, exportFile, segments, {
+      width: job.input.width, height: job.input.height, fps: job.input.fps,
+      fit: job.input.fit, cropRect, maxDuration: job.input.maxDuration,
+    });
+  } else {
+    updateProgress(30, "Re-encoding to short-form (1080x1920)");
+    encodeInfo = await reencodeToShortForm(fullPath, exportFile, {
+      width: job.input.width,
+      height: job.input.height,
+      fps: job.input.fps,
+      fit: job.input.fit, // pad (default) | crop | blur
+      start: job.input.start,
+      duration: job.input.duration,
+      maxDuration: job.input.maxDuration,
+      cropRect, // null → center crop; set → safe-zone-aware crop
+    });
+  }
+  if (cropPlan) encodeInfo.cropPlan = cropPlan;
+
+  // ── Caption burning (optional post-process) ──
+  // When burnCaptions is set, load captions from the entry (saved by processAnalyzeJob)
+  // and burn them into the rendered video via ffmpeg subtitles filter. Non-fatal: if
+  // no captions are available or the burn fails, the un-captioned render is kept.
+  if (job.input.burnCaptions && fs.existsSync(exportFile)) {
+    updateProgress(85, "Burning captions into video");
+    let captionData = job.input.captionData || null;
+    if (!captionData && job.input.entryId) {
+      try {
+        const entryStore = require("./entry-store");
+        const entryMeta = entryStore.getEntry(repoRoot, job.input.entryId);
+        captionData = (entryMeta && Array.isArray(entryMeta.captions) && entryMeta.captions.length > 0)
+          ? entryMeta.captions : null;
+      } catch {}
+    }
+    if (captionData && captionData.length > 0) {
+      const burnedFile = exportFile.replace(/\.mp4$/, "-captioned.mp4");
+      try {
+        await burnCaptionsToVideo(exportFile, burnedFile, captionData);
+        fs.renameSync(burnedFile, exportFile);
+        encodeInfo.captionsBurned = captionData.length;
+        console.log(`[job-worker] Burned ${captionData.length} captions into ${exportFile}`);
+      } catch (e) {
+        console.error("[job-worker] caption burn failed (non-fatal):", e.message);
+        encodeInfo.captionsBurnFailed = e.message;
+      }
+    }
+  }
+
+  updateProgress(90, "Validating output");
 
   // Verify output exists
   if (!fs.existsSync(exportFile)) {
     throw new Error("Export file was not created");
+  }
+
+  // ── Quality gate (Phase 7): validate with real ffprobe before completing ──
+  // If the export does not meet short-form spec, block it: delete the invalid
+  // file and fail the job with the concrete reasons. Honors exportValidator flag.
+  const rawValidation = await ci.validateExport(exportFile, job.input.validation || {});
+  const validation = (rawValidation && typeof rawValidation === "object")
+    ? rawValidation
+    : { ok: false, skipped: false, blockedReasons: ["validateExport returned invalid shape"] };
+
+  // Persist verdict + encode info (fit mode, crop plan) back to the entry so the
+  // dashboard can surface it. Recorded for both pass and block.
+  if (job.input.entryId) {
+    try {
+      const entryStore = require("./entry-store");
+      entryStore.saveValidation(repoRoot, job.input.entryId, job.input.renderKey || "highlight", {
+        ...validation,
+        encode: encodeInfo,
+      });
+    } catch (e) {
+      console.error("[job-worker] persist validation failed:", e.message);
+    }
+  }
+
+  if (!validation.ok && !validation.skipped) {
+    try { fs.unlinkSync(exportFile); } catch { /* best-effort cleanup */ }
+    const reasons = (validation.blockedReasons || []).join("; ") || "did not meet short-form spec";
+    throw new Error(`Export blocked by ExportValidator: ${reasons}`);
   }
 
   const stats = fs.statSync(exportFile);
@@ -220,6 +360,8 @@ async function processExportJob(job, repoRoot, updateProgress) {
     exportFile,
     size: stats.size,
     created: stats.birthtime,
+    encode: encodeInfo,
+    validation,
   };
 }
 

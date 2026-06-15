@@ -84,8 +84,7 @@ const routes = [
   require("./routes/status"),
   require("./routes/system-overview"),
   require("./routes/ui"),
-  require("./routes/nodes"),
-  require("./routes/mesh"),
+  require("./routes/media"), // Video/media streaming (range requests)
   require("./routes/rag"),
   require("./routes/operator"),
   require("./routes/files"),
@@ -236,9 +235,13 @@ if (enableMcpOAuth && fs.existsSync(mcpOAuthServerScript)) {
 }
 
 // ── Trading Microservice (Lantern OS Native) ──
+// Set LANTERN_DISABLE_TRADING=1 to skip the trading microservice + AI trader.
+const tradingDisabled = process.env.LANTERN_DISABLE_TRADING === "1";
 let tradingService = null;
 const tradingServiceScript = path.join(__dirname, "start-trading-service.js");
-if (fs.existsSync(tradingServiceScript)) {
+if (tradingDisabled) {
+  console.log("[Trading Service] Skipped (LANTERN_DISABLE_TRADING=1)");
+} else if (fs.existsSync(tradingServiceScript)) {
   tradingService = spawn("node", [tradingServiceScript], {
     stdio: "inherit",
     cwd: __dirname,
@@ -258,7 +261,9 @@ if (fs.existsSync(tradingServiceScript)) {
 // ── AI Trader Process (autonomous trading system) ──
 const aiTraderStartupScript = path.join(__dirname, "..", "..", "scripts", "start-ai-trader.js");
 let aiTraderProcess = null;
-if (fs.existsSync(aiTraderStartupScript)) {
+if (tradingDisabled) {
+  console.log("[AI Trader] Skipped (LANTERN_DISABLE_TRADING=1)");
+} else if (fs.existsSync(aiTraderStartupScript)) {
   aiTraderProcess = spawn("node", [aiTraderStartupScript], {
     stdio: "inherit",
     cwd: repoRoot,
