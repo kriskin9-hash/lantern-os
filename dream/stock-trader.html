@@ -788,7 +788,7 @@ function _renderLadder(ticker, d, currentPrice, canvas, overlay, bars, viewKey){
       targetVisibleBars = Math.max(MIN_VISIBLE_BARS, Math.floor(plotWidth / TARGET_BAR_WIDTH));
     }
 
-    const vb = view.visibleBars !== undefined ? view.visibleBars : Math.min(targetVisibleBars, bars.length);
+    const vb = view.visibleBars != null ? view.visibleBars : Math.min(targetVisibleBars, bars.length);
     const maxOffset = Math.max(0, bars.length - vb);
     const offset = Math.min(Math.max(0, view.barOffset||0), maxOffset);
     view.visibleBars = vb;
@@ -992,6 +992,10 @@ function updateCardMeta(ticker, d){
 let lastCardOrder = null;
 function renderCards(){
   const grid = document.getElementById('cardsGrid');
+  // wlPrices hasn't loaded yet — leave the loading placeholder in place
+  // instead of wiping #cardsGrid down to an empty grid.
+  if(!wlPrices.length) return;
+
   const sorted = wlPrices.map(t=>t.ticker).sort((a,b)=>{
     const order={open:0,watching:1,quiet:2};
     return order[tickerState(zonesData[a]||{})] - order[tickerState(zonesData[b]||{})];
@@ -1467,10 +1471,6 @@ async function loadBars(){
     for(const ticker of Object.keys(bars)){
       barsData[ticker] = bars[ticker].bars || [];
     }
-    // Hide loading spinner and render charts
-    const loadingEl = document.getElementById('dashboardLoading');
-    if(loadingEl) loadingEl.style.display = 'none';
-
     wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
     updateRegimeBadges();
     renderFullscreenChart();
