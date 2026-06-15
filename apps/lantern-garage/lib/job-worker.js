@@ -317,6 +317,43 @@ async function processAnalyzeJob(job, repoRoot, ctx) {
     }
   }
 
+  // Write highlight_debug.json — per-segment instrumentation for future tuning.
+  // Note: per-signal strengths (motion, audio_peak, speech_energy) are null until
+  // the highlight engine is extended to preserve per-frame signal values.
+  try {
+    const fmtTime = (s) => {
+      const m = Math.floor(s / 60), sec = (s % 60).toFixed(1);
+      return `${String(m).padStart(2, "0")}:${String(sec).padStart(4, "0")}`;
+    };
+    const debugSegs = Array.isArray(timelineJSON.highlights)
+      ? timelineJSON.highlights.map(hl => ({
+          segment: `${fmtTime(hl.start)}-${fmtTime(hl.end)}`,
+          startSec: hl.start, endSec: hl.end, duration: hl.duration, score: hl.score,
+          signals: Array.isArray(hl.tags) ? hl.tags : [], reason: hl.reason || "",
+          motion: null, audio_peak: null, speech_energy: null,
+        }))
+      : [];
+    const highlightDebug = {
+      jobId: job.id, videoPath, analyzedAt: new Date().toISOString(),
+      durationSec: timelineJSON.duration || null, highlightCount: debugSegs.length,
+      segments: debugSegs,
+      topHighlight: debugSegs.length > 0 ? debugSegs.reduce((a, b) => a.score > b.score ? a : b) : null,
+      scoreV10: scoreV10 ? { viralPct: scoreV10.viralProbability != null ? (scoreV10.viralProbability * 100).toFixed(1) : null, grade: scoreV10.grade } : null,
+    };
+    fs.writeFileSync(path.join(resultsDir, `${job.id}-highlight_debug.json`), JSON.stringify(highlightDebug, null, 2));
+    if (job.input.entryId) {
+      try {
+        const eStore = require("./entry-store");
+        const eDir = eStore.getEntryDir(repoRoot, job.input.entryId);
+        fs.mkdirSync(eDir, { recursive: true });
+        fs.writeFileSync(path.join(eDir, "highlight_debug.json"), JSON.stringify(highlightDebug, null, 2));
+      } catch {}
+    }
+    ctx.log(`Wrote highlight_debug.json (${debugSegs.length} segments)`);
+  } catch (e) {
+    console.error("[job-worker] highlight_debug.json write failed (non-fatal):", e.message);
+  }
+
   ctx.log("Analysis complete");
   ctx.progress(100, "Analysis complete");
 
@@ -635,6 +672,45 @@ async function processSafeZonesJob(job, repoRoot, ctx) {
       console.error("[job-worker] persist safezones failed:", e.message);
       ctx.log(`Persist failed (non-fatal): ${e.message}`);
     }
+  }
+
+  // Write safe_zone_report.json alongside results for audit and enforcement tracking.
+  try {
+    const regions = Array.isArray(result.regions) ? result.regions : [];
+    const facecam = regions.find(r => r.type === "facecam");
+    const hudBands = regions.filter(r => r.type === "hud");
+    const safeZoneReport = {
+      jobId: job.id, videoPath: job.input.videoPath,
+      detectedAt: new Date().toISOString(),
+      status: result.status || "unavailable",
+      framesSampled: result.framesSampled || 0,
+      regions,
+      cropPlan: result.cropPlan || null,
+      enforcement: {
+        facecam_visible: !!facecam,
+        facecam_confidence: facecam ? facecam.confidence : null,
+        facecam_corner: facecam ? facecam.corner : null,
+        hud_bands_detected: hudBands.length,
+        rejected: false,
+        rejection_reason: null,
+      },
+    };
+    // Reject crop if facecam was declared high-confidence but sits below 60% threshold
+    if (facecam && facecam.confidence != null && facecam.confidence < 0.4) {
+      safeZoneReport.enforcement.rejected = true;
+      safeZoneReport.enforcement.rejection_reason = `facecam confidence ${facecam.confidence.toFixed(2)} below 0.40 threshold`;
+    }
+    if (job.input.entryId) {
+      try {
+        const eStore = require("./entry-store");
+        const eDir = eStore.getEntryDir(repoRoot, job.input.entryId);
+        fs.mkdirSync(eDir, { recursive: true });
+        fs.writeFileSync(path.join(eDir, "safe_zone_report.json"), JSON.stringify(safeZoneReport, null, 2));
+      } catch {}
+    }
+    ctx.log(`Wrote safe_zone_report.json (${regions.length} regions, rejected=${safeZoneReport.enforcement.rejected})`);
+  } catch (e) {
+    console.error("[job-worker] safe_zone_report.json write failed (non-fatal):", e.message);
   }
 
   ctx.log("Safe zone detection complete");

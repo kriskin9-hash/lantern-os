@@ -64,18 +64,8 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
       return true;
     }
 
-    sendJson(res, {
-      jobId: job.id,
-      type: job.type,
-      status: job.status,
-      progress: job.progress,
-      progressMessage: job.progressMessage,
-      result: job.result,
-      error: job.error,
-      createdAt: job.createdAt,
-      startedAt: job.startedAt,
-      completedAt: job.completedAt,
-    });
+    // Use toJSON() to include stages, logs, liveStats, etaSeconds for TaskProgressPanel
+    sendJson(res, job.toJSON());
     return true;
   }
 
