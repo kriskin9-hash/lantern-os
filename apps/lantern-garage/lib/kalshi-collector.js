@@ -19,6 +19,7 @@ const KALSHI_DIR = path.resolve(__dirname, "..", "..", "..", "data", "kalshi");
 let collector = null;
 let latestSnapshot = null;
 let isRunning = false;
+let backoffUntil = null;
 
 function getSnapshotPath() {
   const today = new Date().toISOString().split("T")[0];
@@ -45,9 +46,17 @@ function logSnapshot(snapshot) {
  * Fetch and store a fresh now-slice snapshot
  */
 async function collectSnapshot() {
+  if (backoffUntil && Date.now() < backoffUntil) return null;
+
   try {
     // Check if exchange is active
     const status = await kalshi.getExchangeStatus();
+    if (status.status === 429) {
+      const retryAfter = Math.max(30, parseInt(status.retryAfter || "60", 10)) * 1000;
+      backoffUntil = Date.now() + retryAfter;
+      console.warn(`[Kalshi Collector] 429 rate limit — pausing ${retryAfter / 1000}s`);
+      return null;
+    }
     if (!status.ok || !status.data?.exchange_active) {
       return null; // markets closed
     }
@@ -59,6 +68,12 @@ async function collectSnapshot() {
       limit: 200,
     });
 
+    if (mk.status === 429) {
+      const retryAfter = Math.max(30, parseInt(mk.retryAfter || "60", 10)) * 1000;
+      backoffUntil = Date.now() + retryAfter;
+      console.warn(`[Kalshi Collector] 429 rate limit — pausing ${retryAfter / 1000}s`);
+      return null;
+    }
     if (!mk.ok || !mk.data?.markets) {
       return null;
     }
@@ -131,10 +146,22 @@ function getLatestMarkets() {
   return latestSnapshot?.markets || [];
 }
 
+function getStatus() {
+  const now = Date.now();
+  const inBackoff = backoffUntil != null && now < backoffUntil;
+  return {
+    running: isRunning,
+    backoff: inBackoff,
+    resumeAt: inBackoff ? new Date(backoffUntil).toISOString() : null,
+    latestSnapshotAt: latestSnapshot?.generatedAt || null,
+  };
+}
+
 module.exports = {
   start,
   stop,
   getLatest,
   getLatestMarkets,
+  getStatus,
   collectSnapshot, // for manual testing
 };

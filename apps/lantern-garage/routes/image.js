@@ -138,7 +138,16 @@ module.exports = function imageRoutes(req, res, url, deps) {
   // Gallery API: List gallery images
   if (req.method === "GET" && url.pathname === "/api/images") {
     try {
-      const images = listImages();
+      const imgDir = path.join(deps.repoRoot || process.cwd(), "data", "images");
+      if (!fs.existsSync(imgDir)) fs.mkdirSync(imgDir, { recursive: true });
+      const images = fs.readdirSync(imgDir)
+        .filter(f => /\.(png|jpg|jpeg|webp|gif)$/i.test(f))
+        .map(f => {
+          const stat = fs.statSync(path.join(imgDir, f));
+          const id = f.split(".")[0];
+          return { id, filename: f, url: `/images/${f}`, size: stat.size, timestamp: stat.mtime.toISOString() };
+        })
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
       sendJson(res, { images, count: images.length });
     } catch (err) {
       sendJson(res, { error: err.message, images: [] }, 500);

@@ -1028,7 +1028,9 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const o = body ? JSON.parse(body) : {};
-        return sendJson(res, await kalshi.placeOrder(o), 200), true;
+        const result = await kalshi.placeOrder(o);
+        const httpStatus = result.mode === 'live' && result.status ? (result.status >= 200 && result.status < 300 ? 200 : result.status) : 200;
+        return sendJson(res, result, httpStatus), true;
       }
       // POST — cancel order  { orderId }
       if (url.pathname === '/api/trading/kalshi/order/cancel' && req.method === 'POST') {
@@ -1502,13 +1504,16 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     try {
       const collector = deps.kalshiCollector;
       const latest = collector ? collector.getLatest() : null;
+      const collectorStatus = collector?.getStatus?.() || null;
       sendJson(res, {
         running: !!collector,
+        backoff: collectorStatus?.backoff || false,
+        resumeAt: collectorStatus?.resumeAt || null,
         lastSnapshot: latest ? {
           generatedAt: latest.generatedAt,
           marketCount: latest.markets?.length || 0,
           exitCount: latest.exitCount || 0,
-          markets: latest.markets?.slice(0, 5), // First 5 for preview
+          markets: latest.markets?.slice(0, 5),
         } : null,
       }, 200);
     } catch (error) {
