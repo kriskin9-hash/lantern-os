@@ -650,6 +650,186 @@
     }
   }
 
+  /**
+   * Phase 3.5: Performance Overlay
+   * Monitor FPS, memory, event rate, render cycles
+   */
+  class PerformanceOverlay {
+    constructor() {
+      this.fps = 0;
+      this.frameCount = 0;
+      this.lastTime = performance.now();
+      this.eventRate = 0;
+      this.eventCount = 0;
+      this.lastEventTime = performance.now();
+      this.renderCycles = 0;
+      this.enabled = localStorage.getItem('STREAM_DEBUG') === 'true' || window.location.search.includes('debug');
+      this.createElement();
+    }
+
+    createElement() {
+      if (!this.enabled) return;
+
+      const overlay = document.createElement('div');
+      overlay.id = 'performanceOverlay';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 60px;
+        right: 10px;
+        background: rgba(0, 0, 0, 0.85);
+        color: #00d4aa;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        padding: 8px;
+        border: 1px solid #00d4aa;
+        border-radius: 4px;
+        z-index: 10000;
+        line-height: 1.4;
+        pointer-events: none;
+        max-width: 180px;
+      `;
+      overlay.innerHTML = `<div id="perfStats"></div>`;
+      document.body.appendChild(overlay);
+
+      // Animation frame loop
+      const updateLoop = () => {
+        this.frameCount++;
+        const now = performance.now();
+        const elapsed = now - this.lastTime;
+
+        if (elapsed >= 1000) {
+          this.fps = Math.round(this.frameCount * 1000 / elapsed);
+          this.frameCount = 0;
+          this.lastTime = now;
+
+          const memUsage = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : 0;
+          const memLimit = performance.memory ? Math.round(performance.memory.jsHeapSizeLimit / 1048576) : 0;
+
+          const stats = document.getElementById('perfStats');
+          if (stats) {
+            stats.innerHTML = `
+              FPS: ${this.fps}<br>
+              Events/sec: ${this.eventRate.toFixed(1)}<br>
+              Renders: ${this.renderCycles}<br>
+              Memory: ${memUsage}/${memLimit}MB<br>
+              API calls: ${window.__apiCallCount || 0}
+            `;
+          }
+
+          this.eventRate = 0;
+        }
+
+        requestAnimationFrame(updateLoop);
+      };
+
+      requestAnimationFrame(updateLoop);
+    }
+
+    recordEvent() {
+      if (!this.enabled) return;
+      this.eventCount++;
+      this.eventRate = this.eventCount;
+      this.eventCount = 0;
+    }
+
+    recordRender() {
+      if (!this.enabled) return;
+      this.renderCycles++;
+    }
+  }
+
+  const perfOverlay = new PerformanceOverlay();
+
+  /**
+   * Phase 3.5: Stream Debug Mode
+   * Logs event IDs, sequences, delivery timing
+   */
+  function enableStreamDebug() {
+    const debugMode = localStorage.getItem('STREAM_DEBUG') === 'true' || window.location.search.includes('debug');
+    if (!debugMode) return;
+
+    const eventLog = {
+      events: [],
+      sequences: new Set(),
+      duplicates: 0,
+      missedSequences: 0
+    };
+
+    const originalConnect = window.connectStream;
+    window.connectStream = function() {
+      originalConnect.call(this);
+
+      const eventSource = window.__eventSource;
+      if (!eventSource) return;
+
+      const originalOnMessage = eventSource.onmessage;
+      eventSource.onmessage = function(e) {
+        try {
+          const msg = JSON.parse(e.data);
+          const eventId = `${msg.type}:${msg.data?.tradeId}:${msg.data?.timestamp}`;
+          const sequence = msg.data?.sequence || 0;
+
+          // Check for duplicates
+          if (eventLog.sequences.has(sequence) && sequence > 0) {
+            eventLog.duplicates++;
+            console.warn(`[StreamDebug] Duplicate sequence: ${sequence}`);
+          } else if (sequence > 0) {
+            eventLog.sequences.add(sequence);
+          }
+
+          eventLog.events.push({
+            timestamp: Date.now(),
+            type: msg.type,
+            id: eventId,
+            sequence
+          });
+
+          console.log(`[StreamDebug] Event: ${msg.type} seq=${sequence} id=${eventId.substring(0, 30)}...`);
+
+          // Check delivery timing
+          if (msg.data?.timestamp) {
+            const deliveryLag = Date.now() - msg.data.timestamp;
+            if (deliveryLag > 1000) {
+              console.warn(`[StreamDebug] High delivery lag: ${deliveryLag}ms`);
+            }
+          }
+
+          perfOverlay.recordEvent();
+        } catch (err) {
+          console.error('[StreamDebug] Parse error:', err.message);
+        }
+
+        // Call original handler
+        if (originalOnMessage) {
+          originalOnMessage.call(this, e);
+        }
+      };
+    };
+
+    window.__streamDebugLog = eventLog;
+    console.log('[StreamDebug] Enabled. View logs via window.__streamDebugLog');
+  }
+
+  enableStreamDebug();
+
+  // Track API calls for performance overlay
+  window.__apiCallCount = 0;
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    window.__apiCallCount++;
+    return originalFetch.apply(this, args);
+  };
+
+  // Wrap loadEngineState to track renders
+  const originalLoadState = window.loadEngineState;
+  if (originalLoadState) {
+    window.loadEngineState = async function() {
+      const result = await originalLoadState.call(this);
+      perfOverlay.recordRender();
+      return result;
+    };
+  }
+
   // Start when DOM ready
   document.addEventListener('DOMContentLoaded', init);
 </script>

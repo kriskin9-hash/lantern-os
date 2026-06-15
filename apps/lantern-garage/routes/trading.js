@@ -394,6 +394,10 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       return true;
     }
 
+    // Phase 3.5: Debug mode for stream validation
+    const debugMode = process.env.STREAM_DEBUG === 'true';
+    let eventSequence = 0;
+
     // Set up SSE headers
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -402,22 +406,67 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       'Access-Control-Allow-Origin': '*'
     });
 
-    // Send initial state
+    // Send initial state with phase 3.5 metadata
     const initialState = engine.getState();
-    res.write(`data: ${JSON.stringify({ type: 'initial', data: initialState })}\n\n`);
+    const initialEvent = {
+      type: 'initial',
+      data: initialState,
+      sequence: eventSequence++,
+      timestamp: Date.now()
+    };
+    if (debugMode) {
+      console.log('[Trading Stream] Initial event sent, sequence:', initialEvent.sequence);
+    }
+    res.write(`data: ${JSON.stringify(initialEvent)}\n\n`);
 
-    // Set up listeners for trade events
+    // Set up listeners for trade events (with phase 3.5 metadata)
     const onTradeCreated = (trade) => {
-      res.write(`data: ${JSON.stringify({ type: 'trade:created', data: trade })}\n\n`);
+      const event = {
+        type: 'trade:created',
+        data: { ...trade, sequence: eventSequence },
+        sequence: eventSequence++,
+        timestamp: Date.now()
+      };
+      if (debugMode) {
+        console.log(`[Trading Stream] trade:created seq=${event.sequence} tradeId=${trade.tradeId}`);
+      }
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
     const onTradeUpdated = (trade) => {
-      res.write(`data: ${JSON.stringify({ type: 'trade:updated', data: trade })}\n\n`);
+      const event = {
+        type: 'trade:updated',
+        data: { ...trade, sequence: eventSequence },
+        sequence: eventSequence++,
+        timestamp: Date.now()
+      };
+      if (debugMode) {
+        console.log(`[Trading Stream] trade:updated seq=${event.sequence} tradeId=${trade.tradeId} status=${trade.status}`);
+      }
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
     const onTradeFilled = (trade) => {
-      res.write(`data: ${JSON.stringify({ type: 'trade:filled', data: trade })}\n\n`);
+      const event = {
+        type: 'trade:filled',
+        data: { ...trade, sequence: eventSequence },
+        sequence: eventSequence++,
+        timestamp: Date.now()
+      };
+      if (debugMode) {
+        console.log(`[Trading Stream] trade:filled seq=${event.sequence} tradeId=${trade.tradeId}`);
+      }
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
     const onTradeRejected = (trade) => {
-      res.write(`data: ${JSON.stringify({ type: 'trade:rejected', data: trade })}\n\n`);
+      const event = {
+        type: 'trade:rejected',
+        data: { ...trade, sequence: eventSequence },
+        sequence: eventSequence++,
+        timestamp: Date.now()
+      };
+      if (debugMode) {
+        console.log(`[Trading Stream] trade:rejected seq=${event.sequence} tradeId=${trade.tradeId}`);
+      }
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
     };
 
     engine.on('trade:created', onTradeCreated);
@@ -427,6 +476,9 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
     // Clean up on disconnect
     req.on('close', () => {
+      if (debugMode) {
+        console.log(`[Trading Stream] Client disconnected after ${eventSequence} events`);
+      }
       engine.removeListener('trade:created', onTradeCreated);
       engine.removeListener('trade:updated', onTradeUpdated);
       engine.removeListener('trade:filled', onTradeFilled);
