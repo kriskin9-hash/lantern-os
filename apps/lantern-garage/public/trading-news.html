@@ -388,11 +388,21 @@ function loadNews() {
         tickerCount: data?.ticker_news?.length ?? 0,
         broadCount: data?.broad_news?.length ?? 0,
         hasError: !!data?.error,
-        source: data?.source,
-        rawData: JSON.stringify(data).slice(0, 200)
+        source: data?.source
       });
-      const tickerNews = data.ticker_news || [];
-      const broadNews = data.broad_news || [];
+      let tickerNews = data.ticker_news || [];
+      let broadNews = data.broad_news || [];
+
+      // Ensure all articles have a unique id field for deduplication
+      tickerNews = tickerNews.map(n => ({
+        ...n,
+        id: n.id || n.news_id || (n.headline + '|' + JSON.stringify(n.symbols))
+      }));
+      broadNews = broadNews.map(n => ({
+        ...n,
+        id: n.id || n.news_id || (n.headline)
+      }));
+
       if (data.error || (tickerNews.length === 0 && broadNews.length === 0)) {
         console.log('[trading-news] Feed empty, falling back to CSF');
         loadNewsFromCSF();
@@ -428,13 +438,29 @@ function loadNewsFromCSF() {
 }
 
 function processNews(ticker_news, broad_news, persistToCSF) {
+  console.log('[trading-news] processNews input:', { tickerCount: ticker_news.length, broadCount: broad_news.length });
+  const tickerDetail = ticker_news.map(n => ({ id: n.id, headline: n.headline.slice(0,40), symbols: JSON.stringify(n.symbols) }));
+  const broadDetail = broad_news.map(n => ({ id: n.id, headline: n.headline.slice(0,40) }));
+  console.log('[trading-news] ticker articles (detail):', JSON.stringify(tickerDetail, null, 2));
+  console.log('[trading-news] broad articles (detail):', JSON.stringify(broadDetail, null, 2));
+
   allNews = [...ticker_news, ...broad_news];
+  console.log('[trading-news] combined before dedupe:', allNews.length);
 
   // Deduplicate by id
   const seen = new Set();
-  allNews = allNews.filter(n => { if(seen.has(n.id)) return false; seen.add(n.id); return true; });
-
-  console.log('[trading-news] processNews: rendering', allNews.length, 'articles');
+  const beforeDedupe = allNews.length;
+  const dupeIds = [];
+  allNews = allNews.filter(n => {
+    const isDupe = seen.has(n.id);
+    if (isDupe) {
+      dupeIds.push(n.id);
+      console.log('[trading-news] FILTERING OUT DUPE ID:', n.id, '(headline:', n.headline.slice(0,30), ')');
+    }
+    if (!isDupe) seen.add(n.id);
+    return !isDupe;
+  });
+  console.log('[trading-news] after dedupe:', { before: beforeDedupe, after: allNews.length, removed: beforeDedupe - allNews.length, dupeIds });
 
   // Set accurate period label
   if (allNews.length > 0) {

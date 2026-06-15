@@ -354,6 +354,38 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/engine-health — Trade State Engine health check (Phase 2.5)
+  if (url.pathname === '/api/trading/engine-health' && req.method === 'GET') {
+    try {
+      const engine = deps.tradeStateEngine;
+      if (!engine) {
+        return sendJson(res, { error: 'Trade State Engine not available' }, 503), true;
+      }
+      const health = engine.getHealth();
+      sendJson(res, health, health.status === 'healthy' ? 200 : 503);
+    } catch (error) {
+      console.error('[Trading] /engine-health error:', error.message);
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/trading/reconcile — Force state reconciliation (Phase 2.5)
+  if (url.pathname === '/api/trading/reconcile' && req.method === 'POST') {
+    try {
+      const engine = deps.tradeStateEngine;
+      if (!engine) {
+        return sendJson(res, { error: 'Trade State Engine not available' }, 503), true;
+      }
+      const result = engine.reconcileState();
+      sendJson(res, result, result.success ? 200 : 207); // 207 Multi-Status if issues found
+    } catch (error) {
+      console.error('[Trading] /reconcile error:', error.message);
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
+
   // GET /api/trading/stream — Server-Sent Events stream for real-time trade updates
   if (url.pathname === '/api/trading/stream' && req.method === 'GET') {
     const engine = deps.tradeStateEngine;
