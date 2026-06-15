@@ -39,13 +39,15 @@
   /* Skip link (WCAG 2.4.1) */
   .skip-link{position:absolute;left:-9999px;top:-9999px;z-index:9999;background:var(--accent);color:white;padding:10px 15px;text-decoration:none;border-radius:3px}
   .skip-link:focus{left:10px;top:10px;outline:2px solid white}
-  /* ── Layout ── */
-  .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px 1fr auto;height:100vh}
+  /* ── Layout (TradingView-style) ── */
+  .layout{display:grid;grid-template-columns:280px 1fr;grid-template-rows:50px 60px 1fr 140px;height:100vh}
   .header{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
-  .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
-  .main{overflow-y:auto;padding:12px;background:var(--bg0);outline:none}
+  .toolbar{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 18px;overflow-x:auto}
+  .sidebar{grid-column:1;grid-row:3;background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;display:flex;flex-direction:column}
+  .main{grid-column:2;grid-row:3;overflow:hidden;background:var(--bg0);outline:none;display:flex;flex-direction:column}
   .main:focus{outline:none}
-  .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:8px;padding:8px;max-height:196px;box-sizing:border-box}
+  .chart-area{flex:1;overflow:hidden;position:relative}
+  .footer{grid-column:1/-1;grid-row:4;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:8px;padding:8px;box-sizing:border-box;overflow-y:auto}
   /* ── Header ── */
   .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.08em;white-space:nowrap}
   .logo span{color:var(--text0);font-weight:400}
@@ -61,25 +63,34 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;margin-left:auto;transition:background .15s,color .15s}
   .nav-link:hover{color:var(--text0);background:var(--bg3)}
-  /* ── Sidebar watchlist ── */
-  .wl-item{padding:6px 12px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .15s;outline:none}
-  .wl-item:hover,.wl-item.active{background:var(--bg2)}
+  /* ── Sidebar watchlist (TradingView-style) ── */
+  .watchlist{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+  .wl-header{padding:8px 16px;font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)}
+  .wl-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s;outline:none;display:flex;flex-direction:column;gap:4px}
+  .wl-item:hover{background:rgba(255,255,255,.05)}
+  .wl-item.active{background:rgba(74,158,255,.12);border-left:3px solid var(--blue)}
   .wl-item:focus{outline:2px solid var(--blue);outline-offset:-2px}
-  .wl-item.active{box-shadow:inset 2px 0 0 var(--blue);background:var(--bg3)}
-  .wl-sym{font-family:var(--mono);font-size:11px;font-weight:600}
-  .wl-row{display:flex;justify-content:space-between;align-items:center}
-  .wl-price{font-family:var(--mono);font-size:10px;color:var(--text1)}
-  .wl-chg{font-family:var(--mono);font-size:9px;font-weight:600}
+  .wl-row{display:flex;justify-content:space-between;align-items:baseline}
+  .wl-sym{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text0)}
+  .wl-price{font-family:var(--mono);font-size:11px;color:var(--text1)}
+  .wl-chg{font-family:var(--mono);font-size:10px;font-weight:600}
   .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
-  .wl-signal{font-family:var(--mono);font-size:8px;margin-top:2px}
-  .wl-add{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}
+  .wl-signal{font-family:var(--mono);font-size:8px;color:var(--text2)}
+  .wl-add{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:4px}
   .wl-add input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:4px 6px;border-radius:3px}
   .wl-add button{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .wl-add button:hover{color:var(--text0)}
   .wl-remove{font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;padding:0 4px}
   .wl-remove:hover{color:var(--red)}
-  /* ── Ticker cards grid ── */
-  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+  /* ── Toolbar (chart controls) ── */
+  .toolbar-btn{font-family:var(--mono);font-size:11px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,color .15s;outline:none;white-space:nowrap}
+  .toolbar-btn:hover{color:var(--text0);background:var(--bg3)}
+  .toolbar-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .toolbar-btn:focus{outline:2px solid var(--blue)}
+  .toolbar-separator{width:1px;height:20px;background:var(--border);margin:0 4px}
+  /* ── Ticker cards grid (hidden in single-chart view) ── */
+  .cards-grid{display:none;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
+  .cards-grid.visible{display:grid}
   /* ── Loading state ── */
   .dashboard-loading{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:80px 20px;color:var(--text1);font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase}
   .dashboard-loading img{width:56px;height:56px;animation:dashboard-spin 3s linear infinite;filter:drop-shadow(0 0 8px rgba(74,158,255,.35))}
@@ -114,6 +125,7 @@
   .pnl-neg{background:rgba(255,95,109,.15);color:var(--red)}
   /* Zone ladder */
   .zone-ladder{position:relative;height:220px;background:var(--bg1);margin:0 14px 10px;border-radius:3px;overflow:hidden;cursor:default;border:1px solid var(--border)}
+  .zone-ladder.chart-main{margin:0;border-radius:0;height:100%}
   .card.state-open .zone-ladder{height:280px}
   .card.state-quiet .zone-ladder{height:130px}
   /* Order ticket trigger row */
@@ -585,7 +597,11 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   canvas.height = Math.round(h*dpr);
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,w,h);
+
+  // Dark background for better contrast
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg1').trim();
+  ctx.fillRect(0, 0, w, h);
+
   if(rMax<=rMin) return;
 
   const pw  = Math.max(0, w - AXIS_W);
@@ -617,40 +633,62 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
     // Time axis labels removed for cleaner TradingView-style appearance
 
     if(type==='candle'){
+      ctx.lineWidth = 1.5;
       for(let i=0;i<n;i++){
         const b = bars[i];
-        const x = i*slotW + slotW/2;
+        const x = Math.round(i*slotW + slotW/2);
         const up = b.close >= b.open;
         const color = up ? CHART_CANDLE_UP : CHART_CANDLE_DOWN;
+
+        // Wick (high-low line)
         ctx.strokeStyle = color;
-        ctx.fillStyle   = color;
-        ctx.lineWidth   = 1;
+        ctx.globalAlpha = 0.8;
         ctx.beginPath();
         ctx.moveTo(x, y(b.high));
         ctx.lineTo(x, y(b.low));
         ctx.stroke();
+
+        // Body (open-close rectangle)
         const bodyTop = y(Math.max(b.open,b.close));
         const bodyBot = y(Math.min(b.open,b.close));
-        const bw = Math.max(1, slotW*0.6);
-        ctx.fillRect(x-bw/2, bodyTop, bw, Math.max(1, bodyBot-bodyTop));
+        const bodyH = Math.max(1.5, Math.abs(bodyBot - bodyTop));
+        const bw = Math.max(2, Math.min(slotW*0.65, 12));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = color;
+        ctx.fillRect(x - bw/2, bodyTop, bw, bodyH);
+
+        // Body border for definition
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.6;
+        ctx.strokeRect(x - bw/2, bodyTop, bw, bodyH);
       }
+      ctx.globalAlpha = 1;
     }else{
       const pts = bars.map((b,i)=>[i*slotW + slotW/2, y(b.close)]);
-      // area fill under the line
+      // Gradient area fill under the line
+      const gradient = ctx.createLinearGradient(0, 0, 0, ph);
+      gradient.addColorStop(0, 'rgba(74,158,255,.15)');
+      gradient.addColorStop(1, 'rgba(74,158,255,.01)');
+
       ctx.beginPath();
       ctx.moveTo(pts[0][0], ph);
       for(const [x,yy] of pts) ctx.lineTo(x,yy);
       ctx.lineTo(pts[n-1][0], ph);
       ctx.closePath();
-      ctx.fillStyle = 'rgba(74,158,255,.08)';
+      ctx.fillStyle = gradient;
       ctx.fill();
-      // line
+
+      // Line with smooth anti-aliasing
       ctx.beginPath();
       ctx.moveTo(pts[0][0], pts[0][1]);
       for(let i=1;i<n;i++) ctx.lineTo(pts[i][0], pts[i][1]);
       ctx.strokeStyle = '#4a9eff';
-      ctx.lineWidth = 1.3;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.globalAlpha = 0.9;
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
   }
 }
@@ -714,10 +752,19 @@ function _renderLadder(ticker, d, currentPrice, canvas, overlay, bars, viewKey){
   const view  = getChartView(viewKey);
 
   // Horizontal zoom/pan: slice to the visible bar window. visibleBars===null
-  // means "show everything" (the default, auto-fit view).
+  // means "auto-fit based on width" (the default, adaptive view).
   let viewBars = bars;
-  if(bars.length > 0 && view.visibleBars != null){
-    const vb = Math.max(MIN_VISIBLE_BARS, Math.min(view.visibleBars, bars.length));
+  if(bars.length > 0){
+    // Calculate optimal visible bars based on canvas width
+    // Target: ~65-75px per bar for readable candles (matches TradingView)
+    let targetVisibleBars = bars.length;
+    if(canvas && canvas.clientWidth){
+      const plotWidth = Math.max(0, canvas.clientWidth - AXIS_W);
+      const TARGET_BAR_WIDTH = 70;
+      targetVisibleBars = Math.max(MIN_VISIBLE_BARS, Math.floor(plotWidth / TARGET_BAR_WIDTH));
+    }
+
+    const vb = view.visibleBars !== undefined ? view.visibleBars : Math.min(targetVisibleBars, bars.length);
     const maxOffset = Math.max(0, bars.length - vb);
     const offset = Math.min(Math.max(0, view.barOffset||0), maxOffset);
     view.visibleBars = vb;
