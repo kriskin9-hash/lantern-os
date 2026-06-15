@@ -9,12 +9,17 @@ Prediction markets (Kalshi, Polymarket) serve as external ground-truth signals f
 3. **Adversarial validation** — market participants actively seek profitable exploits (finding agent errors)
 4. **Latency measurement** — time from agent prediction to actual resolution quantifies decision quality
 
+> **Full literature survey (issue #520):** see
+> [`docs/research/PREDICTION-MARKET-GROUNDING-SURVEY.md`](research/PREDICTION-MARKET-GROUNDING-SURVEY.md)
+> for the verified references, viability verdict, and proposed wiring.
+
 ## Key Papers
 
 - **arXiv:2309.01219** — "Using Prediction Markets to Validate ML Models" (2023)
-  - Establishes prediction markets as ML validation signal
-  - Measures agent accuracy against market consensus
-  - Shows >5% alpha capture correlates with >90% confidence
+  - ⚠️ **UNVERIFIED:** this arXiv id could not be confirmed to map to this title
+    (see survey §5). Treat as unverified until checked; the survey relies on
+    independently-citable works instead.
+  - (claimed) Establishes prediction markets as ML validation signal
 
 ## Σ₀ Grounding via Kalshi Tight-Band
 
