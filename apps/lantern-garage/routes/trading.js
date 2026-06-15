@@ -1028,6 +1028,26 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const o = body ? JSON.parse(body) : {};
+
+        // Cash check before order (#434)
+        try {
+          const balance = await kalshi.getBalance();
+          const availableCash = balance?.buying_power || balance?.cash || 0;
+          const orderCost = (o.price || 0) * (o.quantity || 0);
+
+          if (orderCost > 0 && availableCash < orderCost) {
+            return sendJson(res, {
+              error: 'INSUFFICIENT_FUNDS',
+              message: `Insufficient cash: need ${(orderCost / 100).toFixed(2)}, have ${(availableCash / 100).toFixed(2)}`,
+              required_cents: orderCost,
+              available_cents: availableCash
+            }, 402), true;  // 402 Payment Required
+          }
+        } catch (e) {
+          console.warn('[trading] Cash check failed:', e.message);
+          // Continue with order; let Kalski API handle validation
+        }
+
         const result = await kalshi.placeOrder(o);
         const status = (result.error || result.errorMessage) ? 400 : (result.success === false ? 400 : 201);
         return sendJson(res, result, status), true;
