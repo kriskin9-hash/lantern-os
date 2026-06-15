@@ -33,6 +33,7 @@ const { JobQueue } = require("./lib/job-queue");
 const { JobWorker } = require("./lib/job-worker");
 const { PrWatcher } = require("./lib/pr-watcher");
 const { TradeStateEngine } = require("./lib/trade-state-engine");
+const SystemConsistencyValidator = require("./lib/system-consistency-validator");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -365,6 +366,50 @@ server.listen(port, host, () => {
   const tradeStateEngine = new TradeStateEngine();
   deps.tradeStateEngine = tradeStateEngine; // Make available to routes and order handlers
   console.log("[Trade State Engine] Initialized — all orders will flow through this engine");
+
+  // ── System Consistency Validator (Phase 3.6) ──
+  const systemConsistencyValidator = new SystemConsistencyValidator();
+  deps.systemConsistencyValidator = systemConsistencyValidator;
+  console.log("[System Consistency] Validator initialized for cross-layer drift detection");
+
+  // Hook into SSE stream to record events for replay validation
+  tradeStateEngine.on('trade:created', (trade) => {
+    systemConsistencyValidator.recordStreamEvent({
+      type: 'trade:created',
+      data: trade,
+      timestamp: Date.now()
+    });
+  });
+  tradeStateEngine.on('trade:updated', (trade) => {
+    systemConsistencyValidator.recordStreamEvent({
+      type: 'trade:updated',
+      data: trade,
+      timestamp: Date.now()
+    });
+  });
+  tradeStateEngine.on('trade:filled', (trade) => {
+    systemConsistencyValidator.recordStreamEvent({
+      type: 'trade:filled',
+      data: trade,
+      timestamp: Date.now()
+    });
+  });
+
+  // Periodic consistency checks if monitoring is enabled
+  if (process.env.CONSISTENCY_MONITOR === 'true') {
+    setInterval(() => {
+      const uiState = {
+        activeTrades: tradeStateEngine.getOpenPositions().length,
+        displayedTrades: tradeStateEngine.getRecent(20),
+        pnl: 0,
+        timestamp: Date.now()
+      };
+      const validation = systemConsistencyValidator.validate(tradeStateEngine, uiState);
+      if (validation.driftSummary.status !== 'ok') {
+        console.warn('[System Consistency] Drift detected:', validation.driftSummary);
+      }
+    }, 5000); // Check every 5 seconds
+  }
 
   // ── Kalshi Position Monitor (10s polling) + Convergence Trainer ──
   const { startMonitoring } = require("./lib/kalshi-position-monitor");

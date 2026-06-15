@@ -489,6 +489,53 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/consistency-report — Phase 3.6 Cross-System Consistency
+  if (url.pathname === '/api/trading/consistency-report' && req.method === 'GET') {
+    const engine = deps.tradeStateEngine;
+    const validator = deps.systemConsistencyValidator;
+
+    if (!engine || !validator) {
+      sendJson(res, { error: 'Consistency validator not available' }, 503);
+      return true;
+    }
+
+    try {
+      // Capture current UI state from engine
+      const uiState = {
+        activeTrades: engine.getOpenPositions ? engine.getOpenPositions().length : 0,
+        displayedTrades: engine.getRecent(20),
+        pnl: 0, // Would be calculated from actual positions
+        timestamp: Date.now()
+      };
+
+      // Run validation
+      const result = validator.validate(engine, uiState, {
+        watchlist: ['SPY', 'AAPL', 'TSLA', 'NVDA'],
+        activeSymbols: Array.from(new Set(
+          Array.from(engine.trades.values()).map(t => t.symbol).filter(Boolean)
+        )),
+        collectorActive: true
+      });
+
+      // Return consistency report
+      const report = validator.getConsistencyReport();
+      sendJson(res, {
+        status: report.status,
+        passRate: report.passRate,
+        totalValidations: report.totalValidations,
+        lastValidation: result,
+        summary: report,
+        timestamp: Date.now()
+      }, 200);
+
+      return true;
+    } catch (e) {
+      console.error('[Trading Routes] Consistency validation error:', e.message);
+      sendJson(res, { error: 'Consistency check failed', details: e.message }, 500);
+      return true;
+    }
+  }
+
   // ── Trading memory: local orders & agent-log (Trading Phase 2, #323) ──────
   // LanternOS-native: reads/writes data/lantern-garage/trading/*.jsonl and
   // CSF Tier.TRACE records under data/csf_memory/ directly. No external
