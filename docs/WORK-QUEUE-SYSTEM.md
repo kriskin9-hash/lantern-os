@@ -4,6 +4,17 @@ Multi-machine contributor coordination via JSONL queue + HTTP API.
 
 ---
 
+## Canonical Queues & Branch Naming
+
+> **Reconciliation note (2026-06-15).** Two distinct queues exist; do not conflate:
+>
+> - **`data/work-queue.jsonl`** - *canonical* queue for the **Convergence Core** build (Phases 1-4, ids `wq-NNN`). The autonomous dispatcher consumes this for core work.
+> - **`data/agent-work-queue/{pending,assigned,in_progress,completed,failed}/queue.jsonl`** - a *separate* dispatch lane for **Three-Doors / CSF** items (`issue-3NN`). Different lifecycle.
+>
+> **Branch names derive from the queue item `id`, NOT a GitHub issue number.** Earlier rows set `branch` from `issue_number`, which collided with real GitHub issues/PRs (e.g. `claude/527-A1-stream-autonomous-work`). Queued items now use `branch = "<lane>/<id>"` with `issue_number: null` until actually filed.
+
+---
+
 ## Architecture
 
 ```
