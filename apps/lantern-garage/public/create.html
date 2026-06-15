@@ -1165,6 +1165,10 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 // Load recent entries
 async function loadRecentEntries() {
   try {
@@ -1203,15 +1207,15 @@ async function loadRecentEntries() {
               <div class="status-badge">${statusBadge}</div>
             </div>
             <div class="project-info">
-              <h3 class="project-title">${title}</h3>
+              <h3 class="project-title">${esc(title)}</h3>
               <div class="project-meta">
-                <span>${formattedDate}</span>
-                ${entry.project ? `<div class="project-meta-sep"></div><span>${entry.project}</span>` : ''}
+                <span>${esc(formattedDate)}</span>
+                ${entry.project ? `<div class="project-meta-sep"></div><span>${esc(entry.project)}</span>` : ''}
               </div>
-              ${entry.description ? `<p class="project-desc">${entry.description}</p>` : ''}
+              ${entry.description ? `<p class="project-desc">${esc(entry.description)}</p>` : ''}
               <div class="project-actions">
-                <a href="/entry.html?id=${entry.id}">View</a>
-                <button class="delete-btn" onclick="openDeleteModal('${entry.id}', '${title}')">Delete</button>
+                <a href="/entry.html?id=${esc(entry.id)}">View</a>
+                <button class="delete-btn" data-id="${esc(entry.id)}" data-title="${esc(title)}" onclick="openDeleteModal(this.dataset.id, this.dataset.title)">Delete</button>
               </div>
             </div>
           </div>
@@ -1252,6 +1256,7 @@ async function analyzeHighlights() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         videoPath: currentEntry.filePath,
+        entryId: currentEntry.id,
         options: {
           fps: 5,
           motionThreshold: 0.15,
@@ -1380,7 +1385,7 @@ async function displayJobResults(job, panelType) {
       html += `</div>`;
     }
 
-    // Enable variant/caption buttons
+    // Enable variant/caption/safezone buttons
     document.getElementById('variants-btn').disabled = false;
     document.getElementById('variants-tool').classList.remove('disabled');
     document.getElementById('variants-status').textContent = 'Ready';
@@ -1388,6 +1393,10 @@ async function displayJobResults(job, panelType) {
     document.getElementById('captions-btn').disabled = false;
     document.getElementById('captions-tool').classList.remove('disabled');
     document.getElementById('captions-status').textContent = 'Ready';
+
+    document.getElementById('safezones-btn').disabled = false;
+    document.getElementById('safezones-tool').classList.remove('disabled');
+    document.getElementById('safezones-status').textContent = 'Ready';
   }
 
   content.innerHTML = html;

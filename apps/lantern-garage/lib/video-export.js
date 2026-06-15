@@ -317,4 +317,70 @@ async function renderSegments(inputPath, outputPath, segments, options = {}) {
   };
 }
 
-module.exports = { reencodeToShortForm, renderSegments, probeSource, buildVideoFilter, DEFAULTS };
+// ─────────────────────────────────────────────────────────────────────────────
+// Caption burning
+// Post-processes an already-rendered video by overlaying captions via the
+// ffmpeg libass subtitles filter. Writes a temp SRT, runs a re-encode pass,
+// deletes the temp file. Non-destructive: on error, the original clip is intact.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Burn captions into a rendered video file using ffmpeg subtitles filter.
+ * @param {string} inputPath   absolute path to the rendered clip (source)
+ * @param {string} outputPath  absolute path to write (captions burned in)
+ * @param {Array<{text:string, startTime:number, endTime:number}>} captions
+ * @param {Object} opts  { timeoutMs }
+ */
+async function burnCaptionsToVideo(inputPath, outputPath, captions, opts = {}) {
+  if (!Array.isArray(captions) || captions.length === 0) {
+    await fs.promises.copyFile(inputPath, outputPath);
+    return { burned: 0 };
+  }
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  const tmpSrt = outputPath + ".burn.srt";
+  fs.writeFileSync(tmpSrt, buildSRT(captions), "utf8");
+
+  // ffmpeg subtitles filter path: on Windows, drive-letter colon must be escaped
+  // (C:/path → C\:/path) after converting backslashes to forward slashes.
+  const srtForFilter = tmpSrt.replace(/\\/g, "/").replace(/^([A-Za-z]):/, "$1\\:");
+
+  const timeoutMs = opts.timeoutMs || 10 * 60 * 1000;
+  try {
+    await runFfmpeg([
+      "-y", "-i", inputPath,
+      "-vf", `subtitles='${srtForFilter}':force_style='FontSize=36,Alignment=2,MarginV=100,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,Outline=2,Shadow=1'`,
+      "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+      "-c:a", "copy",
+      outputPath,
+    ], timeoutMs);
+  } finally {
+    try { fs.unlinkSync(tmpSrt); } catch {}
+  }
+
+  if (!fs.existsSync(outputPath)) {
+    throw new Error("burnCaptionsToVideo: ffmpeg completed but output not created");
+  }
+  return { burned: captions.length };
+}
+
+function buildSRT(captions) {
+  return captions.map((c, i) => {
+    const start = srtTime(c.startTime != null ? c.startTime : (c.start || 0));
+    const end   = srtTime(c.endTime   != null ? c.endTime   : (c.end   || 0));
+    const text  = String(c.text || "").replace(/\r?\n/g, " ");
+    return `${i + 1}\n${start} --> ${end}\n${text}\n`;
+  }).join("\n");
+}
+
+function srtTime(secs) {
+  const h  = Math.floor(secs / 3600);
+  const m  = Math.floor((secs % 3600) / 60);
+  const s  = Math.floor(secs % 60);
+  const ms = Math.round((secs % 1) * 1000);
+  return `${p2(h)}:${p2(m)}:${p2(s)},${p3(ms)}`;
+}
+function p2(n) { return String(Math.floor(n)).padStart(2, "0"); }
+function p3(n) { return String(Math.floor(n)).padStart(3, "0"); }
+
+module.exports = { reencodeToShortForm, renderSegments, probeSource, buildVideoFilter, burnCaptionsToVideo, DEFAULTS };

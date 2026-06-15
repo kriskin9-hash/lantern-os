@@ -469,6 +469,54 @@
 
     .variant-note { font-size: 0.72rem; color: var(--muted); margin-bottom: 10px; }
 
+    .scorev10-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+    }
+
+    .scorev10-headline {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .scorev10-big {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .scorev10-grade {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-left: auto;
+      padding: 4px 12px;
+      border-radius: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+    .scorev10-grade.ga { color: var(--green); border-color: var(--green); }
+    .scorev10-grade.gb { color: var(--gold); border-color: var(--gold); }
+    .scorev10-grade.gc { color: var(--muted); }
+    .scorev10-grade.gd { color: var(--danger); border-color: var(--danger); }
+
+    .scorev10-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .scorev10-metric { display: flex; flex-direction: column; gap: 2px; }
+    .scorev10-metric-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .scorev10-metric-value { font-size: 1.05rem; font-weight: 700; }
+
+    .scorev10-disclaimer { font-size: 0.72rem; color: var(--muted); margin: 6px 0 0; }
+
     .variant-export-btn {
       padding: 7px 14px;
       background: var(--accent);
@@ -570,6 +618,15 @@
       <div class="section-sub">5 strategy edits, ranked by structural viral score. Predictions are structural estimates (not calibrated).</div>
       <div id="variants-grid">
         <p class="no-data">No variants yet — run analysis to generate them.</p>
+      </div>
+    </div>
+
+    <!-- V10 Overall Viral Score + Predictions -->
+    <div style="margin-top: 32px;" id="scorev10-section">
+      <h3 style="margin: 0 0 4px; font-size: 1rem;">V10 Score</h3>
+      <div class="section-sub">Structural estimates from your actual highlight timeline. Calibration activates after ≥100 labeled outcomes.</div>
+      <div id="scorev10-panel">
+        <p class="no-data">No analysis yet — run analysis to generate scores.</p>
       </div>
     </div>
 
@@ -740,6 +797,9 @@ async function loadEntry() {
 
     // Load ranked variants (V10 Short Selection Engine)
     loadVariants(entry);
+
+    // Load V10 overall score + predictions panel
+    loadScoreV10(entry);
 
     // Load analysis
     if (analysis) {
@@ -1014,6 +1074,65 @@ function loadVariants(entry) {
   }).join('');
 }
 
+function loadScoreV10(entry) {
+  const panel = document.getElementById('scorev10-panel');
+  if (!panel) return;
+
+  const s = entry.scoreV10;
+  if (!s) {
+    panel.innerHTML = '<p class="no-data">No analysis yet — run analysis to generate scores.</p>';
+    return;
+  }
+
+  const viral = s.viral || {};
+  const retention = s.retention || {};
+  const gaming = s.gaming || {};
+  const editorGrade = s.editorGrade || {};
+
+  const viralPct = typeof viral.viralScore === 'number' ? Math.round(viral.viralScore * 100) + '%' : '—';
+  const confidence = typeof viral.confidence === 'number' ? Math.round(viral.confidence * 100) + '%' : '—';
+  // Prefer display strings from the predictor; fall back to raw numbers
+  const completionRaw = (retention.display && retention.display.completion) ||
+    (typeof retention.predictedCompletionRate === 'number' ? Math.round(retention.predictedCompletionRate * 100) + '% (est)' : '—');
+  const shareRaw = (retention.display && retention.display.shareRate) ||
+    (typeof retention.predictedShareRate === 'number' ? Math.round(retention.predictedShareRate * 100) + '% (est)' : '—');
+  // Strip the "(structural estimate…)" suffix for the metric tile, keep it in the disclaimer
+  const completionDisplay = String(completionRaw).split(' (')[0];
+  const shareDisplay = String(shareRaw).split(' (')[0];
+
+  const grade = editorGrade.grade || '—';
+  const gradeClass = (grade === 'A+' || grade === 'A') ? 'ga' : grade === 'B' ? 'gb' : grade === 'C' ? 'gc' : grade === 'D' ? 'gd' : '';
+  const gamingTotal = typeof gaming.totalBonus === 'number' ? gaming.totalBonus : null;
+  const gamingDisplay = gamingTotal !== null ? (gamingTotal > 0 ? '+' + Math.round(gamingTotal * 100) + '%' : '0%') : '—';
+
+  panel.innerHTML = `
+    <div class="scorev10-card">
+      <div class="scorev10-headline">
+        <div>
+          <div class="scorev10-big">${escapeHtml(viralPct)}</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">Viral Score · ${escapeHtml(confidence)} confidence</div>
+        </div>
+        <span class="scorev10-grade ${gradeClass}">Grade: ${escapeHtml(grade)}</span>
+      </div>
+      <div class="scorev10-metrics">
+        <div class="scorev10-metric">
+          <span class="scorev10-metric-label">Completion</span>
+          <b class="scorev10-metric-value">${escapeHtml(completionDisplay)}</b>
+        </div>
+        <div class="scorev10-metric">
+          <span class="scorev10-metric-label">Share Rate</span>
+          <b class="scorev10-metric-value">${escapeHtml(shareDisplay)}</b>
+        </div>
+        <div class="scorev10-metric">
+          <span class="scorev10-metric-label">Gaming Bonus</span>
+          <b class="scorev10-metric-value">${escapeHtml(gamingDisplay)}</b>
+        </div>
+      </div>
+      <p class="scorev10-disclaimer">Structural estimates — not calibrated against real outcome data.</p>
+    </div>
+  `;
+}
+
 async function exportVariant(variantId) {
   const v = loadedVariants[variantId];
   const entry = loadedEntryForVariants;
@@ -1035,6 +1154,7 @@ async function exportVariant(variantId) {
         segments: v.segments,
         format: '9:16',
         fit: 'pad',
+        burnCaptions: true,
       }),
     });
     const data = await res.json();

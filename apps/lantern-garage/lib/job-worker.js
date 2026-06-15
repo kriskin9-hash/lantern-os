@@ -7,7 +7,7 @@ const path = require("path");
 const { analyzeVideoForHighlights } = require("./highlight-engine");
 const { generateCaptions } = require("./caption-engine");
 const { detectSafeZones } = require("./safe-zone-detector");
-const { reencodeToShortForm, renderSegments, probeSource } = require("./video-export");
+const { reencodeToShortForm, renderSegments, probeSource, burnCaptionsToVideo } = require("./video-export");
 const { analyzeForCrop } = require("./safe-zone-v2");
 const ci = require("../../../src/creator-intelligence");
 
@@ -150,13 +150,14 @@ async function processAnalyzeJob(job, repoRoot, updateProgress) {
 
   fs.writeFileSync(resultFile, JSON.stringify(results, null, 2));
 
-  // Persist the V10 score + ranked variants onto the entry when tied to one.
-  if ((scoreV10 || variantsV10) && job.input.entryId) {
+  // Persist the V10 score + ranked variants + captions onto the entry when tied to one.
+  if (job.input.entryId) {
     try {
       const entryStore = require("./entry-store");
       entryStore.updateEntry(repoRoot, job.input.entryId, {
-        scoreV10,
-        variantsV10: variantsV10 ? variantsV10.variants : null,
+        scoreV10: scoreV10 || undefined,
+        variantsV10: variantsV10 ? variantsV10.variants : undefined,
+        captions: captions.map((c) => c.toJSON()),
       });
     } catch (e) {
       console.error("[job-worker] persist V10 results to entry failed:", e.message);
@@ -277,6 +278,35 @@ async function processExportJob(job, repoRoot, updateProgress) {
     });
   }
   if (cropPlan) encodeInfo.cropPlan = cropPlan;
+
+  // ── Caption burning (optional post-process) ──
+  // When burnCaptions is set, load captions from the entry (saved by processAnalyzeJob)
+  // and burn them into the rendered video via ffmpeg subtitles filter. Non-fatal: if
+  // no captions are available or the burn fails, the un-captioned render is kept.
+  if (job.input.burnCaptions && fs.existsSync(exportFile)) {
+    updateProgress(85, "Burning captions into video");
+    let captionData = job.input.captionData || null;
+    if (!captionData && job.input.entryId) {
+      try {
+        const entryStore = require("./entry-store");
+        const entryMeta = entryStore.getEntry(repoRoot, job.input.entryId);
+        captionData = (entryMeta && Array.isArray(entryMeta.captions) && entryMeta.captions.length > 0)
+          ? entryMeta.captions : null;
+      } catch {}
+    }
+    if (captionData && captionData.length > 0) {
+      const burnedFile = exportFile.replace(/\.mp4$/, "-captioned.mp4");
+      try {
+        await burnCaptionsToVideo(exportFile, burnedFile, captionData);
+        fs.renameSync(burnedFile, exportFile);
+        encodeInfo.captionsBurned = captionData.length;
+        console.log(`[job-worker] Burned ${captionData.length} captions into ${exportFile}`);
+      } catch (e) {
+        console.error("[job-worker] caption burn failed (non-fatal):", e.message);
+        encodeInfo.captionsBurnFailed = e.message;
+      }
+    }
+  }
 
   updateProgress(90, "Validating output");
 

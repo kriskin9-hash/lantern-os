@@ -17,6 +17,7 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
       const body = JSON.parse(raw);
 
       const videoPath = body.videoPath;
+      const entryId = body.entryId || null;
       if (!videoPath) {
         sendJson(res, { error: "videoPath required" }, 400);
         return true;
@@ -32,6 +33,7 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
       // Queue the job
       const job = jobQueue.enqueue("analyze", {
         videoPath,
+        entryId,
         options: body.options || {},
       });
 
@@ -225,6 +227,7 @@ module.exports = async function creatorRoutes(req, res, url, deps) {
         start: body.start,
         duration: body.duration,
         useSafeZones: body.useSafeZones === true, // crop-plan to avoid facecam/HUD
+        burnCaptions: body.burnCaptions === true,  // overlay captions via subtitles filter
       });
 
       sendJson(res, {
