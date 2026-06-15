@@ -109,7 +109,19 @@ html, body {
 }
 .nav-links a:hover { color: var(--text); background: var(--surface2); }
 .nav-links a.active { color: var(--accent); font-weight: 600; }
-@media (max-width: 580px) { .nav-links { display: none; } }
+/* On narrow screens, keep the nav reachable: compact, horizontally scrollable
+   row instead of hiding it entirely (there is no hamburger menu). */
+@media (max-width: 580px) {
+  .nav-links {
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-links a { padding: 6px 8px; font-size: 12.5px; }
+}
 .nav-actions {
   margin-left: auto;
   display: flex;
