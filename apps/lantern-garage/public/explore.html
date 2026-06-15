@@ -28,17 +28,15 @@
     }
 
     .explore-section {
-      margin: 48px auto;
-      max-width: 1100px;
-      padding: 0 20px;
+      margin: 48px 0;
     }
     .explore-section-title {
-      font-size: 0.95rem;
+      font-size: 0.72rem;
       font-weight: 700;
-      margin-bottom: 20px;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
       color: var(--accent);
+      margin-bottom: 20px;
     }
     .explore-panels {
       display: grid;
@@ -49,6 +47,29 @@
       .explore-panels {
         grid-template-columns: repeat(2, 1fr);
       }
+    }
+    .explore-info-box {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .explore-info-box h2 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+    .explore-info-box p {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .explore-info-box p:last-of-type {
+      margin-bottom: 0;
     }
   </style>
 </head>
@@ -175,12 +196,12 @@
 
     <!-- ── Informational Section ── -->
     <div class="explore-section">
-      <div style="max-width: 1100px; margin: 0 auto; padding: 32px 24px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);">
-        <h2 style="margin-top: 0; margin-bottom: 16px;">About This Navigation</h2>
-        <p style="color: var(--muted); line-height: 1.6; margin-bottom: 12px;">
+      <div class="explore-info-box">
+        <h2>About This Navigation</h2>
+        <p>
           Lantern OS is organized around three core experiences: <strong>Dream Chat</strong> for journaling and reflection, <strong>Lantern Trader</strong> for market intelligence and trading, and <strong>Content Creator</strong> for sharing your work.
         </p>
-        <p style="color: var(--muted); line-height: 1.6; margin-bottom: 0;">
+        <p>
           This page provides access to advanced features, community resources, and system tools. Everything runs locally on your device — no cloud sync, no account required, complete privacy.
         </p>
       </div>
@@ -204,7 +225,11 @@
     <a href="/">Home</a>
     <a href="/dream-chat.html">Journal</a>
     <a href="/trader-dashboard.html">Trader</a>
+    <a href="/create.html">Create</a>
     <a href="/explore.html">Explore</a>
+    <a href="/knowledgecenter.html">Help</a>
+    <span class="sep">·</span>
+    <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">GitHub</a>
     <span class="sep ml">Open source · runs locally · no account needed</span>
   </div>
 </footer>
