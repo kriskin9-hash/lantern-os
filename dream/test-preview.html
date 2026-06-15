@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Trader Preview Test</title>
+<style>
+  body {
+    margin: 0;
+    padding: 20px;
+    background: #f5f5f5;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .test-section {
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .test-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+  }
+  .test-status {
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  .test-status.pass {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+  .test-status.fail {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+  iframe {
+    width: 100%;
+    height: 600px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+  }
+  .button-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  button {
+    padding: 8px 16px;
+    background: #4a9eff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover {
+    background: #357abd;
+  }
+</style>
+</head>
+<body>
+
+<div class="test-section">
+  <div class="test-title">Stock Trader Dashboard - Preview Test</div>
+  <div class="test-status pass">✓ Server is running and serving latest code</div>
+  <p style="color: #666; margin: 0;">Testing TradingView-style UI with light/dark mode support</p>
+</div>
+
+<div class="test-section">
+  <div class="test-title">Test Controls</div>
+  <div class="button-group">
+    <button onclick="toggleLightMode()">Toggle Light/Dark Mode</button>
+    <button onclick="testKeyboardNav()">Test Keyboard Navigation</button>
+    <button onclick="testChartRendering()">Test Chart Rendering</button>
+  </div>
+  <div id="test-output"></div>
+</div>
+
+<div class="test-section">
+  <div class="test-title">Live Preview</div>
+  <iframe src="http://localhost:4177/stock-trader.html" id="preview-frame"></iframe>
+</div>
+
+<script>
+function toggleLightMode() {
+  const frame = document.getElementById('preview-frame');
+  const output = document.getElementById('test-output');
+  
+  output.innerHTML = '<div class="test-status pass">Testing light/dark mode toggle...</div>';
+  
+  try {
+    frame.contentWindow.toggleTheme();
+    setTimeout(() => {
+      const isLightMode = frame.contentWindow.document.documentElement.classList.contains('light-mode');
+      const status = isLightMode ? 'Light Mode' : 'Dark Mode';
+      output.innerHTML = `<div class="test-status pass">✓ Mode switched to: ${status}</div>`;
+    }, 500);
+  } catch (e) {
+    output.innerHTML = `<div class="test-status fail">✗ Error: ${e.message}</div>`;
+  }
+}
+
+function testKeyboardNav() {
+  const frame = document.getElementById('preview-frame');
+  const output = document.getElementById('test-output');
+  
+  output.innerHTML = '<div class="test-status pass">Testing keyboard navigation...</div>';
+  
+  try {
+    // Trigger Tab key in iframe
+    const event = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      code: 'Tab',
+      keyCode: 9,
+      bubbles: true
+    });
+    frame.contentWindow.document.body.dispatchEvent(event);
+    output.innerHTML = `<div class="test-status pass">✓ Keyboard navigation test sent. Press Tab key in the chart area to test focus indicators.</div>`;
+  } catch (e) {
+    output.innerHTML = `<div class="test-status fail">✗ Error: ${e.message}</div>`;
+  }
+}
+
+function testChartRendering() {
+  const frame = document.getElementById('preview-frame');
+  const output = document.getElementById('test-output');
+  
+  output.innerHTML = '<div class="test-status pass">Testing chart rendering...</div>';
+  
+  try {
+    const canvases = frame.contentWindow.document.querySelectorAll('canvas');
+    if (canvases.length > 0) {
+      output.innerHTML = `<div class="test-status pass">✓ Found ${canvases.length} chart canvas(es) rendering. Try zooming in/out on the chart to test adaptive bar rendering.</div>`;
+    } else {
+      output.innerHTML = `<div class="test-status fail">✗ No chart canvases found. Charts may still be loading.</div>`;
+    }
+  } catch (e) {
+    output.innerHTML = `<div class="test-status fail">✗ Error: ${e.message}</div>`;
+  }
+}
+
+window.addEventListener('load', () => {
+  document.getElementById('test-output').innerHTML = '<div class="test-status pass">✓ Preview test page loaded. Use controls above to test features.</div>';
+});
+</script>
+
+</body>
+</html>

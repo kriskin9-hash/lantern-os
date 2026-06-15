@@ -117,23 +117,33 @@ async function updateConnectorStatuses() {
     if (mcpBtn) { mcpBtn.textContent = 'Connect'; mcpBtn.onclick = connectMcp; mcpBtn.classList.add('primary'); }
   }
 
+  // Provider connector badges — authoritative source is server /api/settings/providers.
+  // localStorage is a fallback for offline mode only.
   const providers = [
     { key: 'ANTHROPIC_API_KEY', id: 'claude' },
     { key: 'GEMINI_API_KEY', id: 'gemini' },
     { key: 'OPENAI_API_KEY', id: 'openai' },
     { key: 'XAI_API_KEY', id: 'grok' },
   ];
+
+  let serverKeys = null;
+  try {
+    const pr = await fetch('/api/settings/providers', { signal: AbortSignal.timeout(3000) });
+    if (pr.ok) serverKeys = await pr.json();
+  } catch { /* fall through to localStorage */ }
+
   for (const p of providers) {
-    const hasKey = !!localStorage.getItem(p.key);
     const badge = document.getElementById('conn-status-' + p.id);
+    if (!badge) continue;
+
+    // Prefer server truth; fall back to input field or localStorage
+    const serverConfigured = serverKeys ? !!(serverKeys[p.key]) : null;
     const input = document.getElementById('key-' + p.id);
-    if (badge) {
-      if (hasKey || (input && input.value.length > 0)) {
-        badge.textContent = 'Ready'; badge.className = 'connector-card-status ok';
-      } else {
-        badge.textContent = 'No key'; badge.className = 'connector-card-status err';
-      }
-    }
+    const localConfigured = !!localStorage.getItem(p.key) || !!(input && input.value.length > 0);
+    const configured = serverConfigured !== null ? serverConfigured : localConfigured;
+
+    badge.textContent = configured ? 'Connected' : 'No key';
+    badge.className = `connector-card-status ${configured ? 'ok' : 'err'}`;
   }
 }
 
@@ -279,6 +289,61 @@ async function sendMessage() {
   if (kingdomeMatch) {
     input.value = '';
     window.location.href = '/three-doors-game.html';
+    return;
+  }
+
+  // !convergence / !convergance — live repo status: agent fleet + csf-agent + version
+  if (/^!converg(?:ence|ance)$/i.test(text)) {
+    input.value = '';
+    const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
+    const messages = document.getElementById('messages');
+    addUserBubble(text);
+    const sysRow = document.createElement('div');
+    sysRow.className = 'msg-row agent';
+    sysRow.innerHTML = '<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Running convergence loop…</div>';
+    messages.appendChild(sysRow);
+    if (typeof scrollToBottom === 'function') scrollToBottom();
+    const runLoop      = fetch(`${base}/api/actions/run-loop`, { method: 'POST' });
+    const fetchVersion = fetch(`${base}/api/version`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const fetchAgents  = fetch(`${base}/api/dream/status/agents`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const fetchInspect = fetch(`${base}/api/actions/inspect`).then(r => r.ok ? r.json() : null).catch(() => null);
+    Promise.all([runLoop, fetchVersion, fetchAgents, fetchInspect])
+      .then(async ([loopR, versionD, agentD, inspectD]) => {
+        const d = loopR.ok ? await loopR.json() : {};
+        const rawOut = d.stdout || '';
+        const tag    = versionD?.version?.semver || versionD?.version?.tag || '–';
+        const commit = versionD?.version?.commit ? versionD.version.commit.slice(0, 7) : '?';
+        let score = null, promo = null;
+        try { const m = rawOut.match(/\{[\s\S]*"promotion_ready"[\s\S]*?\}/); if (m) { const j = JSON.parse(m[0]); score = j.convergence_score; promo = j.promotion_ready; } } catch {}
+        const scoreStr = score != null ? ` · score ${(score * 100).toFixed(0)}%` : '';
+        const promoStr = promo === true ? ' · ✓ ready' : promo === false ? ' · ✗ not ready' : '';
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const branch = versionD?.version?.branch;
+        const branchStr = branch && branch !== 'unknown' ? ` · <code style="opacity:0.7">${esc(branch)}</code>` : '';
+        const header = `<b>Convergence</b> ${loopR.ok ? '✓' : '✗'} · <code>${esc(tag)}</code> <code>${esc(commit)}</code>${branchStr}${scoreStr}${promoStr}`;
+        const GH = 'https://github.com/alex-place/lantern-os';
+        let agentBlock = '';
+        if (agentD?.slots || agentD?.queue) {
+          const q = agentD.queue || {};
+          const lanes = (agentD.slots || []).map(s => `${s.lane.replace(/\/$/, '')} lane: ${s.status === 'working' ? '⚡ working' : s.enabled ? 'Ready' : 'Disabled'}`).join('\n');
+          const qLine = `Queue: ${q.pending||0} pending · ${q.working||0} working · ${q.completed||0} done`;
+          const nextLinks = (q.next || []).map(e => `  <a href="${GH}/issues/${e.number}" target="_blank" style="color:var(--accent)">#${e.number}</a> ${esc((e.title||'').slice(0,48))}`).join('\n');
+          agentBlock = `<div style="margin-top:10px;padding:8px;background:var(--surface2,#1e1e2e);border-radius:6px;font-size:12px"><b>Agent Fleet</b><pre style="margin:4px 0 0;white-space:pre-wrap;color:var(--accent,#7c3aed);opacity:0.9">${esc(lanes)}\n${esc(qLine)}${nextLinks ? '\nNext up:\n' + nextLinks : ''}</pre></div>`;
+        } else if (agentD?.text) {
+          agentBlock = `<div style="margin-top:10px;padding:8px;background:var(--surface2,#1e1e2e);border-radius:6px;font-size:12px"><b>Agent Fleet</b><pre style="margin:4px 0 0;white-space:pre-wrap;color:var(--accent,#7c3aed);opacity:0.9">${esc(agentD.text)}</pre></div>`;
+        }
+        let csfBlock = '';
+        const csf = inspectD?.csf_agent;
+        if (csf?.pending_specs > 0) {
+          csfBlock = `<div style="margin-top:8px;padding:8px;background:rgba(161,139,250,0.08);border-left:2px solid var(--accent);font-size:12px"><b>CSF Agent</b> · ${csf.pending_specs} spec${csf.pending_specs > 1 ? 's' : ''} awaiting review<br><span style="opacity:0.7">${(csf.specs || []).map(esc).join(', ')}</span></div>`;
+        } else if (csf?.top_issue) {
+          const ti = csf.top_issue;
+          csfBlock = `<div style="margin-top:8px;padding:8px;background:rgba(6,182,212,0.06);border-left:2px solid var(--accent);font-size:12px"><b>Top Issue</b> · #${ti.number} <a href="${GH}/issues/${ti.number}" target="_blank" style="color:var(--accent)">${esc(ti.title)}</a><br><span style="opacity:0.6">score ${(ti.score * 100).toFixed(0)}%</span></div>`;
+        }
+        sysRow.querySelector('.bubble').innerHTML = header + agentBlock + csfBlock;
+        if (typeof scrollToBottom === 'function') scrollToBottom();
+      })
+      .catch(e => { sysRow.querySelector('.bubble').textContent = `Convergence failed: ${e.message}`; });
     return;
   }
 

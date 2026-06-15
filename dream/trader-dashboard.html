@@ -1,674 +1,363 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lantern Trader</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#06b6d4">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/css/site.css">
+  <title>Lantern Trader Dashboard — Lantern OS</title>
+  <style>
+    .trader-hero {
+      text-align: center;
+      padding: 80px 20px 60px;
+    }
+    .trader-hero-icon {
+      font-size: 120px;
+      margin-bottom: 24px;
+      display: block;
+      animation: trader-beat 2s ease-in-out infinite;
+    }
+    @keyframes trader-beat {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.85; }
+    }
+    .trader-hero h1 {
+      font-size: clamp(2.2rem, 6vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+      line-height: 1.15;
+    }
+    .trader-hero h1 span {
+      color: var(--accent);
+    }
+    .trader-hero .tagline {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 560px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+    }
 
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg0:#0a0c0f;--bg1:#111318;--bg2:#181c22;--bg3:#1f242d;
-    --border:#252b35;--text0:#e8eaf0;--text1:#9aa0ad;--text2:#5c6370;
-    --green:#00d4aa;--red:#ff5f6d;--amber:#f5a623;--blue:#4a9eff;
-    --purple:#a78bfa;--gold:#f5a623;
-    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
-  }
-  html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px;overflow-x:hidden}
-  /* ── Layout ── */
-  .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px 1fr auto;height:100vh}
-  .header{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
-  .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
-  .main{overflow-y:auto;padding:12px;background:var(--bg0)}
-  .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:1px;max-height:180px}
-  /* ── Header ── */
-  .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.08em;white-space:nowrap}
-  .logo span{color:var(--text1);font-weight:400}
-  .hstat{font-family:var(--mono);font-size:10px;display:flex;flex-direction:column;gap:1px;min-width:80px}
-  .hstat .l{color:var(--text2);font-size:8px;text-transform:uppercase;letter-spacing:.1em}
-  .hstat .v{color:var(--text0)}
-  .hstat .pos{color:var(--green)}.hstat .neg{color:var(--red)}
-  .badge{font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:3px;letter-spacing:.1em}
-  .badge-paper{background:rgba(245,166,35,.15);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
-  .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;margin-left:auto}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;margin-left:auto}
-  .nav-link:hover{color:var(--text0)}
-  /* ── Sidebar watchlist ── */
-  .wl-item{padding:6px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .1s}
-  .wl-item:hover,.wl-item.active{background:var(--bg2)}
-  .wl-sym{font-family:var(--mono);font-size:11px;font-weight:600}
-  .wl-row{display:flex;justify-content:space-between;align-items:center}
-  .wl-price{font-family:var(--mono);font-size:10px;color:var(--text1)}
-  .wl-chg{font-family:var(--mono);font-size:9px;font-weight:600}
-  .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
-  .wl-signal{font-family:var(--mono);font-size:8px;margin-top:2px}
-  .wl-add{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}
-  .wl-add input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:4px 6px;border-radius:3px}
-  .wl-add button{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
-  .wl-add button:hover{color:var(--text0)}
-  .wl-remove{font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;padding:0 4px}
-  .wl-remove:hover{color:var(--red)}
-  /* ── Ticker cards grid ── */
-  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
-  .card{background:var(--bg1);border:1px solid var(--border);border-radius:6px;overflow:hidden;transition:border-color .15s}
-  .card.state-open{border-color:rgba(0,212,170,.35);grid-column:span 2}
-  .card.state-watching{border-color:rgba(74,158,255,.25)}
-  .card.state-quiet{opacity:.75}
-  .card-header{padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .card-ticker{font-family:var(--mono);font-size:14px;font-weight:600}
-  .card-price{font-family:var(--mono);font-size:12px;color:var(--text1)}
-  .card-state{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px;letter-spacing:.1em}
-  .state-open .card-state{background:rgba(0,212,170,.12);color:var(--green)}
-  .state-watching .card-state{background:rgba(74,158,255,.12);color:var(--blue)}
-  .state-quiet .card-state{background:rgba(92,99,112,.1);color:var(--text2)}
-  /* Confidence badge */
-  .conf-badge{font-family:var(--mono);font-size:9px;padding:3px 8px;border-radius:3px;display:flex;gap:6px;flex-wrap:wrap;margin:0 14px 6px}
-  .conf-badge.bull{background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.3);color:var(--green)}
-  .conf-badge.bear{background:rgba(255,95,109,.1);border:1px solid rgba(255,95,109,.3);color:var(--red)}
-  .conf-badge.neut{background:rgba(92,99,112,.15);border:1px solid var(--border);color:var(--text2)}
-  /* P&L badge */
-  .pnl-badge{font-family:var(--mono);font-size:10px;padding:2px 8px;border-radius:3px;font-weight:600}
-  .pnl-pos{background:rgba(0,212,170,.15);color:var(--green)}
-  .pnl-neg{background:rgba(255,95,109,.15);color:var(--red)}
-  /* Zone ladder */
-  .zone-ladder{position:relative;height:220px;background:var(--bg0);margin:0 14px 10px;border-radius:3px;overflow:hidden;cursor:default}
-  .card.state-open .zone-ladder{height:280px}
-  .card.state-quiet .zone-ladder{height:130px}
-  /* Order ticket */
-  .order-ticket{display:flex;align-items:center;gap:6px;padding:0 14px 10px}
-  .order-ticket input{width:56px;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:3px 5px;border-radius:3px}
-  .order-ticket input.sltp{width:44px}
-  .order-ticket button{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 10px;border-radius:3px;cursor:pointer;border:1px solid transparent;letter-spacing:.05em}
-  .btn-buy{background:rgba(0,212,170,.12);color:var(--green);border-color:rgba(0,212,170,.3)}
-  .btn-buy:hover{background:rgba(0,212,170,.22)}
-  .btn-sell{background:rgba(255,95,109,.12);color:var(--red);border-color:rgba(255,95,109,.3)}
-  .btn-sell:hover{background:rgba(255,95,109,.22)}
-  /* Chart canvas + overlay */
-  .chart-canvas{position:absolute;left:0;right:64px;top:0;bottom:0;width:calc(100% - 64px);height:100%}
-  .ladder-overlay{position:absolute;inset:0}
-  /* Header chart controls */
-  .chart-ctrl{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer}
-  .chart-ctrl:hover{color:var(--text0)}
-  /* ── Footer panels ── */
-  .fpanel{padding:10px 14px;overflow-y:auto;max-height:180px}
-  .panel-title{font-family:var(--mono);font-size:9px;color:var(--text2);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
-  /* Agent log */
-  .log-item{font-family:var(--mono);font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:grid;grid-template-columns:45px 55px 1fr;gap:4px;align-items:start}
-  .log-time{color:var(--text2)}.log-agent{font-weight:600}
-  .log-grok{color:var(--purple)}.log-claude{color:var(--blue)}.log-risk{color:var(--amber)}
-  .log-system{color:var(--text1)}.log-trail{color:var(--green)}.log-body{color:var(--text0);word-break:break-word}
-  /* Orders */
-  .order-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:9px;border-bottom:1px solid rgba(255,255,255,.03)}
-  /* Market status */
-  .mkt-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:10px}
-  .mkt-label{color:var(--text2)}.mkt-val{color:var(--text0)}
-</style>
+    .system-readiness {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 0.95rem;
+    }
+    .readiness-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .readiness-dot.healthy { background: var(--green); }
+    .readiness-dot.warning { background: var(--gold); }
+    .readiness-dot.critical { background: var(--danger); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .trader-container {
+      max-width: 1100px;
+      margin: 0 auto 48px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 0 20px;
+    }
+    @media (min-width: 740px) {
+      .trader-container {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .trader-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 28px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: var(--text);
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s, background 0.2s, transform 0.15s, box-shadow 0.2s;
+    }
+    .trader-card:hover {
+      border-color: var(--accent);
+      background: var(--surface2);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-hover);
+    }
+    .trader-card-icon {
+      font-size: 48px;
+      line-height: 1;
+    }
+    .trader-card-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .trader-card-desc {
+      font-size: 0.95rem;
+      color: var(--muted);
+      line-height: 1.5;
+      flex-grow: 1;
+    }
+    .trader-card-tag {
+      font-size: 0.8rem;
+      color: var(--accent);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 8px;
+    }
+
+    .health-panel {
+      max-width: 1100px;
+      margin: 48px auto;
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .health-panel h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+    }
+    .health-items {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .health-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .health-item-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .health-item-dot.ok { background: var(--green); }
+    .health-item-dot.warn { background: var(--gold); }
+    .health-item-dot.fail { background: var(--danger); }
+
+    .info-callout {
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 16px 20px;
+      background: var(--accent-dim);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    .info-callout ul {
+      margin: 10px 0 0 20px;
+      padding: 0;
+    }
+    .info-callout li {
+      margin-bottom: 6px;
+    }
+  </style>
 </head>
 <body>
-<div class="layout">
 
-<!-- Header -->
-<div class="header">
-  <div class="logo">Lantern<span>Trader</span></div>
-  <div class="badge badge-paper">PAPER</div>
-  <div class="hstat"><div class="l">Equity</div><div class="v" id="hEquity">—</div></div>
-  <div class="hstat"><div class="l">Day P&L</div><div class="v" id="hDayPnl">—</div></div>
-  <div class="hstat"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
-  <div class="hstat"><div class="l">Positions</div><div class="v" id="hPos">—</div></div>
-  <div class="hstat"><div class="l">Market</div><div class="v" id="hMkt">—</div></div>
-  <select id="chartTypeSelect" class="chart-ctrl" onchange="changeChartType(this.value)">
-    <option value="line">Line</option>
-    <option value="candle">Candles</option>
-  </select>
-  <select id="chartTfSelect" class="chart-ctrl" onchange="changeTimeframe(this.value)">
-    <option value="1m">1m</option>
-    <option value="5m" selected>5m</option>
-    <option value="15m">15m</option>
-    <option value="1h">1h</option>
-    <option value="4h">4h</option>
-    <option value="1d">1d</option>
-  </select>
-  <div class="pulse"></div>
-  <a href="/trading-news.html" class="nav-link">News →</a>
-  <a href="/" class="nav-link" style="margin-left:8px">← Back</a>
+<!-- ── Site nav ── -->
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/dream-chat.html">Journal</a>
+    <a href="/trader-dashboard.html" class="active">Trading</a>
+    <a href="/trading-news.html">News</a>
+    <a href="/flourishing">Dashboard</a>
+    <a href="/knowledgecenter.html">Help</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light / dark mode">☀</button>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- ── Hero ── -->
+  <div class="trader-hero">
+    <span class="trader-hero-icon" role="img" aria-label="Lantern Trader">📈</span>
+    <h1><span>Lantern Trader Dashboard</span></h1>
+    <p class="tagline">Access trading tools, prediction markets, and market intelligence from one place.</p>
+
+    <!-- System status indicator -->
+    <div class="system-readiness">
+      <span class="readiness-dot healthy" id="readiness-dot" aria-live="polite"></span>
+      <span id="readiness-label">Checking system…</span>
+    </div>
+  </div>
+
+  <!-- ── Trading tools ── -->
+  <div class="trader-container">
+    <a href="/stock-trader.html" class="trader-card">
+      <div class="trader-card-icon">📈</div>
+      <h2 class="trader-card-title">Lantern Stock Trader</h2>
+      <p class="trader-card-desc">Real-time market analysis, zone ladders, and live positions. Alpaca integration for live equities trading.</p>
+      <div class="trader-card-tag">Live Trading Terminal</div>
+    </a>
+
+    <a href="/kalshi-terminal.html" class="trader-card">
+      <div class="trader-card-icon">🎯</div>
+      <h2 class="trader-card-title">Kalshi Trader</h2>
+      <p class="trader-card-desc">Trade event-driven prediction markets with adaptive convergence-based exit signals.</p>
+      <div class="trader-card-tag">Prediction Markets</div>
+    </a>
+
+    <a href="/trading-news.html" class="trader-card">
+      <div class="trader-card-icon">📰</div>
+      <h2 class="trader-card-title">Trader News</h2>
+      <p class="trader-card-desc">Market-moving headlines and sentiment, curated for your active positions and watchlist tickers.</p>
+      <div class="trader-card-tag">Market Intelligence</div>
+    </a>
+  </div>
+
+  <!-- System Status -->
+  <div class="health-panel">
+    <h3>System Status</h3>
+    <div class="health-items">
+      <div class="health-item">
+        <span class="health-item-dot ok" id="dot-market"></span>
+        <span id="text-market">Market Data Connected</span>
+      </div>
+      <div class="health-item">
+        <span class="health-item-dot ok" id="dot-engine"></span>
+        <span id="text-engine">Trading Engine Ready</span>
+      </div>
+      <div class="health-item">
+        <span class="health-item-dot ok" id="dot-kalshi"></span>
+        <span id="text-kalshi">Kalshi Terminal Available</span>
+      </div>
+      <div class="health-item">
+        <span class="health-item-dot ok" id="dot-news"></span>
+        <span id="text-news">News Feed Available</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trading Hub Overview -->
+  <div class="info-callout">
+    <strong>📊 Trading Hub Overview:</strong>
+    <ul>
+      <li>Open <strong>Lantern Stock Trader</strong> for live equity zone ladders, charting, and order tickets backed by Alpaca.</li>
+      <li>Open <strong>Kalshi Trader</strong> to work prediction-market contracts with convergence-based entry and exit signals.</li>
+      <li>Check <strong>Trader News</strong> for the latest headlines and sentiment affecting your watchlist and open positions.</li>
+    </ul>
+  </div>
+
 </div>
 
-<!-- Sidebar -->
-<div class="sidebar">
-  <div class="wl-add">
-    <input type="text" id="wlAddInput" placeholder="Add ticker" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
-    <button onclick="addWatchlistTicker()">+</button>
+<!-- ── Site footer ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-brand"><span class="mandala-icon spin-slow" aria-hidden="true"></span> Lantern OS</span>
+    <span class="sep">·</span>
+    <a href="/stock-trader.html">Stock Trader</a>
+    <a href="/kalshi-terminal.html">Kalshi Trader</a>
+    <a href="/trading-news.html">Trader News</a>
+    <a href="/">Home</a>
+    <span class="sep ml">Open source · runs locally · no account needed</span>
   </div>
-  <div id="wlList"></div>
-</div>
+</footer>
 
-<!-- Main: ticker cards -->
-<div class="main">
-  <div class="cards-grid" id="cardsGrid"></div>
-</div>
-
-<!-- Footer -->
-<div class="footer">
-  <div class="fpanel">
-    <div class="panel-title">Agent Feed</div>
-    <div id="agentLog"></div>
-  </div>
-  <div class="fpanel">
-    <div class="panel-title">Recent Orders</div>
-    <div id="orders"></div>
-  </div>
-  <div class="fpanel">
-    <div class="panel-title">Market Status</div>
-    <div id="mktStatus"></div>
-  </div>
-</div>
-
-</div><!-- /layout -->
-
+<script src="/js/theme-toggle.js"></script>
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
-let zonesData      = {};
-let wlPrices       = [];
-let activeTicker   = null;
-let barsData       = {};
-let chartType      = 'line';
-let chartTimeframe = '5m';
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-function fmt(n, d=2){ return n == null ? '—' : Number(n).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d}); }
-function fmtPct(n){ if(n==null)return '—'; return (n>=0?'+':'')+fmt(n,2)+'%'; }
-function tickerState(d){
-  if(d.position) return 'open';
-  const c = d.last_signal?.confidence || d.confidence || 0;
-  return c >= 45 ? 'watching' : 'quiet';
-}
-function getCurrentPrice(ticker){
-  const wp = wlPrices.find(t => t.ticker === ticker);
-  return wp ? wp.price : 0;
-}
-
-// ── Zone ladder renderer (pure CSS/HTML, zero dependencies) ──────────────────
-function zlLine(topPct, color, label, textColor){
-  return `<div style="position:absolute;left:0;right:64px;top:${topPct};height:1px;
-    background:repeating-linear-gradient(90deg,${color} 0,${color} 5px,transparent 5px,transparent 9px);"></div>
-    <div style="position:absolute;left:4px;top:${topPct};transform:translateY(-100%);
-    font-family:'IBM Plex Mono',monospace;font-size:8px;color:${textColor};
-    background:rgba(10,12,15,.8);padding:1px 3px;border-radius:2px;white-space:nowrap;">${label}</div>`;
-}
-
-// ── Candlestick / line chart renderer ────────────────────────────────────────
-function renderChart(canvas, bars, rMin, rMax, type){
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if(w<=0 || h<=0) return;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width  = Math.round(w*dpr);
-  canvas.height = Math.round(h*dpr);
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  ctx.clearRect(0,0,w,h);
-  if(!bars || bars.length < 2 || rMax<=rMin) return;
-
-  const rng   = rMax - rMin;
-  const y     = p => h - ((p-rMin)/rng)*h;
-  const n     = bars.length;
-  const slotW = w/n;
-
-  if(type==='candle'){
-    for(let i=0;i<n;i++){
-      const b = bars[i];
-      const x = i*slotW + slotW/2;
-      const up = b.close >= b.open;
-      const color = up ? '#00d4aa' : '#ff5f6d';
-      ctx.strokeStyle = color;
-      ctx.fillStyle   = color;
-      ctx.lineWidth   = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, y(b.high));
-      ctx.lineTo(x, y(b.low));
-      ctx.stroke();
-      const bodyTop = y(Math.max(b.open,b.close));
-      const bodyBot = y(Math.min(b.open,b.close));
-      const bw = Math.max(1, slotW*0.6);
-      ctx.fillRect(x-bw/2, bodyTop, bw, Math.max(1, bodyBot-bodyTop));
-    }
-  }else{
-    const pts = bars.map((b,i)=>[i*slotW + slotW/2, y(b.close)]);
-    // area fill under the line
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], h);
-    for(const [x,yy] of pts) ctx.lineTo(x,yy);
-    ctx.lineTo(pts[n-1][0], h);
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(74,158,255,.08)';
-    ctx.fill();
-    // line
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for(let i=1;i<n;i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.strokeStyle = '#4a9eff';
-    ctx.lineWidth = 1.3;
-    ctx.stroke();
+/* Theme toggle event listener */
+document.addEventListener('DOMContentLoaded', () => {
+  const themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle && window.toggleTheme) {
+    themeToggle.addEventListener('click', toggleTheme);
   }
-}
+});
 
-function renderZoneLadder(ticker, d, currentPrice){
-  const el = document.getElementById('ladder-'+ticker);
-  if(!el) return;
-  const canvas  = document.getElementById('chart-'+ticker);
-  const overlay = document.getElementById('overlay-'+ticker);
-  if(!overlay) return;
+/* Trading hub system status */
+(function() {
+  const $ = id => document.getElementById(id);
+  const healthStates = {
+    market: 'checking',
+    engine: 'checking',
+    kalshi: 'ok',
+    news: 'ok',
+  };
 
-  // Price fallback chain
-  let priceLabel = null;
-  if(!currentPrice || currentPrice <= 0){
-    const pos   = d.position;
-    const zones = (d.zones || []).slice(0, 12);
-    if(pos && pos.entry > 0){
-      currentPrice = pos.entry;
-      priceLabel   = 'entry $' + (pos.entry >= 100
-                        ? pos.entry.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})
-                        : pos.entry.toFixed(4));
-    } else if(zones.length > 0){
-      const mids = zones.map(z => z.mid).filter(m => m > 0);
-      if(mids.length > 0){
-        currentPrice = mids.reduce((a,b)=>a+b,0) / mids.length;
-        priceLabel   = 'no price';
-      }
-    }
-    if(!currentPrice || currentPrice <= 0){
-      currentPrice = getCurrentPrice(ticker);
-      if(!currentPrice || currentPrice <= 0){
-        overlay.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
-          + 'height:100%;font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--text2)'
-          + '">Waiting for price data</div>';
-        if(canvas){ const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); }
-        return;
-      }
-      priceLabel = 'live';
+  async function fetchJson(path) {
+    try {
+      const r = await fetch(path, { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
+
+  async function checkHealth() {
+    const [marketStatus, tradingStatus] = await Promise.all([
+      fetchJson('/api/trading/market-status'),
+      fetchJson('/api/trading/status'),
+    ]);
+
+    healthStates.market = marketStatus ? 'ok' : 'fail';
+    updateIndicator('market', healthStates.market,
+      marketStatus ? (marketStatus.market_open ? 'Market open' : 'Market data connected') : 'Market data unavailable');
+
+    healthStates.engine = tradingStatus ? 'ok' : 'warn';
+    updateIndicator('engine', healthStates.engine, tradingStatus ? 'Trading engine ready' : 'Trading engine unreachable');
+
+    const allOk = Object.values(healthStates).every(s => s === 'ok');
+    const hasFail = Object.values(healthStates).some(s => s === 'fail');
+    const dot = $('readiness-dot');
+
+    if (hasFail) {
+      dot.className = 'readiness-dot critical';
+      $('readiness-label').textContent = 'System needs attention';
+    } else if (allOk) {
+      dot.className = 'readiness-dot healthy';
+      $('readiness-label').textContent = 'All systems ready';
+    } else {
+      dot.className = 'readiness-dot warning';
+      $('readiness-label').textContent = 'Some systems loading';
     }
   }
-  const pos   = d.position;
-  const zones = (d.zones||[]).slice(0,12);
-  const bars  = barsData[ticker] || [];
 
-  // Determine display range
-  let rMin = currentPrice * 0.97, rMax = currentPrice * 1.03;
-  if(pos){
-    if(pos.stop)  { rMin=Math.min(rMin,pos.stop*0.998);  rMax=Math.max(rMax,pos.stop*1.002);  }
-    if(pos.tp)    { rMin=Math.min(rMin,pos.tp*0.998);    rMax=Math.max(rMax,pos.tp*1.002);    }
-    if(pos.entry) { rMin=Math.min(rMin,pos.entry*0.998); rMax=Math.max(rMax,pos.entry*1.002); }
-  }
-  // Expand to include nearby zones
-  for(const z of zones){
-    if(z.mid){ if(z.mid>rMax*0.998) rMax=z.mid*1.002; if(z.mid<rMin*1.002) rMin=z.mid*0.998; }
-  }
-  // Expand to include the historical chart range
-  for(const b of bars){
-    if(b.high>rMax) rMax=b.high*1.002;
-    if(b.low <rMin) rMin=b.low *0.998;
-  }
-  const rng = rMax - rMin; if(rng<=0) return;
-
-  const pct  = p => (((rMax-p)/rng)*100).toFixed(2)+'%';
-  const hpct = (t,b) => (Math.max(0.3,(t-b)/rng*100)).toFixed(2)+'%';
-
-  let html = '';
-
-  // Zone bands
-  for(let i=0;i<zones.length;i++){
-    const z=zones[i]; if(!z.mid) continue;
-    const sup  = z.type==='SUPPORT';
-    const today= z.tier==='today'||z.tier==='weekly';
-    const op   = Math.max(0.07, Math.min(0.75, (z.strength||40)/100*0.9));
-    const zTop = Math.min(rMax, z.top    || z.mid*1.001);
-    const zBot = Math.max(rMin, z.bottom || z.mid*0.999);
-    if(zTop<=rMin||zBot>=rMax) continue;
-    const bgColor  = sup ? `rgba(0,212,170,${op})` : `rgba(255,95,109,${op})`;
-    const bdColor  = z.triggered_entry ? '#f5a623' : (today ? (sup?'rgba(0,212,170,.6)':'rgba(255,95,109,.6)') : 'transparent');
-    const bdWidth  = (today||z.triggered_entry) ? '1px' : '0';
-    html += `<div style="position:absolute;left:0;right:64px;top:${pct(zTop)};height:${hpct(zTop,zBot)};
-      background:${bgColor};border-top:${bdWidth} solid ${bdColor};border-bottom:${bdWidth} solid ${bdColor};
-      box-sizing:border-box;min-height:3px;"></div>`;
-    html += `<div style="position:absolute;right:0;width:62px;top:${pct(z.mid)};transform:translateY(-50%);
-      font-family:'IBM Plex Mono',monospace;font-size:8px;line-height:1.3;padding:1px 3px;white-space:nowrap;
-      color:${sup?'rgba(0,212,170,.85)':'rgba(255,95,109,.85)'}">${sup?'S':'R'} ${z.strength||'?'} · ${z.touches||'?'}T</div>`;
-  }
-
-  // P&L fill between entry and current price
-  if(pos&&pos.entry){
-    const fillTop = Math.max(rMin,Math.min(rMax,Math.max(currentPrice,pos.entry)));
-    const fillBot = Math.max(rMin,Math.min(rMax,Math.min(currentPrice,pos.entry)));
-    if(fillTop>fillBot){
-      const profit = currentPrice>=pos.entry;
-      html += `<div style="position:absolute;left:0;right:64px;top:${pct(fillTop)};height:${hpct(fillTop,fillBot)};
-        background:${profit?'rgba(0,212,170,.06)':'rgba(255,95,109,.06)'};min-height:2px;pointer-events:none;"></div>`;
+  function updateIndicator(key, state, label) {
+    const dot = $(`dot-${key}`);
+    const text = $(`text-${key}`);
+    if (dot) {
+      dot.className = `health-item-dot ${state === 'ok' ? 'ok' : state === 'warn' ? 'warn' : 'fail'}`;
     }
-    // Entry line
-    if(pos.entry>=rMin&&pos.entry<=rMax)
-      html += zlLine(pct(pos.entry),'rgba(74,158,255,.8)',`Entry $${fmt(pos.entry,pos.entry>=100?2:4)}`,'#4a9eff');
-  }
-
-  // Stop + TP lines
-  if(pos&&pos.stop&&pos.stop>=rMin&&pos.stop<=rMax)
-    html += zlLine(pct(pos.stop),'rgba(255,95,109,.85)',`STOP $${fmt(pos.stop,pos.stop>=100?2:4)}`,'#ff5f6d');
-  if(pos&&pos.tp&&pos.tp>=rMin&&pos.tp<=rMax)
-    html += zlLine(pct(pos.tp),'rgba(0,212,170,.85)',`TP $${fmt(pos.tp,pos.tp>=100?2:4)}`,'#00d4aa');
-
-  // Current price line
-  const priceText = priceLabel || ('$' + fmt(currentPrice, currentPrice>=100?2:4));
-  const lineColor = priceLabel ? '#9aa0ad' : '#e8eaf0';
-  html += `<div style="position:absolute;left:0;right:0;top:${pct(currentPrice)};height:1.5px;background:${lineColor};z-index:5;"></div>`;
-  html += `<div style="position:absolute;left:4px;top:${pct(currentPrice)};transform:translateY(-110%);z-index:6;
-    font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:${lineColor};
-    background:var(--bg1);padding:1px 4px;border-radius:2px;white-space:nowrap;">${priceText}</div>`;
-
-  overlay.innerHTML = html;
-  if(canvas) renderChart(canvas, bars, rMin, rMax, chartType);
-}
-
-// ── Build one ticker card ───────────────────────────────────────────────────
-function buildCard(ticker, d){
-  const state = tickerState(d);
-  const pos   = d.position;
-  const sig   = d.last_signal||{};
-  const conf  = d.confidence || sig.confidence || 0;
-  const dir   = d.direction  || sig.direction  || 'NEUTRAL';
-
-  const dirClass = dir==='BULLISH'?'bull':dir==='BEARISH'?'bear':'neut';
-  const dirIcon  = dir==='BULLISH'?'▲ LONG ':dir==='BEARISH'?'▼ SHORT':'--- ';
-  const confHtml = conf
-    ? `<div class="conf-badge ${dirClass}">${dirIcon}${conf}%${d.catalyst?' | '+d.catalyst.slice(0,45):''}</div>`
-    : '';
-
-  let pnlHtml = '';
-  if(pos){ const cl=pos.pnl_pct>=0?'pnl-pos':'pnl-neg'; pnlHtml=`<span class="pnl-badge ${cl}">${fmtPct(pos.pnl_pct)}</span>`; }
-
-  let watchHtml = '';
-  if(state==='watching'){
-    const near = (d.zones||[])[0];
-    if(near) watchHtml = `<div style="font-family:var(--mono);font-size:8px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
-  }
-
-  return `
-<div class="card state-${state}" id="card-${ticker}">
-  <div class="card-header">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="card-ticker">${ticker}</span>${pnlHtml}
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="card-price" id="cp-${ticker}">—</span>
-      <span class="card-state">${state.toUpperCase()}</span>
-    </div>
-  </div>
-  ${confHtml}${watchHtml}
-  <div class="zone-ladder" id="ladder-${ticker}">
-    <canvas class="chart-canvas" id="chart-${ticker}"></canvas>
-    <div class="ladder-overlay" id="overlay-${ticker}"></div>
-  </div>
-  <div class="order-ticket">
-    <input type="number" id="qty-${ticker}" value="1" min="0" step="any" title="Quantity">
-    <input type="number" class="sltp" id="sl-${ticker}" placeholder="SL" min="0" step="any" title="Stop loss">
-    <input type="number" class="sltp" id="tp-${ticker}" placeholder="TP" min="0" step="any" title="Take profit">
-    <button class="btn-buy" onclick="placeOrder('${ticker}','buy')">BUY</button>
-    <button class="btn-sell" onclick="placeOrder('${ticker}','sell')">SELL</button>
-  </div>
-</div>`;
-}
-
-// ── Render all cards ─────────────────────────────────────────────────────────
-function renderCards(){
-  const grid = document.getElementById('cardsGrid');
-  const sorted = wlPrices.map(t=>t.ticker).sort((a,b)=>{
-    const order={open:0,watching:1,quiet:2};
-    return order[tickerState(zonesData[a]||{})] - order[tickerState(zonesData[b]||{})];
-  });
-  grid.innerHTML = sorted.map(t => buildCard(t, zonesData[t]||{})).join('');
-  sorted.forEach(t => renderZoneLadder(t, zonesData[t]||{}, getCurrentPrice(t)));
-}
-
-// ── Order placement ──────────────────────────────────────────────────────────
-async function placeOrder(ticker, side){
-  const qtyEl = document.getElementById('qty-'+ticker);
-  const slEl  = document.getElementById('sl-'+ticker);
-  const tpEl  = document.getElementById('tp-'+ticker);
-  const qty = qtyEl ? Number(qtyEl.value) : 0;
-  if(!qty || qty <= 0){ alert('Enter a quantity greater than 0'); return; }
-  const stopLoss   = slEl && slEl.value !== '' ? Number(slEl.value) : null;
-  const takeProfit = tpEl && tpEl.value !== '' ? Number(tpEl.value) : null;
-
-  let msg = `${side.toUpperCase()} ${qty} ${ticker} at market (paper account)?`;
-  if(stopLoss)   msg += `\nStop loss: $${stopLoss}`;
-  if(takeProfit) msg += `\nTake profit: $${takeProfit}`;
-  if(!confirm(msg)) return;
-
-  try{
-    const body = { ticker, side, qty, type: 'market' };
-    if(stopLoss)   body.stopLoss   = stopLoss;
-    if(takeProfit) body.takeProfit = takeProfit;
-    const r = await fetch('/api/trading/orders/place', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(body)
-    });
-    const result = await r.json();
-    if(!r.ok || result.status !== 'placed'){
-      alert('Order failed: ' + (result.error || r.statusText));
-      return;
+    if (text) {
+      text.textContent = label;
     }
-    await Promise.all([loadOrders(), loadPortfolio()]);
-  }catch(e){
-    alert('Order failed: ' + e.message);
   }
-}
 
-// ── Watchlist sidebar ─────────────────────────────────────────────────────────
-function renderWatchlist(){
-  document.getElementById('wlList').innerHTML = wlPrices.map(t=>{
-    const d  = zonesData[t.ticker]||{};
-    const sig= d.last_signal||{};
-    const dir= d.direction||sig.direction||'';
-    const cl = t.chg_pct>0?'up':t.chg_pct<0?'dn':'flat';
-    const sigTxt = dir ? `<div class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'} ${d.confidence||sig.confidence||0}%</div>` : '';
-    return `<div class="wl-item${activeTicker===t.ticker?' active':''}" onclick="focusTicker('${t.ticker}')">
-      <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}% <span class="wl-remove" onclick="removeWatchlistTicker('${t.ticker}',event)">×</span></span></div>
-      <div class="wl-row"><span class="wl-price">$${t.price>100?t.price.toLocaleString():t.price.toFixed(4)}</span></div>
-      ${sigTxt}
-    </div>`;
-  }).join('');
-}
-
-function focusTicker(t){
-  activeTicker = t;
-  const el = document.getElementById('card-'+t);
-  if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
-  renderWatchlist();
-}
-
-// ── Watchlist add/remove ─────────────────────────────────────────────────────
-async function addWatchlistTicker(){
-  const input = document.getElementById('wlAddInput');
-  const ticker = (input.value || '').trim().toUpperCase();
-  if(!ticker) return;
-  try{
-    const r = await fetch('/api/trading/watchlist', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ ticker })
-    });
-    const result = await r.json();
-    if(!r.ok){ alert('Failed to add ticker: ' + (result.error || r.statusText)); return; }
-    input.value = '';
-    await Promise.all([loadWatchlistPrices(), loadZones()]);
-    renderCards();
-  }catch(e){
-    alert('Failed to add ticker: ' + e.message);
-  }
-}
-
-async function removeWatchlistTicker(ticker, evt){
-  if(evt) evt.stopPropagation();
-  try{
-    const r = await fetch('/api/trading/watchlist/'+encodeURIComponent(ticker), { method: 'DELETE' });
-    const result = await r.json();
-    if(!r.ok){ alert('Failed to remove ticker: ' + (result.error || r.statusText)); return; }
-    await Promise.all([loadWatchlistPrices(), loadZones()]);
-    renderCards();
-  }catch(e){
-    alert('Failed to remove ticker: ' + e.message);
-  }
-}
-
-// ── Data loaders ─────────────────────────────────────────────────────────────
-let zonesLoading = false;
-async function loadZones(){
-  if(zonesLoading) return;
-  zonesLoading = true;
-  try{
-    const r = await fetch('/api/trading/zones');
-    const data = await r.json();
-    zonesData = data.zones || {};
-    wlPrices.forEach(t=>{
-      renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price);
-      const el = document.getElementById('cp-'+t.ticker);
-      if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
-    });
-  }catch(e){ console.warn('zones load failed',e); }
-  finally{ zonesLoading = false; }
-}
-
-let pricesLoading = false;
-async function loadWatchlistPrices(){
-  if(pricesLoading) return;
-  pricesLoading = true;
-  try{
-    const r = await fetch('/api/trading/watchlist-prices');
-    wlPrices = await r.json();
-    renderWatchlist();
-    wlPrices.forEach(t=>{
-      const el = document.getElementById('cp-'+t.ticker);
-      if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
-      renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price);
-    });
-  }catch(e){}
-  finally{ pricesLoading = false; }
-}
-
-let barsLoading = false;
-async function loadBars(){
-  if(barsLoading) return;
-  barsLoading = true;
-  try{
-    const r = await fetch('/api/trading/bars-multi?timeframe='+chartTimeframe);
-    const d = await r.json();
-    const bars = d.bars || {};
-    barsData = {};
-    for(const ticker of Object.keys(bars)){
-      barsData[ticker] = bars[ticker].bars || [];
-    }
-    wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
-  }catch(e){ console.warn('bars load failed', e); }
-  finally{ barsLoading = false; }
-}
-
-function changeChartType(type){
-  chartType = type;
-  wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
-}
-
-function changeTimeframe(tf){
-  chartTimeframe = tf;
-  loadBars();
-}
-
-async function loadPortfolio(){
-  try{
-    const r  = await fetch('/api/trading/positions');
-    const d  = await r.json();
-    const a  = d.account||{};
-    document.getElementById('hEquity').textContent = a.equity ? '$'+fmt(a.equity,0) : '—';
-    const pnl= a.pnl_today||0;
-    const pe = document.getElementById('hDayPnl');
-    pe.textContent = (pnl>=0?'+':'')+'$'+fmt(Math.abs(pnl),0);
-    pe.className   = 'v '+(pnl>=0?'pos':'neg');
-    document.getElementById('hPos').textContent = (d.positions||[]).length;
-  }catch(e){}
-}
-
-async function loadMarketStatus(){
-  try{
-    const r = await fetch('/api/trading/market-status');
-    const d = await r.json();
-    document.getElementById('hVix').textContent = d.vix ? d.vix+' '+d.vix_regime : '—';
-    document.getElementById('hMkt').textContent = d.market||'—';
-    const ms = document.getElementById('mktStatus');
-    ms.innerHTML = `
-      <div class="mkt-row"><span class="mkt-label">VIX</span><span class="mkt-val">${d.vix||'—'} (${d.vix_regime||'—'})</span></div>
-      <div class="mkt-row"><span class="mkt-label">Market</span><span class="mkt-val">${d.market||'—'}</span></div>
-      <div class="mkt-row"><span class="mkt-label">SPY 1D</span><span class="mkt-val" style="color:${(d.spy_1d||0)>=0?'var(--green)':'var(--red)'}">${fmtPct(d.spy_1d)}</span></div>
-      <div class="mkt-row"><span class="mkt-label">SPY 5D</span><span class="mkt-val" style="color:${(d.spy_5d||0)>=0?'var(--green)':'var(--red)'}">${fmtPct(d.spy_5d)}</span></div>
-      <div class="mkt-row"><span class="mkt-label">Day P&L</span><span class="mkt-val" style="color:${(d.day_pnl_pct||0)>=0?'var(--green)':'var(--red)'}">${fmtPct(d.day_pnl_pct)}</span></div>
-      <div class="mkt-row"><span class="mkt-label">Status</span><span class="mkt-val" style="color:${d.market_open?'var(--green)':'var(--text2)'}">${d.market_open?'OPEN':'CLOSED'}</span></div>`;
-  }catch(e){}
-}
-
-let lastLogLen = 0;
-async function loadAgentLog(){
-  try{
-    const r = await fetch('/api/trading/agent-log');
-    const logs = await r.json();
-    if(!Array.isArray(logs)||logs.length===lastLogLen) return;
-    lastLogLen = logs.length;
-    const cls = {grok:'log-grok',claude:'log-claude',risk:'log-risk',system:'log-system',trail:'log-trail'};
-    document.getElementById('agentLog').innerHTML = [...logs].reverse().map(l=>`
-      <div class="log-item">
-        <span class="log-time">${l.time||''}</span>
-        <span class="log-agent ${cls[l.type]||'log-system'}">${(l.agent||'').slice(0,8)}</span>
-        <span class="log-body">${(l.body||'').slice(0,90)}</span>
-      </div>`).join('');
-  }catch(e){}
-}
-
-async function loadOrders(){
-  try{
-    const r = await fetch('/api/trading/orders');
-    const orders = await r.json();
-    if(!Array.isArray(orders)||!orders.length){
-      document.getElementById('orders').innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:var(--text2)">No recent orders</div>';
-      return;
-    }
-    document.getElementById('orders').innerHTML = orders.slice(0,8).map(o=>`
-      <div class="order-row">
-        <span style="color:${o.side==='buy'?'var(--green)':'var(--red)'}">${o.side.toUpperCase()}</span>
-        <span>${o.symbol}</span>
-        <span style="color:var(--text2)">${o.qty}</span>
-        <span style="color:${o.status==='filled'?'var(--green)':o.status==='canceled'?'var(--red)':'var(--amber)'}">${o.status}</span>
-        <span style="color:var(--text2)">${o.filled_at||'—'}</span>
-      </div>`).join('');
-  }catch(e){}
-}
-
-// ── Full refresh (every 30s) ──────────────────────────────────────────────────
-async function fullRefresh(){
-  await Promise.all([loadZones(), loadWatchlistPrices(), loadPortfolio(), loadMarketStatus()]);
-  renderCards();
-}
-
-// ── Init ──────────────────────────────────────────────────────────────────────
-function startDashboard(){
-  fullRefresh();
-  loadBars();
-  loadAgentLog();
-  loadOrders();
-  setInterval(fullRefresh,         30000);
-  setInterval(loadWatchlistPrices,  5000);
-  setInterval(loadBars,            15000);
-  setInterval(loadAgentLog,         5000);
-  setInterval(loadOrders,          60000);
-}
-document.addEventListener('DOMContentLoaded', startDashboard);
-
+  checkHealth();
+  setInterval(checkHealth, 10000);
+})();
 </script>
 </body>
 </html>
