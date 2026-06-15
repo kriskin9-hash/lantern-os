@@ -509,7 +509,8 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     agent = selectAgent(message);
   }
 
-  const suggestions = Object.values(DREAM_DOORS)
+  // For Keystone (technical agent), skip dream door suggestions
+  const suggestions = agent.id === "keystone" ? [] : Object.values(DREAM_DOORS)
     .slice(0, 4)
     .map((d) => d.name);
 

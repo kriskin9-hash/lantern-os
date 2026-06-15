@@ -1028,13 +1028,38 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const o = body ? JSON.parse(body) : {};
-        return sendJson(res, await kalshi.placeOrder(o), 200), true;
+
+        // Cash check before order (#434)
+        try {
+          const balance = await kalshi.getBalance();
+          const availableCash = balance?.buying_power || balance?.cash || 0;
+          const orderCost = (o.price || 0) * (o.quantity || 0);
+
+          if (orderCost > 0 && availableCash < orderCost) {
+            return sendJson(res, {
+              error: 'INSUFFICIENT_FUNDS',
+              message: `Insufficient cash: need ${(orderCost / 100).toFixed(2)}, have ${(availableCash / 100).toFixed(2)}`,
+              required_cents: orderCost,
+              available_cents: availableCash
+            }, 402), true;  // 402 Payment Required
+          }
+        } catch (e) {
+          console.warn('[trading] Cash check failed:', e.message);
+          // Continue with order; let Kalski API handle validation
+        }
+
+        const result = await kalshi.placeOrder(o);
+        const status = (result.error || result.errorMessage) ? 400 : (result.success === false ? 400 : 201);
+        return sendJson(res, result, status), true;
       }
       // POST — cancel order  { orderId }
       if (url.pathname === '/api/trading/kalshi/order/cancel' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const { orderId } = body ? JSON.parse(body) : {};
-        return sendJson(res, await kalshi.cancelOrder(orderId), 200), true;
+        if (!orderId) return sendJson(res, { error: 'orderId required' }, 400), true;
+        const result = await kalshi.cancelOrder(orderId);
+        const status = (result.error || result.errorMessage) ? 400 : (result.success === false ? 400 : 200);
+        return sendJson(res, result, status), true;
       }
 
       // ── Paper trading ledger (dry-run position tracking) ───────────────────
