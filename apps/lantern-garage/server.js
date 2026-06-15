@@ -43,6 +43,8 @@ const PersistentEventQueue = require("./core/persistent-event-queue");
 const IdempotencyStore = require("./core/idempotency-store");
 const EventQueueConsumer = require("./core/event-queue-consumer");
 const TraderWatchdog = require("./core/trader-watchdog");
+const AlpacaExecutionAdapter = require("./core/alpaca-execution-adapter");
+const ExecutionRouter = require("./core/execution-router");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -71,12 +73,32 @@ const queuePath = path.join(repoRoot, "data", "trading", "event-queue.jsonl");
 const persistentEventQueue = new PersistentEventQueue(queuePath);
 const idempotencyStore = new IdempotencyStore(path.join(repoRoot, "data", "trading", "executed-events.jsonl"));
 const systemAuditTracer = new SystemAuditTracer(path.join(repoRoot, "data", "trading", "audit-log.jsonl"));
-const eventQueueConsumer = new EventQueueConsumer(persistentEventQueue, idempotencyStore, { auditTracer: systemAuditTracer });
+
+// Initialize PRL-1.2: Alpaca Execution Bridge
+const alpacaAdapter = new AlpacaExecutionAdapter({
+  key: process.env.ALPACA_API_KEY,
+  secret: process.env.ALPACA_SECRET_KEY,
+  paper: true // Always paper trading unless explicitly enabled
+});
+
+const executionRouter = new ExecutionRouter(alpacaAdapter, {
+  mode: process.env.EXECUTION_MODE || "paper",
+  allowLive: process.env.ALLOW_LIVE_TRADING === "true"
+});
+
+// Initialize consumer with Alpaca adapter
+const eventQueueConsumer = new EventQueueConsumer(persistentEventQueue, idempotencyStore, {
+  auditTracer: systemAuditTracer,
+  alpacaAdapter: alpacaAdapter
+});
+
 const traderWatchdog = new TraderWatchdog(repoRoot, persistentEventQueue, systemAuditTracer);
 
 // Start PRL-1 components
 eventQueueConsumer.start();
 traderWatchdog.start();
+
+console.log(`[Trading] PRL-1.2 Alpaca execution initialized (mode: ${executionRouter.getStats().mode})`);
 
 // Shared dependency bundle passed to every route module
 const deps = {
@@ -101,6 +123,7 @@ const deps = {
   maxConversationTextLength, maxDreamerTextLength,
   openaiApiKey,
   persistentEventQueue, idempotencyStore, systemAuditTracer, eventQueueConsumer, traderWatchdog,
+  alpacaAdapter, executionRouter,
   "__dirname": __dirname,
 };
 

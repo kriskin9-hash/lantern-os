@@ -2374,6 +2374,34 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // ── PRL-1.2 Execution Status ──
+  // GET /api/trading/execution-status
+  // Returns Alpaca execution statistics and system health
+  if (url.pathname === '/api/trading/execution-status' && req.method === 'GET') {
+    try {
+      const alpacaAdapter = deps.alpacaAdapter;
+      const eventQueueConsumer = deps.eventQueueConsumer;
+      const executionRouter = deps.executionRouter;
+
+      const executionStatus = {
+        timestamp: new Date().toISOString(),
+        broker: "alpaca",
+        mode: executionRouter ? executionRouter.getStats().mode : "unknown",
+        alpaca: alpacaAdapter ? alpacaAdapter.getStats() : null,
+        consumer: eventQueueConsumer ? eventQueueConsumer.getStatus() : null,
+        router: executionRouter ? executionRouter.getStats() : null
+      };
+
+      sendJson(res, executionStatus, 200);
+    } catch (error) {
+      sendJson(res, {
+        error: 'Failed to fetch execution status',
+        details: error.message
+      }, 500);
+    }
+    return true;
+  }
+
   return false;
 };
 

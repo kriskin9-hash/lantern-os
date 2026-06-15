@@ -170,6 +170,25 @@
     "crash_recovery": "Node restart MUST recover state from disk/DB, not Python"
   },
 
+  "execution": {
+    "version": "prl-1.2",
+    "mode": "paper",
+    "broker": "alpaca",
+    "allowLive": false,
+    "description": "Paper trading mode via Alpaca. Set allowLive=true to enable live trading (REQUIRES RISK GATES).",
+    "safety_gates": {
+      "stability_index_min": 0.8,
+      "idempotency_required": true,
+      "schema_validation_required": true,
+      "engine_state_check_required": true
+    },
+    "execution_path": {
+      "paper": "Alpaca paper trading account (no real money)",
+      "simulation": "Mock fills (for testing, no broker call)",
+      "blocked": "All execution disabled (circuit breaker mode)"
+    }
+  },
+
   "cloud_readiness": {
     "filesystem_independence": "✅ No shared filesystem required",
     "network_boundary": "✅ Clean HTTP API boundary",
@@ -178,6 +197,7 @@
     "scaling": "✅ Stateless Python (can scale), Stateful Node (single instance or HA)",
     "docker_safe": "✅ Can run in separate containers",
     "kubernetes_ready": "✅ Can run as separate pods",
-    "production_ready": "✅ All PRL-1.1 requirements met"
+    "production_ready": "✅ All PRL-1.1 requirements met",
+    "paper_execution_ready": "✅ PRL-1.2 Alpaca integration complete"
   }
 }
