@@ -98,60 +98,101 @@
       flex: 1;
       display: flex;
       flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    /* Heroic Title Section */
+    .hero-title-section {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+      text-align: center;
       overflow: hidden;
     }
 
-    .content-wrapper {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
-      padding: 32px 24px;
-      height: 100%;
-      align-items: center;
+    .hero-title-background {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 500px;
+      height: 500px;
+      max-width: 90vw;
+      max-height: 90vw;
+      background: url(/mandala.svg) center / contain no-repeat;
+      opacity: 0.08;
+      pointer-events: none;
+      z-index: 0;
     }
 
-    .hero-left {
+    .hero-title-content {
+      position: relative;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      align-items: center;
+      gap: 20px;
     }
 
-    .hero-icon {
-      width: 64px;
-      height: 64px;
+    .hero-title-icon {
+      width: 120px;
+      height: 120px;
       background: url(/mandala.svg) center / contain no-repeat;
+      animation: pulse-glow 3s ease-in-out infinite;
     }
 
-    .hero-left h1 {
-      font-size: 2.4rem;
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+
+    .hero-title-content h1 {
+      font-size: clamp(2.8rem, 8vw, 4rem);
       font-weight: 800;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.04em;
       margin: 0;
       line-height: 1.1;
     }
 
-    .hero-left p {
-      font-size: 1rem;
+    .hero-title-content p {
+      font-size: 1.1rem;
       color: var(--muted);
       margin: 0;
-      line-height: 1.5;
-      max-width: 420px;
+      max-width: 540px;
+      line-height: 1.6;
     }
 
-    .hero-tagline {
+    .hero-title-subtext {
       font-size: 0.9rem;
       color: var(--muted);
-      margin-top: 4px !important;
+      margin-top: 8px !important;
     }
 
     /* Three Cards Grid */
-    .heroes-right {
+    .heroes-section {
+      padding: 48px 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .section-label {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      text-transform: uppercase;
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .heroes-grid {
       display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
-      height: 100%;
-      overflow-y: auto;
-      padding-right: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
     }
 
     .hero-card {
@@ -171,7 +212,8 @@
     .hero-card:hover {
       border-color: var(--accent);
       background: var(--surface2);
-      transform: translateX(4px);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
     }
 
     .hero-card-header {
@@ -221,18 +263,78 @@
       gap: 10px;
     }
 
+    /* Settings Section */
+    .settings-section {
+      padding: 48px 24px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .settings-container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .settings-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 0 0 24px;
+      letter-spacing: -0.3px;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .settings-card {
+      padding: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .settings-card h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .settings-card p {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .settings-card a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      transition: opacity 0.2s;
+    }
+
+    .settings-card a:hover {
+      opacity: 0.8;
+    }
+
     /* Status Bar */
     .status-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 24px;
+      padding: 10px 24px;
       background: var(--surface);
       border-top: 1px solid var(--border);
       font-size: 0.85rem;
       color: var(--muted);
       gap: 12px;
       flex-shrink: 0;
+      margin-top: auto;
     }
 
     .status-dot {
@@ -252,92 +354,55 @@
       50% { opacity: 0.4; }
     }
 
-    /* Scrollbar styling */
-    .heroes-right::-webkit-scrollbar {
-      width: 6px;
+    .status-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .heroes-right::-webkit-scrollbar-track {
-      background: transparent;
+    .status-right a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+      transition: opacity 0.2s;
     }
 
-    .heroes-right::-webkit-scrollbar-thumb {
-      background: var(--border);
-      border-radius: 3px;
+    .status-right a:hover {
+      opacity: 0.8;
     }
 
-    .heroes-right::-webkit-scrollbar-thumb:hover {
-      background: var(--muted);
-    }
-
-    /* Tablet: Stack vertically */
-    @media (max-width: 1024px) {
-      .content-wrapper {
-        grid-template-columns: 1fr;
-        gap: 24px;
-        padding: 24px;
-      }
-
-      .hero-left h1 {
-        font-size: 2rem;
-      }
-
-      .heroes-right {
-        grid-template-columns: repeat(3, 1fr);
-        overflow-y: visible;
-        height: auto;
-        padding-right: 0;
-      }
-
-      .hero-card {
-        min-height: 160px;
-      }
-    }
-
-    /* Mobile: Single column */
-    @media (max-width: 640px) {
+    /* Responsive */
+    @media (max-width: 768px) {
       .app-header {
-        padding: 12px 16px;
-        gap: 16px;
+        flex-wrap: wrap;
       }
 
       .header-nav {
-        gap: 16px;
+        flex-basis: 100%;
+        order: 3;
+        margin-top: 12px;
       }
 
-      .header-nav a {
-        font-size: 13px;
+      .hero-title-section {
+        padding: 40px 16px;
       }
 
-      .content-wrapper {
-        gap: 16px;
-        padding: 16px;
+      .hero-title-background {
+        width: 300px;
+        height: 300px;
       }
 
-      .hero-left h1 {
-        font-size: 1.6rem;
+      .hero-title-content h1 {
+        font-size: 2.2rem;
       }
 
-      .hero-left p {
-        font-size: 0.95rem;
-      }
-
-      .heroes-right {
+      .heroes-grid {
         grid-template-columns: 1fr;
-        gap: 12px;
+        padding: 0;
       }
 
-      .hero-card {
-        padding: 16px;
-        gap: 8px;
-      }
-
-      .hero-card h2 {
-        font-size: 1.1rem;
-      }
-
-      .hero-card p {
-        font-size: 0.85rem;
+      .settings-grid {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -362,17 +427,21 @@
 
     <!-- Main Content -->
     <main class="main-content">
-      <div class="content-wrapper">
-        <!-- Left: Hero Introduction -->
-        <div class="hero-left">
-          <span class="hero-icon"></span>
+      <!-- Heroic Title Section -->
+      <section class="hero-title-section">
+        <div class="hero-title-background"></div>
+        <div class="hero-title-content">
+          <span class="hero-title-icon"></span>
           <h1>Lantern OS</h1>
           <p>A persistent local-first reasoning system. Private, fast, and yours alone.</p>
-          <p class="hero-tagline">Convergence Core v1 · Running Locally · No Account Required</p>
+          <p class="hero-title-subtext">Convergence Core v1 · Running Locally · No Account Required</p>
         </div>
+      </section>
 
-        <!-- Right: Three Core Experiences -->
-        <div class="heroes-right">
+      <!-- Three Core Experiences -->
+      <section class="heroes-section">
+        <p class="section-label">Three Core Experiences</p>
+        <div class="heroes-grid">
           <!-- Dream Chat / Work -->
           <a href="/dream-chat.html" class="hero-card">
             <div class="hero-card-header">
@@ -406,7 +475,36 @@
             <span class="hero-card-cta">Open →</span>
           </a>
         </div>
-      </div>
+      </section>
+
+      <!-- Settings Section -->
+      <section class="settings-section">
+        <div class="settings-container">
+          <h2 class="settings-title">Settings & Configuration</h2>
+          <div class="settings-grid">
+            <!-- API Keys -->
+            <div class="settings-card">
+              <h3>🔑 API Keys</h3>
+              <p>Configure AI providers (Claude, OpenAI, Gemini) for streaming responses. All optional — works offline without keys.</p>
+              <a href="/settings/providers.html">Configure Keys →</a>
+            </div>
+
+            <!-- Local Data -->
+            <div class="settings-card">
+              <h3>💾 Local Data</h3>
+              <p>All data stored locally on your device. No cloud sync, no account needed. Export anytime.</p>
+              <a href="/settings/export.html">Export Data →</a>
+            </div>
+
+            <!-- System Status -->
+            <div class="settings-card">
+              <h3>⚡ System Status</h3>
+              <p>Monitor kernel readiness, memory queries, convergence records, and verification status in real-time.</p>
+              <a href="/settings/status.html">View Status →</a>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Status Bar -->
@@ -415,7 +513,11 @@
         <span class="status-dot" id="status-dot"></span>
         <span id="status-label">Connecting…</span>
       </div>
-      <span id="status-right">Lantern OS</span>
+      <div class="status-right">
+        <span id="status-version">Lantern OS</span>
+        <span>·</span>
+        <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener" title="View on GitHub">GitHub</a>
+      </div>
     </div>
   </div>
 
@@ -427,15 +529,17 @@
         const res = await fetch('/api/health', { signal: AbortSignal.timeout(3000) });
         const dot = document.getElementById('status-dot');
         const label = document.getElementById('status-label');
-        const right = document.getElementById('status-right');
+        const version = document.getElementById('status-version');
 
         if (res.ok) {
           dot.className = 'status-dot';
-          label.textContent = 'Server online';
 
           const health = await res.json();
           if (health.version) {
-            right.textContent = 'Lantern OS · v' + health.version;
+            label.textContent = 'Server online';
+            version.textContent = 'Lantern OS · v' + health.version;
+          } else {
+            label.textContent = 'Server online';
           }
         } else {
           dot.className = 'status-dot offline';
