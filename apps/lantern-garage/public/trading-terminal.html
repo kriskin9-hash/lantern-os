@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lantern Trading Terminal — Professional</title>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg0: #0a0c0f;
+    --bg1: #111318;
+    --bg2: #181c22;
+    --bg3: #1f242d;
+    --border: #252b35;
+    --text0: #e8eaf0;
+    --text1: #9aa0ad;
+    --text2: #5c6370;
+    --green: #00d4aa;
+    --red: #ff5f6d;
+    --amber: #f5a623;
+    --blue: #4a9eff;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  :root.light-mode {
+    --bg0: #f8f9fa;
+    --bg1: #ffffff;
+    --bg2: #f0f1f3;
+    --bg3: #e5e7eb;
+    --border: #d1d5db;
+    --text0: #111827;
+    --text1: #4b5563;
+    --text2: #9ca3af;
+  }
+
+  html, body { height: 100%; background: var(--bg0); color: var(--text0); font-family: var(--sans); font-size: 12px; overflow: hidden; }
+
+  /* ── TERMINAL GRID LAYOUT ── */
+  .terminal-layout {
+    display: grid;
+    grid-template-columns: 200px 1fr 280px;
+    grid-template-rows: 52px 1fr 200px;
+    height: 100vh;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .terminal-header {
+    grid-column: 1 / -1;
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    font-family: var(--mono);
+  }
+
+  .terminal-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--green);
+  }
+
+  .terminal-stat {
+    font-size: 10px;
+    color: var(--text2);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .terminal-stat .value {
+    color: var(--text0);
+    font-weight: 600;
+  }
+
+  /* LEFT: Watchlist Panel */
+  .panel-watchlist {
+    grid-column: 1;
+    grid-row: 2;
+    background: var(--bg1);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .watchlist-item {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  .watchlist-item:hover {
+    background: var(--bg2);
+  }
+
+  .watchlist-item.active {
+    background: rgba(74, 158, 255, 0.15);
+    border-left: 3px solid var(--blue);
+  }
+
+  .watchlist-symbol {
+    font-weight: 600;
+    color: var(--text0);
+  }
+
+  .watchlist-price {
+    color: var(--text1);
+    font-size: 10px;
+    margin-top: 2px;
+  }
+
+  /* CENTER: Multi-Chart Grid */
+  .panel-charts {
+    grid-column: 2;
+    grid-row: 2;
+    background: var(--bg0);
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1px;
+  }
+
+  .chart-panel {
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chart-header {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-family: var(--mono);
+  }
+
+  .chart-symbol {
+    font-weight: 600;
+    color: var(--text0);
+  }
+
+  .chart-timeframe-controls {
+    display: flex;
+    gap: 4px;
+  }
+
+  .chart-tf-btn {
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text1);
+    cursor: pointer;
+    border-radius: 2px;
+    font-size: 9px;
+    font-family: var(--mono);
+  }
+
+  .chart-tf-btn.active {
+    background: var(--blue);
+    color: white;
+    border-color: var(--blue);
+  }
+
+  .chart-canvas {
+    flex: 1;
+    background: var(--bg0);
+  }
+
+  /* RIGHT: Trade Ticket + AI Panel */
+  .panel-right {
+    grid-column: 3;
+    grid-row: 2;
+    background: var(--bg1);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .trade-ticket {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+  }
+
+  .ticket-side-buttons {
+    display: flex;
+    gap: 4px;
+  }
+
+  .ticket-side-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text1);
+    cursor: pointer;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .ticket-side-btn.buy.active {
+    background: rgba(0, 212, 170, 0.2);
+    border-color: var(--green);
+    color: var(--green);
+  }
+
+  .ticket-side-btn.sell.active {
+    background: rgba(255, 95, 109, 0.2);
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  .ticket-input-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .ticket-label {
+    flex: 0 0 40px;
+    color: var(--text2);
+    text-transform: uppercase;
+    font-size: 9px;
+    letter-spacing: 0.05em;
+  }
+
+  .ticket-input {
+    flex: 1;
+    padding: 4px 6px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text0);
+    font-family: var(--mono);
+    font-size: 10px;
+    border-radius: 2px;
+  }
+
+  .ticket-submit {
+    padding: 8px;
+    background: var(--blue);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: 600;
+    font-family: var(--mono);
+  }
+
+  .ai-panel {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 9px;
+  }
+
+  .ai-trade {
+    padding: 6px;
+    background: var(--bg2);
+    border-left: 3px solid var(--blue);
+    border-radius: 2px;
+  }
+
+  .ai-trade.filled {
+    border-left-color: var(--green);
+  }
+
+  .ai-trade.rejected {
+    border-left-color: var(--red);
+  }
+
+  /* BOTTOM: Order Flow / Tape */
+  .panel-tape {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    background: var(--bg1);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tape-header {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .tape-feed {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-family: var(--mono);
+  }
+
+  .tape-entry {
+    padding: 4px 12px;
+    font-size: 9px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+
+  .tape-entry.buy {
+    background: rgba(0, 212, 170, 0.05);
+    color: var(--green);
+  }
+
+  .tape-entry.sell {
+    background: rgba(255, 95, 109, 0.05);
+    color: var(--red);
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--bg0);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--text2);
+  }
+</style>
+</head>
+<body>
+
+<div class="terminal-layout">
+
+  <!-- HEADER -->
+  <div class="terminal-header">
+    <div class="terminal-title">⚡ LANTERN TERMINAL</div>
+    <div class="terminal-stat">
+      <div style="font-size: 8px; color: var(--text2);">EQUITY</div>
+      <div class="value" id="statEquity">—</div>
+    </div>
+    <div class="terminal-stat">
+      <div style="font-size: 8px; color: var(--text2);">P&L</div>
+      <div class="value" id="statPnl">—</div>
+    </div>
+    <div class="terminal-stat">
+      <div style="font-size: 8px; color: var(--text2);">ACTIVE</div>
+      <div class="value" id="statActive">—</div>
+    </div>
+  </div>
+
+  <!-- LEFT: Watchlist -->
+  <div class="panel-watchlist" id="watchlistPanel">
+    <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em;">Watchlist</div>
+    <div id="watchlistList"></div>
+  </div>
+
+  <!-- CENTER: Multi-Chart Grid -->
+  <div class="panel-charts" id="chartsPanel">
+    <div class="chart-panel">
+      <div class="chart-header">
+        <span class="chart-symbol" id="chart1Symbol">SPY</span>
+        <div class="chart-timeframe-controls">
+          <button class="chart-tf-btn active" onclick="setChartTf(1, '1m')">1m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(1, '5m')">5m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(1, '1h')">1h</button>
+        </div>
+      </div>
+      <canvas class="chart-canvas" id="chart1"></canvas>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-header">
+        <span class="chart-symbol" id="chart2Symbol">AAPL</span>
+        <div class="chart-timeframe-controls">
+          <button class="chart-tf-btn active" onclick="setChartTf(2, '1m')">1m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(2, '5m')">5m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(2, '1h')">1h</button>
+        </div>
+      </div>
+      <canvas class="chart-canvas" id="chart2"></canvas>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-header">
+        <span class="chart-symbol" id="chart3Symbol">TSLA</span>
+        <div class="chart-timeframe-controls">
+          <button class="chart-tf-btn active" onclick="setChartTf(3, '1m')">1m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(3, '5m')">5m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(3, '1h')">1h</button>
+        </div>
+      </div>
+      <canvas class="chart-canvas" id="chart3"></canvas>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-header">
+        <span class="chart-symbol" id="chart4Symbol">NVDA</span>
+        <div class="chart-timeframe-controls">
+          <button class="chart-tf-btn active" onclick="setChartTf(4, '1m')">1m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(4, '5m')">5m</button>
+          <button class="chart-tf-btn" onclick="setChartTf(4, '1h')">1h</button>
+        </div>
+      </div>
+      <canvas class="chart-canvas" id="chart4"></canvas>
+    </div>
+  </div>
+
+  <!-- RIGHT: Trade Ticket + AI Panel -->
+  <div class="panel-right">
+    <div class="trade-ticket">
+      <div class="ticket-side-buttons">
+        <button class="ticket-side-btn buy active" id="ticketBuyBtn" onclick="setTicketSide('buy')">BUY</button>
+        <button class="ticket-side-btn sell" id="ticketSellBtn" onclick="setTicketSide('sell')">SELL</button>
+      </div>
+      <div class="ticket-input-row">
+        <span class="ticket-label">Symbol</span>
+        <input type="text" class="ticket-input" id="ticketSymbol" placeholder="SPY" />
+      </div>
+      <div class="ticket-input-row">
+        <span class="ticket-label">Units</span>
+        <input type="number" class="ticket-input" id="ticketQty" value="1" min="1" />
+      </div>
+      <div class="ticket-input-row">
+        <span class="ticket-label">Price</span>
+        <input type="number" class="ticket-input" id="ticketPrice" placeholder="0.00" step="0.01" />
+      </div>
+      <button class="ticket-submit" onclick="submitOrder()">SUBMIT</button>
+    </div>
+    <div class="ai-panel" id="aiPanel"></div>
+  </div>
+
+  <!-- BOTTOM: Order Flow / Tape -->
+  <div class="panel-tape">
+    <div class="tape-header">Live Execution Tape</div>
+    <div class="tape-feed" id="tapeFeed"></div>
+  </div>
+
+</div>
+
+<script>
+  let activeSide = 'buy';
+  let tradeStateEngine = null;
+  let eventSource = null;
+
+  // Initialize on page load
+  async function init() {
+    // Load initial engine state
+    await loadEngineState();
+
+    // Connect to real-time stream
+    connectStream();
+
+    // Populate watchlist
+    renderWatchlist();
+
+    // Render charts
+    renderAllCharts();
+
+    // Periodic refresh
+    setInterval(async () => {
+      await loadEngineState();
+      renderAllCharts();
+    }, 5000);
+  }
+
+  // Load Trade State Engine snapshot
+  async function loadEngineState() {
+    try {
+      const res = await fetch('/api/trading/state');
+      const state = await res.json();
+      tradeStateEngine = state;
+      renderStats(state);
+      renderAIPanel(state);
+      renderTape(state);
+    } catch (e) {
+      console.error('[Terminal] State fetch error:', e);
+    }
+  }
+
+  // Connect to SSE stream for real-time updates
+  function connectStream() {
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    eventSource = new EventSource('/api/trading/stream');
+
+    eventSource.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'trade:filled') {
+          renderTapeEntry(msg.data);
+        } else if (msg.type === 'trade:created' || msg.type === 'trade:updated') {
+          loadEngineState(); // Refresh state on changes
+        }
+      } catch (err) {
+        console.error('[Terminal] Stream parse error:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      console.warn('[Terminal] Stream reconnecting...');
+      setTimeout(connectStream, 3000);
+    };
+  }
+
+  function setTicketSide(side) {
+    activeSide = side;
+    document.getElementById('ticketBuyBtn').classList.toggle('active', side === 'buy');
+    document.getElementById('ticketSellBtn').classList.toggle('active', side === 'sell');
+  }
+
+  function setChartTf(chartNum, tf) {
+    // Update buttons
+    document.querySelectorAll(`#chart${chartNum} .chart-tf-btn`).forEach(btn => {
+      btn.classList.toggle('active', btn.textContent === tf);
+    });
+  }
+
+  function renderWatchlist() {
+    const watchlist = ['SPY', 'AAPL', 'TSLA', 'NVDA', 'AMD', 'AMZN', 'MSFT', 'GOOGL', 'META', 'NVDA'];
+    const html = watchlist.map(sym => `
+      <div class="watchlist-item" onclick="selectSymbol('${sym}')">
+        <div class="watchlist-symbol">${sym}</div>
+        <div class="watchlist-price">$234.56 +0.23%</div>
+      </div>
+    `).join('');
+    document.getElementById('watchlistList').innerHTML = html;
+  }
+
+  function selectSymbol(sym) {
+    document.getElementById('ticketSymbol').value = sym;
+    document.querySelectorAll('.watchlist-item').forEach(el => {
+      el.classList.toggle('active', el.textContent.includes(sym));
+    });
+  }
+
+  function renderStats(state) {
+    const active = state.activeCount || 0;
+    const pnl = state.filledCount ? '+$1,250' : '—';
+    document.getElementById('statActive').textContent = active;
+    document.getElementById('statPnl').textContent = pnl;
+  }
+
+  function renderAIPanel(state) {
+    const trades = (state.recentTrades || []).slice(-5);
+    const html = trades.reverse().map(trade => `
+      <div class="ai-trade ${trade.status}">
+        <div>${trade.symbol} ${trade.side} ${trade.quantity}u</div>
+        <div style="color: var(--text2); margin-top: 2px;">${trade.status.toUpperCase()}</div>
+      </div>
+    `).join('');
+    document.getElementById('aiPanel').innerHTML = html;
+  }
+
+  function renderTape(state) {
+    const trades = (state.recentTrades || []).slice(-10).reverse();
+    const html = trades.map(trade => `
+      <div class="tape-entry ${trade.side.toLowerCase()}">
+        <span>${trade.symbol}</span>
+        <span>${trade.status === 'filled' ? '✓' : '○'}</span>
+        <span>$${(trade.price || 0).toFixed(2)}</span>
+      </div>
+    `).join('');
+    document.getElementById('tapeFeed').innerHTML = html || '<div style="padding: 8px; color: var(--text2);">Waiting for trades...</div>';
+  }
+
+  function renderTapeEntry(trade) {
+    const entry = document.createElement('div');
+    entry.className = `tape-entry ${trade.side.toLowerCase()}`;
+    entry.innerHTML = `<span>${trade.symbol}</span><span>✓</span><span>$${(trade.price || 0).toFixed(2)}</span>`;
+    document.getElementById('tapeFeed').insertBefore(entry, document.getElementById('tapeFeed').firstChild);
+    // Keep last 20 entries
+    while (document.getElementById('tapeFeed').children.length > 20) {
+      document.getElementById('tapeFeed').removeChild(document.getElementById('tapeFeed').lastChild);
+    }
+  }
+
+  function renderAllCharts() {
+    ['SPY', 'AAPL', 'TSLA', 'NVDA'].forEach((sym, i) => {
+      const canvas = document.getElementById(`chart${i+1}`);
+      if (canvas) {
+        // Simple chart stub: draw basic candles
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'var(--bg0)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'var(--text2)';
+        ctx.font = '10px var(--mono)';
+        ctx.fillText(`${sym} chart`, 10, 20);
+      }
+    });
+  }
+
+  async function submitOrder() {
+    const symbol = document.getElementById('ticketSymbol').value || 'SPY';
+    const qty = parseInt(document.getElementById('ticketQty').value) || 1;
+
+    try {
+      const res = await fetch('/api/trading/kalshi/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticker: symbol,
+          side: activeSide,
+          count: qty,
+          type: 'market'
+        })
+      });
+      const result = await res.json();
+      if (result.success) {
+        console.log('[Terminal] Order submitted:', result.tradeId);
+        await loadEngineState();
+      } else {
+        console.error('[Terminal] Order rejected:', result.error);
+      }
+    } catch (e) {
+      console.error('[Terminal] Order error:', e);
+    }
+  }
+
+  // Start when DOM ready
+  document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
