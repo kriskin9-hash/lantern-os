@@ -32,6 +32,7 @@ const { getRoutingSnapshot, refreshProviderCache } = require("./lib/provider-cac
 const { JobQueue } = require("./lib/job-queue");
 const { JobWorker } = require("./lib/job-worker");
 const { PrWatcher } = require("./lib/pr-watcher");
+const { TradeStateEngine } = require("./lib/trade-state-engine");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -359,6 +360,11 @@ server.listen(port, host, () => {
   const kalshiMarketsCollector = new KalshiMarketsCollector();
   kalshiMarketsCollector.start(30000); // 30s interval
   deps.kalshiMarketsCollector = kalshiMarketsCollector; // Make available to routes
+
+  // ── Trade State Engine (single source of truth for all trades) ──
+  const tradeStateEngine = new TradeStateEngine();
+  deps.tradeStateEngine = tradeStateEngine; // Make available to routes and order handlers
+  console.log("[Trade State Engine] Initialized — all orders will flow through this engine");
 
   // ── Kalshi Position Monitor (10s polling) + Convergence Trainer ──
   const { startMonitoring } = require("./lib/kalshi-position-monitor");

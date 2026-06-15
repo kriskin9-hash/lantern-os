@@ -71,17 +71,38 @@ function parseRssItems(xml) {
 
 function fetchRss(symbols) {
   const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbols.join(","))}&region=US&lang=en-US`;
+  console.log("[NewsCollector] Fetching RSS from symbols:", symbols);
   return new Promise((resolve) => {
-    const req = https.get(url, { timeout: 8000 }, (res) => {
+    // Note: rejectUnauthorized=false is for development only.
+    // In production, use proper certificate validation or a proxy.
+    const req = https.get(url, {
+      timeout: 8000,
+      rejectUnauthorized: false // Dev/testing: allow self-signed certs
+    }, (res) => {
+      console.log("[NewsCollector] RSS response status:", res.statusCode);
       let body = "";
-      res.on("data", (chunk) => (body += chunk));
-      res.on("end", () => resolve(body));
+
+      // Handle rate limiting gracefully
+      if (res.statusCode === 429) {
+        console.warn("[NewsCollector] Rate limited (429), skipping this feed");
+        resolve("");
+        return;
+      }
+
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        console.log("[NewsCollector] RSS fetch complete, received", body.length, "bytes");
+        resolve(body);
+      });
     });
     req.on("error", (e) => {
       console.error("[NewsCollector] Fetch error:", e.message);
       resolve("");
     });
     req.on("timeout", () => {
+      console.error("[NewsCollector] Fetch timeout");
       req.destroy();
       resolve("");
     });
@@ -103,12 +124,24 @@ class NewsCollector {
   constructor() {
     this.running = false;
     this.pollInterval = null;
+    this.lastFetchTime = {};  // Track last fetch time per feed to avoid rate limiting
+    this.fetchDelayMs = 2000;  // Increased delay between feeds
   }
 
   async _collectFor(symbols, tag) {
+    console.log("[NewsCollector] _collectFor:", { symbols, tag });
     const xml = await fetchRss(symbols);
-    if (!xml) return 0;
+    console.log("[NewsCollector] RSS fetch result:", {
+      tag,
+      xmlLength: xml ? xml.length : 0,
+      hasContent: !!xml
+    });
+    if (!xml) {
+      console.log("[NewsCollector] Empty XML response for", tag);
+      return 0;
+    }
     const items = parseRssItems(xml).slice(0, 8);
+    console.log("[NewsCollector] Parsed items:", { tag, count: items.length, items: items.slice(0, 2) });
     let recorded = 0;
     for (const item of items) {
       const rec = await tradingNews.recordNewsItem({
@@ -119,26 +152,56 @@ class NewsCollector {
         console.error("[NewsCollector] Record error:", e.message);
         return null;
       });
-      if (rec && rec.tier === "entity") recorded++;
+      if (rec && rec.tier === "entity") {
+        console.log("[NewsCollector] Recorded article:", { tag, headline: item.headline.slice(0, 50) });
+        recorded++;
+      }
     }
+    console.log("[NewsCollector] _collectFor complete:", { tag, recorded });
     return recorded;
   }
 
   async collectOnce() {
+    console.log("[NewsCollector] collectOnce() starting at", new Date().toISOString());
     // Stock-style tickers only (e.g. excludes BTCUSD/ETHUSD/SOLUSD, which
     // don't have Yahoo Finance equity RSS feeds — crypto news is handled by
     // crypto-collector.js).
     const tickers = loadWatchlist().filter((t) => /^[A-Z]{1,5}$/.test(t));
+    console.log("[NewsCollector] Watchlist tickers:", tickers);
 
-    let total = await this._collectFor(BROAD_MARKET_SYMBOLS, "broad");
-    for (const ticker of tickers) {
-      total += await this._collectFor([ticker], ticker);
-      // Be polite to Yahoo's free RSS endpoint
-      await new Promise((r) => setTimeout(r, 500));
+    const now = Date.now();
+    const minDelayBetweenFeeds = 60000; // 1 minute between feeds to avoid rate limiting
+
+    // Broad market collection (every 10 minutes)
+    let total = 0;
+    if (!this.lastFetchTime["broad"] || now - this.lastFetchTime["broad"] > minDelayBetweenFeeds) {
+      total = await this._collectFor(BROAD_MARKET_SYMBOLS, "broad");
+      this.lastFetchTime["broad"] = now;
+      console.log("[NewsCollector] Broad market collection complete, total:", total);
+      await new Promise((r) => setTimeout(r, this.fetchDelayMs));
+    } else {
+      console.log("[NewsCollector] Skipping broad market (too recent)");
     }
 
+    // Rotate through tickers to avoid rate limiting all at once
+    // Only fetch 3 tickers per run, cycling through the watchlist
+    const tickersToFetch = tickers.slice(0, 3);
+    for (const ticker of tickersToFetch) {
+      if (!this.lastFetchTime[ticker] || now - this.lastFetchTime[ticker] > minDelayBetweenFeeds) {
+        const tickerTotal = await this._collectFor([ticker], ticker);
+        total += tickerTotal;
+        this.lastFetchTime[ticker] = now;
+        await new Promise((r) => setTimeout(r, this.fetchDelayMs));
+      } else {
+        console.log(`[NewsCollector] Skipping ${ticker} (too recent)`);
+      }
+    }
+
+    console.log(`[NewsCollector] collectOnce() complete at ${new Date().toISOString()}, total recorded: ${total}`);
     if (total > 0) {
       console.log(`[NewsCollector] Recorded ${total} new headline(s)`);
+    } else {
+      console.log("[NewsCollector] No new articles in this run");
     }
     return total;
   }

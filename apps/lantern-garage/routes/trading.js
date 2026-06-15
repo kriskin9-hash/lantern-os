@@ -337,6 +337,74 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/state — Trade State Engine snapshot for UI
+  // Returns unified trade state from TradeStateEngine (single source of truth)
+  if (url.pathname === '/api/trading/state' && req.method === 'GET') {
+    try {
+      const engine = deps.tradeStateEngine;
+      if (!engine) {
+        return sendJson(res, { error: 'Trade State Engine not available' }, 503), true;
+      }
+      const state = engine.getState();
+      sendJson(res, state, 200);
+    } catch (error) {
+      console.error('[Trading] /state error:', error.message);
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/trading/stream — Server-Sent Events stream for real-time trade updates
+  if (url.pathname === '/api/trading/stream' && req.method === 'GET') {
+    const engine = deps.tradeStateEngine;
+    if (!engine) {
+      sendJson(res, { error: 'Trade State Engine not available' }, 503);
+      return true;
+    }
+
+    // Set up SSE headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+
+    // Send initial state
+    const initialState = engine.getState();
+    res.write(`data: ${JSON.stringify({ type: 'initial', data: initialState })}\n\n`);
+
+    // Set up listeners for trade events
+    const onTradeCreated = (trade) => {
+      res.write(`data: ${JSON.stringify({ type: 'trade:created', data: trade })}\n\n`);
+    };
+    const onTradeUpdated = (trade) => {
+      res.write(`data: ${JSON.stringify({ type: 'trade:updated', data: trade })}\n\n`);
+    };
+    const onTradeFilled = (trade) => {
+      res.write(`data: ${JSON.stringify({ type: 'trade:filled', data: trade })}\n\n`);
+    };
+    const onTradeRejected = (trade) => {
+      res.write(`data: ${JSON.stringify({ type: 'trade:rejected', data: trade })}\n\n`);
+    };
+
+    engine.on('trade:created', onTradeCreated);
+    engine.on('trade:updated', onTradeUpdated);
+    engine.on('trade:filled', onTradeFilled);
+    engine.on('trade:rejected', onTradeRejected);
+
+    // Clean up on disconnect
+    req.on('close', () => {
+      engine.removeListener('trade:created', onTradeCreated);
+      engine.removeListener('trade:updated', onTradeUpdated);
+      engine.removeListener('trade:filled', onTradeFilled);
+      engine.removeListener('trade:rejected', onTradeRejected);
+      res.end();
+    });
+
+    return true;
+  }
+
   // ── Trading memory: local orders & agent-log (Trading Phase 2, #323) ──────
   // LanternOS-native: reads/writes data/lantern-garage/trading/*.jsonl and
   // CSF Tier.TRACE records under data/csf_memory/ directly. No external
@@ -1040,28 +1108,62 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         return sendJson(res, r.error ? { error: r.error } : r.data, r.status || 200), true;
       }
       // POST — place order (dry-run / kill-switch gated inside placeOrder)
+      // All orders flow through TradeStateEngine for single source of truth
       if (url.pathname === '/api/trading/kalshi/order' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const o = body ? JSON.parse(body) : {};
         const result = await kalshi.placeOrder(o);
-        // Return correct HTTP status based on order result
-        const httpStatus = result.mode === 'dry_run' ? 200 : (result.status || 200);
-        const isError = result.status && result.status >= 400;
-        const response = {
-          success: !isError && (result.mode === 'dry_run' || result.status === 200),
-          error: isError ? `Kalshi API error: ${result.status}` : null,
-          mode: result.mode,
-          status: result.status,
-          orderId: result.result?.order_id,
-          order: result.order
-        };
-        return sendJson(res, response, isError ? result.status : 200), true;
+
+        // Route through TradeStateEngine (single source of truth)
+        const engine = deps.tradeStateEngine;
+        try {
+          // Create trade in engine with initial state
+          const trade = engine.createTrade({
+            ...result,
+            symbol: o.ticker || o.symbol,
+            side: o.side,
+            quantity: o.count || o.qty,
+            orderId: result.result?.order_id,
+            brokerStatus: result.status
+          });
+
+          const isError = result.status && result.status >= 400;
+          const response = {
+            success: !isError && (result.mode === 'dry_run' || result.status === 200),
+            error: isError ? `Kalshi API error: ${result.status}` : null,
+            mode: result.mode,
+            status: result.status,
+            orderId: result.result?.order_id,
+            tradeId: trade.tradeId,
+            tradeStatus: trade.status
+          };
+          return sendJson(res, response, isError ? result.status : 200), true;
+        } catch (e) {
+          console.error("[Order] Engine error:", e.message);
+          return sendJson(res, { error: e.message }, 500), true;
+        }
       }
       // POST — cancel order  { orderId }
+      // All cancels flow through TradeStateEngine
       if (url.pathname === '/api/trading/kalshi/order/cancel' && req.method === 'POST') {
         const body = await collectRequestBody(req);
         const { orderId } = body ? JSON.parse(body) : {};
         const result = await kalshi.cancelOrder(orderId);
+
+        // Update engine state
+        const engine = deps.tradeStateEngine;
+        const trade = engine.getTradeByOrderId(orderId);
+        if (trade) {
+          try {
+            engine.updateTradeStatus(trade.tradeId, 'cancelled', {
+              cancelledAt: Date.now(),
+              brokerStatus: result.status
+            });
+          } catch (e) {
+            console.error("[Cancel] State transition error:", e.message);
+          }
+        }
+
         const isError = result.status && result.status >= 400;
         const response = {
           success: !isError && (result.mode === 'dry_run' || result.status === 200),
