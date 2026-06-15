@@ -575,6 +575,113 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     }
   }
 
+  // ── Phase 4B: Independent AI Trader Integration ────────────────────────────
+
+  // POST /api/trading/independent-ai/order — Route AI trader decision to engine
+  if (url.pathname === '/api/trading/independent-ai/order' && req.method === 'POST') {
+    const engine = deps.tradeStateEngine;
+    const tracer = deps.systemAuditTracer;
+    const stabilityIndex = deps.stabilityIndex;
+
+    if (!engine || !tracer || !stabilityIndex) {
+      sendJson(res, { error: 'Required dependencies not available' }, 503);
+      return true;
+    }
+
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+
+      const { ticker, side, quantity, confidence, strategy, decision_id } = payload;
+
+      if (!ticker || !side || !quantity) {
+        sendJson(res, { error: 'Missing required fields: ticker, side, quantity' }, 400);
+        return true;
+      }
+
+      // Create trace for this decision
+      const traceId = tracer.recordAIDecision(
+        { action: side, symbol: ticker, quantity },
+        stabilityIndex.lastIndex,
+        null,
+        confidence || 0.5,
+        [`external-trader: ${strategy || 'unknown'}`, `decision-id: ${decision_id || 'none'}`]
+      );
+
+      // Route through Trade State Engine
+      const trade = engine.createTrade({
+        symbol: ticker,
+        side: side.toUpperCase(),
+        quantity: parseInt(quantity),
+        price: 0,
+        mode: "paper",
+        externalAgent: "independent-ai-trader",
+        confidence: confidence || 0.5,
+        strategy: strategy || 'alpha-model',
+        decisionId: decision_id,
+        traceId
+      });
+
+      // Record in audit trail
+      tracer.recordTradeExecution(
+        traceId,
+        trade.tradeId,
+        { status: trade.status },
+        true
+      );
+
+      sendJson(res, {
+        success: true,
+        tradeId: trade.tradeId,
+        traceId,
+        status: trade.status,
+        message: `Paper trade routed: ${ticker} ${side}`
+      }, 201);
+
+      return true;
+
+    } catch (e) {
+      console.error('[AI Trader Integration] Order error:', e.message);
+      sendJson(res, { error: 'Failed to process AI trader order', details: e.message }, 500);
+      return true;
+    }
+  }
+
+  // GET /api/trading/independent-ai/status — Get AI trader integration status
+  if (url.pathname === '/api/trading/independent-ai/status' && req.method === 'GET') {
+    const engine = deps.tradeStateEngine;
+    const tracer = deps.systemAuditTracer;
+
+    const externalTrades = engine ? Array.from(engine.trades.values())
+      .filter(t => t.externalAgent === "independent-ai-trader") : [];
+
+    const status = {
+      service: "independent-ai-trader-integration",
+      phase: "4B",
+      mode: "paper-trading-only",
+      integration: {
+        enabled: true,
+        traceability: !!tracer,
+        safetyGateActive: true,
+        realExecutionBlocked: true
+      },
+      metrics: {
+        totalTrades: engine ? engine.trades.size : 0,
+        externalTrades: externalTrades.length,
+        externalWinRate: externalTrades.length > 0 ? "N/A (paper)" : 0
+      },
+      requirements: {
+        stabilityIndexMinimum: 0.8,
+        executionMode: "PAPER ONLY",
+        auditTrailRequired: true,
+        safetyBypass: "NOT IMPLEMENTED"
+      }
+    };
+
+    sendJson(res, status, 200);
+    return true;
+  }
+
   // ── Trading memory: local orders & agent-log (Trading Phase 2, #323) ──────
   // LanternOS-native: reads/writes data/lantern-garage/trading/*.jsonl and
   // CSF Tier.TRACE records under data/csf_memory/ directly. No external
