@@ -44,6 +44,12 @@ class TradeStateEngine extends EventEmitter {
     this.orderIdToTradeId = new Map(); // orderId → tradeId (for lookups)
     this.recentTrades = []; // For UI: last N trades
     this.maxRecentTrades = 100;
+
+    // Phase 2.5: Event ordering & dedup
+    this.eventSequence = 0; // Monotonic counter for event ordering
+    this.tradeEventSequence = new Map(); // tradeId → last event sequence number
+    this.tradeEventHashes = new Map(); // tradeId → last event hash (for dedup)
+    this.eventQueue = []; // Queued events awaiting processing
   }
 
   /**
@@ -250,12 +256,140 @@ class TradeStateEngine extends EventEmitter {
   }
 
   /**
+   * Phase 2.5: Check for duplicate/stale events
+   */
+  _isDuplicateEvent(tradeId, eventHash) {
+    const lastHash = this.tradeEventHashes.get(tradeId);
+    return lastHash === eventHash;
+  }
+
+  /**
+   * Phase 2.5: Get next monotonic event sequence number
+   */
+  _nextEventSequence() {
+    return ++this.eventSequence;
+  }
+
+  /**
+   * Phase 2.5: Validate trade state consistency
+   */
+  validateTradeState(tradeId) {
+    const trade = this.trades.get(tradeId);
+    if (!trade) return { valid: true, message: "Trade not found" };
+
+    // Validate state is in known set
+    if (!Object.values(TRADE_STATES).includes(trade.status)) {
+      return { valid: false, message: `Unknown state: ${trade.status}` };
+    }
+
+    // Validate quantities
+    if (trade.filledQuantity > trade.quantity) {
+      return { valid: false, message: "Filled quantity exceeds total quantity" };
+    }
+
+    // Validate terminal states have timestamps
+    if (
+      [TRADE_STATES.FILLED, TRADE_STATES.REJECTED, TRADE_STATES.CANCELLED].includes(trade.status) &&
+      !trade.filledAt &&
+      !trade.error
+    ) {
+      return { valid: false, message: "Terminal state missing completion details" };
+    }
+
+    return { valid: true, message: "State valid" };
+  }
+
+  /**
+   * Phase 2.5: Full engine integrity check
+   */
+  validateEngineIntegrity() {
+    const issues = [];
+
+    // Check for orphaned orders
+    for (const [orderId, tradeId] of this.orderIdToTradeId.entries()) {
+      if (!this.trades.has(tradeId)) {
+        issues.push(`Orphan order mapping: ${orderId} → ${tradeId}`);
+      }
+    }
+
+    // Check for invalid states
+    for (const [tradeId, trade] of this.trades.entries()) {
+      const validation = this.validateTradeState(tradeId);
+      if (!validation.valid) {
+        issues.push(`Trade ${tradeId}: ${validation.message}`);
+      }
+    }
+
+    // Check for duplicates in terminal states
+    const filled = new Set();
+    for (const trade of this.trades.values()) {
+      if (trade.status === TRADE_STATES.FILLED && trade.tradeId) {
+        if (filled.has(trade.tradeId)) {
+          issues.push(`Duplicate filled trade: ${trade.tradeId}`);
+        }
+        filled.add(trade.tradeId);
+      }
+    }
+
+    return {
+      valid: issues.length === 0,
+      issues,
+      tradeCount: this.trades.size,
+      timestamp: Date.now()
+    };
+  }
+
+  /**
+   * Phase 2.5: Get engine health snapshot
+   */
+  getHealth() {
+    const integrity = this.validateEngineIntegrity();
+    return {
+      status: integrity.valid ? "healthy" : "degraded",
+      activeTrades: this.getOpenPositions().length,
+      totalTrades: this.trades.size,
+      eventQueueDepth: this.eventQueue.length,
+      eventSequence: this.eventSequence,
+      lastReconciliation: this.lastReconciliationTime || null,
+      issues: integrity.issues,
+      timestamp: Date.now()
+    };
+  }
+
+  /**
+   * Phase 2.5: Reconcile state (after restart or consistency check)
+   */
+  reconcileState() {
+    const before = this.trades.size;
+    const validation = this.validateEngineIntegrity();
+
+    if (!validation.valid) {
+      console.warn("[TradeStateEngine] Reconciliation found issues:", validation.issues);
+    }
+
+    this.lastReconciliationTime = Date.now();
+
+    return {
+      success: validation.valid,
+      tradesBefore: before,
+      tradesAfter: this.trades.size,
+      issues: validation.issues,
+      timestamp: this.lastReconciliationTime
+    };
+  }
+
+  /**
    * Clear all state (for testing)
    */
   clear() {
     this.trades.clear();
     this.orderIdToTradeId.clear();
     this.recentTrades = [];
+    this.eventSequence = 0;
+    this.tradeEventSequence.clear();
+    this.tradeEventHashes.clear();
+    this.eventQueue = [];
+    this.lastReconciliationTime = null;
   }
 }
 
