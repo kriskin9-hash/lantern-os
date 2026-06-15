@@ -17,8 +17,11 @@ const path = require("path");
 const https = require("https");
 const tradingNews = require("./trading-news");
 
-const WATCHLIST_PATH = path.resolve(__dirname, "..", "..", "..", "data", "lantern-garage", "trading", "watchlist.json");
+// Config-based watchlist (loaded dynamically, not hardcoded)
+const CONFIG_WATCHLIST_PATH = path.resolve(__dirname, "..", "..", "..", "config", "watchlist.json");
+const LEGACY_WATCHLIST_PATH = path.resolve(__dirname, "..", "..", "..", "data", "lantern-garage", "trading", "watchlist.json");
 const BROAD_MARKET_SYMBOLS = ["^GSPC", "^DJI", "^IXIC", "^VIX"];
+const FALLBACK_TICKERS = ["AAPL", "SPY", "TLT"];
 
 const HIGH_IMPACT_KEYWORDS = [
   "fed", "rate hike", "rate cut", "inflation", "cpi", "jobs report",
@@ -110,14 +113,33 @@ function fetchRss(symbols) {
 }
 
 function loadWatchlist() {
+  // Try config/watchlist.json first (new config-based approach)
   try {
-    const raw = fs.readFileSync(WATCHLIST_PATH, "utf8");
+    const raw = fs.readFileSync(CONFIG_WATCHLIST_PATH, "utf8");
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed.tickers)) return parsed.tickers;
+    if (Array.isArray(parsed.tickers) && parsed.tickers.length > 0) {
+      console.log("[NewsCollector] Loaded watchlist from config:", parsed.tickers.length, "tickers");
+      return parsed.tickers;
+    }
   } catch {
-    // file missing or invalid — fall back to empty list (broad-market still runs)
+    // config file missing or invalid, try legacy path
   }
-  return [];
+
+  // Fall back to legacy data/lantern-garage/trading/watchlist.json
+  try {
+    const raw = fs.readFileSync(LEGACY_WATCHLIST_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.tickers) && parsed.tickers.length > 0) {
+      console.log("[NewsCollector] Loaded watchlist from legacy path:", parsed.tickers.length, "tickers");
+      return parsed.tickers;
+    }
+  } catch {
+    // legacy file also missing or invalid
+  }
+
+  // Final fallback to hardcoded tickers
+  console.log("[NewsCollector] Using fallback tickers:", FALLBACK_TICKERS.join(", "));
+  return FALLBACK_TICKERS;
 }
 
 class NewsCollector {
@@ -163,11 +185,15 @@ class NewsCollector {
 
   async collectOnce() {
     console.log("[NewsCollector] collectOnce() starting at", new Date().toISOString());
+
+    // Load watchlist dynamically on each cycle (allows config changes to be picked up)
+    const allTickers = loadWatchlist();
+
     // Stock-style tickers only (e.g. excludes BTCUSD/ETHUSD/SOLUSD, which
     // don't have Yahoo Finance equity RSS feeds — crypto news is handled by
     // crypto-collector.js).
-    const tickers = loadWatchlist().filter((t) => /^[A-Z]{1,5}$/.test(t));
-    console.log("[NewsCollector] Watchlist tickers:", tickers);
+    const tickers = allTickers.filter((t) => /^[A-Z]{1,5}$/.test(t));
+    console.log("[NewsCollector] Active tickers for this cycle:", tickers.join(", "));
 
     const now = Date.now();
     const minDelayBetweenFeeds = 60000; // 1 minute between feeds to avoid rate limiting

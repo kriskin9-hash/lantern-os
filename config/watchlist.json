@@ -1,0 +1,21 @@
+{
+  "tickers": [
+    "AAPL",
+    "TSLA",
+    "NVDA",
+    "AMD",
+    "AMZN",
+    "INTC",
+    "SHOP",
+    "ASML",
+    "META",
+    "MSFT",
+    "JPM",
+    "GLD",
+    "SPY",
+    "TLT"
+  ],
+  "description": "Stock watchlist for RSS news ingestion",
+  "lastUpdated": "2026-06-15",
+  "notes": "Edit this file to add/remove stocks. Changes picked up on next collector cycle."
+}
