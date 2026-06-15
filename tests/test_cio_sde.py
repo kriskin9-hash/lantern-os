@@ -342,8 +342,10 @@ def test_anti_collapse_dormant_when_safe():
 
 # ── Surprise Monitor Integration ───────────────────────────────────────────────
 
-@pytest.mark.xfail(reason="#506: surprise<->Sigma0 integration not yet wired into engine.forward_step "
-                          "(rollout does not feed m.surprise_monitor, so surprise_spook is never emitted)",
+@pytest.mark.xfail(reason="#506: engine.forward_step now consumes m.surprise_monitor and emits "
+                          "surprise_spook, but it self-observes (y=x), so during collapse the "
+                          "innovation -> 0 and the NIS canary may not fire; pending an observation "
+                          "model that triggers spooks under collapse",
                    strict=False)
 def test_surprise_monitor_integration():
     """Surprise monitor fires NIS canary and triggers anti-collapse excitation.
