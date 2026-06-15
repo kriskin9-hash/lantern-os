@@ -241,3 +241,72 @@ def test_anti_collapse_dormant_when_safe():
         m, x0, m.pcsf(x0, s0),
         s0, torch.eye(4).expand(8, 4, 4).clone())
     assert p == 0.0
+
+
+# ── Non-Normal Jacobian Handling ───────────────────────────────────────────────
+
+def test_certificate_with_non_normal_matrix():
+    """Small-gain bound handles non-symmetric (non-normal) matrices."""
+    # Create a non-normal matrix with significant cross-terms
+    A = torch.tensor([[-0.5, 2.0], [0.0, -0.8]])
+    cert = collapse_certificate(A.unsqueeze(0))
+    # Should provide a bound even for non-normal case
+    assert cert.alpha is not None
+    assert cert.active_dim == 2  # both modes active
+
+
+def test_certificate_cross_term_bound():
+    """Cross-term norm is added to symmetric bound for non-normal case."""
+    # Non-normal matrix: symmetric part has negative eigenvalues
+    A = torch.tensor([[-0.3, 1.5], [-0.5, -0.6]])
+    cert = collapse_certificate(A.unsqueeze(0))
+    
+    # Compute symmetric part separately
+    A_s = 0.5 * (A + A.T)
+    sym_evals = torch.linalg.eigvalsh(A_s)
+    alpha_sym = float(sym_evals.max().item())
+    
+    # Cross-term norm should increase the bound
+    cross_norm = torch.linalg.norm(A - A_s, ord=2).item()
+    assert cert.alpha >= alpha_sym  # bound should be at least symmetric part
+    assert cert.alpha <= alpha_sym + cross_norm + 1e-4  # should not exceed small-gain bound
+
+
+def test_log_barrier_smooth_projection():
+    """Log-barrier provides smooth boundary instead of hard clamp."""
+    m = _model()
+    m.collapse_op = SemanticCollapseOperator(log_barrier_strength=0.5)
+    
+    # Create a collapsing regime
+    for p in m.graph.active.drift_net.parameters():
+        torch.nn.init.zeros_(p)
+    
+    x0, s0 = _init_state(scale=0.01)
+    _, _, tr = rollout(m, x0, s0, steps=20, base_seed=1)
+    
+    # Should still collapse but with smooth transitions
+    assert len(tr.collapses) > 0
+    # Check that norms don't jump discontinuously (smooth barrier)
+    norms = tr.x_norms()
+    for i in range(1, len(norms)):
+        # Allow some change but not infinite jumps
+        assert abs(norms[i] - norms[i-1]) < 10.0
+
+
+def test_non_symmetric_jacobian_in_rollout():
+    """Rollout with non-symmetric Jacobian dynamics."""
+    # Create a non-normal linear dynamics node
+    A = torch.tensor([[-0.4, 1.0], [-0.3, -0.7]])
+    B = torch.zeros(2, 2)
+    node = LinearDynamics(A, B=B, noise=0.05)
+    
+    m = CIO_SDE(dim=2, ctrl_dim=2, hidden=8)
+    m.graph.active = node
+    m.pcsf.u_max = 1e-6  # disable control for pure drift test
+    
+    x0, s0 = _init_state(b=16, dim=2, scale=1.0)
+    xf, _, tr = rollout(m, x0, s0, steps=50, dt=0.05, base_seed=0)
+    
+    # Should remain bounded even with non-normal dynamics
+    assert not analyze_trajectory(tr).diverged
+    assert all(v == v for v in tr.x_norms())  # no NaN

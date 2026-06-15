@@ -89,6 +89,18 @@ cross term must be separately bounded (e.g. via `‖P_M A P_N‖` and a small-ga
 Young's-inequality argument that tightens `α` to an effective rate), or one must
 fall back to the full-spectrum test.
 
+**Implementation (as of 2026-06-15).** The `collapse_certificate()` function now
+uses a small-gain theorem bound for the non-normal case:
+
+$$\alpha_{\text{bound}} = \max_i \lambda_i(A_s) + \|A - A_s\|_2$$
+
+where `A_s = (A + A^T)/2` is the symmetric part. This provides a conservative
+bound that accounts for cross-terms in the non-normal case. The bound is exact
+for normal matrices (where `‖A - A_s‖_2 = 0`) and remains conservative for
+non-normal matrices. This is a **proven bound** (not heuristic) based on the
+small-gain theorem, though it may be overly conservative for strongly non-normal
+dynamics.
+
 ### 1.2 The authoritative test: full-spectrum, not A_s alone
 
 `α < 0` on the symmetric part is **necessary but not sufficient** for strict

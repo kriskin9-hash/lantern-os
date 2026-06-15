@@ -67,12 +67,14 @@ class SemanticCollapseOperator:
                  rank_frac: float = 0.5,
                  anisotropy_eps: float = 5e-2,
                  ctrl_eps: float = 1e-2,
-                 eig_eps: float = 1e-2) -> None:
+                 eig_eps: float = 1e-2,
+                 log_barrier_strength: float = 0.1) -> None:
         self.grad_eps = grad_eps          # ∇ₓL below this ⇒ no optimization signal
         self.rank_frac = rank_frac        # eff_rank/dim below this ⇒ rank-deficient
         self.anisotropy_eps = anisotropy_eps  # Σ eigval spread below this ⇒ flat
         self.ctrl_eps = ctrl_eps          # ∂H/∂u below this ⇒ control singularity
         self.eig_eps = eig_eps            # |λ| below this ⇒ null eigenmode
+        self.log_barrier_strength = log_barrier_strength  # smooth boundary penalty
 
     @torch.no_grad()
     def _effective_rank(self, A: Tensor) -> float:
@@ -114,7 +116,19 @@ class SemanticCollapseOperator:
             return torch.zeros_like(x), CollapseOutcome.NULL
         V = evecs[:, null_mask]                 # (d, k) null subspace basis
         P = V @ V.T                             # projector onto invariant manifold
-        x_star = x @ P.T                        # degenerate fixed point
+        
+        # Log-barrier for smooth boundary: -strength * log(1 - ‖P x‖ / ‖x‖)
+        # This penalizes approaching the boundary smoothly instead of hard clamp
+        if self.log_barrier_strength > 0:
+            x_norm = x.norm(dim=-1, keepdim=True).clamp_min(1e-8)
+            proj_norm = (x @ P.T).norm(dim=-1, keepdim=True)
+            barrier_ratio = (proj_norm / x_norm).clamp_max(0.99)
+            barrier = -self.log_barrier_strength * torch.log(1.0 - barrier_ratio)
+            # Apply barrier as a soft penalty to the projection
+            x_star = x @ P.T * (1.0 - barrier)
+        else:
+            x_star = x @ P.T
+        
         return x_star, CollapseOutcome.ATTRACTOR
 
     def evaluate(self, model, x: Tensor, u: Tensor, sigma: Tensor,
@@ -181,7 +195,13 @@ class CollapseCertificate:
 @torch.no_grad()
 def collapse_certificate(A: Tensor, eig_eps: float = 1e-2,
                          margin: float = 0.0) -> CollapseCertificate:
-    """Evaluate the collapse-guarantee theorem for a (batched) Jacobian A."""
+    """Evaluate the collapse-guarantee theorem for a (batched) Jacobian A.
+    
+    For non-normal A, uses the small-gain theorem bound:
+        α ≤ max_i Re(λ_i) + ‖A - A_s‖_2
+    where A_s is the symmetric part. This provides a conservative bound
+    that accounts for cross-terms in the non-normal case.
+    """
     Abar = A.mean(0) if A.dim() == 3 else A
     A_s = 0.5 * (Abar + Abar.T)
     evals = torch.linalg.eigvalsh(A_s)
@@ -192,7 +212,12 @@ def collapse_certificate(A: Tensor, eig_eps: float = 1e-2,
         # entirely null — already on the manifold, trivially collapsed
         return CollapseCertificate(True, float("-inf"), float("inf"),
                                    null_dim, 0)
-    alpha = float(active.max().item())
+    
+    # Small-gain bound for non-normal case
+    alpha_sym = float(active.max().item())
+    cross_term_norm = torch.linalg.norm(Abar - A_s, ord=2).item()
+    alpha = alpha_sym + cross_term_norm  # conservative bound
+    
     guaranteed = alpha < -margin
     return CollapseCertificate(
         guaranteed=guaranteed,
