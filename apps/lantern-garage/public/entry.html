@@ -1159,6 +1159,7 @@ function loadVariants(entry) {
           <div class="variant-head">
             <span class="variant-label">${escapeHtml(v.label || v.strategy || v.id)}</span>
             <span class="variant-grade ${gradeClass(grade)}">${escapeHtml(grade)}</span>
+            ${v.rank === 1 ? '<span class="variant-grade g-Aplus" style="background:var(--accent);color:#fff;border-color:var(--accent);">★ Recommended Upload</span>' : ''}
           </div>
           <div class="variant-metrics">
             <div><span>Viral Score</span><b>${viral}</b></div>
@@ -1317,7 +1318,7 @@ async function runRenderShorts() {
   try {
     const r = await fetch('/api/creator/export', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoPath: currentProject.filePath, entryId, renderKey: top.id, segments: top.segments, format: '9:16', fit: 'pad', burnCaptions: true }),
+      body: JSON.stringify({ videoPath: currentProject.filePath, entryId, renderKey: top.id, segments: top.segments, format: '9:16', fit: 'crop', useSafeZones: true, burnCaptions: true }),
     });
     const d = await r.json();
     if (!r.ok || !d.jobId) throw new Error(d.error || 'failed to queue');
@@ -1516,7 +1517,8 @@ async function exportVariant(variantId) {
         renderKey: v.id,
         segments: v.segments,
         format: '9:16',
-        fit: 'pad',
+        fit: 'crop',          // cover-fill the 9:16 frame (no black bars)
+        useSafeZones: true,    // shift the crop window to avoid slicing facecam/HUD
         burnCaptions: true,
       }),
     });

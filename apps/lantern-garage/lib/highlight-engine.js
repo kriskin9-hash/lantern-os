@@ -128,19 +128,25 @@ async function analyzeVideoForHighlights(videoPath, options = {}, onProgress = (
 
   onProgress(66, "detecting_highlights", "Merging detections into highlights");
 
-  // Merge and score highlights
-  const highlights = mergeDetections(
+  // Merge and score highlights (gameplay-first; conversation is penalized).
+  const { highlights, density } = mergeDetections(
     motionFrames,
     audioSpikes,
     sceneChanges,
     fps,
     minHighlightDuration,
-    maxHighlightDuration
+    maxHighlightDuration,
+    options.weights
   );
 
   highlights.forEach((hl) => {
     timeline.addHighlight(hl.start, hl.end, hl.score, hl.reason, hl.tags);
   });
+
+  // Attach the per-second gameplay-density heatmap (real composite of motion/
+  // scene/transient-audio with conversation suppressed).
+  timeline.metadata.gameplayDensity = density;
+  timeline.metadata.scoring = "gameplay_first_v10";
 
   timeline.sort();
   return timeline;
@@ -255,6 +261,7 @@ async function detectAudioSpikes(videoPath, fps = 5, threshold = 0.7, opts = {})
     const audioFrames = [];
     let audioBuffer = Buffer.alloc(0);
     let frameIndex = 0;
+    let lastLoudness = null; // track across ALL windows for transient detection
     let settled = false;
     const finish = (val) => { if (settled) return; settled = true; clearTimeout(timer); resolve(val); };
     const timer = setTimeout(() => { try { ffmpeg.kill("SIGKILL"); } catch {} finish(audioFrames); }, timeoutMs);
@@ -271,8 +278,13 @@ async function detectAudioSpikes(videoPath, fps = 5, threshold = 0.7, opts = {})
         audioBuffer = audioBuffer.slice(bytesPerFrame);
 
         const loudness = calculateLoudness(frameData);
+        // Transient = sudden loudness rise vs the previous window. Combat (shots,
+        // explosions, hitmarkers) is transient-heavy; speech is loud-but-sustained.
+        // This lets the merger tell "talking" from "action" honestly from real PCM.
+        const transient = lastLoudness === null ? 0 : Math.max(0, loudness - lastLoudness);
+        lastLoudness = loudness;
         if (loudness > threshold) {
-          audioFrames.push({ timestamp: frameIndex / fps, loudness });
+          audioFrames.push({ timestamp: frameIndex / fps, loudness, transient });
         }
         frameIndex++;
       }
@@ -373,77 +385,106 @@ function buildHistogram(frame) {
 // SCORING & MERGING
 // ============================================================================
 
-function mergeDetections(
-  motionFrames,
-  audioFrames,
-  sceneFrames,
-  fps,
-  minDuration,
-  maxDuration
-) {
+// Gameplay-first weights. Audio is SUPPORTIVE, never dominant — this is what
+// stops a loud lobby conversation from beating real gameplay. "combat" here is
+// an honest proxy: an audio transient that co-occurs with visual action (motion/
+// scene), NOT real kill-feed/hitmarker OCR (which this engine does not do).
+const GAMEPLAY_WEIGHTS = {
+  motion: 0.40,        // gameplay_motion
+  combat: 0.25,        // audio transient gated by visual action (combat proxy)
+  scene: 0.15,         // rapid_scene_change
+  audioPeak: 0.10,     // sustained loudness, only credited when action is present
+  // ui_event 0.10 — not implemented (needs CV/OCR); folded into scene/motion.
+};
+
+function clampUnit(x) { return Math.max(0, Math.min(1, Number.isFinite(x) ? x : 0)); }
+
+/**
+ * Merge motion/audio/scene detections into scored highlight segments, with a
+ * gameplay-first composite and a conversation penalty. Returns { highlights,
+ * density } where density is a per-second gameplay-density heatmap.
+ */
+function mergeDetections(motionFrames, audioFrames, sceneFrames, fps, minDuration, maxDuration, weights) {
+  const W = { ...GAMEPLAY_WEIGHTS, ...(weights || {}) };
+
+  // Pass 1 — gather raw per-(motion-)frame signals.
+  const raw = [];
+  let maxMotion = 0, maxTrans = 0;
+  for (const frame of motionFrames) {
+    const audioMatch = audioFrames.find((a) => Math.abs(a.timestamp - frame.timestamp) < 0.5);
+    const sceneMatch = sceneFrames.find((s) => Math.abs(s.timestamp - frame.timestamp) < 0.5);
+    const motionRaw = frame.motion || 0;
+    const sceneRaw = sceneMatch ? (sceneMatch.difference || 0) : 0; // already 0..1
+    const audioLoud = audioMatch ? (audioMatch.loudness || 0) : 0;  // already 0..1
+    const audioTrans = audioMatch ? (audioMatch.transient || 0) : 0;
+    if (motionRaw > maxMotion) maxMotion = motionRaw;
+    if (audioTrans > maxTrans) maxTrans = audioTrans;
+    raw.push({ t: frame.timestamp, motionRaw, sceneRaw, audioLoud, audioTrans, hasAudio: !!audioMatch, hasScene: !!sceneMatch });
+  }
+  const mDiv = maxMotion > 0 ? maxMotion : 1;
+  const tDiv = maxTrans > 0 ? maxTrans : 1;
+
+  // Pass 2 — gameplay-first composite + conversation suppression.
   const candidates = [];
+  const densityBySec = new Map();
+  for (const r of raw) {
+    const motionN = clampUnit(r.motionRaw / mDiv);
+    const sceneN = clampUnit(r.sceneRaw);
+    const audioLoudN = clampUnit(r.audioLoud);
+    const audioTransN = clampUnit(r.audioTrans / tDiv);
 
-  // Find peaks in motion
-  for (let i = 0; i < motionFrames.length; i++) {
-    const frame = motionFrames[i];
-    const audioMatch = audioFrames.find(
-      (a) => Math.abs(a.timestamp - frame.timestamp) < 0.5
-    );
-    const sceneMatch = sceneFrames.find(
-      (s) => Math.abs(s.timestamp - frame.timestamp) < 0.5
-    );
+    // Visual action present? (the gate for crediting any audio)
+    const action = motionN > 0.45 || sceneN > 0.18;
+    const combat = action ? audioTransN : 0; // transient audio only counts as combat with visual action
 
-    let score = frame.motion;
-    let reason = "motion";
+    let density = W.motion * motionN + W.combat * combat + W.scene * sceneN;
+    if (action) density += W.audioPeak * audioLoudN;
+
+    // Conversation/speech suppression: loud + sustained (low transient) + static
+    // scene + modest motion = talking, not gameplay. Hard-penalize it.
+    const speechLike = audioLoudN > 0.5 && audioTransN < 0.15 && sceneN < 0.12 && motionN < 0.45;
+    if (speechLike) density *= 0.35;
+
+    const score = clampUnit(density);
+
     const tags = ["motion"];
+    if (r.hasScene && sceneN > 0.12) tags.push("scene");
+    if (r.hasAudio) tags.push("audio");
+    if (action && combat > 0.15) tags.push("combat");
+    if (speechLike) tags.push("speech");
+    const reason = speechLike ? "talking (low gameplay activity)"
+      : tags.includes("combat") ? "combat action"
+      : tags.includes("scene") ? "motion + scene change"
+      : "motion";
 
-    if (audioMatch) {
-      score = Math.max(score, audioMatch.loudness);
-      reason += " + audio";
-      tags.push("audio");
-    }
+    // Heatmap: max density per whole second.
+    const sec = Math.floor(r.t);
+    densityBySec.set(sec, Math.max(densityBySec.get(sec) || 0, score));
 
-    if (sceneMatch) {
-      score = Math.max(score, sceneMatch.difference);
-      reason += " + scene";
-      tags.push("scene");
-    }
-
-    candidates.push({
-      timestamp: frame.timestamp,
-      score,
-      reason,
-      tags,
-    });
+    // Drop near-zero/penalized noise so conversation regions don't form highlights.
+    if (score >= 0.12) candidates.push({ timestamp: r.t, score, reason, tags });
   }
 
-  // Group adjacent candidates into highlights
+  // Group adjacent candidates into highlights.
   const highlights = [];
   let current = null;
-
   for (const cand of candidates) {
     if (!current) {
       current = { start: cand.timestamp, end: cand.timestamp, score: cand.score, reason: cand.reason, tags: cand.tags };
     } else if (cand.timestamp - current.end < 0.5) {
       current.end = cand.timestamp;
-      current.score = Math.max(current.score, cand.score);
+      if (cand.score > current.score) { current.score = cand.score; current.reason = cand.reason; current.tags = cand.tags; }
     } else {
-      if (current.end - current.start >= minDuration && current.end - current.start <= maxDuration) {
-        highlights.push(current);
-      }
+      if (current.end - current.start >= minDuration && current.end - current.start <= maxDuration) highlights.push(current);
       current = { start: cand.timestamp, end: cand.timestamp, score: cand.score, reason: cand.reason, tags: cand.tags };
     }
   }
+  if (current && current.end - current.start >= minDuration && current.end - current.start <= maxDuration) highlights.push(current);
 
-  if (
-    current &&
-    current.end - current.start >= minDuration &&
-    current.end - current.start <= maxDuration
-  ) {
-    highlights.push(current);
-  }
+  const density = [...densityBySec.entries()].sort((a, b) => a[0] - b[0])
+    .map(([time, d]) => ({ time, density: Number(d.toFixed(3)) }));
 
-  return highlights;
+  return { highlights, density };
 }
 
 function scoreHighlight(motion, audio, scene, weights = {}) {
@@ -503,6 +544,8 @@ module.exports = {
   detectAudioSpikes,
   detectSceneChanges,
   scoreHighlight,
+  mergeDetections,
   getVideoMetadata,
   ANALYSIS_DEFAULTS,
+  GAMEPLAY_WEIGHTS,
 };
