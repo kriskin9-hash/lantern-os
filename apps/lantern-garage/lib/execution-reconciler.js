@@ -2,6 +2,8 @@
  * Execution Reconciler
  *
  * Periodic sync with broker to ensure internal state matches reality.
+ * Generates events from divergences (immutable audit trail).
+ *
  * Detects and corrects:
  * - Orders broker has that we don't know about
  * - Orders we know about that broker has cancelled/failed
@@ -13,10 +15,15 @@
 
 "use strict";
 
+const BrokerEventNormalizer = require("./broker-event-normalizer");
+const ExecutionConflictResolver = require("./execution-conflict-resolver");
+const ExecutionEventStore = require("./execution-event-store");
+
 class ExecutionReconciler {
-  constructor(tracker, broker) {
+  constructor(tracker, broker, eventStore) {
     this.tracker = tracker;
     this.broker = broker;
+    this.eventStore = eventStore;
     this.lastReconcileTime = null;
     this.reconcileInterval = 5000;  // Every 5 seconds
   }
@@ -47,6 +54,7 @@ class ExecutionReconciler {
   /**
    * Main reconciliation loop
    * Compares internal state with broker state
+   * Emits events instead of direct mutations
    */
   async reconcile() {
     const startTime = Date.now();
@@ -65,6 +73,7 @@ class ExecutionReconciler {
 
       // Check for divergence
       let divergences = 0;
+      const events = [];  // Collect events to append
 
       // 1. Check each local order against broker state
       for (const localOrder of localOrders) {
@@ -77,34 +86,53 @@ class ExecutionReconciler {
 
         if (!brokerOrder) {
           // Order was on broker, now it's gone
-          // Could be filled, cancelled, or failed
-          console.warn(`[ExecutionReconciler] Missing from broker: ${localOrder.orderId} (brokerId: ${localOrder.brokerId})`);
+          console.warn(`[ExecutionReconciler] Missing from broker: ${localOrder.orderId}`);
           divergences++;
 
-          // Assume order was cancelled/rejected
-          this.tracker.recordFailure(localOrder.orderId, "Order missing from broker (likely cancelled)");
+          // Emit failure event
+          const event = {
+            eventId: ExecutionEventStore.generateEventId(),
+            orderId: localOrder.orderId,
+            type: "ORDER_FAILED",
+            timestamp: Date.now(),
+            source: "reconciliation",
+            reason: "Order missing from broker (likely cancelled)",
+          };
+          events.push(event);
           continue;
         }
 
-        // Check fill status
-        const diverged = this.checkOrderDivergence(localOrder, brokerOrder);
-        if (diverged) {
+        // Check fill status and collect events
+        const orderEvents = this.checkOrderDivergence(localOrder, brokerOrder);
+        if (orderEvents.length > 0) {
+          events.push(...orderEvents);
           divergences++;
         }
       }
 
-      // 2. Check for orders broker has that we don't know about (unlikely but possible)
+      // 2. Check for orders broker has that we don't know about
       for (const brokerOrder of brokerOrders) {
         const localOrder = this.tracker.getOrderByBrokerId(brokerOrder.id);
         if (!localOrder) {
           console.warn(`[ExecutionReconciler] Unknown broker order: ${brokerOrder.id}`);
           divergences++;
-          // This is unexpected but not fatal - could be order from external system
+        }
+      }
+
+      // Append all events to event store
+      for (const event of events) {
+        try {
+          this.eventStore.append(event);
+        } catch (e) {
+          console.error(`[ExecutionReconciler] Failed to append event: ${e.message}`);
         }
       }
 
       const elapsed = Date.now() - startTime;
-      console.log(`[ExecutionReconciler] Cycle complete: ${divergences} divergences found (${elapsed}ms)`);
+      console.log(
+        `[ExecutionReconciler] Cycle complete: ${divergences} divergences, ` +
+        `${events.length} events (${elapsed}ms)`
+      );
 
       this.lastReconcileTime = new Date().toISOString();
     } catch (e) {
@@ -114,48 +142,104 @@ class ExecutionReconciler {
 
   /**
    * Compare single order's internal vs broker state
-   * Returns true if divergence was detected and corrected
+   * Returns array of events (empty if no divergence)
    */
   checkOrderDivergence(localOrder, brokerOrder) {
-    let diverged = false;
+    const events = [];
 
-    // Check status
-    if (brokerOrder.status === "CANCELLED" && localOrder.status !== "FAILED") {
+    // Normalize broker response
+    let normalizedStatus;
+    try {
+      normalizedStatus = BrokerEventNormalizer.normalizeStatus(brokerOrder.status);
+    } catch (e) {
+      console.warn(`[ExecutionReconciler] Failed to normalize status: ${e.message}`);
+      return events;
+    }
+
+    // Check status changes
+    if (normalizedStatus === "CANCELLED" && localOrder.status !== "FAILED") {
       console.warn(`[ExecutionReconciler] Order was cancelled: ${localOrder.orderId}`);
-      this.tracker.recordFailure(localOrder.orderId, "Broker cancelled order");
-      return true;
+      events.push({
+        eventId: ExecutionEventStore.generateEventId(),
+        orderId: localOrder.orderId,
+        type: "ORDER_CANCELLED",
+        timestamp: Date.now(),
+        source: "reconciliation",
+        brokerId: brokerOrder.id,
+      });
+      return events;
     }
 
-    if (brokerOrder.status === "FAILED" && localOrder.status !== "FAILED") {
-      console.warn(`[ExecutionReconciler] Order failed: ${localOrder.orderId} (${brokerOrder.failureReason})`);
-      this.tracker.recordFailure(localOrder.orderId, brokerOrder.failureReason || "Broker execution failed");
-      return true;
+    if (normalizedStatus === "FAILED" && localOrder.status !== "FAILED") {
+      console.warn(`[ExecutionReconciler] Order failed: ${localOrder.orderId}`);
+      events.push({
+        eventId: ExecutionEventStore.generateEventId(),
+        orderId: localOrder.orderId,
+        type: "ORDER_FAILED",
+        timestamp: Date.now(),
+        source: "reconciliation",
+        brokerId: brokerOrder.id,
+        reason: brokerOrder.failureReason || "Broker execution failed",
+      });
+      return events;
     }
 
-    // Check fill quantity
-    if (brokerOrder.filledQty !== localOrder.filledQty) {
-      console.warn(`[ExecutionReconciler] Fill divergence: ${localOrder.orderId} (local: ${localOrder.filledQty}, broker: ${brokerOrder.filledQty})`);
-      this.tracker.recordFill(localOrder.orderId, brokerOrder.filledQty, brokerOrder.avgPrice || 0);
-      diverged = true;
-    }
+    // Extract fill details
+    const filledQty = BrokerEventNormalizer.extractFilledQty(brokerOrder);
+    const avgPrice = BrokerEventNormalizer.extractAvgPrice(brokerOrder);
 
-    // Check if broker filled but we didn't know
-    if (brokerOrder.status === "FILLED" && localOrder.status !== "FILLED") {
-      console.warn(`[ExecutionReconciler] Order filled on broker but not in local state: ${localOrder.orderId}`);
-      this.tracker.recordFill(localOrder.orderId, brokerOrder.filledQty, brokerOrder.avgPrice || 0);
-      diverged = true;
-    }
+    // Check fill quantity divergence
+    if (filledQty !== localOrder.filledQty) {
+      console.warn(
+        `[ExecutionReconciler] Fill divergence: ${localOrder.orderId} ` +
+        `(local: ${localOrder.filledQty}, broker: ${filledQty})`
+      );
 
-    // Check partial fill
-    if (brokerOrder.filledQty > 0 && brokerOrder.filledQty < brokerOrder.quantity) {
-      if (localOrder.status !== "PARTIAL") {
-        console.warn(`[ExecutionReconciler] Partial fill detected: ${localOrder.orderId} (${brokerOrder.filledQty}/${brokerOrder.quantity})`);
-        this.tracker.recordFill(localOrder.orderId, brokerOrder.filledQty, brokerOrder.avgPrice || 0);
-        diverged = true;
+      // Check for conflicts before generating event
+      const conflict = ExecutionConflictResolver.checkConflict(
+        localOrder,
+        {
+          type: "ORDER_FILLED",
+          filledQty,
+          avgPrice,
+          timestamp: Date.now(),
+        }
+      );
+
+      if (!conflict.conflict) {
+        events.push({
+          eventId: ExecutionEventStore.generateEventId(),
+          orderId: localOrder.orderId,
+          type: filledQty >= localOrder.quantity ? "ORDER_FILLED" : "FILL_UPDATE",
+          timestamp: Date.now(),
+          source: "reconciliation",
+          brokerId: brokerOrder.id,
+          filledQty,
+          avgPrice,
+        });
+      } else {
+        console.warn(`[ExecutionReconciler] Conflict detected: ${conflict.issue}`);
       }
     }
 
-    return diverged;
+    // Check if broker filled but we didn't know
+    if (normalizedStatus === "FILLED" && localOrder.status !== "FILLED") {
+      console.warn(`[ExecutionReconciler] Order filled on broker but not local: ${localOrder.orderId}`);
+      if (filledQty > 0 && avgPrice > 0) {
+        events.push({
+          eventId: ExecutionEventStore.generateEventId(),
+          orderId: localOrder.orderId,
+          type: "ORDER_FILLED",
+          timestamp: Date.now(),
+          source: "reconciliation",
+          brokerId: brokerOrder.id,
+          filledQty,
+          avgPrice,
+        });
+      }
+    }
+
+    return events;
   }
 
   /**
