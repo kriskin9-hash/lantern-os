@@ -288,6 +288,19 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
         });
       } catch { /* provenance non-critical */ }
       if (!result.reply) { sendJson(res, { error: result.error || "no_provider_configured", agent: result.agent, online: false, help: result.help || "", suggestions: result.suggestions || [] }, 503); return true; }
+      // wq-005: emit a ConvergenceRecord for this reasoning cycle (Reason → Act).
+      // Single point — catches both the !convergence command and normal reply paths.
+      // Guarded: a failed record must never break the reply.
+      try {
+        const { emitConvergenceRecord } = require("../lib/convergence-records");
+        await emitConvergenceRecord({
+          hypothesis: message.slice(0, 280),
+          evidence_ids: (recentDreams || []).map((d) => d && (d.id || d.recordedAt)).filter(Boolean),
+          result: String(result.reply || "").slice(0, 2000),
+          confidence: result.online ? 0.7 : 0.3, // v1 heuristic: grounded (online) reply trusted more
+          reasoner: result.agent || "unknown",
+        });
+      } catch { /* convergence record non-critical */ }
       // ClaimsPacket — non-blocking, non-fatal
       try {
         const claimPacket = {
