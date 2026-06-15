@@ -10,10 +10,63 @@
   <link rel="stylesheet" href="/css/site.css">
   <title>Lantern OS — Convergence Core</title>
   <style>
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
     body {
       margin: 0;
       padding: 0;
       overflow: hidden;
+    }
+
+    /* Skip to content link */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      background: var(--accent);
+      color: white;
+      padding: 8px 12px;
+      z-index: 100;
+      text-decoration: none;
+      border-radius: 0 0 4px 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    .skip-link:focus {
+      top: 0;
+    }
+
+    /* Enhanced focus indicators for keyboard navigation */
+    *:focus-visible {
+      outline: 3px solid var(--accent) !important;
+      outline-offset: 2px;
+    }
+
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
+
+    /* Ensure button-like elements are keyboard accessible */
+    button {
+      cursor: pointer;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .app-container {
@@ -410,6 +463,9 @@
   </style>
 </head>
 <body>
+  <!-- Skip to main content link (visible on focus) -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
@@ -428,7 +484,7 @@
     </header>
 
     <!-- Main Content -->
-    <main class="main-content">
+    <main class="main-content" id="main-content">
       <!-- Heroic Title Section -->
       <section class="hero-title-section">
         <div class="hero-title-background"></div>
@@ -445,36 +501,36 @@
         <p class="section-label">Three Core Experiences</p>
         <div class="heroes-grid">
           <!-- Dream Chat / Work -->
-          <a href="/dream-chat.html" class="hero-card">
+          <a href="/dream-chat.html" class="hero-card" aria-label="Dream Chat — Chat with an AI that remembers your journal">
             <div class="hero-card-header">
-              <span class="hero-card-icon">⚙️</span>
+              <span class="hero-card-icon" aria-hidden="true">⚙️</span>
               <span class="hero-card-label">Work</span>
             </div>
             <h2>Dream Chat</h2>
             <p>Chat with an AI that remembers your journal and helps you reason through ideas.</p>
-            <span class="hero-card-cta">Open →</span>
+            <span class="hero-card-cta" aria-hidden="true">Open →</span>
           </a>
 
           <!-- Trader Dashboard / Trade -->
-          <a href="/trader-dashboard.html" class="hero-card">
+          <a href="/trader-dashboard.html" class="hero-card" aria-label="Lantern Trader — Trading hub for prediction markets and stock analysis">
             <div class="hero-card-header">
-              <span class="hero-card-icon">📈</span>
+              <span class="hero-card-icon" aria-hidden="true">📈</span>
               <span class="hero-card-label">Trade</span>
             </div>
             <h2>Lantern Trader</h2>
             <p>Trading hub for prediction markets, stock analysis, and live market news.</p>
-            <span class="hero-card-cta">Open →</span>
+            <span class="hero-card-cta" aria-hidden="true">Open →</span>
           </a>
 
           <!-- Creator Dashboard / Create -->
-          <a href="/create.html" class="hero-card">
+          <a href="/create.html" class="hero-card" aria-label="Creator Dashboard — Upload and organize your creative work">
             <div class="hero-card-header">
-              <span class="hero-card-icon">✏️</span>
+              <span class="hero-card-icon" aria-hidden="true">✏️</span>
               <span class="hero-card-label">Create</span>
             </div>
             <h2>Creator Dashboard</h2>
             <p>Upload and organize your creative work, stored locally and indexed.</p>
-            <span class="hero-card-cta">Open →</span>
+            <span class="hero-card-cta" aria-hidden="true">Open →</span>
           </a>
         </div>
       </section>
@@ -486,23 +542,23 @@
           <div class="settings-grid">
             <!-- API Keys -->
             <div class="settings-card">
-              <h3>🔑 API Keys</h3>
+              <h3><span aria-hidden="true">🔑</span> API Keys</h3>
               <p>Configure AI providers (Claude, OpenAI, Gemini) for streaming responses. All optional — works offline without keys.</p>
-              <a href="/settings/providers.html">Configure Keys →</a>
+              <a href="/settings/providers.html" title="Configure API keys for AI providers">Configure Keys <span aria-hidden="true">→</span></a>
             </div>
 
             <!-- Local Data -->
             <div class="settings-card">
-              <h3>💾 Local Data</h3>
+              <h3><span aria-hidden="true">💾</span> Local Data</h3>
               <p>All data stored locally on your device. No cloud sync, no account needed. Export anytime.</p>
-              <a href="/settings/export.html">Export Data →</a>
+              <a href="/settings/export.html" title="Export and download your data">Export Data <span aria-hidden="true">→</span></a>
             </div>
 
             <!-- System Status -->
             <div class="settings-card">
-              <h3>⚡ System Status</h3>
+              <h3><span aria-hidden="true">⚡</span> System Status</h3>
               <p>Monitor kernel readiness, memory queries, convergence records, and verification status in real-time.</p>
-              <a href="/settings/status.html">View Status →</a>
+              <a href="/settings/status.html" title="View system health and status information">View Status <span aria-hidden="true">→</span></a>
             </div>
           </div>
         </div>
@@ -510,15 +566,15 @@
     </main>
 
     <!-- Status Bar -->
-    <div class="status-bar">
-      <div>
-        <span class="status-dot" id="status-dot"></span>
-        <span id="status-label">Connecting…</span>
+    <div class="status-bar" role="contentinfo">
+      <div aria-live="polite" aria-atomic="true">
+        <span class="status-dot" id="status-dot" aria-label="Server status indicator" role="img"></span>
+        <span id="status-label" aria-label="Server connection status">Connecting…</span>
       </div>
       <div class="status-right">
         <span id="status-version">Lantern OS</span>
-        <span>·</span>
-        <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener" title="View on GitHub">GitHub</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer" title="View Lantern OS on GitHub (opens in new window)">GitHub</a>
       </div>
     </div>
   </div>
