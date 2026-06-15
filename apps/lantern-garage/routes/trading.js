@@ -2402,6 +2402,151 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // ── PRL-1.3 Risk Governor API ──
+  // GET /api/risk/status
+  // Returns current risk governor state and metrics
+  if (url.pathname === '/api/risk/status' && req.method === 'GET') {
+    try {
+      const riskGovernor = deps.riskGovernor;
+      if (!riskGovernor) {
+        return sendJson(res, {
+          error: 'Risk Governor not initialized'
+        }, 503);
+      }
+
+      sendJson(res, riskGovernor.getStatus(), 200);
+    } catch (error) {
+      sendJson(res, {
+        error: 'Failed to fetch risk status',
+        details: error.message
+      }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/risk/emergency-stop
+  // Activate emergency stop (blocks ALL trading)
+  if (url.pathname === '/api/risk/emergency-stop' && req.method === 'POST') {
+    try {
+      const riskGovernor = deps.riskGovernor;
+      if (!riskGovernor) {
+        return sendJson(res, {
+          error: 'Risk Governor not initialized'
+        }, 503);
+      }
+
+      riskGovernor.emergencyStop();
+      console.warn('[API] Emergency stop activated');
+
+      sendJson(res, {
+        status: 'emergency_stop_activated',
+        timestamp: new Date().toISOString(),
+        message: 'All trading is now frozen. Manual resume required.'
+      }, 200);
+    } catch (error) {
+      sendJson(res, {
+        error: 'Failed to activate emergency stop',
+        details: error.message
+      }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/risk/resume
+  // Resume trading after emergency stop
+  if (url.pathname === '/api/risk/resume' && req.method === 'POST') {
+    try {
+      const riskGovernor = deps.riskGovernor;
+      if (!riskGovernor) {
+        return sendJson(res, {
+          error: 'Risk Governor not initialized'
+        }, 503);
+      }
+
+      riskGovernor.resume();
+      console.log('[API] Trading resumed');
+
+      sendJson(res, {
+        status: 'trading_resumed',
+        timestamp: new Date().toISOString(),
+        message: 'Trading is now enabled.'
+      }, 200);
+    } catch (error) {
+      sendJson(res, {
+        error: 'Failed to resume trading',
+        details: error.message
+      }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/risk/reset-daily
+  // Reset daily P&L counters (call at market open)
+  if (url.pathname === '/api/risk/reset-daily' && req.method === 'POST') {
+    try {
+      const riskGovernor = deps.riskGovernor;
+      if (!riskGovernor) {
+        return sendJson(res, {
+          error: 'Risk Governor not initialized'
+        }, 503);
+      }
+
+      riskGovernor.resetDaily();
+      console.log('[API] Daily risk counters reset');
+
+      sendJson(res, {
+        status: 'daily_reset',
+        timestamp: new Date().toISOString(),
+        message: 'Daily P&L and block counters have been reset.'
+      }, 200);
+    } catch (error) {
+      sendJson(res, {
+        error: 'Failed to reset daily counters',
+        details: error.message
+      }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/risk/limit
+  // Update a risk limit (max daily loss, position size, etc.)
+  if (url.pathname === '/api/risk/limit' && req.method === 'POST') {
+    try {
+      const body = await collectRequestBody(req);
+      const payload = body ? JSON.parse(body) : {};
+      const { field, value } = payload;
+
+      if (!field || value === undefined) {
+        return sendJson(res, {
+          error: 'Missing required fields: field, value'
+        }, 400);
+      }
+
+      const riskGovernor = deps.riskGovernor;
+      if (!riskGovernor) {
+        return sendJson(res, {
+          error: 'Risk Governor not initialized'
+        }, 503);
+      }
+
+      riskGovernor.updateLimit(field, value);
+      console.log(`[API] Risk limit updated: ${field} = ${value}`);
+
+      sendJson(res, {
+        status: 'limit_updated',
+        field,
+        value,
+        timestamp: new Date().toISOString()
+      }, 200);
+    } catch (error) {
+      sendJson(res, {
+        error: 'Failed to update risk limit',
+        details: error.message
+      }, 500);
+    }
+    return true;
+  }
+
   return false;
 };
 

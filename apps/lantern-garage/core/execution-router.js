@@ -14,6 +14,7 @@
 class ExecutionRouter {
   constructor(alpacaAdapter, options = {}) {
     this.alpacaAdapter = alpacaAdapter;
+    this.riskGovernor = options.riskGovernor || null;
     this.mode = options.mode || "paper";
     this.allowLive = options.allowLive === true ? true : false;
 
@@ -27,18 +28,22 @@ class ExecutionRouter {
     this.acceptedTrades = 0;
     this.rejectedTrades = 0;
     this.mockTrades = 0;
+    this.governorBlockedCount = 0;
 
-    console.log(`[Router] Initialized (mode: ${this.mode}, allowLive: ${this.allowLive})`);
+    console.log(`[Router] Initialized (mode: ${this.mode}, allowLive: ${this.allowLive}, governor: ${this.riskGovernor ? "ACTIVE" : "NOT_CONFIGURED"})`);
   }
 
   /**
    * Route a trade to the appropriate execution path
    *
+   * CRITICAL: Risk Governor is checked FIRST, before ANY other gate
+   *
    * Returns:
    * {
    *   routed: true|false,
-   *   path: "alpaca" | "mock" | "blocked",
+   *   path: "alpaca" | "mock" | "blocked" | "risk_blocked",
    *   reason: string,
+   *   governorReasons: [] (if blocked by risk governor),
    *   execution: executionResult (if executed)
    * }
    */
@@ -50,12 +55,42 @@ class ExecutionRouter {
       symbol,
       side,
       quantity,
+      price = 100, // Default price for notional calc
       stabilityIndex = 0.8,
       eventId,
       traceId
     } = trade;
 
-    // Validation Check 1: Is trade state valid?
+    // ──────────────────────────────────────────────────────────
+    // GATE 0 (HIGHEST PRIORITY): Risk Governor
+    // ──────────────────────────────────────────────────────────
+    if (this.riskGovernor) {
+      const riskEvaluation = this.riskGovernor.evaluateTrade(trade, {
+        quantity,
+        price,
+        notional: quantity * price
+      });
+
+      if (!riskEvaluation.allowed) {
+        this.rejectedTrades++;
+        this.governorBlockedCount++;
+        console.warn(`[Router] Risk Governor BLOCKED: ${symbol} ${side}`);
+        console.warn(`  Reasons: ${riskEvaluation.reasons.join(", ")}`);
+
+        return {
+          routed: false,
+          path: "risk_blocked",
+          reason: "risk_governor_blocked",
+          governorReasons: riskEvaluation.reasons,
+          governorSeverity: riskEvaluation.severity,
+          execution: null
+        };
+      }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // GATE 1: Is trade state valid?
+    // ──────────────────────────────────────────────────────────
     if (!symbol || !side || !quantity) {
       this.rejectedTrades++;
       return {
@@ -66,7 +101,9 @@ class ExecutionRouter {
       };
     }
 
-    // Validation Check 2: Safety gate (stability >= 0.8)
+    // ──────────────────────────────────────────────────────────
+    // GATE 2: Safety gate (stability >= 0.8)
+    // ──────────────────────────────────────────────────────────
     if (stabilityIndex < 0.8) {
       this.rejectedTrades++;
       return {
@@ -77,7 +114,9 @@ class ExecutionRouter {
       };
     }
 
-    // Validation Check 3: Trade state must be PENDING
+    // ──────────────────────────────────────────────────────────
+    // GATE 3: Trade state must be PENDING
+    // ──────────────────────────────────────────────────────────
     if (trade.status && trade.status !== "PENDING") {
       this.rejectedTrades++;
       return {
@@ -88,7 +127,9 @@ class ExecutionRouter {
       };
     }
 
-    // Route based on mode
+    // ──────────────────────────────────────────────────────────
+    // GATE 4: Route based on execution mode
+    // ──────────────────────────────────────────────────────────
     if (this.mode === "blocked") {
       this.rejectedTrades++;
       return {
@@ -229,8 +270,10 @@ class ExecutionRouter {
       totalRouted: this.routedTrades,
       acceptedTrades: this.acceptedTrades,
       rejectedTrades: this.rejectedTrades,
+      governorBlockedCount: this.governorBlockedCount,
       mockTrades: this.mockTrades,
-      successRate: ((this.acceptedTrades / total) * 100).toFixed(1) + "%"
+      successRate: ((this.acceptedTrades / total) * 100).toFixed(1) + "%",
+      governorBlocked: ((this.governorBlockedCount / total) * 100).toFixed(1) + "%"
     };
   }
 }

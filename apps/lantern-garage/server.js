@@ -45,6 +45,7 @@ const EventQueueConsumer = require("./core/event-queue-consumer");
 const TraderWatchdog = require("./core/trader-watchdog");
 const AlpacaExecutionAdapter = require("./core/alpaca-execution-adapter");
 const ExecutionRouter = require("./core/execution-router");
+const RiskGovernor = require("./core/risk-governor");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const publicRoot = path.join(__dirname, "public");
@@ -74,6 +75,15 @@ const persistentEventQueue = new PersistentEventQueue(queuePath);
 const idempotencyStore = new IdempotencyStore(path.join(repoRoot, "data", "trading", "executed-events.jsonl"));
 const systemAuditTracer = new SystemAuditTracer(path.join(repoRoot, "data", "trading", "audit-log.jsonl"));
 
+// Initialize PRL-1.3: Risk Governor (Capital Protection Layer)
+const riskGovernor = new RiskGovernor({
+  maxDailyLossUSD: Number(process.env.MAX_DAILY_LOSS_USD || 500),
+  maxPositionSizeUSD: Number(process.env.MAX_POSITION_SIZE_USD || 1000),
+  maxOpenTrades: Number(process.env.MAX_OPEN_TRADES || 5),
+  cooldownMs: Number(process.env.TRADE_COOLDOWN_MS || 5000),
+  maxDrawdownPercent: Number(process.env.MAX_DRAWDOWN_PERCENT || 10)
+});
+
 // Initialize PRL-1.2: Alpaca Execution Bridge
 const alpacaAdapter = new AlpacaExecutionAdapter({
   key: process.env.ALPACA_API_KEY,
@@ -83,13 +93,15 @@ const alpacaAdapter = new AlpacaExecutionAdapter({
 
 const executionRouter = new ExecutionRouter(alpacaAdapter, {
   mode: process.env.EXECUTION_MODE || "paper",
-  allowLive: process.env.ALLOW_LIVE_TRADING === "true"
+  allowLive: process.env.ALLOW_LIVE_TRADING === "true",
+  riskGovernor: riskGovernor
 });
 
-// Initialize consumer with Alpaca adapter
+// Initialize consumer with Alpaca adapter and Risk Governor
 const eventQueueConsumer = new EventQueueConsumer(persistentEventQueue, idempotencyStore, {
   auditTracer: systemAuditTracer,
-  alpacaAdapter: alpacaAdapter
+  alpacaAdapter: alpacaAdapter,
+  riskGovernor: riskGovernor
 });
 
 const traderWatchdog = new TraderWatchdog(repoRoot, persistentEventQueue, systemAuditTracer);
@@ -98,6 +110,7 @@ const traderWatchdog = new TraderWatchdog(repoRoot, persistentEventQueue, system
 eventQueueConsumer.start();
 traderWatchdog.start();
 
+console.log(`[Trading] PRL-1.3 Risk Governor initialized (max daily loss: $${riskGovernor.state.maxDailyLossUSD})`);
 console.log(`[Trading] PRL-1.2 Alpaca execution initialized (mode: ${executionRouter.getStats().mode})`);
 
 // Shared dependency bundle passed to every route module
@@ -123,7 +136,7 @@ const deps = {
   maxConversationTextLength, maxDreamerTextLength,
   openaiApiKey,
   persistentEventQueue, idempotencyStore, systemAuditTracer, eventQueueConsumer, traderWatchdog,
-  alpacaAdapter, executionRouter,
+  alpacaAdapter, executionRouter, riskGovernor,
   "__dirname": __dirname,
 };
 

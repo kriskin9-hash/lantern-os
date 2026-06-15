@@ -24,12 +24,14 @@ class EventQueueConsumer {
     this.stabilityIndex = options.stabilityIndex || { lastIndex: 0.9 };
     this.auditTracer = options.auditTracer || null;
     this.alpacaAdapter = options.alpacaAdapter || null;
+    this.riskGovernor = options.riskGovernor || null;
 
     this.running = false;
     this.processedCount = 0;
     this.skippedCount = 0;
     this.failedCount = 0;
     this.executedCount = 0;
+    this.riskBlockedCount = 0;
     this.lastProcessTime = Date.now();
 
     // Consumer loop interval (250ms = 4 events/sec max)
@@ -147,7 +149,46 @@ class EventQueueConsumer {
         traceId
       });
 
-      // STEP 2: [PRL-1.2] Execute on Alpaca if adapter available
+      // STEP 2: [PRL-1.3] Check Risk Governor (BEFORE execution)
+      if (this.riskGovernor) {
+        const riskCheck = this.riskGovernor.evaluateTrade(trade, {
+          quantity: payload.quantity || 1,
+          price: 100, // Will be updated with actual fill price
+          notional: (payload.quantity || 1) * 100
+        });
+
+        if (!riskCheck.allowed) {
+          this.riskBlockedCount++;
+          console.warn(`[Consumer] Risk Governor BLOCKED: ${payload.ticker} ${payload.action}`);
+          console.warn(`  Reasons: ${riskCheck.reasons.join(", ")}`);
+
+          // Log risk block to audit trail
+          if (this.auditTracer) {
+            this.auditTracer.recordEvent(
+              "RISK_BLOCK",
+              "risk-governor",
+              {
+                symbol: payload.ticker,
+                side: payload.action,
+                reasons: riskCheck.reasons,
+                severity: riskCheck.severity
+              },
+              trade.tradeId,
+              traceId
+            );
+          }
+
+          // Don't execute, but mark queue event as processed
+          this.queue.markProcessed(eventId, {
+            reason: "risk_blocked",
+            riskReasons: riskCheck.reasons
+          });
+
+          return;
+        }
+      }
+
+      // STEP 3: [PRL-1.2] Execute on Alpaca if adapter available
       let executionResult = null;
       if (this.alpacaAdapter) {
         try {
@@ -169,6 +210,11 @@ class EventQueueConsumer {
               brokerOrderId: executionResult.orderId,
               fillPrice: executionResult.avgFillPrice
             });
+          }
+
+          // [PRL-1.3] Record execution in risk governor
+          if (this.riskGovernor && executionResult.status === "filled") {
+            this.riskGovernor.recordExecution(trade, executionResult);
           }
         } catch (execError) {
           console.error(`[Consumer] Alpaca execution failed: ${execError.message}`);
@@ -260,14 +306,19 @@ class EventQueueConsumer {
       metrics: {
         processed: this.processedCount,
         executed: this.executedCount,
+        riskBlocked: this.riskBlockedCount,
         skipped: this.skippedCount,
         failed: this.failedCount,
         pending: pending.length,
         successRate: this.processedCount > 0
           ? ((this.executedCount / this.processedCount) * 100).toFixed(1) + "%"
+          : "N/A",
+        riskBlockRate: this.processedCount > 0
+          ? ((this.riskBlockedCount / this.processedCount) * 100).toFixed(1) + "%"
           : "N/A"
       },
       alpaca: this.alpacaAdapter ? this.alpacaAdapter.getStats() : null,
+      riskGovernor: this.riskGovernor ? this.riskGovernor.getState() : null,
       lastProcessTime: new Date(this.lastProcessTime).toISOString(),
       loopInterval: `${this.loopInterval}ms`
     };
