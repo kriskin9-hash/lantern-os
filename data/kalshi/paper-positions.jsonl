@@ -359,3 +359,6 @@
 {"event": "open", "id": "paper_1781587203307_iyir", "ts": "2026-06-16T05:20:03.307763Z", "ticker": "KXHYPE15M-26JUN160130-30", "title": "HYPE price up in next 15 mins?", "side": "no", "action": "buy", "count": 1, "limitCents": 78, "cio_edge": -0.2277, "source": "crypto_live_trader"}
 {"event": "open", "id": "paper_1781587296720_flsn", "ts": "2026-06-16T05:21:36.720172Z", "ticker": "KXXRP15M-26JUN160130-30", "title": "XRP price up in next 15 mins?", "side": "yes", "action": "buy", "count": 1, "limitCents": 69, "cio_edge": 0.3301, "source": "crypto_live_trader"}
 {"event": "open", "id": "paper_1781587308152_gfd4", "ts": "2026-06-16T05:21:48.152973Z", "ticker": "KXDOGE15M-26JUN160130-30", "title": "DOGE price up in next 15 mins?", "side": "yes", "action": "buy", "count": 1, "limitCents": 45, "cio_edge": 0.5588, "source": "crypto_live_trader"}
+{"event": "close", "id": "paper_1781587406145_kg94", "exitTag": "RESOLVED", "exitPriceCents": 100, "pnlPct": 1.0, "correct": true, "closedAt": "2026-06-16T05:30:26.844160Z"}
+{"event": "close", "id": "paper_1781587383597_8988", "exitTag": "RESOLVED", "exitPriceCents": 100, "pnlPct": 1.0, "correct": true, "closedAt": "2026-06-16T05:30:27.026505Z"}
+{"event": "close", "id": "paper_1781587395527_hqe7", "exitTag": "RESOLVED", "exitPriceCents": 0, "pnlPct": 1.0, "correct": false, "closedAt": "2026-06-16T05:30:27.560304Z"}

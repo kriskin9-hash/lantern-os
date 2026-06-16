@@ -1,10 +1,10 @@
 {
   "crypto15m_eval": {
-    "accuracy_direction": 0.6183,
-    "total_signals": 131,
-    "correct_signals": 81,
-    "windows_observed": 159,
-    "avg_edge": 0.3085,
+    "accuracy_direction": 0.6194,
+    "total_signals": 134,
+    "correct_signals": 83,
+    "windows_observed": 162,
+    "avg_edge": 0.3081,
     "results": [
       {
         "ticker": "KXBTC15M-26JUN141400-00",
@@ -1754,6 +1754,39 @@
         "outcome": 1,
         "correct": false,
         "edge": 0.0
+      },
+      {
+        "ticker": "KXSOL15M-26JUN160130-30",
+        "symbol": "SOL",
+        "ts": "2026-06-16T05:30:26.227376Z",
+        "n_points": 42,
+        "final_price": 0.9901,
+        "had_signal": true,
+        "outcome": 1,
+        "correct": true,
+        "edge": 0.1826923076923077
+      },
+      {
+        "ticker": "KXXRP15M-26JUN160130-30",
+        "symbol": "XRP",
+        "ts": "2026-06-16T05:30:26.227376Z",
+        "n_points": 42,
+        "final_price": 0.9901,
+        "had_signal": true,
+        "outcome": 1,
+        "correct": true,
+        "edge": 0.17821782178217827
+      },
+      {
+        "ticker": "KXHYPE15M-26JUN160130-30",
+        "symbol": "HYPE",
+        "ts": "2026-06-16T05:30:26.227376Z",
+        "n_points": 38,
+        "final_price": 0.01,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": false,
+        "edge": 0.5196078431372549
       }
     ]
   }
