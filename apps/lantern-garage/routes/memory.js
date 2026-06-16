@@ -14,7 +14,7 @@ const { sendJson, collectRequestBody } = require("../lib/http-utils");
  */
 async function queryMemory(params) {
   return new Promise((resolve, reject) => {
-    const script = path.join(__dirname, "..", "..", "src", "convergence", "memory_query.py");
+    const script = path.join(__dirname, "..", "..", "..", "src", "convergence", "memory_query.py");
     const args = [
       "--pattern", params.pattern || "",
       "--min-confidence", (params.min_confidence || 0.5).toString(),
@@ -29,7 +29,7 @@ async function queryMemory(params) {
     }
 
     const proc = spawn("python", [script, ...args], {
-      cwd: path.join(__dirname, "..", ".."),
+      cwd: path.join(__dirname, "..", "..", ".."),
     });
 
     let stdout = "";
