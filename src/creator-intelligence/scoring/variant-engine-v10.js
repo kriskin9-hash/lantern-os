@@ -109,8 +109,35 @@ function buildDerivedTimeline(segments) {
  * @param {Object} opts      { gaming, safeZones, cropPlan, targetSec }
  * @returns {{ variants: Array, basis, calibrated, generatedAt }}
  */
+/**
+ * Last-resort highlights so a variant can ALWAYS be built. If real detection
+ * produced nothing, synthesize short evenly-spaced windows from the clip
+ * duration. Explicitly tagged "fallback" — we never fabricate quality signals,
+ * we only guarantee a renderable selection so the pipeline cannot dead-end.
+ */
+function fallbackHighlights(analysis) {
+  const dur = Number(analysis.duration) || 0;
+  if (dur <= 1.5) return [];
+  const win = Math.min(12, Math.max(2, dur / 6));
+  if (dur <= win * 2) {
+    const d = Math.min(dur, 12);
+    return [{ start: 0, end: round3(d), duration: round3(d), score: 0.5, tags: ["fallback"], reason: "fallback: whole clip (no signals)" }];
+  }
+  return [0.2, 0.5, 0.8].map((c) => {
+    const start = Math.max(0, Math.min(dur * c - win / 2, dur - win));
+    return { start: round3(start), end: round3(start + win), duration: round3(win), score: 0.5, tags: ["fallback"], reason: "fallback: sampled window (no signals)" };
+  });
+}
+
 function generateVariantsV10(analysis = {}, opts = {}) {
-  const highlights = Array.isArray(analysis.highlights) ? analysis.highlights : [];
+  let highlights = Array.isArray(analysis.highlights) ? analysis.highlights : [];
+  // HARD GUARANTEE: never build empty variants. If there are no highlights,
+  // degrade gracefully to fallback windows so every variant carries segments.
+  let usedFallback = false;
+  if (highlights.length === 0) {
+    highlights = fallbackHighlights(analysis);
+    usedFallback = highlights.length > 0;
+  }
   const targetSec = Math.min(MAX_TARGET_SEC, opts.targetSec || DEFAULT_TARGET_SEC);
 
   const variants = Object.values(STRATEGIES).map((def) => {
@@ -150,9 +177,12 @@ function generateVariantsV10(analysis = {}, opts = {}) {
     variants,
     basis: "structural_heuristic",
     calibrated: false,
-    note: "Each variant is a real cut-list of analyzed segments; scores reflect the selected segments. renderPath is null until the variant is rendered.",
+    usedFallback,
+    note: usedFallback
+      ? "No highlights detected; variants built from fallback windows so render never dead-ends."
+      : "Each variant is a real cut-list of analyzed segments; scores reflect the selected segments. renderPath is null until the variant is rendered.",
     generatedAt: new Date().toISOString(),
   };
 }
 
-module.exports = { generateVariantsV10, selectSegments, buildDerivedTimeline, STRATEGIES };
+module.exports = { generateVariantsV10, selectSegments, buildDerivedTimeline, fallbackHighlights, STRATEGIES };

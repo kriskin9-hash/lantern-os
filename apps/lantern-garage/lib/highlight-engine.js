@@ -139,6 +139,17 @@ async function analyzeVideoForHighlights(videoPath, options = {}, onProgress = (
     options.weights
   );
 
+  // Instrumentation — real counts from this analysis, surfaced so the pipeline
+  // can never fail silently (stored on the project as analysis.debug downstream).
+  timeline.metadata.debug = {
+    videoDuration: Number((metadata.duration || 0).toFixed(2)),
+    fps,
+    sampledMotionFrames: motionFrames.length,
+    sampledAudioFrames: audioSpikes.length,
+    sceneChanges: sceneChanges.length,
+    mergedHighlights: highlights.length,
+  };
+
   highlights.forEach((hl) => {
     timeline.addHighlight(hl.start, hl.end, hl.score, hl.reason, hl.tags);
   });

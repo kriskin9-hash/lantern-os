@@ -287,6 +287,25 @@ async function processAnalyzeJob(job, repoRoot, ctx) {
     ctx.log(`Scoring error (non-fatal): ${e.message}`);
   }
 
+  // Phase 1 instrumentation — a compact, real debug summary persisted on the
+  // project (analysis.debug) so a "no segments" state is never invisible.
+  const tlDebug = (timelineJSON.metadata && timelineJSON.metadata.debug) || {};
+  const segmentCount = Array.isArray(timelineJSON.highlights) ? timelineJSON.highlights.length : 0;
+  const usedFallback = !!(variantsV10 && variantsV10.usedFallback) ||
+    (Array.isArray(timelineJSON.highlights) && timelineJSON.highlights.some((h) => Array.isArray(h.tags) && h.tags.includes("fallback")));
+  timelineJSON.debug = {
+    videoDuration: tlDebug.videoDuration != null ? tlDebug.videoDuration : (timelineJSON.duration || null),
+    fps: tlDebug.fps != null ? tlDebug.fps : null,
+    sampledMotionFrames: tlDebug.sampledMotionFrames != null ? tlDebug.sampledMotionFrames : null,
+    sceneChanges: tlDebug.sceneChanges != null ? tlDebug.sceneChanges : null,
+    candidateCount: tlDebug.sampledMotionFrames != null ? tlDebug.sampledMotionFrames : null,
+    segmentCount,
+    variantCount: variantsV10 ? variantsV10.variants.length : 0,
+    captionCount: captions.length,
+    usedFallback,
+  };
+  ctx.log(`debug: segments=${segmentCount} variants=${timelineJSON.debug.variantCount} fallback=${usedFallback}`);
+
   ctx.stage("saving");
   ctx.progress(96, "Saving results");
   ctx.log("Saving analysis results");
@@ -650,6 +669,39 @@ async function processExportJob(job, repoRoot, ctx) {
       entryStore.touchStages(repoRoot, job.input.entryId, ["rendered"]);
     } catch (e) {
       console.error("[job-worker] register render onto entry failed:", e.message);
+    }
+  }
+
+  // Phase 7 — per-export render report in the project's renders/ folder.
+  if (job.input.entryId) {
+    try {
+      const entryStore = require("./entry-store");
+      const entry = entryStore.getEntry(repoRoot, job.input.entryId);
+      const key = job.input.renderKey || job.input.variant || "highlight";
+      const variant = (entry && Array.isArray(entry.variantsV10))
+        ? entry.variantsV10.find((v) => v.id === key) : null;
+      const viral = variant && variant.score ? variant.score : null;
+      const segSec = Array.isArray(segments) ? segments.reduce((a, s) => a + Math.max(0, (s.end || 0) - (s.start || 0)), 0) : 0;
+      const conf = viral && viral.confidence != null ? viral.confidence : null;
+      const report = {
+        variant: key,
+        segments: Array.isArray(segments) ? segments.length : 0,
+        duration: segSec ? `${Math.round(segSec)}s` : null,
+        sigma0_score: viral && viral.viralScore != null ? viral.viralScore : null,
+        confidence: conf,
+        collapse_risk: conf != null ? Number((1 - conf).toFixed(3)) : null, // derived: 1 - confidence
+        rendered: true,
+        output: path.relative(repoRoot, exportFile).split(path.sep).join("/"),
+        sizeBytes: stats.size,
+        validation: { ok: validation.ok === true, skipped: validation.skipped === true },
+        at: new Date().toISOString(),
+      };
+      const reportPath = path.join(entryStore.getEntryDir(repoRoot, job.input.entryId), "renders", "report.json");
+      fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+      fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ctx.log(`Render report: variant=${report.variant} segments=${report.segments} duration=${report.duration}`);
+    } catch (e) {
+      console.error("[job-worker] render report write failed (non-fatal):", e.message);
     }
   }
 

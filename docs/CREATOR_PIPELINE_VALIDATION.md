@@ -109,8 +109,40 @@ in earlier runs), so the top-up does not engage.
 
 ---
 
+## "No empty variants ever" — render-guarantee hardening
+
+A second pass made empty-segment dead-ends structurally impossible, validated by
+`tests/e2e-video-render.js` (**11/11 passed**, run: `node tests/e2e-video-render.js`).
+
+| Layer | Guarantee |
+|---|---|
+| Detector | `analyzeVideoForHighlights` uses real motion + audio + scene; on empty result the analyze job inserts fallback windows |
+| **Variant builder** | `generateVariantsV10` now synthesizes fallback windows when `analysis.highlights` is empty, so **every** caller (analyze job, `regenerate-variants` endpoint) gets variants with segments. Verified: empty highlights → `segs=[3,3,3,3,3]`, `usedFallback=true` |
+| Export | short variants are topped up to the 15s floor; an empty-segments request re-encodes the whole clip (capped at 60s) |
+| **Frontend** | `runRenderShorts()` no longer dead-ends with "Top variant has no segments to render" — it falls back to a whole-clip render so the user always gets a Short |
+
+**Phase 1 — instrumentation.** `analysis.debug` is persisted on the project, e.g.
+`{videoDuration, fps, sampledMotionFrames, sceneChanges, segmentCount, variantCount, captionCount, usedFallback}`.
+
+**Phase 6 — output inspection.** The test extracts first/middle/last frames from
+the rendered mp4 and verifies: portrait `1080×1920`, **not black** (center-band
+max luma `[153,128,255]`), **not frozen** (inter-frame diff `70.9`). *Honest limit:*
+"facecam visible / HUD preserved / gameplay visible" need a vision model and are
+**not** auto-asserted.
+
+**Phase 7 — render report.** Each export writes `entries/<id>/renders/report.json`:
+```json
+{ "variant":"variantC","segments":5,"duration":"15s","sigma0_score":0.957,
+  "confidence":0.742,"collapse_risk":0.258,"rendered":true,"output":"…mp4" }
+```
+(`collapse_risk` is derived as `1 - confidence` — a proxy, labeled as such, not a
+separately-measured signal.)
+
+---
+
 ## Reproduction artifacts
 
-- Test driver: `scripts/test_creator_pipeline.js`
+- Pipeline driver: `scripts/test_creator_pipeline.js` (12/12)
+- Render-guarantee driver: `tests/e2e-video-render.js` (11/11)
 - Machine-readable summary: `data/creator/pipeline-test-summary.json` (gitignored)
 - Generated fixture: `tests/assets/test-video.mp4` (gitignored, regenerated on run)
