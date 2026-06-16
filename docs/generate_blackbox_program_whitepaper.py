@@ -41,6 +41,53 @@ from reportlab.platypus import (
     PageBreak, Preformatted,
 )
 from reportlab.lib.enums import TA_CENTER
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.pdfmetrics import registerFontFamily
+
+
+def _register_unicode_fonts():
+    """Embed a Unicode font family so math/Greek glyphs (Σ₀, ∇ₓL, ⊥ₛ, →, ×, ≥)
+    render instead of becoming tofu boxes. Returns (sans, sans_bold, mono) font
+    names, falling back to the base-14 Helvetica/Courier if DejaVu is absent."""
+    search = []
+    try:
+        import matplotlib
+        search.append(Path(matplotlib.__file__).parent / "mpl-data" / "fonts" / "ttf")
+    except Exception:
+        pass
+    search.append(Path(r"C:\Windows\Fonts"))
+    search.append(Path("/usr/share/fonts/truetype/dejavu"))
+
+    variants = {
+        "DejaVuSans": "DejaVuSans.ttf",
+        "DejaVuSans-Bold": "DejaVuSans-Bold.ttf",
+        "DejaVuSans-Oblique": "DejaVuSans-Oblique.ttf",
+        "DejaVuSans-BoldOblique": "DejaVuSans-BoldOblique.ttf",
+        "DejaVuMono": "DejaVuSansMono.ttf",
+        "DejaVuMono-Bold": "DejaVuSansMono-Bold.ttf",
+    }
+
+    def find(fname):
+        for d in search:
+            p = d / fname
+            if p.exists():
+                return str(p)
+        return None
+
+    if not all(find(f) for f in variants.values()):
+        return "Helvetica", "Helvetica-Bold", "Courier"  # graceful fallback
+
+    for name, fname in variants.items():
+        pdfmetrics.registerFont(TTFont(name, find(fname)))
+    registerFontFamily("DejaVuSans", normal="DejaVuSans", bold="DejaVuSans-Bold",
+                       italic="DejaVuSans-Oblique", boldItalic="DejaVuSans-BoldOblique")
+    registerFontFamily("DejaVuMono", normal="DejaVuMono", bold="DejaVuMono-Bold",
+                       italic="DejaVuMono", boldItalic="DejaVuMono-Bold")
+    return "DejaVuSans", "DejaVuSans-Bold", "DejaVuMono"
+
+
+SANS, SANS_BOLD, MONO = _register_unicode_fonts()
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -64,28 +111,33 @@ TB, TQ, TC = T["base3_codec"], T["quantum_dust_field"], T["status_cube"]
 GT, GD, GI = G["trajectory_stats"], G["detection"], G["intervention"]
 
 styles = getSampleStyleSheet()
-styles.add(ParagraphStyle("PaperTitle", parent=styles["Title"], fontSize=17,
-                          spaceAfter=6, alignment=TA_CENTER))
-styles.add(ParagraphStyle("Subtitle", parent=styles["Normal"], fontSize=11,
-                          alignment=TA_CENTER, textColor=HexColor("#555555"),
-                          spaceAfter=18))
-styles.add(ParagraphStyle("SectionHead", parent=styles["Heading1"], fontSize=14,
-                          spaceBefore=16, spaceAfter=8, textColor=HexColor("#1a1a2e")))
-styles.add(ParagraphStyle("SubHead", parent=styles["Heading2"], fontSize=12,
-                          spaceBefore=10, spaceAfter=5, textColor=HexColor("#16213e")))
-styles.add(ParagraphStyle("Body", parent=styles["Normal"], fontSize=10,
-                          spaceBefore=4, spaceAfter=4, leading=14))
-# Plain-language callout: indented, tinted, italic — the "in plain words" voice.
-styles.add(ParagraphStyle("Plain", parent=styles["Normal"], fontSize=10,
-                          spaceBefore=4, spaceAfter=8, leading=14,
+styles.add(ParagraphStyle("PaperTitle", parent=styles["Title"], fontName=SANS_BOLD,
+                          fontSize=17, spaceAfter=6, alignment=TA_CENTER))
+styles.add(ParagraphStyle("Subtitle", parent=styles["Normal"], fontName=SANS,
+                          fontSize=11, alignment=TA_CENTER,
+                          textColor=HexColor("#555555"), spaceAfter=18))
+styles.add(ParagraphStyle("SectionHead", parent=styles["Heading1"], fontName=SANS_BOLD,
+                          fontSize=14, spaceBefore=16, spaceAfter=8,
+                          textColor=HexColor("#1a1a2e")))
+styles.add(ParagraphStyle("SubHead", parent=styles["Heading2"], fontName=SANS_BOLD,
+                          fontSize=12, spaceBefore=10, spaceAfter=5,
+                          textColor=HexColor("#16213e")))
+styles.add(ParagraphStyle("Body", parent=styles["Normal"], fontName=SANS,
+                          fontSize=10, spaceBefore=4, spaceAfter=4, leading=14))
+# Plain-language callout: indented, tinted — the "in plain words" voice.
+styles.add(ParagraphStyle("Plain", parent=styles["Normal"], fontName=SANS,
+                          fontSize=10, spaceBefore=4, spaceAfter=8, leading=14,
                           leftIndent=10, rightIndent=10, borderPadding=6,
                           backColor=HexColor("#eef4fb"), textColor=HexColor("#22303f")))
-styles.add(ParagraphStyle("CodeBlock", parent=styles["Code"], fontSize=8,
-                          spaceBefore=4, spaceAfter=4, leading=10,
+styles.add(ParagraphStyle("CodeBlock", parent=styles["Code"], fontName=MONO,
+                          fontSize=8, spaceBefore=4, spaceAfter=4, leading=10,
                           backColor=HexColor("#f4f4f4"), borderPadding=4))
-styles.add(ParagraphStyle("Caption", parent=styles["Normal"], fontSize=9,
-                          alignment=TA_CENTER, textColor=HexColor("#666666"),
-                          spaceBefore=4, spaceAfter=12))
+styles.add(ParagraphStyle("Caption", parent=styles["Normal"], fontName=SANS,
+                          fontSize=9, alignment=TA_CENTER,
+                          textColor=HexColor("#666666"), spaceBefore=4, spaceAfter=12))
+# Wrapping cell text for table bodies (bare strings do NOT wrap in reportlab).
+styles.add(ParagraphStyle("Cell", parent=styles["Normal"], fontName=SANS,
+                          fontSize=9, leading=11, spaceBefore=0, spaceAfter=0))
 
 # ── Auto-numbering so sections can be reordered without manual renumbering ──
 _SEC = [0]
@@ -113,12 +165,19 @@ def PW(text):
 
 
 def make_table(headers, rows, col_widths=None):
-    t = Table([headers] + rows, colWidths=col_widths, repeatRows=1)
+    # Wrap body string cells in Paragraphs so long text wraps to the column
+    # width instead of overflowing the margin. Headers stay as strings (short,
+    # and styled white-on-dark by the TableStyle).
+    wrapped_rows = [
+        [Paragraph(c, styles["Cell"]) if isinstance(c, str) else c for c in row]
+        for row in rows
+    ]
+    t = Table([headers] + wrapped_rows, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), HexColor("#1a1a2e")),
         ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#ffffff")),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, 0), SANS_BOLD),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
         ("GRID", (0, 0), (-1, -1), 0.5, HexColor("#cccccc")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [HexColor("#ffffff"), HexColor("#f9f9f9")]),
