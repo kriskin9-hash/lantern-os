@@ -228,6 +228,80 @@ Copy `.env.example` to `.env` at repo root. Key variables: `ANTHROPIC_API_KEY`, 
 
 `pytest.ini` sets `pythonpath = apps src` so tests can import from both trees without install.
 
+## Keystone Testing Charter
+
+**Autonomous test agent** using Agentic QE principles for continuous self-improvement.
+
+### Targets
+- **Dev server**: `http://127.0.0.1:4178` (current branch, hot-reload)
+- **Stable server**: `http://127.0.0.1:4177` (master branch)
+
+### Test Scenarios
+| Scenario | Purpose | Target |
+|---|---|---|
+| home-load | Verify home page renders + no console errors | `/` |
+| dream-chat-init | Verify dream-chat loads + textarea ready | `/dream-chat.html` |
+| dream-chat-first-message | Send test message + verify response stream | `/dream-chat.html` |
+| theme-toggle | Light ↔ dark mode works bidirectionally | All pages |
+| dream-chat-agent-select | Switch agent personas + verify prompt changes | `/dream-chat.html` |
+| dream-chat-error-handling | Send malformed input + verify error state | `/dream-chat.html` |
+| home-nav-links | Click all nav links + verify page loads | `/` → all targets |
+| trader-dashboard-load | Verify Kalshi deck renders | `/trader-dashboard.html` |
+| responsive-mobile | Test 375x812 (iPhone) viewport | All pages |
+| responsive-tablet | Test 768x1024 (iPad) viewport | All pages |
+| console-monitoring | Capture console errors during all scenarios | All pages |
+| network-monitoring | Capture failed requests (4xx, 5xx, timeout) | All pages |
+| slow-network | Flag requests >1000ms | All pages |
+
+### Confidence Thresholds
+| Score | Action |
+|---|---|
+| 0.8–1.0 (High) | File immediately with [keystone-autonomous] tag |
+| 0.5–0.79 (Medium) | File with [needs-review] tag + wait for approval |
+| 0.2–0.49 (Low) | Log to `data/keystone-insights.jsonl` (manual review later) |
+| <0.2 (Trivial) | Discard (console.warn, CSS whitespace, etc.) |
+
+### Triggering Autonomous Tests
+**In dream-chat.html:**
+- Type: `"test the app"` or `"scan for issues"` or `"audit the system"`
+- Keystone agent will autonomously:
+  1. **Observe**: Fetch list of issues needing validation
+  2. **Research**: Analyze codebase for test coverage gaps
+  3. **Reason**: Generate test plan using Playwright scenarios
+  4. **Act**: Run scenarios via Playwright MCP
+  5. **Verify**: Score findings by confidence (Σ₀ rigor)
+  6. **Converge**: File issues with evidence + confidence records
+
+### Reviewing Results
+1. **Live stream**: Watch real-time test execution in dream-chat.html test panel
+2. **Convergence log**: `data/keystone-test-runs.jsonl` — append-only record of each run
+3. **Issue tracker**: `#566-588` — full test fleet issues for ongoing improvements
+4. **GitHub issues**: Auto-filed with [keystone-autonomous] + [sigma0-grounded] labels
+
+### Convergence Records
+Each test run logs:
+```json
+{
+  "timestamp": "2026-06-16T...",
+  "runId": "keystone-20260616-...",
+  "scenarios_completed": 12,
+  "findings_total": 3,
+  "findings_high_confidence": 2,
+  "filed_issues": ["#615", "#616"],
+  "convergence": {
+    "hypothesis": "Dream-chat XSS in image gallery",
+    "evidence": ["screenshot", "console trace", "HTML snippet"],
+    "confidence": {
+      "research": 0.85,
+      "web_grounded": 0.8,
+      "observable": 1.0,
+      "overall": 0.85
+    },
+    "sources": ["codebase analysis", "web search", "playwright trace"]
+  }
+}
+```
+
 ## Per-Agent Workstream Rule (Critical)
 
 Each agent gets **one open PR lane at a time**. All agent lanes run concurrently.
