@@ -51,11 +51,6 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
   position:relative;padding:8px 16px 0;min-height:0}
 .stage{position:relative;width:min(440px,94vw);height:min(500px,62vh)}
 
-/* ── loading state ── */
-.dashboard-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.15em;text-transform:uppercase}
-.dashboard-loading img{width:56px;height:56px;animation:dashboard-spin 3s linear infinite;filter:drop-shadow(0 0 8px rgba(74,158,255,.35))}
-@keyframes dashboard-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-
 .card{position:absolute;inset:0;background:var(--surface);border:1px solid var(--border);
   border-radius:10px;padding:18px;display:flex;flex-direction:column;
   box-shadow:var(--shadow);will-change:transform;touch-action:none;cursor:grab;user-select:none}
@@ -149,6 +144,7 @@ body{height:100vh;overflow:hidden;display:flex;flex-direction:column}
   background:linear-gradient(135deg,#059669,#00d4aa);color:#fff;cursor:pointer;letter-spacing:.03em;transition:all .15s;min-width:110px;box-shadow:0 3px 14px rgba(0,180,130,.35)}
 .btn-take:hover{filter:brightness(1.08);transform:scale(1.04)}
 .peek .card-actions,.peek2 .card-actions{display:none}
+.keyboard-hint{font-size:11px;color:var(--muted);margin-top:8px;letter-spacing:.05em;text-transform:uppercase;font-weight:500}
 /* theme toggle */
 .theme-toggle{background:none;border:1px solid var(--border);border-radius:6px;padding:4px 9px;cursor:pointer;color:var(--muted);font-size:13px;transition:border-color .2s}
 .theme-toggle:hover{border-color:var(--accent);color:var(--text)}
@@ -206,7 +202,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <h1 class="sr-only">Kalshi Terminal — Swipe Deck</h1>
 
 <nav class="site-nav">
-  <a class="nav-brand" href="/">
+  <a class="nav-brand" href="/trader-dashboard.html">
     <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
     Lantern OS
   </a>
@@ -226,12 +222,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 
 <main class="deck">
-  <article class="stage" id="stage" role="region" aria-label="Current market position">
-    <div class="dashboard-loading" id="dashboardLoading">
-      <img src="/mandala.svg" alt="" aria-hidden="true">
-      <span>Loading positions&hellip;</span>
-    </div>
-  </article>
+  <article class="stage" id="stage" role="region" aria-label="Current market position"></article>
   <div class="end" id="end" role="status" aria-label="No positions available">
     <div>No open positions</div>
     <div style="font-size:12px;color:var(--muted)">Checking for new positions every 5s automatically.</div>
@@ -243,6 +234,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div class="actions" role="region" aria-label="Card action buttons">
   <button class="btn-pass" id="bPass" aria-label="Pass on current position" onclick="act('pass')">✕ Pass</button>
   <button class="btn-take" id="bTake" aria-label="Take current position" onclick="act('take')">✓ Take it</button>
+  <div class="keyboard-hint">← Pass  Take →</div>
 </div>
 
 <div class="image-gallery" id="imageGallery" style="display:none" aria-label="Market chart and news images">
@@ -349,7 +341,7 @@ async function syncDeck(){
   // 5. patch front in place (no full re-render — preserves swipe state)
   if(!dragging) patchFront(deck[idx]);
   const rem=deck.length-idx;
-  document.getElementById('progress').textContent=rem>0?`${rem} of ${deck.length} · soonest first`:'';
+  document.getElementById('progress').textContent=rem>0?`Card ${deck.length-rem+1} of ${deck.length} · soonest first`:'';
   maybePrefetch();
 }
 
@@ -400,7 +392,7 @@ async function maybePrefetch(){
     if(!toAdd.length) return;
     deck.push(...toAdd);
     const rem=deck.length-idx;
-    document.getElementById('progress').textContent=rem>0?`${rem} of ${deck.length} · soonest first`:'';
+    document.getElementById('progress').textContent=rem>0?`Card ${deck.length-rem+1} of ${deck.length} · soonest first`:'';
     if(!dragging&&idx<deck.length) render();
   } catch(_){}
   finally{ prefetching=false; }
@@ -647,7 +639,7 @@ function patchFront(card){
 function render(){
   const stage=document.getElementById('stage');
   const remaining=deck.length-idx;
-  document.getElementById('progress').textContent=remaining>0?`${remaining} of ${deck.length} · soonest first`:'';
+  document.getElementById('progress').textContent=remaining>0?`Card ${deck.length-remaining+1} of ${deck.length} · soonest first`:'';
   if(idx>=deck.length){ stage.innerHTML=''; document.getElementById('end').style.display='flex'; return; }
   document.getElementById('end').style.display='none';
   let html='';
@@ -798,9 +790,18 @@ async function act(dir,fromSwipe){
     if(card.favAsk==null){ blockTake('No live ask price — cannot trade'); return; }
     if(card.kind==='convergence'){
       if(card.favAsk>90){ blockTake(`Margin too thin (${100-(card.favAsk||0)}¢ profit) — need 10¢ min`); return; }
+      if(card.favAsk<80){ blockTake(`Not converged enough (${card.favAsk}¢) — need 80¢ min`); return; }
     } else {
       if(card.favAsk<4||card.favAsk>96){ blockTake(`Market converged (${card.favAsk}¢) — no edge`); return; }
       if((card.conviction||0)<40){ blockTake(`Edge too thin — ${card.conviction||0}% conviction`); return; }
+    }
+    // Cash sufficiency check for buy orders
+    const orderCostCents=card.favAsk||0;
+    const balData=await j('/balance');
+    const balanceCents=balData.error?0:(balData.balance||balData.balance_cents||0);
+    if(balanceCents<orderCostCents){
+      blockTake(`Insufficient balance — need $${(orderCostCents/100).toFixed(2)}, have $${(balanceCents/100).toFixed(2)}`);
+      return;
     }
   } else {
     // Position / exit card — only block if truly stale with no price
@@ -833,26 +834,12 @@ function showResult(res,card){
     t.className='toast dry show';
     t.textContent=`DRY-RUN · take ${lbl} @ ${card.favAsk||'?'}¢\nplanned, not sent (${(res.wouldBlock||[]).join('; ')})`;
   } else if(res.mode==='live'){
-    // Check for actual success, not just that it's live
-    if(res.success === true && res.status < 400){
-      t.className='toast live show'; t.textContent=`LIVE · took ${lbl} @ ${card.favAsk||'?'}¢`;
-    } else {
-      // Show error if success is false or status is 4xx/5xx
-      t.className='toast err show'; t.textContent=`ERROR · ${res.error || `status ${res.status}`}`;
-    }
-  } else if(res.error){
-    t.className='toast err show'; t.textContent=`ERROR · ${res.error}`;
-  } else {
-    t.className='toast err show'; t.textContent=JSON.stringify(res).slice(0,140);
-  }
+    const ok=res.status>=200&&res.status<300;
+    t.className=ok?'toast live show':'toast err show';
+    t.textContent=ok?`LIVE · took ${lbl} ✓`:`LIVE · FAILED ${lbl} (status ${res.status}) — check portfolio`;
+  } else { t.className='toast err show'; t.textContent=JSON.stringify(res).slice(0,140); }
   clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3200);
 }
-
-document.addEventListener('keydown',e=>{
-  if(e.key==='ArrowRight') act('take');
-  else if(e.key==='ArrowLeft') act('pass');
-});
-
 
 // ── image gallery ────────────────────────────────────────────────────────────
 let imageGalleryOpen=true;
@@ -872,11 +859,15 @@ async function loadImages(){
 
 function renderImages(images){
   const grid=document.getElementById('imageGrid');
-  grid.innerHTML=images.slice(0,12).map(img=>`
-    <div class="image-item" onclick="openImageModal('${img.url||'/images/'+img.id}','${(img.filename||'image').replace(/'/g,"\\'")}')" title="${img.filename||'Image'}">
-      <img src="${img.url||'/images/'+img.id}" alt="${img.filename||'Market image'}" loading="lazy" onerror="this.parentElement.innerHTML='⚠'">
-    </div>
-  `).join('');
+  grid.innerHTML=images.slice(0,12).map(img=>{
+    const url=img.url||'/images/'+img.id;
+    const title=img.filename||'Image';
+    return `<div class="image-item" data-url="${encodeURIComponent(url)}" data-title="${encodeURIComponent(title)}" title="${title.replace(/"/g,'&quot;')}"><img src="${url.replace(/"/g,'%22')}" alt="${title.replace(/"/g,'&quot;')}" loading="lazy" onerror="this.parentElement.innerHTML='⚠'"></div>`;
+  }).join('');
+  grid.onclick=e=>{
+    const el=e.target.closest('[data-url]');
+    if(el) openImageModal(decodeURIComponent(el.dataset.url),decodeURIComponent(el.dataset.title));
+  };
 }
 
 function openImageModal(url,title){
@@ -899,18 +890,61 @@ function toggleGallery(){
   grid.style.display=imageGalleryOpen?'':'none';
 }
 
+// Consolidated keyboard shortcut handler (arrow keys + escape)
 document.addEventListener('keydown',e=>{
-  if(e.key==='Escape') closeImageModal();
+  if(e.key==='ArrowRight') act('take');
+  else if(e.key==='ArrowLeft') act('pass');
+  else if(e.key==='Escape') closeImageModal();
 });
+
+// Polling interval references for visibility-based pausing
+let connInterval, balInterval, syncInterval, imgInterval;
 
 function init(){
   // Restore saved theme
   try{const t=localStorage.getItem('kalshi-theme');if(t){document.documentElement.setAttribute('data-theme',t);document.getElementById('themeToggle').textContent=t==='dark'?'☀':'🌙';}}catch(_){}
   loadConnection(); loadBalance(); syncDeck(); loadImages();
-  setInterval(loadConnection,20000);
-  setInterval(loadBalance,30000);
-  setInterval(syncDeck,SYNC_MS);
-  setInterval(loadImages,60000);
+  
+  // Start polling with normal intervals
+  connInterval=setInterval(loadConnection,20000);
+  balInterval=setInterval(loadBalance,30000);
+  syncInterval=setInterval(syncDeck,SYNC_MS);
+  imgInterval=setInterval(loadImages,60000);
+  
+  // Pause/resume on visibility change to save API quota and battery
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+      // Clear all intervals when tab is hidden
+      clearInterval(connInterval);
+      clearInterval(balInterval);
+      clearInterval(syncInterval);
+      clearInterval(imgInterval);
+      
+      // Set slow fallback intervals (30s for syncDeck, others 2x slower)
+      connInterval=setInterval(loadConnection,40000);
+      balInterval=setInterval(loadBalance,60000);
+      syncInterval=setInterval(syncDeck,30000);
+      imgInterval=setInterval(loadImages,120000);
+    }else{
+      // Clear slow intervals
+      clearInterval(connInterval);
+      clearInterval(balInterval);
+      clearInterval(syncInterval);
+      clearInterval(imgInterval);
+      
+      // Restore normal intervals
+      connInterval=setInterval(loadConnection,20000);
+      balInterval=setInterval(loadBalance,30000);
+      syncInterval=setInterval(syncDeck,SYNC_MS);
+      imgInterval=setInterval(loadImages,60000);
+      
+      // Immediate refresh on tab focus
+      loadConnection();
+      loadBalance();
+      syncDeck();
+      loadImages();
+    }
+  });
 }
 document.addEventListener('DOMContentLoaded',init);
 </script>

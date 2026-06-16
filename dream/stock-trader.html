@@ -18,41 +18,17 @@
     --tv-text-primary:#ffffff;--tv-text-secondary:#d1d4dc;
     --tv-grid:rgba(255,255,255,.06);--tv-axis:rgba(255,255,255,.65);
     --tv-candle-up:#26a69a;--tv-candle-down:#ef5350;
-    --card-bg:rgba(15,18,28,.95);--panel-bg:rgba(15,18,28,.95);
-  }
-  :root.light-mode{
-    --bg0:#ffffff;--bg1:#fafafa;--bg2:#f0f0f0;--bg3:#e8e8e8;
-    --border:#d8d8d8;--text0:#1a1a1a;--text1:#333333;--text2:#666666;
-    --tv-text-primary:#1a1a1a;--tv-text-secondary:#404040;
-    --tv-grid:rgba(0,0,0,.06);--tv-axis:rgba(0,0,0,.8);
-    --tv-candle-up:#16a085;--tv-candle-down:#c0392b;
-    --card-bg:#ffffff;--panel-bg:#fafafa;
   }
   html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px;overflow-x:hidden}
-
-  /* WCAG: Keyboard Navigation & Focus Indicators */
-  *:focus{outline:2px solid var(--blue);outline-offset:2px}
-  *:focus:not(:focus-visible){outline:none}
-  *:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-  button:focus,a:focus,[role="button"]:focus{outline:2px solid var(--blue);outline-offset:2px}
-
-  /* Skip link (WCAG 2.4.1) */
-  .skip-link{position:absolute;left:-9999px;top:-9999px;z-index:9999;background:var(--accent);color:white;padding:10px 15px;text-decoration:none;border-radius:3px}
-  .skip-link:focus{left:10px;top:10px;outline:2px solid white}
-  /* ── Layout (TradingView-style) ── */
-  .layout{display:grid;grid-template-columns:280px 1fr;grid-template-rows:50px 60px 1fr 140px;height:100vh}
+  /* ── Layout ── */
+  .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px 1fr auto;height:100vh}
   .header{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
-  .toolbar{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:0 18px;overflow-x:auto}
-  .sidebar{grid-column:1;grid-row:3;background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:12px 0;display:flex;flex-direction:column}
-  .main{grid-column:2;grid-row:3;overflow:hidden;background:var(--bg0);outline:none;display:flex;flex-direction:column}
-  .main:focus{outline:none}
-  .chart-area{flex:1;overflow:hidden;position:relative}
-  .footer{grid-column:1/-1;grid-row:4;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:8px;padding:8px;box-sizing:border-box;overflow-y:auto}
+  .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
+  .main{overflow-y:auto;padding:12px;background:var(--bg0)}
+  .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 260px;gap:8px;padding:8px;max-height:196px;box-sizing:border-box}
   /* ── Header ── */
   .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.08em;white-space:nowrap}
-  .logo span{color:var(--text0);font-weight:400}
-  .header h1{display:none}
-  .header [role="heading"]{font-size:1.2em;font-weight:600}
+  .logo span{color:var(--text1);font-weight:400}
   .hstat{font-family:var(--mono);font-size:10px;display:flex;flex-direction:column;gap:1px;min-width:80px}
   .hstat .l{color:var(--text2);font-size:8px;text-transform:uppercase;letter-spacing:.1em}
   .hstat .v{color:var(--text0)}
@@ -63,44 +39,26 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;margin-left:auto;transition:background .15s,color .15s}
   .nav-link:hover{color:var(--text0);background:var(--bg3)}
-  /* ── Sidebar watchlist (TradingView-style) ── */
-  .watchlist{flex:1;overflow-y:auto;display:flex;flex-direction:column}
-  .wl-header{padding:8px 16px;font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--border)}
-  .wl-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s;outline:none;display:flex;flex-direction:column;gap:4px}
-  .wl-item:hover{background:rgba(255,255,255,.05)}
-  .wl-item.active{background:rgba(74,158,255,.12);border-left:3px solid var(--blue)}
-  .wl-item:focus{outline:2px solid var(--blue);outline-offset:-2px}
-  :root.light-mode .wl-item{border-bottom:1px solid #e8e8e8}
-  :root.light-mode .wl-item:hover{background:#f5f5f5}
-  :root.light-mode .wl-item.active{background:rgba(74,158,255,.08);border-left-color:#4a9eff}
-  .wl-row{display:flex;justify-content:space-between;align-items:baseline}
-  .wl-sym{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text0)}
-  .wl-price{font-family:var(--mono);font-size:11px;color:var(--text1)}
-  .wl-chg{font-family:var(--mono);font-size:10px;font-weight:600}
+  /* ── Sidebar watchlist ── */
+  .wl-item{padding:6px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s}
+  .wl-item:hover,.wl-item.active{background:var(--bg2)}
+  .wl-item.active{box-shadow:inset 2px 0 0 var(--blue)}
+  .wl-sym{font-family:var(--mono);font-size:11px;font-weight:600}
+  .wl-row{display:flex;justify-content:space-between;align-items:center}
+  .wl-price{font-family:var(--mono);font-size:10px;color:var(--text1)}
+  .wl-chg{font-family:var(--mono);font-size:9px;font-weight:600}
   .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
-  .wl-signal{font-family:var(--mono);font-size:8px;color:var(--text2)}
-  .wl-add{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:4px}
+  .wl-signal{font-family:var(--mono);font-size:8px;margin-top:2px}
+  .wl-add{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}
   .wl-add input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:4px 6px;border-radius:3px}
   .wl-add button{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .wl-add button:hover{color:var(--text0)}
   .wl-remove{font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;padding:0 4px}
   .wl-remove:hover{color:var(--red)}
-  /* ── Toolbar (chart controls) ── */
-  .toolbar-btn{font-family:var(--mono);font-size:11px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,color .15s;outline:none;white-space:nowrap}
-  .toolbar-btn:hover{color:var(--text0);background:var(--bg3)}
-  .toolbar-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-  .toolbar-btn:focus{outline:2px solid var(--blue)}
-  .toolbar-separator{width:1px;height:20px;background:var(--border);margin:0 4px}
   /* ── Ticker cards grid ── */
   .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
-  /* ── Loading state ── */
-  .dashboard-loading{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:80px 20px;color:var(--text1);font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase}
-  .dashboard-loading img{width:56px;height:56px;animation:dashboard-spin 3s linear infinite;filter:drop-shadow(0 0 8px rgba(74,158,255,.35))}
-  @keyframes dashboard-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-  .card{background:var(--card-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:border-color .15s}
-  .card:hover{border-color:var(--text1)}
-  :root.light-mode .card{border-color:#e0e0e0}
-  :root.light-mode .card:hover{border-color:#999}
+  .card{background:rgba(15,18,28,.95);border:1px solid rgba(255,255,255,.06);border-radius:12px;overflow:hidden;transition:border-color .15s}
+  .card:hover{border-color:rgba(255,255,255,.12)}
   .card.state-open{border-color:rgba(0,212,170,.35);grid-column:span 2}
   .card.state-watching{border-color:rgba(74,158,255,.25)}
   .card.state-quiet{opacity:.75}
@@ -128,24 +86,16 @@
   .pnl-pos{background:rgba(0,212,170,.15);color:var(--green)}
   .pnl-neg{background:rgba(255,95,109,.15);color:var(--red)}
   /* Zone ladder */
-  .zone-ladder{position:relative;height:220px;background:var(--bg1);margin:0 14px 10px;border-radius:3px;overflow:hidden;cursor:default;border:1px solid var(--border)}
-  .zone-ladder.chart-main{margin:0;border-radius:0;height:100%}
+  .zone-ladder{position:relative;height:220px;background:var(--bg0);margin:0 14px 10px;border-radius:3px;overflow:hidden;cursor:default}
   .card.state-open .zone-ladder{height:280px}
   .card.state-quiet .zone-ladder{height:130px}
   /* Order ticket trigger row */
   .order-ticket{display:flex;align-items:center;gap:6px;padding:0 14px 10px}
-  .order-ticket button{flex:1;font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 10px;border-radius:3px;cursor:pointer;border:1px solid transparent;letter-spacing:.05em;transition:background .15s;outline:none}
-  .order-ticket button:focus{outline:2px solid var(--blue);outline-offset:1px}
+  .order-ticket button{flex:1;font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 10px;border-radius:3px;cursor:pointer;border:1px solid transparent;letter-spacing:.05em;transition:background .15s}
   .btn-buy{background:rgba(0,212,170,.12);color:var(--green);border-color:rgba(0,212,170,.3)}
   .btn-buy:hover{background:rgba(0,212,170,.22)}
-  .btn-buy:focus{outline:2px solid var(--blue)}
   .btn-sell{background:rgba(255,95,109,.12);color:var(--red);border-color:rgba(255,95,109,.3)}
   .btn-sell:hover{background:rgba(255,95,109,.22)}
-  .btn-sell:focus{outline:2px solid var(--blue)}
-  :root.light-mode .btn-buy{background:rgba(22,160,133,.08);color:#16a085;border-color:rgba(22,160,133,.25)}
-  :root.light-mode .btn-buy:hover{background:rgba(22,160,133,.15)}
-  :root.light-mode .btn-sell{background:rgba(192,57,43,.08);color:#c0392b;border-color:rgba(192,57,43,.25)}
-  :root.light-mode .btn-sell:hover{background:rgba(192,57,43,.15)}
   /* Chart canvas + overlay — canvas covers the full ladder and draws its own
      right-side price axis (52px) + bottom time axis (16px); the HTML overlay
      (zone bands, S/R labels, price/entry/stop/tp lines) is inset to match
@@ -155,19 +105,13 @@
   /* Header chart controls */
   .chart-ctrl{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
   .chart-ctrl:hover{color:var(--text0);background:var(--bg3)}
-  :root.light-mode .chart-ctrl{background:#f5f5f5;border-color:#e0e0e0;color:#333}
-  :root.light-mode .chart-ctrl:hover{background:#e8e8e8;color:#000}
   /* Chart range presets (1D/5D/1M) */
-  .range-group{display:flex;gap:2px;role:'group';aria-label:'Chart time range selector'}
-  .range-btn{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,border-color .15s,color .15s;outline:none;tabindex:0}
+  .range-group{display:flex;gap:2px}
+  .range-btn{font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
   .range-btn:hover{color:var(--text0);background:var(--bg3)}
-  .range-btn:focus{outline:2px solid var(--blue)}
   .range-btn.active{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18);color:#fff}
-  :root.light-mode .range-btn{background:#f5f5f5;border-color:#e0e0e0;color:#333}
-  :root.light-mode .range-btn:hover{background:#e8e8e8;color:#000}
-  :root.light-mode .range-btn.active{background:#4a9eff;border-color:#4a9eff;color:#fff}
   /* Fullscreen ticker chart */
-  .fs-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px}
+  .fs-bg{position:fixed;inset:0;background:rgba(5,6,8,.85);z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px}
   .fs-bg.hidden{display:none}
   .fs-chart{background:var(--bg1);border:1px solid var(--border);border-radius:6px;width:100%;height:100%;max-width:1400px;display:flex;flex-direction:column}
   .fs-header{padding:10px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
@@ -181,14 +125,14 @@
   .fs-header .order-ticket{padding:0;gap:6px}
   .fs-header .order-ticket button{flex:0 0 auto;min-width:56px}
   /* Order ticket modal */
-  .ot-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px}
+  .ot-bg{position:fixed;inset:0;background:rgba(5,6,8,.85);z-index:1100;display:flex;align-items:center;justify-content:center;padding:24px}
   .ot-bg.hidden{display:none}
-  .ot-modal{background:var(--bg1);border:1px solid var(--border);border-radius:6px;width:100%;max-width:340px;font-family:var(--mono);display:flex;flex-direction:column;max-height:90vh;overflow:hidden}
+  .ot-modal{background:var(--bg1);border:1px solid var(--border);border-radius:6px;width:100%;max-width:340px;font-family:var(--mono)}
   .ot-header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
   .ot-header .ot-ticker{font-size:14px;font-weight:600;flex:1}
   .ot-close{cursor:pointer;font-size:11px;color:var(--text1);padding:4px 8px;border-radius:3px;border:1px solid var(--border);background:var(--bg2)}
   .ot-close:hover{color:var(--text0)}
-  .ot-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1}
+  .ot-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px}
   .ot-side-row{display:flex;gap:6px}
   .ot-side-btn{flex:1;text-align:center;padding:8px 6px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);font-size:12px;cursor:pointer;line-height:1.6}
   .ot-side-btn .ot-side-label{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text2)}
@@ -221,24 +165,21 @@
   .ot-submit.sell{background:rgba(255,95,109,.15);color:var(--red);border-color:var(--red)}
   .ot-submit.sell:hover{background:rgba(255,95,109,.28)}
   /* ── Footer panels ── */
-  .fpanel{padding:10px 14px;overflow-y:auto;max-height:180px;background:var(--panel-bg);border:1px solid var(--border);border-radius:12px}
+  .fpanel{padding:10px 14px;overflow-y:auto;max-height:180px;background:rgba(15,18,28,.95);border:1px solid rgba(255,255,255,.06);border-radius:12px}
   .panel-title{font-family:var(--mono);font-size:9px;color:var(--tv-text-secondary);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
   /* Agent log */
-  .log-item{font-family:var(--mono);font-size:10px;padding:3px 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:45px 55px 1fr;gap:4px;align-items:start;opacity:0.9}
+  .log-item{font-family:var(--mono);font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:grid;grid-template-columns:45px 55px 1fr;gap:4px;align-items:start}
   .log-time{color:var(--text2)}.log-agent{font-weight:600}
   .log-grok{color:var(--purple)}.log-claude{color:var(--blue)}.log-risk{color:var(--amber)}
   .log-system{color:var(--text1)}.log-trail{color:var(--green)}.log-body{color:var(--text0);word-break:break-word}
   /* Orders */
-  .order-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:9px;border-bottom:1px solid var(--border);opacity:0.9}
+  .order-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:9px;border-bottom:1px solid rgba(255,255,255,.03)}
   /* Market status */
   .mkt-row{display:flex;justify-content:space-between;padding:3px 0;font-family:var(--mono);font-size:10px}
   .mkt-label{color:var(--tv-text-secondary)}.mkt-val{color:var(--tv-text-primary)}
 </style>
 </head>
 <body>
-<!-- WCAG 2.4.1: Skip to main content link -->
-<a href="#main-content" class="skip-link">Skip to main content</a>
-
 <div class="layout">
 
 <!-- Header -->
@@ -268,7 +209,6 @@
     <button class="range-btn" data-range="1M" onclick="changeRange('1M')">1M</button>
   </div>
   <div class="pulse"></div>
-  <button id="themeToggle" class="chart-ctrl" onclick="toggleTheme()" style="margin-left:auto" title="Toggle dark/light mode">◐ Theme</button>
   <a href="/trading-news.html" class="nav-link">News →</a>
   <a href="/trader-dashboard.html" class="nav-link" style="margin-left:8px">← Hub</a>
 </div>
@@ -284,12 +224,7 @@
 
 <!-- Main: ticker cards -->
 <div class="main">
-  <div class="cards-grid" id="cardsGrid">
-    <div class="dashboard-loading" id="dashboardLoading">
-      <img src="/mandala.svg" alt="" aria-hidden="true">
-      <span>Loading market data&hellip;</span>
-    </div>
-  </div>
+  <div class="cards-grid" id="cardsGrid"></div>
 </div>
 
 <!-- Footer -->
@@ -428,12 +363,11 @@ let zonesData      = {};
 let wlPrices       = [];
 let activeTicker   = null;
 let barsData       = {};
-let chartType      = 'candle';
+let chartType      = 'line';
 let chartTimeframe = '5m';
 let fullscreenTicker = null;
 let otTicker = null, otSide = 'buy', otOrderType = 'market';
 const TICK_SIZE = 0.01;
-let isDarkMode = localStorage.getItem('lanternTheme') !== 'light';
 
 // ── Chart layout + zoom/pan state ────────────────────────────────────────────
 // AXIS_W: right-gutter width reserved for price labels. AXIS_H: bottom-strip
@@ -610,28 +544,13 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   canvas.height = Math.round(h*dpr);
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr,0,0,dpr,0,0);
-
-  // Get colors from CSS variables (respects light/dark mode)
-  const root = getComputedStyle(document.documentElement);
-  const bgColor = root.getPropertyValue('--bg1').trim();
-  const gridColor = root.getPropertyValue('--tv-grid').trim();
-  const axisColor = root.getPropertyValue('--tv-axis').trim();
-  const candleUp = root.getPropertyValue('--tv-candle-up').trim() || '#26a69a';
-  const candleDown = root.getPropertyValue('--tv-candle-down').trim() || '#ef5350';
-
-  // Background
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, w, h);
-
+  ctx.clearRect(0,0,w,h);
   if(rMax<=rMin) return;
 
   const pw  = Math.max(0, w - AXIS_W);
   const ph  = Math.max(0, h - AXIS_H);
   const rng = rMax - rMin;
   const y   = p => ((rMax-p)/rng)*ph;
-
-  // Store colors for use in candle/line rendering
-  const chartColors = { candleUp, candleDown, gridColor, axisColor };
 
   // Price axis: faint gridlines across the plot + labels in the right gutter
   ctx.font = CHART_AXIS_FONT;
@@ -640,12 +559,12 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   for(let i=0;i<=PRICE_TICKS;i++){
     const price = rMin + rng*i/PRICE_TICKS;
     const yy = Math.round(y(price)) + 0.5;
-    ctx.strokeStyle = chartColors.gridColor;
+    ctx.strokeStyle = CHART_GRID_COLOR;
     ctx.beginPath();
     ctx.moveTo(0, yy);
     ctx.lineTo(pw, yy);
     ctx.stroke();
-    ctx.fillStyle = chartColors.axisColor;
+    ctx.fillStyle = CHART_AXIS_COLOR;
     ctx.textAlign = 'left';
     ctx.textBaseline = i===0 ? 'top' : (i===PRICE_TICKS ? 'bottom' : 'middle');
     ctx.fillText(fmt(price, price>=100?2:4), pw+4, yy);
@@ -654,65 +573,60 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   if(bars && bars.length >= 2){
     const n = bars.length, slotW = pw/n;
 
-    // Time axis labels removed for cleaner TradingView-style appearance
+    // Time axis: a few evenly-spaced bar timestamps along the bottom. The
+    // first/last ticks are edge-aligned (left/right) instead of centered so
+    // their labels stay within the plot area and never bleed into the price
+    // gutter on the right or get clipped on the left.
+    ctx.fillStyle = CHART_AXIS_COLOR;
+    ctx.textBaseline = 'bottom';
+    const TIME_TICKS = 4;
+    const firstD = new Date(String(bars[0].timestamp).replace(' ','T'));
+    const lastD  = new Date(String(bars[n-1].timestamp).replace(' ','T'));
+    const multiDay = !isNaN(firstD.getTime()) && !isNaN(lastD.getTime()) && firstD.toDateString() !== lastD.toDateString();
+    for(let i=0;i<=TIME_TICKS;i++){
+      const idx = Math.min(n-1, Math.round(i*(n-1)/TIME_TICKS));
+      const label = formatBarTime(bars[idx].timestamp, timeframe, multiDay);
+      if(!label) continue;
+      if(i===0){ ctx.textAlign='left'; ctx.fillText(label, 2, h-2); }
+      else if(i===TIME_TICKS){ ctx.textAlign='right'; ctx.fillText(label, pw-2, h-2); }
+      else { ctx.textAlign='center'; ctx.fillText(label, idx*slotW + slotW/2, h-2); }
+    }
 
     if(type==='candle'){
-      ctx.lineWidth = 1.5;
       for(let i=0;i<n;i++){
         const b = bars[i];
-        const x = Math.round(i*slotW + slotW/2);
+        const x = i*slotW + slotW/2;
         const up = b.close >= b.open;
-        const color = up ? chartColors.candleUp : chartColors.candleDown;
-
-        // Wick (high-low line)
+        const color = up ? CHART_CANDLE_UP : CHART_CANDLE_DOWN;
         ctx.strokeStyle = color;
-        ctx.globalAlpha = 0.8;
+        ctx.fillStyle   = color;
+        ctx.lineWidth   = 1;
         ctx.beginPath();
         ctx.moveTo(x, y(b.high));
         ctx.lineTo(x, y(b.low));
         ctx.stroke();
-
-        // Body (open-close rectangle)
         const bodyTop = y(Math.max(b.open,b.close));
         const bodyBot = y(Math.min(b.open,b.close));
-        const bodyH = Math.max(1.5, Math.abs(bodyBot - bodyTop));
-        const bw = Math.max(2, Math.min(slotW*0.65, 12));
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = color;
-        ctx.fillRect(x - bw/2, bodyTop, bw, bodyH);
-
-        // Body border for definition
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = 0.6;
-        ctx.strokeRect(x - bw/2, bodyTop, bw, bodyH);
+        const bw = Math.max(1, slotW*0.6);
+        ctx.fillRect(x-bw/2, bodyTop, bw, Math.max(1, bodyBot-bodyTop));
       }
-      ctx.globalAlpha = 1;
     }else{
       const pts = bars.map((b,i)=>[i*slotW + slotW/2, y(b.close)]);
-      // Gradient area fill under the line
-      const gradient = ctx.createLinearGradient(0, 0, 0, ph);
-      gradient.addColorStop(0, 'rgba(74,158,255,.15)');
-      gradient.addColorStop(1, 'rgba(74,158,255,.01)');
-
+      // area fill under the line
       ctx.beginPath();
       ctx.moveTo(pts[0][0], ph);
       for(const [x,yy] of pts) ctx.lineTo(x,yy);
       ctx.lineTo(pts[n-1][0], ph);
       ctx.closePath();
-      ctx.fillStyle = gradient;
+      ctx.fillStyle = 'rgba(74,158,255,.08)';
       ctx.fill();
-
-      // Line with smooth anti-aliasing
+      // line
       ctx.beginPath();
       ctx.moveTo(pts[0][0], pts[0][1]);
       for(let i=1;i<n;i++) ctx.lineTo(pts[i][0], pts[i][1]);
       ctx.strokeStyle = '#4a9eff';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.globalAlpha = 0.9;
+      ctx.lineWidth = 1.3;
       ctx.stroke();
-      ctx.globalAlpha = 1;
     }
   }
 }
@@ -776,19 +690,10 @@ function _renderLadder(ticker, d, currentPrice, canvas, overlay, bars, viewKey){
   const view  = getChartView(viewKey);
 
   // Horizontal zoom/pan: slice to the visible bar window. visibleBars===null
-  // means "auto-fit based on width" (the default, adaptive view).
+  // means "show everything" (the default, auto-fit view).
   let viewBars = bars;
-  if(bars.length > 0){
-    // Calculate optimal visible bars based on canvas width
-    // Target: ~65-75px per bar for readable candles (matches TradingView)
-    let targetVisibleBars = bars.length;
-    if(canvas && canvas.clientWidth){
-      const plotWidth = Math.max(0, canvas.clientWidth - AXIS_W);
-      const TARGET_BAR_WIDTH = 70;
-      targetVisibleBars = Math.max(MIN_VISIBLE_BARS, Math.floor(plotWidth / TARGET_BAR_WIDTH));
-    }
-
-    const vb = view.visibleBars != null ? view.visibleBars : Math.min(targetVisibleBars, bars.length);
+  if(bars.length > 0 && view.visibleBars != null){
+    const vb = Math.max(MIN_VISIBLE_BARS, Math.min(view.visibleBars, bars.length));
     const maxOffset = Math.max(0, bars.length - vb);
     const offset = Math.min(Math.max(0, view.barOffset||0), maxOffset);
     view.visibleBars = vb;
@@ -939,9 +844,9 @@ function buildCard(ticker, d){
     <canvas class="chart-canvas" id="chart-${ticker}"></canvas>
     <div class="ladder-overlay" id="overlay-${ticker}"></div>
   </div>
-  <div class="order-ticket" role="group" aria-label="Order buttons for ${ticker}">
-    <button class="btn-buy" tabindex="0" aria-label="Buy shares of ${ticker}" onclick="openOrderTicket('${ticker}','buy')">BUY</button>
-    <button class="btn-sell" tabindex="0" aria-label="Sell shares of ${ticker}" onclick="openOrderTicket('${ticker}','sell')">SELL</button>
+  <div class="order-ticket">
+    <button class="btn-buy" onclick="openOrderTicket('${ticker}','buy')">BUY</button>
+    <button class="btn-sell" onclick="openOrderTicket('${ticker}','sell')">SELL</button>
   </div>
 </div>`;
 }
@@ -992,10 +897,6 @@ function updateCardMeta(ticker, d){
 let lastCardOrder = null;
 function renderCards(){
   const grid = document.getElementById('cardsGrid');
-  // wlPrices hasn't loaded yet — leave the loading placeholder in place
-  // instead of wiping #cardsGrid down to an empty grid.
-  if(!wlPrices.length) return;
-
   const sorted = wlPrices.map(t=>t.ticker).sort((a,b)=>{
     const order={open:0,watching:1,quiet:2};
     return order[tickerState(zonesData[a]||{})] - order[tickerState(zonesData[b]||{})];
@@ -1579,28 +1480,9 @@ async function fullRefresh(){
   renderCards();
 }
 
-// ── Theme toggle ─────────────────────────────────────────────────────────────
-function toggleTheme(){
-  isDarkMode = !isDarkMode;
-  applyTheme();
-  localStorage.setItem('lanternTheme', isDarkMode ? 'dark' : 'light');
-}
-function applyTheme(){
-  const root = document.documentElement;
-  if(isDarkMode){
-    root.classList.remove('light-mode');
-  }else{
-    root.classList.add('light-mode');
-  }
-  renderCards();
-}
-
 // ── Init ──────────────────────────────────────────────────────────────────────
 function startDashboard(){
-  applyTheme();
   syncRangeButtons(chartTimeframe);
-  document.getElementById('chartTypeSelect').value = chartType;
-  document.getElementById('fsChartTypeSelect').value = chartType;
   fullRefresh();
   loadBars();
   loadAgentLog();

@@ -67,11 +67,6 @@
       color: var(--muted);
     }
 
-    /* ── loading state (initial fetch) ── */
-    .dashboard-loading{ text-align:center; padding:60px; display:flex; flex-direction:column; align-items:center; gap:14px; color:var(--muted); font-family:var(--mono); font-size:11px; letter-spacing:.15em; text-transform:uppercase; }
-    .dashboard-loading img{ width:56px; height:56px; animation:dashboard-spin 3s linear infinite; filter:drop-shadow(0 0 8px rgba(74,158,255,.35)); }
-    @keyframes dashboard-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-
     /* ── News Overview stats ── */
     .stat-row{ display:flex; gap:28px; flex-wrap:wrap; }
     .stat-block{ display:flex; flex-direction:column; gap:3px; }
@@ -141,7 +136,7 @@
 
 <!-- ── Site nav (matching trading.html) ── -->
 <nav class="site-nav">
-  <a class="nav-brand" href="/">
+  <a class="nav-brand" href="/trader-dashboard.html">
     <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
     Lantern OS
   </a>
@@ -149,7 +144,7 @@
     <a href="/dream-chat.html">Journal</a>
     <a href="/trader-dashboard.html">Trading</a>
     <a href="/trading-news.html" class="active">News</a>
-    <a href="/flourishing">Dashboard</a>
+    <a href="/create.html">✏️ Create</a>
     <a href="/knowledgecenter.html">Help</a>
   </div>
   <div class="nav-actions">
@@ -210,7 +205,7 @@
 
     <div class="card full-width">
       <h2>Headlines</h2>
-      <div id="newsContainer"><div class="dashboard-loading" id="dashboardLoading"><img src="/mandala.svg" alt="" aria-hidden="true"><span>Loading news&hellip;</span></div></div>
+      <div id="newsContainer"><div class="loading">Loading news...</div></div>
     </div>
   </div>
 </div>
@@ -379,43 +374,18 @@ function toggleTickerFilter(ticker, btn) {
 }
 
 function loadNews() {
-  console.log('[trading-news] loadNews tick:', new Date().toISOString());
-  // Primary source: local news feed (fetched from live Yahoo Finance RSS via news-collector)
-  fetch('/api/news-feed')
+  fetch('/api/trading/dashboard/news-feed')
     .then(r => r.json())
     .then(data => {
-      console.log('[trading-news] API response:', {
-        timestamp: new Date().toISOString(),
-        tickerCount: data?.ticker_news?.length ?? 0,
-        broadCount: data?.broad_news?.length ?? 0,
-        hasError: !!data?.error,
-        source: data?.source
-      });
-      let tickerNews = data.ticker_news || [];
-      let broadNews = data.broad_news || [];
-
-      // Ensure all articles have a unique id field for deduplication
-      tickerNews = tickerNews.map(n => ({
-        ...n,
-        id: n.id || n.news_id || (n.headline + '|' + JSON.stringify(n.symbols))
-      }));
-      broadNews = broadNews.map(n => ({
-        ...n,
-        id: n.id || n.news_id || (n.headline)
-      }));
-
+      const tickerNews = data.ticker_news || [];
+      const broadNews = data.broad_news || [];
       if (data.error || (tickerNews.length === 0 && broadNews.length === 0)) {
-        console.log('[trading-news] Feed empty, falling back to CSF query');
         loadNewsFromCSF();
         return;
       }
-      console.log('[trading-news] Using local news feed:', tickerNews.length + broadNews.length, 'articles from', data.source);
       processNews(tickerNews, broadNews, true);
     })
-    .catch(err => {
-      console.warn('[trading-news] News feed fetch failed:', err);
-      loadNewsFromCSF();
-    });
+    .catch(() => loadNewsFromCSF());
 }
 
 // Fallback when the dashboard news-feed (port 5050) has no data: pull
@@ -439,29 +409,11 @@ function loadNewsFromCSF() {
 }
 
 function processNews(ticker_news, broad_news, persistToCSF) {
-  console.log('[trading-news] processNews input:', { tickerCount: ticker_news.length, broadCount: broad_news.length });
-  const tickerDetail = ticker_news.map(n => ({ id: n.id, headline: n.headline.slice(0,40), symbols: JSON.stringify(n.symbols) }));
-  const broadDetail = broad_news.map(n => ({ id: n.id, headline: n.headline.slice(0,40) }));
-  console.log('[trading-news] ticker articles (detail):', JSON.stringify(tickerDetail, null, 2));
-  console.log('[trading-news] broad articles (detail):', JSON.stringify(broadDetail, null, 2));
-
   allNews = [...ticker_news, ...broad_news];
-  console.log('[trading-news] combined before dedupe:', allNews.length);
 
   // Deduplicate by id
   const seen = new Set();
-  const beforeDedupe = allNews.length;
-  const dupeIds = [];
-  allNews = allNews.filter(n => {
-    const isDupe = seen.has(n.id);
-    if (isDupe) {
-      dupeIds.push(n.id);
-      console.log('[trading-news] FILTERING OUT DUPE ID:', n.id, '(headline:', n.headline.slice(0,30), ')');
-    }
-    if (!isDupe) seen.add(n.id);
-    return !isDupe;
-  });
-  console.log('[trading-news] after dedupe:', { before: beforeDedupe, after: allNews.length, removed: beforeDedupe - allNews.length, dupeIds });
+  allNews = allNews.filter(n => { if(seen.has(n.id)) return false; seen.add(n.id); return true; });
 
   // Set accurate period label
   if (allNews.length > 0) {
@@ -503,7 +455,7 @@ function processNews(ticker_news, broad_news, persistToCSF) {
 }
 
 loadNews();
-setInterval(loadNews, 10000); // DEBUG: 10s for observability testing (prod: 60000+ for 1min+)
+setInterval(loadNews, 300000); // refresh every 5 min
 </script>
 <script src="/js/theme-toggle.js"></script>
 </body>
