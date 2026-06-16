@@ -697,3 +697,5 @@
 {"timestamp":"2026-06-16T00:29:18.706Z","messageLength":23,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0,0,0]}
 {"timestamp":"2026-06-16T00:29:24.314Z","messageLength":16,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0,0,0]}
 {"timestamp":"2026-06-16T00:29:24.450Z","messageLength":17,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0,0,0]}
+{"timestamp":"2026-06-16T02:04:36.805Z","messageLength":2000,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.08173076923076923,0.08173076923076923,0.08173076923076923]}
+{"timestamp":"2026-06-16T02:07:50.481Z","messageLength":2000,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.08173076923076923,0.08173076923076923,0.08173076923076923]}
