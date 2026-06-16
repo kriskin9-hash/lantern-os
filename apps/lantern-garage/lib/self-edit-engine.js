@@ -245,8 +245,17 @@ function openDraftPr(repoRoot, branch, title, body) {
   if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
   const safeTitle = String(title || "Auto PR").replace(/"/g, "'").slice(0, 256);
   const safeBody = String(body || "").replace(/"/g, "'").slice(0, 4000);
+
+  // Derive repo slug from origin remote so gh targets the fork, not upstream.
+  let repoFlag = "";
+  try {
+    const originUrl = execSync("git remote get-url origin", { cwd: repoRoot, encoding: "utf8", timeout: 5000 }).trim();
+    const m = originUrl.match(/github\.com[/:]([^/]+\/[^/.]+)/);
+    if (m) repoFlag = `--repo ${m[1]}`;
+  } catch { /* proceed without --repo and let gh infer */ }
+
   const result = execSync(
-    `gh pr create --head ${branch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
+    `gh pr create ${repoFlag} --head ${branch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
     { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" } }
   );
   // Extract URL from gh output
