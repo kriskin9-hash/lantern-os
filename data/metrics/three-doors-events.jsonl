@@ -88,3 +88,9 @@
 {"timestamp":"2026-06-13T09:53:26.000Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
 {"timestamp":"2026-06-13T09:53:30.698Z","event":"door_choice","payload":{"label":"G","name":"ðŸŒ«ï¸ Fog Door Return","sceneKey":"kingdome-garden"}}
 {"timestamp":"2026-06-13T09:53:30.731Z","event":"image_load","payload":{"sceneKey":"cloverfield","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T04:16:06.725Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T04:16:09.215Z","event":"door_choice","payload":{"label":"A","name":"The Storybook Door","sceneKey":"kingdome-garden"}}
+{"timestamp":"2026-06-16T04:16:09.852Z","event":"image_load","payload":{"sceneKey":"cloverfield","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T04:16:11.535Z","event":"door_choice","payload":{"label":"B","name":"The Today Door","sceneKey":"cloverfield"}}
+{"timestamp":"2026-06-16T04:16:13.182Z","event":"image_load","payload":{"sceneKey":"future-doors","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T04:59:17.811Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}

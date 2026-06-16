@@ -1,0 +1,18 @@
+<html>
+<head>
+    <title>Test Harness</title>
+</head>
+<body>
+    <button onclick="xssFunction();">Click Me</button>
+    <script>
+        function xssFunction() {
+            setTimeout(function() {
+                alert('XSS payload executed');
+            }, 5000);
+        }
+        // Remove required elements
+        document.body.removeChild(document.getElementById('requiredElement'));
+    </script>
+</body>
+</html>
+<!DOCTYPE html>

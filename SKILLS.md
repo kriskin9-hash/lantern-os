@@ -2,7 +2,30 @@
 
 **⚠️ REQUIRED READING: Before working with any skill, all agents must review [SECURITY.md](SECURITY.md)**
 
-## Core Skills
+---
+
+## Convergence Loop (Σ₀)
+
+The entire system is one loop: **Observe → Remember → Reason → Act → Verify → Converge**
+
+Every skill must strengthen one stage. Nothing outside this loop is in scope.
+
+### AGI Benchmark (as of 2026-06-16)
+| Stage | Score | Target | Bottleneck |
+|-------|-------|--------|------------|
+| Observe | 0.85 | 0.95 | GitHub + web fetch |
+| Research | 0.80 | 0.95 | Web grounding (DuckDuckGo) |
+| Reason | 0.82 | 0.90 | JSON parse resilience (extractJson) |
+| Act | 0.78 | 0.90 | Branch/PR management |
+| Verify | 0.60 | 0.90 | Playwright test coverage |
+| Converge | 0.75 | 0.90 | Evidence logging + confidence |
+| **Σ₀ Overall** | **0.77** | **0.92** | |
+
+Scores updated per-run in `data/agi-benchmark.jsonl`.
+
+---
+
+## Live Skills (real implementations)
 
 ### dream_journal
 Dream Journal entry creation, management, and RAG-backed search.
@@ -32,112 +55,88 @@ Text-to-speech and audio generation via ElevenLabs/OpenAI.
 - Provider fallback (ElevenLabs → OpenAI)
 - Caching and rate-limit handling
 
-## Agent Personas
+### autonomous_work *(Σ₀ grounded)*
+Fully autonomous issue resolution via `/api/convergence/autonomous-work/stream`.
+- Observe: fetch GitHub issue + extract keywords
+- Research: grep codebase + DuckDuckGo web search
+- Reason: Claude generates JSON plan via `extractJson` (4-strategy fallback)
+- Act: apply unified diff patch to correct `auto/issue-N` branch
+- Verify: run allowlisted test commands
+- Converge: log evidence + confidence to `data/convergence-autonomous-work.jsonl`
+- Commit + push + open draft PR (graceful "already exists" handling)
+- **Confidence:** codebase 0.85 · web 0.80 · tests 0.90 · observable 1.0
 
-Each dream chat request is routed to one of six agent personas based on keyword matching:
+### provider_management
+Live API key management without server restart.
+- `POST /api/providers/set-key` — write key to `.env.local`, hot-patch `process.env`
+- `DELETE /api/providers/set-key` — remove key from `.env.local`
+- `POST /api/providers/test/:provider` — ping provider API to verify key
+- `GET /api/providers/status` — which providers have keys configured
+- Supports: anthropic · gemini · openai · xai
+
+---
+
+## Agent Personas
 
 | Agent | Strengths | Keywords |
 |-------|-----------|----------|
 | **Lantern** | Reflection, guidance, wisdom | dream, reflect, meaning, symbol |
 | **Blinkbug** | Analysis, patterns, data | analyze, pattern, track, data |
-| **Keystone** | Integration, connections, structure | connect, integrate, organize |
+| **Keystone** | Autonomous testing, QE, convergence | test, scan, audit, keystone, issue |
 | **Waterfall** | Flow, emotion, narrative | feel, story, journey, flow |
 | **Xenon** | Creativity, imagination, play | create, imagine, play, explore |
 | **Founder** | Vision, goals, direction | goal, vision, plan, future |
 
-Selection is automatic but can be overridden via `?agent=NAME` parameter.
-
-## Provider Chain
-
-LLM requests are routed through a swarm orchestrator supporting:
-
-- **Anthropic** (Claude family) — chat, coding, reasoning, creative
-- **OpenAI** (GPT-4 family) — chat, reasoning, vision, coding
-- **Google** (Gemini) — chat, vision, fast inference
-- **xAI** (Grok) — creative, vision, chat
-- **Mistral** — coding, chat, creative
-- **Cohere** — summarization, research
-- **Perplexity** — research, retrieval-augmented
-- **DeepSeek** — reasoning, coding
-- **Ollama** (local) — fallback, privacy-preserving
-- **OpenRouter** (unified gateway)
-
-Default is "auto" (best available). Override with `?provider=NAME`.
-
-## Integration Points
-
-### MCP Server
-`src/mcp_server/server.py` — FastAPI + SSE service exposing:
-- `queue_status` — task queue snapshot
-- `task_intake` — enqueue work for async processing
-- `dispatch_work` — assign tasks to agents
-- `boot_check` — system readiness verification
-- `list_skills` — enumerate available capabilities
-- `get_status` — unified system health
-
-### Discord Bot
-Optional `src/discord_lounge_bot/bot.py` — chat relay and notifications when:
-- `DISCORD_BOT_TOKEN` and `LANTERN_DISCORD_GUILD_ID` set in `.env.local`
-
-### Three Doors Game
-Interactive narrative engine at `/api/dream/doors`:
-- Action: `start` | `reset` | `choose` | `status`
-- Door choice persistence via CSF memory
-- Image suggestions (Stable Diffusion or AI prompts)
-
-## Configuration
-
-### Environment Variables
-Copy `.env.example` to `.env` (or `.env.local` for secrets):
-
-```bash
-ANTHROPIC_API_KEY=sk-...
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-XAI_API_KEY=...
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-ELEVENLABS_API_KEY=...
-DISCORD_BOT_TOKEN=...
-LANTERN_DISCORD_GUILD_ID=...
-```
-
-### Python Tests
-```bash
-python -m pytest tests/ -q --tb=short \
-  --ignore=tests/test_anti_entropy_memory.py \
-  --ignore=tests/test_audit_chain.py \
-  --ignore=tests/test_discord_bot.py \
-  --ignore=tests/test_discord_voice_gate.py
-```
-
-### Node.js Tests
-```bash
-npm run test:api --prefix apps/lantern-garage
-npm run test:chat --prefix apps/lantern-garage
-npm run test:ui --prefix apps/lantern-garage
-```
-
-## Security Guidelines
-
-**ALL AGENTS MUST READ:** [SECURITY.md](SECURITY.md)
-
-Key points:
-- Never interpolate user input into Python `-c` scripts (use stdin JSON)
-- File serving uses path.relative() boundary checks + denylist for `.env*`, `data/private`, etc.
-- All HTTP responses include security headers (CSP, X-Frame-Options, etc.)
-- CORS is restricted to local-only (no wildcard `*`)
-
-## Skill Development
-
-To add a new skill:
-1. Create a directory in `/skills/{skill-name}/`
-2. Add a `SKILL.md` with description and API contract
-3. Implement in appropriate service (Node.js or Python)
-4. Register in MCP server (`src/mcp_server/server.py`)
-5. Document in this file
+Selection is automatic; override with `?agent=NAME`.
 
 ---
 
-**Last updated:** 2026-06-08  
-**Branch:** master  
-**Status:** All core skills operational
+## Provider Chain
+
+Cascade order for LLM calls (auto mode):
+
+| Priority | Provider | Status | Model |
+|----------|----------|--------|-------|
+| 1 | **Anthropic Claude** | ✓ Live | claude-haiku-4-5-20251001 |
+| 2 | **Gemini** | ⚠ Quota (free tier) | gemini-2.5-flash |
+| 3 | **OpenAI** | ⚠ Quota | gpt-4.1-mini |
+| 4 | **xAI Grok** | ✓ Live | grok-3-mini |
+| 5 | **Ollama** (local) | ✗ Not running | lantern-csf-dream |
+
+Configure via `/api-keys-settings.html` — keys persist to `.env.local` with hot-patch.
+
+---
+
+## Fleet Integration
+
+### Autonomous Test Fleet (Keystone)
+Trigger in dream-chat: `"test the app"` / `"scan for issues"` / `"audit the system"`
+
+**Scenarios:** home-load · dream-chat-init · dream-chat-first-message · theme-toggle ·
+dream-chat-agent-select · dream-chat-error-handling · home-nav-links ·
+trader-dashboard-load · responsive-mobile · responsive-tablet ·
+console-monitoring · network-monitoring · slow-network
+
+**Confidence gate:** ≥0.8 → file immediately · 0.5–0.79 → needs-review · <0.5 → log only
+
+### MCP Server
+`src/mcp_server/server.py` — FastAPI + SSE on port 8771:
+`queue_status` · `task_intake` · `dispatch_work` · `boot_check` · `list_skills` · `get_status`
+
+### Discord Bot
+Optional — set `DISCORD_BOT_TOKEN` + `LANTERN_DISCORD_GUILD_ID` in `.env.local`.
+
+---
+
+## Open Issues — Fleet Growth Queue
+
+| # | Issue | Stage | Priority |
+|---|-------|-------|----------|
+| [#585](https://github.com/alex-place/lantern-os/issues/585) | Hardening: error recovery & resilience | Act | High |
+| [#586](https://github.com/alex-place/lantern-os/issues/586) | Perf: parallelize scenario execution | Act | High |
+| [#587](https://github.com/alex-place/lantern-os/issues/587) | Validation: self-test the test harness | Verify | High |
+| [#590](https://github.com/alex-place/lantern-os/issues/590) | Infra: Cloudflare tunnel down | Observe | Medium |
+| [#592](https://github.com/alex-place/lantern-os/issues/592) | AGI Benchmark: Σ₀ self-assessment | Converge | High |
+| [#593](https://github.com/alex-place/lantern-os/issues/593) | Fleet: provider fallback + JSON resilience | Converge | High |
+
+Run `!convergence` in dream-chat or `Auto-work #N` in the convergence panel.

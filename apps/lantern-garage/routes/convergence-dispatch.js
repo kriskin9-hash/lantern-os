@@ -137,17 +137,17 @@ module.exports = async (req, res, url, deps) => {
           );
         });
 
-        let branchName = currentBranch;
-        if (currentBranch === "master") {
-          branchName = `auto/issue-${issueNumber}`;
+        // Always use a fresh issue-specific branch — never reuse current branch
+        const branchName = `auto/issue-${issueNumber}`;
+        if (currentBranch !== branchName) {
+          // Try checkout existing branch first, then create new one
           await new Promise((resolve) => {
-            execFile(
-              "git",
-              ["checkout", "-b", branchName],
-              { cwd: REPO_ROOT, timeout: 5000, windowsHide: true },
+            execFile("git", ["checkout", branchName], { cwd: REPO_ROOT, timeout: 5000, windowsHide: true },
               (err) => {
-                if (err) return resolve(false);
-                resolve(true);
+                if (!err) return resolve(true);
+                execFile("git", ["checkout", "-b", branchName, "master"], { cwd: REPO_ROOT, timeout: 5000, windowsHide: true, env: { ...process.env, SKIP_MONOWORKSTREAM: "1" } },
+                  (err2) => resolve(!err2)
+                );
               }
             );
           });
@@ -277,11 +277,19 @@ module.exports = async (req, res, url, deps) => {
         }
         step("fetch_issue", "done", { title: issueDetails.title, state: issueDetails.state });
 
-        // ── 2. branch (never work on master) ─────────────────────────────
+        // ── 2. branch (always issue-specific, never reuse current) ──────────
         step("branch", "start");
-        let branchName = gitCurrentBranch(REPO_ROOT);
-        if (branchName === "master" || branchName === "main") {
-          branchName = gitCreateBranch(REPO_ROOT, `issue-${issueNumber}`);
+        const targetBranch = `auto/issue-${issueNumber}`;
+        const curBranch = gitCurrentBranch(REPO_ROOT);
+        let branchName = targetBranch;
+        if (curBranch !== targetBranch) {
+          try {
+            branchName = gitCreateBranch(REPO_ROOT, `issue-${issueNumber}`);
+          } catch (e) {
+            // Branch already exists — check it out
+            const { execSync } = require("child_process");
+            execSync(`git checkout ${targetBranch}`, { cwd: REPO_ROOT, timeout: 5000, env: { ...process.env, SKIP_MONOWORKSTREAM: "1" } });
+          }
         }
         receipt.branch = branchName;
         step("branch", "done", { branch: branchName });

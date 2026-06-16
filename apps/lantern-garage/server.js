@@ -4,15 +4,16 @@ const path = require("path");
 const { spawn } = require("child_process");
 
 // Load .env.local then .env from repo root (two levels up from apps/lantern-garage/)
+// .env.local ALWAYS overrides system env — .env only sets if not already present
 const candidateEnvFiles = [
-  path.resolve(__dirname, "..", "..", ".env.local"),
-  path.resolve(__dirname, "..", "..", ".env"),
+  { path: path.resolve(__dirname, "..", "..", ".env.local"), override: true },
+  { path: path.resolve(__dirname, "..", "..", ".env"),       override: false },
 ];
-for (const envPath of candidateEnvFiles) {
+for (const { path: envPath, override } of candidateEnvFiles) {
   if (!fs.existsSync(envPath)) continue;
   fs.readFileSync(envPath, "utf8").split("\n").forEach((line) => {
     const m = line.replace(/\r$/, "").match(/^([A-Z0-9_]+)\s*=\s*(.*)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^['"]/g, "").replace(/['"]$/g, "");
+    if (m && (override || !process.env[m[1]])) process.env[m[1]] = m[2].replace(/^['"]/g, "").replace(/['"]$/g, "");
   });
 }
 
@@ -110,6 +111,7 @@ const routes = [
   require("./routes/agent-performance"),
   require("./routes/leaderboard"),
   require("./routes/agent-status"),
+  require("./routes/providers"),
   require("./routes/self-edit"),
   require("./routes/creator"),
   require("./routes/creator-entries"),

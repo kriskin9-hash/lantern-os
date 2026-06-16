@@ -241,17 +241,22 @@ function gitAddAll(repoRoot) {
 }
 
 function openDraftPr(repoRoot, branch, title, body) {
-  // branch is already sanitized — don't re-sanitize (same double-prefix bug as gitPush).
   if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
   const safeTitle = String(title || "Auto PR").replace(/"/g, "'").slice(0, 256);
   const safeBody = String(body || "").replace(/"/g, "'").slice(0, 4000);
-  const result = execSync(
-    `gh pr create --head ${branch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
-    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" } }
-  );
-  // Extract URL from gh output
-  const urlMatch = result.match(/(https:\/\/github\.com\/[^\s]+)/);
-  return urlMatch ? urlMatch[1] : result.trim();
+  try {
+    const result = execSync(
+      `gh pr create --head ${branch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
+      { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" } }
+    );
+    const urlMatch = result.match(/(https:\/\/github\.com\/[^\s]+)/);
+    return urlMatch ? urlMatch[1] : result.trim();
+  } catch (e) {
+    // PR already exists — extract the existing URL from the error output
+    const existing = (e.stderr || e.stdout || e.message || "").match(/(https:\/\/github\.com\/[^\s\n]+)/);
+    if (existing) return existing[1];
+    throw e;
+  }
 }
 
 // ── Test runner ─────────────────────────────────────────────────────────
@@ -297,7 +302,7 @@ function runTests(repoRoot, testCommands) {
 
 // ── LLM helper (non-streaming) ──────────────────────────────────────────
 
-async function callLlm(system, user, providerHint = "auto") {
+async function callLlm(system, user, providerHint = "auto", maxTokens = 4096) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -305,19 +310,18 @@ async function callLlm(system, user, providerHint = "auto") {
 
   // When a specific provider is requested, try it directly (no cascade).
   if (providerHint !== "auto") {
-    if (providerHint === "claude" && anthropicKey) return callClaude(system, user);
-    if (providerHint === "openai" && openaiKey) return callOpenAI(messages);
-    if (providerHint === "gemini" && geminiKey) return callGemini(system, user);
+    if (providerHint === "claude" && anthropicKey) return callClaude(system, user, maxTokens);
+    if (providerHint === "openai" && openaiKey) return callOpenAI(messages, maxTokens);
+    if (providerHint === "gemini" && geminiKey) return callGemini(system, user, maxTokens);
     if (providerHint === "ollama") return callOllama(messages);
     throw new Error("no_provider_available");
   }
 
-  // Auto mode: try providers in cascade so a transient TLS/network error on
-  // one provider doesn't block the whole operation.
+  // Auto mode: try providers in cascade
   const queue = [
-    anthropicKey && (() => callClaude(system, user)),
-    geminiKey    && (() => callGemini(system, user)),
-    openaiKey    && (() => callOpenAI(messages)),
+    anthropicKey && (() => callClaude(system, user, maxTokens)),
+    geminiKey    && (() => callGemini(system, user, maxTokens)),
+    openaiKey    && (() => callOpenAI(messages, maxTokens)),
     () => callOllama(messages),
   ].filter(Boolean);
 
@@ -328,10 +332,10 @@ async function callLlm(system, user, providerHint = "auto") {
   throw new Error("all_providers_failed: " + errs.join(" | "));
 }
 
-function callOpenAI(messages) {
+function callOpenAI(messages, maxTokens = 4096) {
   const openaiKey = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-  const payload = JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.3 });
+  const payload = JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 });
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: "api.openai.com",
@@ -357,10 +361,10 @@ function callOpenAI(messages) {
   });
 }
 
-function callClaude(system, user) {
+function callClaude(system, user, maxTokens = 4096) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
-  const payload = JSON.stringify({ model, max_tokens: 2048, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
+  const payload = JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: "api.anthropic.com",
@@ -386,12 +390,12 @@ function callClaude(system, user) {
   });
 }
 
-function callGemini(system, user) {
+function callGemini(system, user, maxTokens = 4096) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const payload = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: `${system}\n\n${user}` }] }],
-    generationConfig: { maxOutputTokens: 2048, temperature: 0.3 },
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
   });
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -447,6 +451,31 @@ function callOllama(messages) {
   });
 }
 
+// ── JSON extraction (resilient against markdown fences + preamble) ───────
+
+function extractJson(raw) {
+  if (!raw || typeof raw !== "string") throw new Error("empty response");
+  // 1. Try direct parse first
+  const trimmed = raw.trim();
+  try { return JSON.parse(trimmed); } catch {}
+  // 2. Strip ```json ... ``` or ``` ... ``` fences
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) { try { return JSON.parse(fenceMatch[1].trim()); } catch {} }
+  // 3. Find first { and last } to extract embedded JSON object
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(trimmed.slice(start, end + 1)); } catch {}
+  }
+  // 4. Find first [ and last ] for array responses
+  const aStart = trimmed.indexOf("[");
+  const aEnd = trimmed.lastIndexOf("]");
+  if (aStart !== -1 && aEnd > aStart) {
+    try { return JSON.parse(trimmed.slice(aStart, aEnd + 1)); } catch {}
+  }
+  throw new Error("no valid JSON found in model response");
+}
+
 // ── Plan generation ─────────────────────────────────────────────────────
 
 const PLAN_SYSTEM_PROMPT = `You are a disciplined code-change planner. Given a user request and relevant file contents, produce a structured plan.
@@ -485,11 +514,9 @@ async function generatePlan(repoRoot, userRequest, scopeFiles, history) {
   const raw = await callLlm(PLAN_SYSTEM_PROMPT, userPrompt, "auto");
   let plan;
   try {
-    // Strip markdown fences if present
-    const jsonText = raw.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
-    plan = JSON.parse(jsonText);
-  } catch {
-    throw new Error("plan_parse_failed: model did not return valid JSON");
+    plan = extractJson(raw);
+  } catch (e) {
+    throw new Error("plan_parse_failed: " + e.message + " | raw=" + raw.slice(0, 300));
   }
 
   // Validate plan structure
