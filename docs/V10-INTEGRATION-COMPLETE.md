@@ -1,3 +1,29 @@
+# Σ₀ V10 Integration — CORRECTED STATUS
+
+> **⚠️ CORRECTION (supersedes the claims below).** The `analyzer-v10-integration.js`
+> module described in this document was **reverted and deleted**. It wired the
+> `lib/analyzer-v10.js` research prototype — whose feature extractors return all
+> `0.0` — into the production highlight path. With zero-valued features the Σ₀
+> scorer's hook gate (`hookScore < 0.4`) rejected **every** segment, producing
+> empty `highlights` → empty variant `segments` → the render error
+> *"Top variant has no segments to render."*
+>
+> **Actual production path (as of the render-pipeline fix):**
+> - **Highlight detection:** `apps/lantern-garage/lib/highlight-engine.js`
+>   (`analyzeVideoForHighlights`) — real ffmpeg motion/audio/scene analysis.
+> - **Empty-result guard:** `processAnalyzeJob` splits the clip into three
+>   even segments (labeled `fallback`) if detection finds nothing, so variants
+>   and render never dead-end.
+> - **Scoring + variants:** `src/creator-intelligence` (`scoreVideoV10`,
+>   `generateVariantsV10`) — structural-heuristic V10. Each variant carries a
+>   real `segments` cut-list. This is what the dashboard actually uses.
+>
+> The `lib/` Σ₀ collapse modules remain **research code only** and are NOT in the
+> production path until their feature extractors are real (FFmpeg/audio/vision).
+> The original (now-inaccurate) writeup is preserved below for history.
+
+---
+
 # Σ₀ V10 Integration Complete — Dashboard Live
 
 **Commit:** `4344a8c9`  

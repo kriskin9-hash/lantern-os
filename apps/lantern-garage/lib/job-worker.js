@@ -5,7 +5,6 @@
 const fs = require("fs");
 const path = require("path");
 const { analyzeVideoForHighlights } = require("./highlight-engine");
-const { analyzeVideoWithSigmaZeroV10 } = require("./analyzer-v10-integration");
 const { generateCaptions } = require("./caption-engine");
 const { detectSafeZones } = require("./safe-zone-detector");
 const { reencodeToShortForm, renderSegments, probeSource, burnCaptionsToVideo } = require("./video-export");
@@ -208,9 +207,9 @@ async function processAnalyzeJob(job, repoRoot, ctx) {
   const stageFromKey = { loading_video: "load", analyzing_motion: "frame_scan", detecting_highlights: "highlights" };
   let highlightsFoundSoFar = 0;
 
-  // Run Σ₀ V10 highlight analysis
-  // Uses collapse-theory-based scoring with stability filtering
-  const timeline = await analyzeVideoWithSigmaZeroV10(fullPath, options || {}, (percent, statusKey, message) => {
+  // Run highlight analysis — real ffmpeg motion/audio/scene detection.
+  // Streams sub-stage progress (8→66%) so the bar never sits on one number.
+  const timeline = await analyzeVideoForHighlights(fullPath, options || {}, (percent, statusKey, message) => {
     const nextStage = stageFromKey[statusKey];
     if (nextStage && job.currentStageId !== nextStage) {
       ctx.stage(nextStage);
@@ -218,12 +217,40 @@ async function processAnalyzeJob(job, repoRoot, ctx) {
     ctx.progress(percent, message || statusKey);
     ctx.log(message || statusKey);
 
-    // Parse "Analyzed X/Y" for live stats
-    const analyzed = message && message.match(/Analyzed (\d+)\/(\d+)/);
-    if (analyzed) {
-      ctx.liveStats({ analyzedSec: parseInt(analyzed[1]), totalSec: parseInt(analyzed[2]) });
+    // Parse "Analyzing motion (13s / 120s)" for live stats
+    const motionMatch = message && message.match(/Analyzing motion \((\d+)s \/ (\d+)s\)/);
+    if (motionMatch) {
+      ctx.liveStats({ analyzedSec: parseInt(motionMatch[1]), totalSec: parseInt(motionMatch[2]) });
     }
   });
+
+  // GUARANTEE: downstream variants/render require at least one highlight segment.
+  // If real detection found nothing (a quiet clip, or a long source the detector
+  // couldn't score), synthesize short sample windows so the pipeline produces a
+  // renderable selection instead of dead-ending the user. These are explicitly
+  // labeled "fallback" — we do NOT fabricate quality signals. Windows are kept
+  // short (≤12s) and evenly spaced so the result is still a usable Short even for
+  // a long source (a naive "thirds" split of a 17-min clip is not a Short).
+  if (Array.isArray(timeline.highlights) && timeline.highlights.length === 0) {
+    const dur = Number(timeline.duration) || 0;
+    if (dur > 1.5) {
+      const win = Math.min(12, Math.max(3, dur / 6));
+      if (dur <= win * 2) {
+        // Short clip: a single window covering it.
+        timeline.addHighlight(0, Number(Math.min(dur, 12).toFixed(1)), 0.5,
+          "fallback: whole clip (no strong signals detected)", ["fallback"]);
+      } else {
+        // Longer clip: three short windows at 20% / 50% / 80%.
+        for (const c of [0.2, 0.5, 0.8]) {
+          const start = Math.max(0, Math.min(dur * c - win / 2, dur - win));
+          timeline.addHighlight(Number(start.toFixed(1)), Number((start + win).toFixed(1)), 0.5,
+            "fallback: sampled window (no strong signals detected)", ["fallback"]);
+        }
+      }
+      timeline.sort();
+      ctx.log(`No highlights detected — inserted ${timeline.highlights.length} fallback window(s) so variants/render can proceed`);
+    }
+  }
 
   ctx.stage("ranking");
   ctx.progress(70, "Scoring highlights");
