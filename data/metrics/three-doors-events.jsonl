@@ -94,3 +94,9 @@
 {"timestamp":"2026-06-16T04:16:11.535Z","event":"door_choice","payload":{"label":"B","name":"The Today Door","sceneKey":"cloverfield"}}
 {"timestamp":"2026-06-16T04:16:13.182Z","event":"image_load","payload":{"sceneKey":"future-doors","source":"pool:caadi","reason":"random (no keyword match)"}}
 {"timestamp":"2026-06-16T04:59:17.811Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T05:59:59.377Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T06:00:30.024Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T06:00:42.007Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T06:00:53.879Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T06:01:10.783Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}
+{"timestamp":"2026-06-16T06:01:11.124Z","event":"image_load","payload":{"sceneKey":"kingdome-garden","source":"pool:caadi","reason":"random (no keyword match)"}}

@@ -1,10 +1,10 @@
 {
   "crypto15m_eval": {
-    "accuracy_direction": 0.6194,
-    "total_signals": 134,
-    "correct_signals": 83,
-    "windows_observed": 162,
-    "avg_edge": 0.3081,
+    "accuracy_direction": 0.6014,
+    "total_signals": 148,
+    "correct_signals": 89,
+    "windows_observed": 176,
+    "avg_edge": 0.3098,
     "results": [
       {
         "ticker": "KXBTC15M-26JUN141400-00",
@@ -1787,6 +1787,160 @@
         "outcome": 0,
         "correct": false,
         "edge": 0.5196078431372549
+      },
+      {
+        "ticker": "KXSOL15M-26JUN160200-00",
+        "symbol": "SOL",
+        "ts": "2026-06-16T06:00:09.118024Z",
+        "n_points": 29,
+        "final_price": 0.5784,
+        "had_signal": true,
+        "outcome": -1,
+        "correct": false,
+        "edge": 0.0
+      },
+      {
+        "ticker": "KXSOL15M-26JUN160200-00",
+        "symbol": "SOL",
+        "ts": "2026-06-16T06:00:10.628608Z",
+        "n_points": 76,
+        "final_price": 0.5784,
+        "had_signal": true,
+        "outcome": -1,
+        "correct": false,
+        "edge": 0.0
+      },
+      {
+        "ticker": "KXBTC15M-26JUN160200-00",
+        "symbol": "BTC",
+        "ts": "2026-06-16T06:00:20.525447Z",
+        "n_points": 29,
+        "final_price": 0.1089,
+        "had_signal": true,
+        "outcome": -1,
+        "correct": false,
+        "edge": 0.0
+      },
+      {
+        "ticker": "KXETH15M-26JUN160200-00",
+        "symbol": "ETH",
+        "ts": "2026-06-16T06:00:20.525447Z",
+        "n_points": 29,
+        "final_price": 0.0,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": true,
+        "edge": -0.2647058823529412
+      },
+      {
+        "ticker": "KXXRP15M-26JUN160200-00",
+        "symbol": "XRP",
+        "ts": "2026-06-16T06:00:20.525447Z",
+        "n_points": 28,
+        "final_price": 0.9901,
+        "had_signal": true,
+        "outcome": 1,
+        "correct": false,
+        "edge": -0.5980392156862745
+      },
+      {
+        "ticker": "KXDOGE15M-26JUN160200-00",
+        "symbol": "DOGE",
+        "ts": "2026-06-16T06:00:20.525447Z",
+        "n_points": 27,
+        "final_price": 0.9901,
+        "had_signal": true,
+        "outcome": 1,
+        "correct": true,
+        "edge": 0.6153846153846154
+      },
+      {
+        "ticker": "KXBTC15M-26JUN160200-00",
+        "symbol": "BTC",
+        "ts": "2026-06-16T06:00:22.041291Z",
+        "n_points": 78,
+        "final_price": 0.1089,
+        "had_signal": true,
+        "outcome": -1,
+        "correct": false,
+        "edge": 0.0
+      },
+      {
+        "ticker": "KXETH15M-26JUN160200-00",
+        "symbol": "ETH",
+        "ts": "2026-06-16T06:00:22.041291Z",
+        "n_points": 79,
+        "final_price": 0.0,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": true,
+        "edge": -0.5339805825242718
+      },
+      {
+        "ticker": "KXXRP15M-26JUN160200-00",
+        "symbol": "XRP",
+        "ts": "2026-06-16T06:00:22.041291Z",
+        "n_points": 76,
+        "final_price": 0.9901,
+        "had_signal": true,
+        "outcome": 1,
+        "correct": false,
+        "edge": -0.5728155339805825
+      },
+      {
+        "ticker": "KXDOGE15M-26JUN160200-00",
+        "symbol": "DOGE",
+        "ts": "2026-06-16T06:00:22.041291Z",
+        "n_points": 77,
+        "final_price": 0.9901,
+        "had_signal": true,
+        "outcome": 1,
+        "correct": false,
+        "edge": -0.5
+      },
+      {
+        "ticker": "KXBNB15M-26JUN160200-00",
+        "symbol": "BNB",
+        "ts": "2026-06-16T06:00:32.065756Z",
+        "n_points": 28,
+        "final_price": 0.0,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": true,
+        "edge": -0.11650485436893203
+      },
+      {
+        "ticker": "KXHYPE15M-26JUN160200-00",
+        "symbol": "HYPE",
+        "ts": "2026-06-16T06:00:32.065756Z",
+        "n_points": 29,
+        "final_price": 0.0099,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": false,
+        "edge": 0.6634615384615385
+      },
+      {
+        "ticker": "KXBNB15M-26JUN160200-00",
+        "symbol": "BNB",
+        "ts": "2026-06-16T06:00:33.349474Z",
+        "n_points": 68,
+        "final_price": 0.0099,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": true,
+        "edge": -0.37142857142857144
+      },
+      {
+        "ticker": "KXHYPE15M-26JUN160200-00",
+        "symbol": "HYPE",
+        "ts": "2026-06-16T06:00:33.349474Z",
+        "n_points": 67,
+        "final_price": 0.0099,
+        "had_signal": true,
+        "outcome": 0,
+        "correct": true,
+        "edge": -0.32673267326732675
       }
     ]
   }
