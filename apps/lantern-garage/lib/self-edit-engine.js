@@ -214,20 +214,22 @@ function gitCommit(repoRoot, message) {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 10000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" },
   });
 }
 
-function gitPush(repoRoot, branchName) {
-  const safe = sanitizeBranchName(branchName);
-  if (!safe.startsWith("auto/")) throw new Error("invalid_branch_prefix");
-  execSync(`git push origin ${safe}`, {
+function gitPush(repoRoot, targetBranch) {
+  // targetBranch is already sanitized (auto/...) — don't re-sanitize or the
+  // slash gets stripped and the name doubles (auto/foo → auto/autofoo).
+  if (!targetBranch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
+  // Use HEAD:ref so we don't need to rename the local branch first.
+  execSync(`git push origin HEAD:${targetBranch}`, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 30000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" },
   });
-  return safe;
+  return targetBranch;
 }
 
 function gitDiffStat(repoRoot) {
@@ -239,12 +241,13 @@ function gitAddAll(repoRoot) {
 }
 
 function openDraftPr(repoRoot, branch, title, body) {
-  const safeBranch = sanitizeBranchName(branch);
+  // branch is already sanitized — don't re-sanitize (same double-prefix bug as gitPush).
+  if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
   const safeTitle = String(title || "Auto PR").replace(/"/g, "'").slice(0, 256);
   const safeBody = String(body || "").replace(/"/g, "'").slice(0, 4000);
   const result = execSync(
-    `gh pr create --head ${safeBranch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
-    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }
+    `gh pr create --head ${branch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
+    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" } }
   );
   // Extract URL from gh output
   const urlMatch = result.match(/(https:\/\/github\.com\/[^\s]+)/);

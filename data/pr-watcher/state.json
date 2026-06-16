@@ -1,1 +1,9 @@
-{}
+{
+  "560": {
+    "number": 560,
+    "title": "feat: Claude routing + prompt caching + revive #557 (jobs, creator dashboard, audits)",
+    "updatedAt": 1781575247000,
+    "firstSeenAt": 1781575018177,
+    "reviewedAt": null
+  }
+}
