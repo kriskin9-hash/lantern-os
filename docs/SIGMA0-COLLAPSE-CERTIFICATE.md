@@ -18,10 +18,13 @@ lines before relying on any claim here.
 > Because the research lane was skipped, the gap block below had silently gone
 > stale: the [#509] !convergance epic (five priority research gaps) closed on
 > 2026-06-15, along with [#505], [#506], [#507], [#516], [#517], [#520], [#523],
-> and [#508] — yet none of those closures were reflected here, and two code fixes
-> landed unrecorded: the `Optional` import (§3) and the log-barrier (Appendix A).
-> Both are now marked resolved. The genuinely-remaining work is re-tracked as live
-> issues so this doc cannot drift again ([#657]–[#660]).
+> and [#508] — yet none of those closures were reflected here. The `Optional`
+> import defect (§3) is genuinely fixed and is now recorded. **Correction
+> (2026-06-16):** a first version of this pass also marked the Appendix A
+> "log-barrier" resolved — that was an overclaim caught in external review. What
+> ships is a misnamed multiplicative shrink with a sign-flip footgun, not a barrier;
+> the smoothness caveat stands ([#661]). The genuinely-remaining work is re-tracked
+> as live issues so this doc cannot drift again ([#657]–[#661]).
 
 **Status taxonomy & tracked gaps.** Each claim is one of: **PROVEN** (theorem +
 machine-checked), **MEASURED** (empirical, with a test/run pointer), **HEURISTIC**
@@ -42,6 +45,7 @@ status cannot silently drift.
 - [#658] — **§3 sufficiency.** Σ₀⁻¹ is HEURISTIC with N=1 evidence; no theorem says it *prevents* collapse. Upgrade via proof under explicit hypotheses, or a regime sweep to MEASURED-over-distribution.
 - [#659] — **§4 decision.** `p_gate`/`p_unbounded` are documented but not in code (superseded by the `surprise.py` NIS canary). Formally retire them, or implement and wire `p_gate`.
 - [#660] — **housekeeping.** Reconcile the persistent-excitation attribution across `.md`/`.tex`, and verify all web citations before formal publication.
+- [#661] — **§2 / Appendix A defect.** `_collapse_state`'s "log-barrier" is a misnamed multiplicative shrink that flips sign for `strength > 0.217`; drop it or move `collapse_certificate` to the logarithmic norm μ₂. *Flagged in external review 2026-06-16.*
 
 [#504]: https://github.com/alex-place/lantern-os/issues/504
 [#505]: https://github.com/alex-place/lantern-os/issues/505
@@ -57,6 +61,7 @@ status cannot silently drift.
 [#658]: https://github.com/alex-place/lantern-os/issues/658
 [#659]: https://github.com/alex-place/lantern-os/issues/659
 [#660]: https://github.com/alex-place/lantern-os/issues/660
+[#661]: https://github.com/alex-place/lantern-os/issues/661
 
 ---
 
@@ -548,10 +553,18 @@ hand-entered, not data-derived.**
 3. A reservoir's autonomous rollout diverges unless projected back onto the
    valid `[0,1]⁴` domain; that projection *is* `π`. This is a real modeling step,
    but it is also an external bound imposed by hand, not an emergent property.
-4. **(Resolved 2026-06-15.)** The certificate was unreliable at boundary fixed
-   points where the hard clamp is non-smooth; the proper fix — a smooth log-barrier
-   penalty — is now implemented (`src/cio_sde/collapse.py:71–126`,
-   `log_barrier_strength`, default 0.1).
+4. **(NOT resolved — corrected 2026-06-16, [#661].)** The hard clamp is non-smooth
+   at boundary fixed points; a true log-barrier was the proposed fix. What is
+   implemented in `_collapse_state` (`collapse.py:120–130`) is **not** a log-barrier:
+   it is a multiplicative shrink of the projection,
+   `x* = (P x)·(1 − barrier)` with `barrier = −s·log(1 − ‖Px‖/‖x‖)`. At the default
+   `s = 0.1` it scales the projection by up to ~46%; and for `s > 1/ln(100) ≈ 0.217`
+   the factor `(1 − barrier)` goes negative, so the "collapsed" state flips sign and
+   grows — the opposite of a barrier. The smoothness caveat therefore **stands**.
+   Candidate fixes ([#661]): drop the term (`P` alone is the correct projection), or
+   replace the active/null contraction argument with the logarithmic norm
+   μ₂(A) = λ_max(A_s), which bounds `‖x(t)‖ ≤ e^{μ₂(A)t}‖x(0)‖` directly — tighter,
+   with no small-gain cross-term and no subspace-invariance assumption.
 
 ### Status: Implemented
 
