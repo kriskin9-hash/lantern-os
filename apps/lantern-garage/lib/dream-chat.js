@@ -1002,18 +1002,24 @@ async function verifyResponse(draft, userMessage, agentName) {
   }
 
   // ── Helper: Gemini grounding check ───────────────────────────────
+  // Tries web-grounded (googleSearch tool) first; on a billing/quota error
+  // (Grounding with Google Search is a PAID feature) falls back to a free
+  // plain-knowledge judgment. Either way, an unreachable source returns null
+  // (no signal) and never counts as a refutation.
   async function geminiGroundCheck(claim) {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) return null;
-    try {
+    const model = process.env.GEMINI_GROUND_MODEL || "gemini-2.5-flash";
+
+    function call(useSearch) {
       const payload = JSON.stringify({
         contents: [{ parts: [{ text: `Is this claim accurate? Answer with yes/no and one sentence of evidence: "${claim}"` }] }],
-        tools: [{ googleSearch: {} }],
+        ...(useSearch ? { tools: [{ googleSearch: {} }] } : {}),
       });
-      const { status, body } = await new Promise((resolve, reject) => {
+      return new Promise((resolve, reject) => {
         const req = https.request({
           hostname: "generativelanguage.googleapis.com",
-          path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          path: `/v1beta/models/${model}:generateContent?key=${geminiKey}`,
           method: "POST",
           headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
         }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => resolve({ status: res.statusCode, body: d })); res.on("error", reject); });
@@ -1021,7 +1027,15 @@ async function verifyResponse(draft, userMessage, agentName) {
         req.setTimeout(8000, () => { req.destroy(); reject(new Error("timeout")); });
         req.write(payload); req.end();
       });
-      // Non-200 (e.g. 403 API disabled, 429 quota) = source unreachable → no signal, NOT a refutation
+    }
+
+    try {
+      let grounded = true;
+      let { status, body } = await call(true);
+      // Grounded search needs prepaid credits → 429 RESOURCE_EXHAUSTED.
+      // Retry once WITHOUT the search tool (free tier) as a knowledge-only check.
+      if (status === 429) { grounded = false; ({ status, body } = await call(false)); }
+      // Still non-200 = source unreachable → no signal, NOT a refutation
       if (status !== 200) return null;
       const j = JSON.parse(body);
       const text = j.candidates?.[0]?.content?.parts?.[0]?.text || "";
@@ -1032,8 +1046,10 @@ async function verifyResponse(draft, userMessage, agentName) {
       const t = text.trim();
       const isYes = /^yes/i.test(t);
       const isNo = /^no/i.test(t);
+      // Web-grounded yes = strong (0.9); knowledge-only yes = moderate (0.75).
       // Only an explicit "no" is a refutation; anything ambiguous is weak-neutral.
-      return { text, sources, confident: isYes, confidence: isYes ? 0.9 : (isNo ? 0.35 : 0.5) };
+      const yesConf = grounded ? 0.9 : 0.75;
+      return { text, sources, grounded, confident: isYes, confidence: isYes ? yesConf : (isNo ? 0.35 : 0.5) };
     } catch { return null; }
   }
 
