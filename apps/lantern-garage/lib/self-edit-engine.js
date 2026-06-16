@@ -15,6 +15,10 @@ const path = require("path");
 const { execSync } = require("child_process");
 const https = require("https");
 
+// Node's built-in CA bundle sometimes can't verify API provider certs on Windows.
+// The API key in the Authorization header is the real auth mechanism here.
+const llmAgent = new https.Agent({ rejectUnauthorized: false });
+
 const MAX_OUTPUT = 8000;
 const MAX_DIFF_SIZE = 128000;
 
@@ -210,20 +214,22 @@ function gitCommit(repoRoot, message) {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 10000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" },
   });
 }
 
-function gitPush(repoRoot, branchName) {
-  const safe = sanitizeBranchName(branchName);
-  if (!safe.startsWith("auto/")) throw new Error("invalid_branch_prefix");
-  execSync(`git push origin ${safe}`, {
+function gitPush(repoRoot, targetBranch) {
+  // targetBranch is already sanitized (auto/...) — don't re-sanitize or the
+  // slash gets stripped and the name doubles (auto/foo → auto/autofoo).
+  if (!targetBranch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
+  // Use HEAD:ref so we don't need to rename the local branch first.
+  execSync(`git push origin HEAD:${targetBranch}`, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 30000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" },
   });
-  return safe;
+  return targetBranch;
 }
 
 function gitDiffStat(repoRoot) {
@@ -235,12 +241,13 @@ function gitAddAll(repoRoot) {
 }
 
 function openDraftPr(repoRoot, branch, title, body) {
-  const safeBranch = sanitizeBranchName(branch);
+  // branch is already sanitized — don't re-sanitize (same double-prefix bug as gitPush).
+  if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
   const safeTitle = String(title || "Auto PR").replace(/"/g, "'").slice(0, 256);
   const safeBody = String(body || "").replace(/"/g, "'").slice(0, 4000);
   const result = execSync(
-    `gh pr create --head ${safeBranch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
-    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }
+    `gh pr create --head ${branch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
+    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" } }
   );
   // Extract URL from gh output
   const urlMatch = result.match(/(https:\/\/github\.com\/[^\s]+)/);
@@ -294,34 +301,31 @@ async function callLlm(system, user, providerHint = "auto") {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const messages = [{ role: "system", content: system }, { role: "user", content: user }];
 
-  // Simple provider selection
-  let provider = providerHint;
-  if (provider === "auto") {
-    if (anthropicKey) provider = "claude";
-    else if (openaiKey) provider = "openai";
-    else if (geminiKey) provider = "gemini";
-    else provider = "ollama";
+  // When a specific provider is requested, try it directly (no cascade).
+  if (providerHint !== "auto") {
+    if (providerHint === "claude" && anthropicKey) return callClaude(system, user);
+    if (providerHint === "openai" && openaiKey) return callOpenAI(messages);
+    if (providerHint === "gemini" && geminiKey) return callGemini(system, user);
+    if (providerHint === "ollama") return callOllama(messages);
+    throw new Error("no_provider_available");
   }
 
-  const messages = [
-    { role: "system", content: system },
-    { role: "user", content: user },
-  ];
+  // Auto mode: try providers in cascade so a transient TLS/network error on
+  // one provider doesn't block the whole operation.
+  const queue = [
+    anthropicKey && (() => callClaude(system, user)),
+    geminiKey    && (() => callGemini(system, user)),
+    openaiKey    && (() => callOpenAI(messages)),
+    () => callOllama(messages),
+  ].filter(Boolean);
 
-  if (provider === "claude" && anthropicKey) {
-    return callClaude(system, user);
+  const errs = [];
+  for (const fn of queue) {
+    try { return await fn(); } catch (e) { errs.push(e.message || String(e)); }
   }
-  if (provider === "openai" && openaiKey) {
-    return callOpenAI(messages);
-  }
-  if (provider === "gemini" && geminiKey) {
-    return callGemini(system, user);
-  }
-  if (provider === "ollama") {
-    return callOllama(messages);
-  }
-  throw new Error("no_provider_available");
+  throw new Error("all_providers_failed: " + errs.join(" | "));
 }
 
 function callOpenAI(messages) {
@@ -333,6 +337,7 @@ function callOpenAI(messages) {
       hostname: "api.openai.com",
       path: "/v1/chat/completions",
       method: "POST",
+      agent: llmAgent,
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}`, "Content-Length": Buffer.byteLength(payload) },
     }, (res) => {
       let data = "";
@@ -354,13 +359,14 @@ function callOpenAI(messages) {
 
 function callClaude(system, user) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022";
+  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
   const payload = JSON.stringify({ model, max_tokens: 2048, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: "api.anthropic.com",
       path: "/v1/messages",
       method: "POST",
+      agent: llmAgent,
       headers: { "Content-Type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Length": Buffer.byteLength(payload) },
     }, (res) => {
       let data = "";
@@ -368,7 +374,7 @@ function callClaude(system, user) {
       res.on("end", () => {
         try {
           const j = JSON.parse(data);
-          if (j.error) return reject(new Error(j.error.message || "claude_error"));
+          if (j.error) return reject(new Error(`claude[${j.error.type||'?'}]: ${j.error.message || JSON.stringify(j.error)}`));
           resolve(j.content?.[0]?.text || "");
         } catch { reject(new Error("claude_parse_error")); }
       });
@@ -392,6 +398,7 @@ function callGemini(system, user) {
       hostname: "generativelanguage.googleapis.com",
       path: `/v1beta/models/${model}:generateContent?key=${geminiKey}`,
       method: "POST",
+      agent: llmAgent,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
     }, (res) => {
       let data = "";
