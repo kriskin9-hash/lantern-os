@@ -188,7 +188,9 @@ class SlotManager:
     def __init__(self, path: Optional[Path] = None):
         self.path = path or (REPO_ROOT / "data" / "agent-fleet" / "slots.json")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        # RLock (reentrant): purge_released() holds the lock and then calls
+        # flush(), which re-acquires it. A plain Lock self-deadlocks here.
+        self._lock = threading.RLock()
         self._cache: Optional[Dict[str, Any]] = None
         self._dirty = False
 

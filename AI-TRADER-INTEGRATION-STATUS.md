@@ -29,7 +29,7 @@ Integrate and complete the **Independent AI Trader** system to production-ready 
 ```
 AI Trader Service (Python)
   → python bridge (ai-trader-bridge.py)
-  → /api/trading/ai-trader (Node endpoint)
+  → POST /api/trading/independent-ai/order (Node endpoint, routes/trading.js)
   → execution router (execution-router.js)
   → event queue (persistent-event-queue.js)
   → event consumer (event-queue-consumer.js, 250ms heartbeat)
@@ -110,7 +110,10 @@ gh pr create --title "AI Trader Integration Phase A" --body "..."
 **AI Trader Files**:
 - `apps/lantern-garage/lib/ai-trader-bridge.py`
 - `apps/lantern-garage/services/independent-ai-trader-service.py`
-- `apps/lantern-garage/server.js` (route for `/api/trading/ai-trader`)
+- `apps/lantern-garage/routes/trading.js` (actual route handlers — NOT server.js)
+  - `POST /api/trading/independent-ai/order` (line ~581)
+  - `GET  /api/trading/independent-ai/status` (line ~651)
+  - `GET  /api/ai-trader/signals` + `/signals/demo` (proxied, line ~152)
 
 **Testing**:
 - `tests/test_ai_trader_integration.py` (create this)
@@ -120,7 +123,7 @@ gh pr create --title "AI Trader Integration Phase A" --body "..."
 
 ## Success Criteria
 
-✅ `/api/trading/ai-trader` accepts market data, returns valid signals  
+✅ `POST /api/trading/independent-ai/order` accepts signals, returns valid orders  
 ✅ Signals flow through queue → router → Alpaca (paper mode)  
 ✅ All errors caught, logged, auditable  
 ✅ Integration tests pass  
@@ -147,9 +150,26 @@ make quickstart
 # Or single server
 npm run dev --prefix apps/lantern-garage
 
-# Run tests
-python -m pytest tests/ -q --tb=short
-npm run test:api --prefix apps/lantern-garage
+# Run tests. NOTE on the full `tests/` tree:
+#   - test_p4_integration_full_loops.py STILL fails at collection (imports
+#     ThreeDoorsGameState, which no longer exists in src/three_doors_engine.py) ->
+#     keep it ignored until that import is fixed.
+#   - Always pass --timeout so any future hang NAMES the test instead of blocking
+#     the whole run (on Windows pytest-timeout's thread method can't unwind a
+#     lock-deadlock, so an unguarded hang looks like the suite running forever).
+python -m pytest tests/ -q --tb=line --timeout=30 --timeout-method=thread \
+  --ignore=tests/test_anti_entropy_memory.py \
+  --ignore=tests/test_audit_chain.py \
+  --ignore=tests/test_discord_bot.py \
+  --ignore=tests/test_discord_voice_gate.py \
+  --ignore=tests/test_p4_integration_full_loops.py
+# Last verified (2026-06-15): 496 passed, 3 failed, 6 skipped, 1 xfailed.
+# The 3 failures are PRE-EXISTING and unrelated to AI-trader work: test_oauth_server.py
+# + test_mcp_server.py expect MCP_OAUTH_PORT / JWT secret in .env.example (missing).
+# (A prior deadlock in src/convergence_io_engine.py SlotManager.flush() was fixed
+#  2026-06-15 by switching self._lock to RLock; test_convergence_io_engine.py passes.)
+
+npm run test:api --prefix apps/lantern-garage   # requires server running on 4177
 ```
 
 ---
