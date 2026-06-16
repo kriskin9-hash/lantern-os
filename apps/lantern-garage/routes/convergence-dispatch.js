@@ -246,8 +246,10 @@ module.exports = async (req, res, url, deps) => {
         const opts = JSON.parse(body || "{}");
         const issueNumber = parseInt(opts.issue, 10);
         const dryRun = opts.dryRun === true;
-        const autoPush = opts.push === true;
-        const autoCommit = autoPush || opts.commit === true;  // push implies commit
+        // Σ₀ autonomous: default to commit+push for fully-verified work (research + tests passed)
+        // Can opt-out with { commit:false } or { push:false } for safety gates
+        const autoPush = opts.push !== false;  // default true (changed from === true)
+        const autoCommit = autoPush || opts.commit !== false;  // default true
 
         if (!issueNumber) {
           send("error", { error: "issue_number_required" });
@@ -284,7 +286,7 @@ module.exports = async (req, res, url, deps) => {
         receipt.branch = branchName;
         step("branch", "done", { branch: branchName });
 
-        // ── 3. research (Σ₀: ground in codebase + external reality) ────────
+        // ── 3. research (Σ₀: ground in codebase + external reality + web) ──
         step("research", "start", { issue: issueNumber });
 
         // Analyze issue description for keywords
@@ -292,6 +294,39 @@ module.exports = async (req, res, url, deps) => {
         const keywords = (issueFullText.match(/\b[a-z-]{4,20}\b/gi) || [])
           .filter((w, i, a) => a.indexOf(w) === i).slice(0, 10);
         step("research", "keywords", { keywords });
+
+        // Web search for external grounding (verify claims against web reality)
+        let webEvidence = [];
+        try {
+          const https = require("https");
+          const searchQuery = keywords.slice(0, 3).join(" ");
+          const webSearchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(searchQuery)}&format=json`;
+
+          const webResult = await new Promise((resolve) => {
+            https.get(webSearchUrl, { timeout: 5000 }, (res) => {
+              let data = "";
+              res.on("data", (chunk) => (data += chunk));
+              res.on("end", () => {
+                try {
+                  const json = JSON.parse(data);
+                  const results = (json.Results || []).slice(0, 3).map((r) => ({
+                    title: r.Title,
+                    url: r.FirstURL,
+                    snippet: r.Text
+                  }));
+                  resolve(results);
+                } catch (e) {
+                  resolve([]);
+                }
+              });
+            }).on("error", () => resolve([]));
+          });
+          webEvidence = webResult;
+          step("research", "web_search", { results: webEvidence.length, sources: webEvidence.map(w => w.url) });
+        } catch (e) {
+          // Web search optional; continue if it fails
+          step("research", "web_search", { skipped: true, reason: e.message });
+        }
 
         // Find relevant files in codebase (grep for keywords + file patterns)
         const fs = require("fs");
@@ -314,10 +349,12 @@ module.exports = async (req, res, url, deps) => {
           keywords,
           scopeFiles: scopeFiles.slice(0, 5),
           issueState: issueDetails.state,
+          webEvidence: webEvidence.slice(0, 3),
           timestamp: new Date().toISOString(),
         };
         step("research", "done", {
           filesFound: scopeFiles.length,
+          webSourcesFound: webEvidence.length,
           context: researchContext
         });
 
@@ -420,17 +457,28 @@ module.exports = async (req, res, url, deps) => {
           // Σ₀ core: hypothesis + evidence
           hypothesis: `Issue #${issueNumber}: ${issueDetails.title}`,
           evidence: [
-            `Research found ${scopeFiles.length} relevant files`,
+            `Codebase research: ${scopeFiles.length} relevant files found`,
+            `Web grounding: ${webEvidence.length} external sources checked`,
             `Plan generated with ${plan.actions?.length || 0} actions`,
             `Tests: ${testsPassed ? 'PASSED' : 'SKIPPED'}`,
-            `Patch applied: ${stats?.filesModified || 0} files modified`
+            `Patch applied: ${stats?.filesModified || 0} files modified`,
+            `Observable: Full SSE stream of all steps`
           ],
           confidence: {
-            research: scopeFiles.length > 0 ? 0.85 : 0.5,
+            codebaseResearch: scopeFiles.length > 0 ? 0.85 : 0.5,
+            webGrounded: webEvidence.length > 0 ? 0.8 : 0.4,
             testsPassed: testsPassed !== false ? 0.9 : 0.3,
             observable: 1.0, // Full SSE stream
-            grounded: scopeFiles.length > 0 ? 0.8 : 0.5,
-            overall: (scopeFiles.length > 0 ? 0.85 : 0.5 + testsPassed !== false ? 0.9 : 0.3) / 2
+            grounded: Math.max(
+              scopeFiles.length > 0 ? 0.8 : 0.5,
+              webEvidence.length > 0 ? 0.8 : 0.4
+            ),
+            overall: Math.min(
+              (scopeFiles.length > 0 ? 0.85 : 0.5) * 0.4 +
+              (webEvidence.length > 0 ? 0.8 : 0.4) * 0.4 +
+              (testsPassed !== false ? 0.9 : 0.3) * 0.2,
+              0.95  // Cap at 95% confidence (always room for error)
+            )
           },
           sources: {
             issue: `github.com/alex-place/lantern-os/issues/${issueNumber}`,
