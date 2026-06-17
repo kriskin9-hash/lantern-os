@@ -108,13 +108,13 @@ async function pollOpen() {
       }
 
       // Use adaptive exit logic (convergence-driven)
-      const eval = evaluateExit(
+      const exitEval = evaluateExit(
         { side, limitCents: entryCents },
         market,
         50  // default entry conviction if not tracked
       );
 
-      const autoExit = eval.shouldExit ? eval.tag : null;
+      const autoExit = exitEval.shouldExit ? exitEval.tag : null;
 
       results.push({
         ...pos,

@@ -306,21 +306,28 @@ async function callLlm(system, user, providerHint = "auto", maxTokens = 4096) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const xaiKey = process.env.XAI_API_KEY;
   const messages = [{ role: "system", content: system }, { role: "user", content: user }];
 
   // When a specific provider is requested, try it directly (no cascade).
   if (providerHint !== "auto") {
-    if (providerHint === "claude" && anthropicKey) return callClaude(system, user, maxTokens);
+    if ((providerHint === "claude" || providerHint === "anthropic") && anthropicKey) return callClaude(system, user, maxTokens);
     if (providerHint === "openai" && openaiKey) return callOpenAI(messages, maxTokens);
     if (providerHint === "gemini" && geminiKey) return callGemini(system, user, maxTokens);
+    if ((providerHint === "grok" || providerHint === "xai") && xaiKey) return callGrok(messages, maxTokens);
     if (providerHint === "ollama") return callOllama(messages);
     throw new Error("no_provider_available");
   }
 
-  // Auto mode: try providers in cascade
+  // Auto mode: try every provider that has a key, in cascade. Order favors
+  // quality/cost and deprioritizes OpenAI (commonly the first to hit a quota
+  // cap); a provider that throws (quota, timeout, parse) falls through to the
+  // next rather than failing the whole run. Grok/XAI is included so a key the
+  // UI advertises as connected is actually usable here.
   const queue = [
     anthropicKey && (() => callClaude(system, user, maxTokens)),
     geminiKey    && (() => callGemini(system, user, maxTokens)),
+    xaiKey       && (() => callGrok(messages, maxTokens)),
     openaiKey    && (() => callOpenAI(messages, maxTokens)),
     () => callOllama(messages),
   ].filter(Boolean);
@@ -356,6 +363,36 @@ function callOpenAI(messages, maxTokens = 4096) {
     });
     req.on("error", reject);
     req.setTimeout(30000, () => { req.destroy(); reject(new Error("openai_timeout")); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+function callGrok(messages, maxTokens = 4096) {
+  // XAI / Grok exposes an OpenAI-compatible Chat Completions API.
+  const xaiKey = process.env.XAI_API_KEY;
+  const model = process.env.XAI_MODEL || "grok-2-latest";
+  const payload = JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.x.ai",
+      path: "/v1/chat/completions",
+      method: "POST",
+      agent: llmAgent,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${xaiKey}`, "Content-Length": Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(data);
+          if (j.error) return reject(new Error((typeof j.error === "string" ? j.error : j.error.message) || "grok_error"));
+          resolve(j.choices?.[0]?.message?.content || "");
+        } catch { reject(new Error("grok_parse_error")); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error("grok_timeout")); });
     req.write(payload);
     req.end();
   });

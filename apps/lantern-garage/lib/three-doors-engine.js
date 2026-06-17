@@ -135,6 +135,16 @@ function buildScenesFallback() {
 loadScenesData();
 
 // ── Game State Persistence ──
+// Per-player state persists as one JSON file under data/three-doors-state/,
+// mirroring the original Python StatusCube (one file per player) so the
+// 7-stage journey survives across requests and server restarts.
+const STATE_DIR = path.join(__dirname, "..", "..", "..", "data", "three-doors-state");
+
+function stateFile(userId) {
+  const safe = String(userId).replace(/[^a-z0-9_-]/gi, "_").slice(0, 128) || "anon";
+  return path.join(STATE_DIR, `${safe}.json`);
+}
+
 class PlayerState {
   constructor(userId) {
     this.userId = userId;
@@ -145,15 +155,42 @@ class PlayerState {
   }
 
   static load(userId) {
-    // In production: load from database
-    // For now: simple in-memory or localStorage simulation
     const state = new PlayerState(userId);
+    try {
+      const raw = fs.readFileSync(stateFile(userId), "utf-8");
+      const d = JSON.parse(raw);
+      state.stageIndex = Number.isInteger(d.stageIndex) ? d.stageIndex : 0;
+      state.loopCount = Number.isInteger(d.loopCount) ? d.loopCount : 0;
+      state.history = Array.isArray(d.history) ? d.history : [];
+      state.sceneKey = typeof d.sceneKey === "string" ? d.sceneKey : "kingdome-garden";
+    } catch {
+      // No saved state yet (or unreadable) — fresh game.
+    }
     return state;
   }
 
   save() {
-    // In production: persist to database
-    // For now: no-op
+    try {
+      fs.mkdirSync(STATE_DIR, { recursive: true });
+      fs.writeFileSync(stateFile(this.userId), JSON.stringify({
+        userId: this.userId,
+        stageIndex: this.stageIndex,
+        loopCount: this.loopCount,
+        history: this.history,
+        sceneKey: this.sceneKey,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (e) {
+      console.warn(`[Three Doors Engine] save failed for ${this.userId}:`, e.message);
+    }
+  }
+
+  reset() {
+    this.stageIndex = 0;
+    this.loopCount = 0;
+    this.history = [];
+    this.sceneKey = "kingdome-garden";
+    this.save();
   }
 }
 
@@ -185,16 +222,22 @@ class ThreeDoorsEngine {
   }
 
   startGame() {
-    // Check if already started
+    // Resume an in-progress journey if one is saved...
     if (this.state.history.length > 0) {
       return this._buildState();
     }
-    // Begin new game
+    // ...otherwise begin a new game at the Garden.
     this.state.stageIndex = 0;
     this.state.history = ["Entered the Garden at the Beginning"];
     this.state.sceneKey = "kingdome-garden";
     this.state.save();
     return this._buildState();
+  }
+
+  resetGame() {
+    // Clear saved progress and start fresh from the Garden.
+    this.state.reset();
+    return this.startGame();
   }
 
   chooseDoor(choice) {

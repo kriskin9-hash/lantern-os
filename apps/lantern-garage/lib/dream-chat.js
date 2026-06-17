@@ -59,6 +59,8 @@ function _loadPersonasFromFile() {
       id: p.id,
       name: p.name,
       symbol: p.symbol,
+      avatar: p.avatar || null,
+      role: p.role || null,
       systemPrompt: p.systemPrompt,
     }));
   } catch (err) {
@@ -1002,31 +1004,54 @@ async function verifyResponse(draft, userMessage, agentName) {
   }
 
   // ── Helper: Gemini grounding check ───────────────────────────────
+  // Tries web-grounded (googleSearch tool) first; on a billing/quota error
+  // (Grounding with Google Search is a PAID feature) falls back to a free
+  // plain-knowledge judgment. Either way, an unreachable source returns null
+  // (no signal) and never counts as a refutation.
   async function geminiGroundCheck(claim) {
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) return null;
-    try {
+    const model = process.env.GEMINI_GROUND_MODEL || "gemini-2.5-flash";
+
+    function call(useSearch) {
       const payload = JSON.stringify({
         contents: [{ parts: [{ text: `Is this claim accurate? Answer with yes/no and one sentence of evidence: "${claim}"` }] }],
-        tools: [{ googleSearch: {} }],
+        ...(useSearch ? { tools: [{ googleSearch: {} }] } : {}),
       });
-      const raw = await new Promise((resolve, reject) => {
+      return new Promise((resolve, reject) => {
         const req = https.request({
           hostname: "generativelanguage.googleapis.com",
-          path: `/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          path: `/v1beta/models/${model}:generateContent?key=${geminiKey}`,
           method: "POST",
           headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-        }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => resolve(d)); res.on("error", reject); });
+        }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => resolve({ status: res.statusCode, body: d })); res.on("error", reject); });
         req.on("error", reject);
         req.setTimeout(8000, () => { req.destroy(); reject(new Error("timeout")); });
         req.write(payload); req.end();
       });
-      const j = JSON.parse(raw);
+    }
+
+    try {
+      let grounded = true;
+      let { status, body } = await call(true);
+      // Grounded search needs prepaid credits → 429 RESOURCE_EXHAUSTED.
+      // Retry once WITHOUT the search tool (free tier) as a knowledge-only check.
+      if (status === 429) { grounded = false; ({ status, body } = await call(false)); }
+      // Still non-200 = source unreachable → no signal, NOT a refutation
+      if (status !== 200) return null;
+      const j = JSON.parse(body);
       const text = j.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      // Empty response = no signal. Never let a silent failure count against a claim.
+      if (!text.trim()) return null;
       const groundingMeta = j.candidates?.[0]?.groundingMetadata;
       const sources = groundingMeta?.groundingChunks?.map(c => c.web?.uri).filter(Boolean) || [];
-      const isYes = /^yes/i.test(text.trim());
-      return { text, sources, confident: isYes, confidence: isYes ? 0.9 : 0.35 };
+      const t = text.trim();
+      const isYes = /^yes/i.test(t);
+      const isNo = /^no/i.test(t);
+      // Web-grounded yes = strong (0.9); knowledge-only yes = moderate (0.75).
+      // Only an explicit "no" is a refutation; anything ambiguous is weak-neutral.
+      const yesConf = grounded ? 0.9 : 0.75;
+      return { text, sources, grounded, confident: isYes, confidence: isYes ? yesConf : (isNo ? 0.35 : 0.5) };
     } catch { return null; }
   }
 
@@ -1045,12 +1070,16 @@ async function verifyResponse(draft, userMessage, agentName) {
 
   // ── Step 2: ground each claim (codebase + web + Gemini in parallel) ──
   const records = [];
-  let anyLow = false;
+  let anyRefuted = false;
 
   await Promise.all(claims.slice(0, 5).map(async (c) => {
     let evidence = "no match found";
-    let confidence = 0.4;
+    // 0.6 = neutral/unknown baseline. Absence of grounding must NOT trigger a
+    // correction — only an active refutation does. (A down grounding source
+    // previously dragged every claim to 0.4 and hedged correct answers.)
+    let confidence = 0.6;
     let source = "none";
+    let refuted = false;
     const sources = [];
 
     // 2a: codebase grep (always run for code claims)
@@ -1064,8 +1093,8 @@ async function verifyResponse(draft, userMessage, agentName) {
       } catch { /* not found */ }
     }
 
-    // 2b: web search via MCP (for web claims or still ungrounded)
-    if (confidence < 0.6) {
+    // 2b: web search via MCP (try to confirm anything not yet codebase-confirmed)
+    if (confidence < 0.75) {
       try {
         const searchResult = await webSearchMcp(`${c.claim} site:github.com OR site:docs.anthropic.com OR developer docs`, 3);
         if (searchResult?.results?.length) {
@@ -1075,10 +1104,11 @@ async function verifyResponse(draft, userMessage, agentName) {
           source = "web-search";
           sources.push(...searchResult.results.slice(0, 2).map(r => r.url));
         }
-      } catch { /* MCP offline */ }
+      } catch { /* MCP offline → no signal, stays neutral */ }
     }
 
-    // 2c: Gemini grounding API (for still-low or web claims)
+    // 2c: Gemini grounding API (confirm or refute). Returns null when the source
+    // is unreachable (403/429/empty) — treated as NO SIGNAL, never refutation.
     if (confidence < 0.7 || c.needsWeb) {
       const g = await geminiGroundCheck(c.claim);
       if (g) {
@@ -1087,28 +1117,32 @@ async function verifyResponse(draft, userMessage, agentName) {
           confidence = g.confidence;
           source = "gemini-grounding";
           sources.push(...g.sources);
-        } else if (!g.confident && g.confidence < confidence) {
+        } else if (g.confidence <= 0.35) {
+          // Explicit "no" from Gemini = active refutation
           evidence = `gemini-refuted: ${g.text.slice(0, 120)}`;
           confidence = g.confidence;
           source = "gemini-grounding";
+          refuted = true;
         }
       }
     }
 
-    records.push({ claim: c.claim, type: c.type, evidence, confidence, source, sources, agent: agentName, userMessage: userMessage.slice(0, 100) });
-    if (confidence < 0.5) anyLow = true;
+    records.push({ claim: c.claim, type: c.type, evidence, confidence, source, sources, refuted, agent: agentName, userMessage: userMessage.slice(0, 100) });
+    if (refuted) anyRefuted = true;
   }));
 
-  // ── Step 3: revise low-confidence claims ─────────────────────────
+  // ── Step 3: revise only ACTIVELY REFUTED claims ──────────────────
+  // Never hedge merely-ungrounded claims: absence of evidence is not evidence of
+  // error, and doing so corrupted correct answers whenever grounding was offline.
   let verified = draft;
   let corrected = false;
-  if (anyLow) {
+  if (anyRefuted) {
     try {
-      const lowClaims = records.filter(r => r.confidence < 0.5)
-        .map(r => `- "${r.claim}" → evidence: ${r.evidence} (confidence: ${r.confidence.toFixed(2)})`)
+      const refutedClaims = records.filter(r => r.refuted)
+        .map(r => `- "${r.claim}" → ${r.evidence} (confidence: ${r.confidence.toFixed(2)})`)
         .join("\n");
       const raw2 = await callHaiku(
-        `You are a self-correcting AI. These claims in your response failed grounding:\n${lowClaims}\n\nOriginal response:\n${draft}\n\nRevise to remove or qualify unverified claims. Use "I believe...", "I'm not certain, but...", or "According to available sources..." where appropriate. Return only the revised response.`,
+        `You are a self-correcting AI. A grounding source actively CONTRADICTED these claims in your response:\n${refutedClaims}\n\nOriginal response:\n${draft}\n\nRevise to correct or qualify only these refuted claims. Use "I believe...", "I'm not certain, but...", or "According to available sources..." where appropriate. Leave everything else unchanged. Return only the revised response.`,
         1024
       );
       const revised = JSON.parse(raw2).content?.[0]?.text?.trim();

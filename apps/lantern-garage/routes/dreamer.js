@@ -49,7 +49,7 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
   }
   if (url.pathname === "/api/agents" && req.method === "GET") {
     sendJson(res, {
-      agents: AGENT_PERSONAS.map((a) => ({ id: a.id, name: a.name, symbol: a.symbol })),
+      agents: AGENT_PERSONAS.map((a) => ({ id: a.id, name: a.name, symbol: a.symbol, avatar: a.avatar || null, role: a.role || null })),
       default: AGENT_PERSONAS[0].id,
     });
     return true;

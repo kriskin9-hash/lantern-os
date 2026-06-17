@@ -55,3 +55,9 @@
 {"timestamp":"2026-06-16T07:28:01.668Z","messageLength":450,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.25,0.21666666666666667,0.21666666666666667]}
 {"timestamp":"2026-06-16T07:57:51.685Z","messageLength":304,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.23255813953488372,0.18604651162790697,0.18604651162790697]}
 {"timestamp":"2026-06-16T07:58:06.979Z","messageLength":450,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.25,0.21666666666666667,0.21666666666666667]}
+{"timestamp":"2026-06-16T09:48:49.278Z","messageLength":53,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0,0,0]}
+{"timestamp":"2026-06-16T09:49:38.943Z","messageLength":60,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.2,0,0]}
+{"timestamp":"2026-06-16T09:56:39.573Z","messageLength":94,"candidatesCount":50,"qualifiedCount":0,"filteredCount":50,"topScores":[0.15384615384615385,0.15384615384615385,0.15384615384615385]}
+{"timestamp":"2026-06-16T18:22:50.407Z","messageLength":83,"candidatesCount":50,"qualifiedCount":1,"filteredCount":49,"topScores":[0.3076923076923077,0.23076923076923078,0.23076923076923078]}
+{"timestamp":"2026-06-16T18:28:23.972Z","messageLength":83,"candidatesCount":50,"qualifiedCount":1,"filteredCount":49,"topScores":[0.3076923076923077,0.23076923076923078,0.23076923076923078]}
+{"timestamp":"2026-06-16T18:59:14.854Z","messageLength":83,"candidatesCount":50,"qualifiedCount":1,"filteredCount":49,"topScores":[0.3076923076923077,0.23076923076923078,0.23076923076923078]}

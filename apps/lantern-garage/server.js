@@ -112,6 +112,7 @@ const routes = [
   require("./routes/leaderboard"),
   require("./routes/agent-status"),
   require("./routes/providers"),
+  require("./routes/library"),
   require("./routes/self-edit"),
   require("./routes/creator"),
   require("./routes/creator-entries"),

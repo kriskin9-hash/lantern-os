@@ -128,6 +128,23 @@ function getStrategyFitness(strategy_id = null, regime = null, limit = 50) {
 }
 
 /**
+ * Pick the best-performing strategy for a regime from the candidate ids.
+ * Returns { strategy_id, fitness, score }. On cold start (no logged trades)
+ * every candidate scores 0 and the first id is returned — a valid object so the
+ * deck renders instead of throwing. Score rewards pnl, penalises drawdown.
+ */
+function getBestStrategyForRegime(regime, strategyIds = []) {
+  const ids = Array.isArray(strategyIds) && strategyIds.length ? strategyIds : ["default"];
+  let best = null;
+  for (const id of ids) {
+    const fitness = getStrategyFitness(id, regime);
+    const score = fitness.count > 0 ? fitness.pnl - Math.abs(fitness.drawdown) * 0.5 : 0;
+    if (!best || score > best.score) best = { strategy_id: id, fitness, score };
+  }
+  return best;
+}
+
+/**
  * Clear all performance logs (debug only)
  */
 function clearPerformanceLog() {
@@ -144,6 +161,7 @@ function clearPerformanceLog() {
 module.exports = {
   logPerformance,
   getStrategyFitness,
+  getBestStrategyForRegime,
   clearPerformanceLog,
   PERF_LOG_PATH
 };

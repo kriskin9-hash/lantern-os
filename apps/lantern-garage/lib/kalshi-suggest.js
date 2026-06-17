@@ -137,16 +137,16 @@ async function buildExits(mkByTicker, nowMs) {
     const cost = costBasisCents(p, qty);
 
     // Use adaptive exit logic (convergence-driven, not mechanical)
-    const eval = evaluateExit(
+    const exitEval = evaluateExit(
       { side: heldSide, limitCents: cost || 50 },
       m,
       p.conviction || 50  // entry conviction if tracked
     );
 
-    if (!eval.shouldExit) continue;  // position holding — no exit signal
+    if (!exitEval.shouldExit) continue;  // position holding — no exit signal
 
-    const sellBid = eval.exitPrice || (m ? (heldSide === "yes" ? m.yes_bid : m.no_bid) : null);
-    const pnlPct = eval.pnlPct;
+    const sellBid = exitEval.exitPrice || (m ? (heldSide === "yes" ? m.yes_bid : m.no_bid) : null);
+    const pnlPct = exitEval.pnlPct;
 
     const heldLabel = heldSide === "yes"
       ? (m && m.yes_sub_title) || "YES" : (m && m.no_sub_title) || "NO";
@@ -158,7 +158,7 @@ async function buildExits(mkByTicker, nowMs) {
       "STOP-LOSS": 100,
       "CONFIDENCE-COLLAPSE": 85,
     };
-    const urgency = urgencyMap[eval.tag] || 80;
+    const urgency = urgencyMap[exitEval.tag] || 80;
 
     exits.push({
       kind: "exit", action: "sell",
@@ -168,8 +168,8 @@ async function buildExits(mkByTicker, nowMs) {
       yesPct: m && m.yes_ask != null && m.no_ask != null && m.yes_ask + m.no_ask > 0
         ? Math.round((m.yes_ask / (m.yes_ask + m.no_ask)) * 100) : null,
       favSide: heldSide, favLabel: heldLabel, favAsk: sellBid, qty,
-      conviction: urgency, exitTag: eval.tag, pnlPct: pnlPct != null ? +pnlPct.toFixed(1) : null,
-      reason: eval.reason,
+      conviction: urgency, exitTag: exitEval.tag, pnlPct: pnlPct != null ? +pnlPct.toFixed(1) : null,
+      reason: exitEval.reason,
       minsToClose: m && m.close_time ? Math.round((new Date(m.close_time).getTime() - nowMs) / 60000) : null,
       close: (m && m.close_time) || "",
     });

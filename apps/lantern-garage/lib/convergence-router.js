@@ -16,10 +16,50 @@ const KALSHI_DIR = path.resolve(__dirname, "../../../data/kalshi");
 const CONVERGENCE_MODEL = path.join(KALSHI_DIR, "convergence-model.json");
 const PATTERN_CACHE = path.resolve(__dirname, "../../../.claude/memory/pattern_cache.json");
 
+// Flywheel taxonomy (see caad/architecture flywheel design): classify each route
+// outcome by how much "recirculation" it cost.
+//   lockup — served from the flywheel (cache/template/deterministic), no recompute
+//   stall  — genuinely needs the external model (the only true LLM cost)
+//   slip   — everything else: had to recompute fresh or fall back locally
+const LOCKUP_SOURCES = new Set([
+  "cache", "cache_validated", "template_cache", "deterministic_route"
+]);
+const STALL_SOURCES = new Set(["needs_llm"]);
+
 class ConvergenceRouter {
   constructor() {
     this.patterns = this.loadPatternCache();
     this.convergenceModel = this.loadConvergenceModel();
+    this.metrics = this.freshMetrics();
+  }
+
+  /**
+   * Initialize the runtime flywheel counters. These measure live routing
+   * outcomes (the "~90% local" figure was previously asserted, never counted).
+   */
+  freshMetrics() {
+    return {
+      total: 0, lockup: 0, slip: 0, stall: 0,
+      bySurface: {},            // surface → {total, lockup, slip, stall}
+      since: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Record one route outcome and return the result unchanged. Additive only —
+   * it never alters routing behavior, just counts it.
+   */
+  _emit(result, surface) {
+    const src = (result && result.source) || "unknown";
+    const klass = LOCKUP_SOURCES.has(src) ? "lockup"
+                : STALL_SOURCES.has(src) ? "stall" : "slip";
+    const m = this.metrics;
+    m.total += 1;
+    m[klass] += 1;
+    const s = m.bySurface[surface] || (m.bySurface[surface] = { total: 0, lockup: 0, slip: 0, stall: 0 });
+    s.total += 1;
+    s[klass] += 1;
+    return result;
   }
 
   /**
@@ -65,12 +105,12 @@ class ConvergenceRouter {
     if (this.patterns.marketPatterns[ticker]) {
       const cached = this.patterns.marketPatterns[ticker];
       if (Date.now() - new Date(cached.timestamp).getTime() < 3600000) { // 1 hour
-        return { source: "cache", data: cached };
+        return this._emit({ source: "cache", data: cached }, "market");
       }
     }
 
     // Fall through to convergence-enhancer mock (no external API)
-    return { source: "local_mock", data: { trend: "neutral", catalyst: "none" } };
+    return this._emit({ source: "local_mock", data: { trend: "neutral", catalyst: "none" } }, "market");
   }
 
   /**
@@ -95,22 +135,22 @@ class ConvergenceRouter {
 
       // Return cached only if: (1) high confidence AND (2) cached agent still matches fresh scores
       if (cached.confidence > 0.7 && cachedAgentScore >= scores[winner] * 0.8) {
-        return {
+        return this._emit({
           agent: cached.agent_id,
           confidence: cached.confidence,
           source: "cache_validated",
           cacheHit: true
-        };
+        }, "intent");
       } else if (cached.confidence > 0.7 && cachedAgentScore < scores[winner] * 0.8) {
         // Cache stale: cached agent lost to fresh computation
-        return {
+        return this._emit({
           agent: winner,
           confidence: freshConfidence,
           source: "cache_stale",
           cacheHit: false,
           cachedAgent: cached.agent_id,
           reasonStale: `${cached.agent_id} scored ${cachedAgentScore}, ${winner} scored ${scores[winner]}`
-        };
+        }, "intent");
       }
     }
 
@@ -131,7 +171,7 @@ class ConvergenceRouter {
     };
     this.savePatternCache();
 
-    return result;
+    return this._emit(result, "intent");
   }
 
   /**
@@ -146,23 +186,23 @@ class ConvergenceRouter {
     // Check cache
     if (this.patterns.codePatterns[patternKey]) {
       const cached = this.patterns.codePatterns[patternKey];
-      return {
+      return this._emit({
         source: "template_cache",
         template: cached.template,
         tokensSaved: cached.tokens_saved,
         examples: cached.examples
-      };
+      }, "code");
     }
 
     // No cached template — would normally call Claude here
     // For now, return a sentinel indicating LLM call needed
-    return {
+    return this._emit({
       source: "needs_llm",
       fileType,
       scope,
       keywords,
       reason: "Pattern not yet cached; first occurrence"
-    };
+    }, "code");
   }
 
   /**
@@ -178,16 +218,16 @@ class ConvergenceRouter {
     };
 
     if (routes[taskType]) {
-      return { endpoint: routes[taskType], method: "GET", source: "deterministic_route" };
+      return this._emit({ endpoint: routes[taskType], method: "GET", source: "deterministic_route" }, "task");
     }
 
     // Unknown task → route via Keystone for dynamic handling
-    return {
+    return this._emit({
       handler: "keystone_dispatcher",
       source: "dynamic_route",
       taskType,
       payload
-    };
+    }, "task");
   }
 
   /**
@@ -251,6 +291,42 @@ class ConvergenceRouter {
       totalCachedRoutes: Object.keys(this.patterns.intentPatterns).length + Object.keys(this.patterns.codePatterns).length,
       generatedAt: this.patterns.generatedAt
     };
+  }
+
+  /**
+   * Live flywheel metrics — measured, not asserted.
+   *
+   *   lockupRate   fraction of routes served from the flywheel (no recompute)
+   *   slippageRate fraction that had to recompute or fall back locally
+   *   stallRate    fraction that genuinely needs the external model
+   *
+   * Replaces the un-measured "~90% local hit" claim with real counters.
+   */
+  getFlywheelMetrics() {
+    const m = this.metrics;
+    const pct = (x) => (m.total ? Math.round((x / m.total) * 1000) / 10 : 0);
+    const surfaces = {};
+    for (const [name, s] of Object.entries(m.bySurface)) {
+      surfaces[name] = {
+        total: s.total,
+        lockupRate: s.total ? Math.round((s.lockup / s.total) * 1000) / 10 : 0,
+        slippageRate: s.total ? Math.round(((s.slip + s.stall) / s.total) * 1000) / 10 : 0
+      };
+    }
+    return {
+      total: m.total,
+      lockup: m.lockup, slip: m.slip, stall: m.stall,
+      lockupRate: pct(m.lockup),
+      slippageRate: pct(m.slip + m.stall),
+      stallRate: pct(m.stall),
+      bySurface: surfaces,
+      since: m.since
+    };
+  }
+
+  /** Reset the live counters (e.g. per measurement window). */
+  resetFlywheelMetrics() {
+    this.metrics = this.freshMetrics();
   }
 }
 

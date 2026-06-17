@@ -35,8 +35,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Continue"
 
 # ── Configuration ──
-$REPO_ROOT = (git rev-parse --show-toplevel) -replace "\\", "/"
-$BotScript = if ($BotScript) { $BotScript } else { "$REPO_ROOT/src/discord_lounge_bot/bot_v2.py" }
+$REPO_ROOT = (git rev-parse --show-toplevel) -replace "/", "\"
+$BotScript = if ($BotScript) { $BotScript } else { "$REPO_ROOT\src\discord_lounge_bot\bot_v2.py" }
 $LogDir = if ($LogDir) { $LogDir } else { "$env:USERPROFILE/.lantern/logs" }
 $LogFile = "$LogDir/discord-bot.log"
 $PidFile = "$LogDir/discord-bot.pid"
@@ -67,9 +67,12 @@ function Write-Log {
 
 function Start-Bot {
     Write-Log "Starting Discord bot: $BotScript"
+    $venvPython = "$REPO_ROOT\.venv\Scripts\python.exe"
+    $pythonExe  = if (Test-Path $venvPython) { $venvPython } else { "python" }
+    Write-Log "Python: $pythonExe"
     try {
         $process = Start-Process `
-            -FilePath "python" `
+            -FilePath $pythonExe `
             -ArgumentList $BotScript `
             -NoNewWindow `
             -PassThru `
