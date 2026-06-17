@@ -74,6 +74,11 @@ async function handlePatreonCallback(req, res, query, deps) {
   const { code, state } = query;
   const { sendJson } = deps;
 
+  console.log("[AUTH] Callback received - code:", code ? code.slice(0, 10) + "..." : "missing");
+  console.log("[AUTH] Callback received - state:", state ? state.slice(0, 10) + "..." : "missing");
+  console.log("[AUTH] Session oauth_state:", req.session.oauth_state ? req.session.oauth_state.slice(0, 10) + "..." : "missing");
+  console.log("[AUTH] Session pkce_verifier:", req.session.pkce_verifier ? "present" : "missing");
+
   if (!code || !state) {
     res.writeHead(400, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ error: "Missing code or state" }));
