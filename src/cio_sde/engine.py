@@ -294,9 +294,9 @@ class CIO_SDE(nn.Module):
 
         # covariance: Σ̇ = AΣ+ΣAᵀ+Q−ΣR⁻¹Σ
         # Lyapunov contraction: A is the linearization of dx=f(x,u)dt+g(x)dW.
-        # For neural SDE stability, we track α(A) = max Re(λ_i(A_s)) + ‖A−A_s‖₂
-        # (see arXiv:2309.07864 for neural SDE contraction theory, arXiv:2402.07827
-        # for small-gain bounds on non-normal Jacobians).
+        # For stability we track α(A) = max Re(λ_i(A_s)) + ‖A−A_s‖₂
+        # (matrix-measure contraction analysis: Lohmiller & Slotine 1998,
+        # Automatica 34(6):683-696; small-gain composition is classical, Zames 1966).
         A = drift_jacobian(node, x.detach(), u.detach())
         q_diag = (g.detach() ** 2)
         sigma_next = self.cov.step(sigma, A, q_diag, dt)

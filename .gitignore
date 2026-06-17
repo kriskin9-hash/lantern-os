@@ -56,6 +56,14 @@ data/file-uploads/
 integrations/human-flourishing-frameworks/data/snapshot.json
 integrations/human-flourishing-frameworks/data/world_model.db
 
+# YouTube channel scrape cache (regenerated at runtime by routes/youtube.js;
+# the route bakes its own fallback list, so none of this needs tracking)
+data/youtube/
+
+# CAAD grounding corpus — large external reference PDFs (315MB+) downloaded at
+# runtime. Tracked spec lives under docs/caad/; the raw PDFs stay local-only.
+caad/architecture/grounding/
+
 # ─── Node ─────────────────────────────────────────────────────────────────────
 node_modules/
 **/node_modules/

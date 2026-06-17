@@ -97,7 +97,7 @@ fact).
 - **Strong:** the theory (Chen & Vaughan; Abernethy et al.; Gneiting & Raftery)
   says a market price under a proper scoring rule is a principled, calibrated,
   low-latency target. This is exactly the kind of *external* signal the Σ₀
-  collapse analysis (#509, arXiv:2406.07284) says is required to avoid collapse
+  collapse analysis (#509, arXiv:2402.07043) says is required to avoid collapse
   (the real-data fraction π > 0).
 - **Constraint:** resolution latency makes resolution-as-reward a delayed-reward
   RL problem. Funding/inventory constraints and market thinness (Kalshi tight

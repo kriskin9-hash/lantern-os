@@ -67,14 +67,12 @@ class SemanticCollapseOperator:
                  rank_frac: float = 0.5,
                  anisotropy_eps: float = 5e-2,
                  ctrl_eps: float = 1e-2,
-                 eig_eps: float = 1e-2,
-                 log_barrier_strength: float = 0.1) -> None:
+                 eig_eps: float = 1e-2) -> None:
         self.grad_eps = grad_eps          # ∇ₓL below this ⇒ no optimization signal
         self.rank_frac = rank_frac        # eff_rank/dim below this ⇒ rank-deficient
         self.anisotropy_eps = anisotropy_eps  # Σ eigval spread below this ⇒ flat
         self.ctrl_eps = ctrl_eps          # ∂H/∂u below this ⇒ control singularity
         self.eig_eps = eig_eps            # |λ| below this ⇒ null eigenmode
-        self.log_barrier_strength = log_barrier_strength  # smooth boundary penalty
 
     @torch.no_grad()
     def _effective_rank(self, A: Tensor) -> float:
@@ -116,19 +114,15 @@ class SemanticCollapseOperator:
             return torch.zeros_like(x), CollapseOutcome.NULL
         V = evecs[:, null_mask]                 # (d, k) null subspace basis
         P = V @ V.T                             # projector onto invariant manifold
-        
-        # Log-barrier for smooth boundary: -strength * log(1 - ‖P x‖ / ‖x‖)
-        # This penalizes approaching the boundary smoothly instead of hard clamp
-        if self.log_barrier_strength > 0:
-            x_norm = x.norm(dim=-1, keepdim=True).clamp_min(1e-8)
-            proj_norm = (x @ P.T).norm(dim=-1, keepdim=True)
-            barrier_ratio = (proj_norm / x_norm).clamp_max(0.99)
-            barrier = -self.log_barrier_strength * torch.log(1.0 - barrier_ratio)
-            # Apply barrier as a soft penalty to the projection
-            x_star = x @ P.T * (1.0 - barrier)
-        else:
-            x_star = x @ P.T
-        
+
+        # Collapse is the orthogonal projection onto the invariant null manifold.
+        # P = V Vᵀ is idempotent and symmetric, so it is non-expansive:
+        # ‖P x‖ ≤ ‖x‖ for all x — the projection is already a contraction toward
+        # the manifold and there is no boundary to enforce. (The former
+        # "log-barrier" multiplicative shrink was misnamed and, for strengths
+        # above 1/ln(100) ≈ 0.217, flipped sign and grew ‖x*‖ — the opposite of
+        # collapse. See issue #661.)
+        x_star = x @ P.T
         return x_star, CollapseOutcome.ATTRACTOR
 
     def evaluate(self, model, x: Tensor, u: Tensor, sigma: Tensor,
@@ -209,9 +203,11 @@ def collapse_certificate(A: Tensor, eig_eps: float = 1e-2,
     where A_s is the symmetric part. This provides a conservative bound
     that accounts for cross-terms in the non-normal case.
 
-    Model collapse grounding (arXiv:2406.07284): Synthetic data induces error
-    plateau at T_synth > k^β; contraction margin prevents this by maintaining
-    spectral distance from collapse boundary (α < -margin).
+    Model-collapse grounding (Dohmatob et al., "A Tale of Tails", arXiv:2402.07043,
+    ICML 2024): synthetic data changes the scaling law and truncates gains; a
+    contraction margin keeps spectral distance from the collapse boundary
+    (α < -margin). The matrix-measure bound is classical contraction analysis
+    (Lohmiller & Slotine 1998, Automatica 34(6):683-696).
     """
     Abar = A.mean(0) if A.dim() == 3 else A
     A_s = 0.5 * (Abar + Abar.T)

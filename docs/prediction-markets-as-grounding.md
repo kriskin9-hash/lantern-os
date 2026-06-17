@@ -15,11 +15,13 @@ Prediction markets (Kalshi, Polymarket) serve as external ground-truth signals f
 
 ## Key Papers
 
-- **arXiv:2309.01219** — "Using Prediction Markets to Validate ML Models" (2023)
-  - ⚠️ **UNVERIFIED:** this arXiv id could not be confirmed to map to this title
-    (see survey §5). Treat as unverified until checked; the survey relies on
-    independently-citable works instead.
-  - (claimed) Establishes prediction markets as ML validation signal
+- **Wolfers, J. & Zitzewitz, E. (2004)** — "Prediction Markets", *Journal of
+  Economic Perspectives* 18(2):107–126.
+  - ✅ **VERIFIED (2026-06-17, #660).** Canonical reference for prediction-market
+    accuracy; grounds the use of markets as an external validation signal.
+  - Note: a prior draft cited `arXiv:2309.01219` as "Using Prediction Markets to
+    Validate ML Models" — that id is actually a *hallucination survey* and has been
+    removed (see survey §5).
 
 ## Σ₀ Grounding via Kalshi Tight-Band
 
@@ -44,8 +46,8 @@ The Kalshi tight-band trading terminal (apps/lanterns-garage/public/kalshi-termi
 ## References
 
 1. Bar-Shalom, Y., Li, X., & Kirubarajan, T. (2001). *Estimation with Applications to Tracking and Navigation*
-2. arXiv:2309.01219 — Prediction Markets for ML Validation (2023)
-3. arXiv:2406.07284 — Model Collapse in Self-Improving Systems (2024)
+2. Wolfers, J. & Zitzewitz, E. (2004). Prediction Markets. *J. Economic Perspectives* 18(2):107–126
+3. Dohmatob, E. et al. (2024). A Tale of Tails: Model Collapse as a Change of Scaling Laws. arXiv:2402.07043 (ICML 2024)
 
 ---
 

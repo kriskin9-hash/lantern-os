@@ -43,12 +43,12 @@ window drives a Σ₀⁻¹ anti-collapse intervention.
 **Matched arXiv findings:**
 
 - **Model collapse present** — parrot-attractor signature confirmed
-  (self_repeat=0.46). *Shumailov et al., Nature 2024; arXiv:2406.07284.*
+  (self_repeat=0.46). *Shumailov et al., Nature 2024; Dohmatob et al., arXiv:2402.07043.*
 - **Small-gain certificate certifies contraction** on non-normal real Jacobians
-  (22 guaranteed windows). *arXiv:2402.07827.*
+  (22 guaranteed windows). *Lohmiller & Slotine 1998.*
 - **NIS canary detects model-reality mismatch** (1,120 spooks). *Bar-Shalom et al. 2001.*
 - **Σ₀⁻¹ sustains the flat direction** at 1.674× the un-excited baseline — the
-  "mix real data (π>0) to prevent collapse" mechanism. *arXiv:2406.07284.*
+  "mix real data (π>0) to prevent collapse" mechanism. *Dohmatob et al., arXiv:2402.07043.*
 
 **Diverged (and why):**
 
@@ -60,7 +60,7 @@ window drives a Σ₀⁻¹ anti-collapse intervention.
 - **Baseline does not hard-freeze** (eff_rank stays 4 with Σ₀⁻¹ OFF). Full
   collapse is predicted only under purely recursive synthetic training (αt→0); a
   real mixed-source log is not purely self-referential, so it shows persistent
-  excitation rather than a rescued collapse — consistent with arXiv:2406.07284's
+  excitation rather than a rescued collapse — consistent with arXiv:2402.07043's
   π>0 (real-data) branch.
 
 **Verdict:** The Σ₀ machinery reproduces the qualitative model-collapse

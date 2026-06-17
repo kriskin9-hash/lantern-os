@@ -22,9 +22,11 @@ lines before relying on any claim here.
 > import defect (§3) is genuinely fixed and is now recorded. **Correction
 > (2026-06-16):** a first version of this pass also marked the Appendix A
 > "log-barrier" resolved — that was an overclaim caught in external review. What
-> ships is a misnamed multiplicative shrink with a sign-flip footgun, not a barrier;
-> the smoothness caveat stands ([#661]). The genuinely-remaining work is re-tracked
-> as live issues so this doc cannot drift again ([#657]–[#661]).
+> shipped was a misnamed multiplicative shrink with a sign-flip footgun, not a barrier.
+> **Resolved (2026-06-17, [#661]):** the spurious term was dropped — `_collapse_state`
+> now returns the clean orthogonal projection `x* = P x`, which is non-expansive
+> (`‖P x‖ ≤ ‖x‖`) and smooth, so no boundary penalty is needed. The remaining
+> work is re-tracked as live issues so this doc cannot drift again ([#657]–[#660]).
 
 **Status taxonomy & tracked gaps.** Each claim is one of: **PROVEN** (theorem +
 machine-checked), **MEASURED** (empirical, with a test/run pointer), **HEURISTIC**
@@ -45,7 +47,9 @@ status cannot silently drift.
 - [#658] — **§3 sufficiency.** Σ₀⁻¹ is HEURISTIC with N=1 evidence; no theorem says it *prevents* collapse. Upgrade via proof under explicit hypotheses, or a regime sweep to MEASURED-over-distribution.
 - [#659] — **§4 decision.** `p_gate`/`p_unbounded` are documented but not in code (superseded by the `surprise.py` NIS canary). Formally retire them, or implement and wire `p_gate`.
 - [#660] — **housekeeping.** Reconcile the persistent-excitation attribution across `.md`/`.tex`, and verify all web citations before formal publication.
-- [#661] — **§2 / Appendix A defect.** `_collapse_state`'s "log-barrier" is a misnamed multiplicative shrink that flips sign for `strength > 0.217`; drop it or move `collapse_certificate` to the logarithmic norm μ₂. *Flagged in external review 2026-06-16.*
+
+**Resolved (landed 2026-06-17):**
+- [#661] — **§2 / Appendix A defect.** `_collapse_state`'s "log-barrier" was a misnamed multiplicative shrink that flipped sign for `strength > 0.217`. **Fixed:** the term is dropped; collapse is now the clean orthogonal projection `x* = P x` (non-expansive, smooth). The `log_barrier_strength` parameter was removed. Regression: `test_collapse_is_nonexpansive_projection`. *Flagged in external review 2026-06-16.*
 
 [#504]: https://github.com/alex-place/lantern-os/issues/504
 [#505]: https://github.com/alex-place/lantern-os/issues/505
@@ -277,8 +281,8 @@ illustrative log values, not pinned by any test. Cite the tests, not the prose.)
 *estimator/parameter* convergence under `∫φφᵀ ≥ αI`. Here there is no estimator
 and no parameter being identified — only a state kept off a manifold. So Σ₀⁻¹ is
 **inspired by / analogous to** persistent excitation; **no PE condition is
-established**. (The Åström–Bohlin 1965 attribution should be reconciled between
-the `.md` and `.tex` variants, where it is currently inconsistent.)
+established**. (Canonical attribution is **Anderson 1977**, consistent across the
+`.md` and `.tex` variants — issue [#660].)
 
 **Latent code defect — RESOLVED (2026-06-15).** `AntiCollapseOperator.__init__`
 annotated `detector: Optional[...]` while `collapse.py` imported only `from typing
@@ -457,15 +461,19 @@ certificate's physics or the §6 numbers** to stand. It is the documented
 phenomenon of **model collapse** — the degradation of learned models when trained
 recursively on synthetic data. Key recent works:
 
-- **arXiv:2406.07284** (2024) establishes the **double-scaling law**: error on
-  synthetic data saturates at threshold `T_synth > k^β` (depending on number of
-  modes `k`), recoverable only by mixing real data (`π > 0` real-data fraction).
+- **Dohmatob, Feng, Yang, Charton & Kempe**, *A Tale of Tails: Model Collapse as
+  a Change of Scaling Laws* (arXiv:2402.07043, ICML 2024) shows synthetic data
+  **changes the scaling law itself**: even a 1% synthetic fraction can truncate
+  scaling so larger training sets stop helping, recoverable by mixing real data.
   This is exactly the collapse mechanism captured by Σ₀: beyond the threshold,
   active modes freeze and the system attracts to the degenerate manifold.
 
-- **Shumailov et al.** (*Nature* 2024) and **arXiv:2309.07864** document model
-  collapse empirically; the double-scaling law provides the phase-transition
-  structure.
+- **Shumailov et al.** (*Nature* 2024) document model collapse empirically; the
+  change-of-scaling-laws result above provides the phase-transition structure. And
+  **Feng, Dohmatob, Yang, Charton & Kempe**, *Beyond Model Collapse: Scaling Up
+  with Synthesized Data Requires Verification* (arXiv:2406.07515, ICML 2024) shows
+  that **verification** of synthetic samples prevents collapse — the published
+  analogue of Σ₀'s external-grounding requirement.
 
 This is closely related to **reward hacking / specification gaming** (Amodei et
 al. 2016; Skalse et al. 2022). The "parrot attractor" (train on reflections →
@@ -494,18 +502,22 @@ literature directly, and soften the strict dichotomy. On that footing it holds.
 - H. Poincaré, *Mémoire sur les courbes…* (1880s) — node/saddle/center/**focus** (spiral) classification.
 - I. Bendixson (1901) — `Re λ(A) ≤ λ_max(A_s)`; the symmetric part bounds the real spectrum (used in §1.2).
 - C. Wissel (1984); M. Scheffer et al., *Nature* (2009) — critical slowing down / early-warning signals.
-- B. D. O. Anderson (1977); Åström & Bohlin (1965) — persistent excitation / identifiability (invoked by analogy only in §3).
+- B. D. O. Anderson (1977), *Exponential stability of linear equations arising in adaptive identification*, IEEE TAC — persistent excitation / identifiability (invoked by analogy only in §3; canonical attribution, matching the `.tex`).
 - J. Pathak et al. (2017–18) — reservoir reconstruction of attractors and Lyapunov spectra.
-- **arXiv:2406.07284** (2024) — "Model Collapse in Self-Improving Systems"; double-scaling law for synthetic data error saturation (§1.1, §7).
-- **arXiv:2402.07827** (2024) — Small-gain theorem bounds for non-normal Jacobians; cross-term norm control (§1.1, implemented in `collapse_certificate()`).
-- **arXiv:2309.07864** (2023) — Lyapunov contraction for neural SDEs (§1, core theory).
-- **arXiv:2309.01219** (2023) — Prediction markets as ML validation signals (external grounding mechanism).
+- W. Lohmiller & J.-J. E. Slotine (1998), *On Contraction Analysis for Nonlinear Systems*, Automatica 34(6):683–696 — matrix measure / logarithmic norm μ₂(A) = λ_max(A_s); the contraction bound used in §1–1.2. (The small-gain composition for the non-normal cross-term is classical — Zames 1966.)
+- H. K. Khalil (2002), *Nonlinear Systems* (3rd ed.), Prentice Hall — Lyapunov stability foundations underpinning §1.
+- **arXiv:2402.07043** (2024) — Dohmatob, Feng, Yang, Charton & Kempe, *A Tale of Tails: Model Collapse as a Change of Scaling Laws* (ICML 2024); synthetic data truncates the scaling law (§1.1, §7).
+- **arXiv:2406.07515** (2024) — Feng, Dohmatob, Yang, Charton & Kempe, *Beyond Model Collapse: Scaling Up with Synthesized Data Requires Verification* (ICML 2024); verification prevents collapse — published analogue of external grounding (§7).
+- J. Wolfers & E. Zitzewitz (2004), *Prediction Markets*, J. Economic Perspectives 18(2):107–126 — prediction-market accuracy; rationale for markets as an external grounding signal (Kalshi grounding, §6).
 - I. Shumailov et al., *Nature* (2024) — model collapse under recursive training on synthetic data (§7).
 - D. Amodei et al. (2016); J. Skalse et al. (2022) — reward hacking / specification gaming (§7).
 
-*Web citations above are from prior knowledge; the live web-search backend was
-unavailable when this was written and no URLs were fetched. Verify before formal
-publication.*
+*Web citations above were **verified against arXiv on 2026-06-17** (issue [#660]).
+An earlier draft, written with the search backend down, carried four fabricated
+arXiv IDs — 2406.07284, 2402.07827, 2309.07864, 2309.01219 — none of which matched
+their claimed titles. They have been replaced with verified sources (the model-
+collapse work is now Dohmatob et al. 2402.07043 and Feng et al. 2406.07515; the
+contraction math is attributed to Lohmiller & Slotine 1998 and Khalil 2002).*
 
 ---
 
@@ -553,18 +565,18 @@ hand-entered, not data-derived.**
 3. A reservoir's autonomous rollout diverges unless projected back onto the
    valid `[0,1]⁴` domain; that projection *is* `π`. This is a real modeling step,
    but it is also an external bound imposed by hand, not an emergent property.
-4. **(NOT resolved — corrected 2026-06-16, [#661].)** The hard clamp is non-smooth
-   at boundary fixed points; a true log-barrier was the proposed fix. What is
-   implemented in `_collapse_state` (`collapse.py:120–130`) is **not** a log-barrier:
-   it is a multiplicative shrink of the projection,
-   `x* = (P x)·(1 − barrier)` with `barrier = −s·log(1 − ‖Px‖/‖x‖)`. At the default
-   `s = 0.1` it scales the projection by up to ~46%; and for `s > 1/ln(100) ≈ 0.217`
-   the factor `(1 − barrier)` goes negative, so the "collapsed" state flips sign and
-   grows — the opposite of a barrier. The smoothness caveat therefore **stands**.
-   Candidate fixes ([#661]): drop the term (`P` alone is the correct projection), or
-   replace the active/null contraction argument with the logarithmic norm
-   μ₂(A) = λ_max(A_s), which bounds `‖x(t)‖ ≤ e^{μ₂(A)t}‖x(0)‖` directly — tighter,
-   with no small-gain cross-term and no subspace-invariance assumption.
+4. **(Resolved — 2026-06-17, [#661].)** A first version of this appendix claimed a
+   "log-barrier" smoothed the boundary. What actually shipped in `_collapse_state`
+   was **not** a log-barrier: it was a multiplicative shrink of the projection,
+   `x* = (P x)·(1 − barrier)` with `barrier = −s·log(1 − ‖Px‖/‖x‖)`, which for
+   `s > 1/ln(100) ≈ 0.217` went negative and flipped the sign of the collapsed
+   state — the opposite of collapse. **Fix:** the term is dropped. Collapse is now
+   the orthogonal projection `x* = P x` with `P = V Vᵀ`; because `P` is idempotent
+   and symmetric it is non-expansive (`‖P x‖ ≤ ‖x‖`) and smooth, so there is no
+   boundary to enforce and no penalty term is needed. The original concern is moot.
+   (The logarithmic-norm reformulation μ₂(A) = λ_max(A_s) of the *certificate's*
+   small-gain bound remains a separate, optional tightening — not required for the
+   projection to be correct.)
 
 ### Status: Implemented
 

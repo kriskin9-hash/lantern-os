@@ -97,6 +97,7 @@ const routes = [
   require("./routes/keystone"),
   require("./routes/image"),
   require("./routes/web-images"),
+  require("./routes/youtube"),
   require("./routes/three-doors-image-pool"),
   require("./routes/three-doors-convergence"),
   require("./routes/convergence-dispatch"),

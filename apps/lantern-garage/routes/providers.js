@@ -12,6 +12,7 @@ const path = require("path");
 const https = require("https");
 const { sendJson } = require("../lib/http-utils");
 const { refreshProviderCache, getProviderState } = require("../lib/provider-cache");
+const { modelFor } = require("../lib/provider-models");
 
 const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 const ENV_LOCAL = path.join(REPO_ROOT, ".env.local");
@@ -94,7 +95,7 @@ function httpsPost(opts, payload) {
 
 async function testAnthropic(key) {
   const payload = JSON.stringify({
-    model: "claude-haiku-4-5-20251001",
+    model: modelFor("anthropic"),
     max_tokens: 8,
     messages: [{ role: "user", content: "hi" }],
   });
@@ -114,7 +115,7 @@ async function testAnthropic(key) {
 }
 
 async function testGemini(key) {
-  const model = "gemini-2.5-flash";
+  const model = modelFor("gemini");
   const payload = JSON.stringify({ contents: [{ parts: [{ text: "hi" }] }], generationConfig: { maxOutputTokens: 4 } });
   const r = await httpsPost({
     hostname: "generativelanguage.googleapis.com",
@@ -128,7 +129,7 @@ async function testGemini(key) {
 }
 
 async function testOpenAI(key) {
-  const payload = JSON.stringify({ model: "gpt-4.1-mini", messages: [{ role: "user", content: "hi" }], max_tokens: 4 });
+  const payload = JSON.stringify({ model: modelFor("openai"), messages: [{ role: "user", content: "hi" }], max_tokens: 4 });
   const r = await httpsPost({
     hostname: "api.openai.com",
     path: "/v1/chat/completions",
@@ -141,7 +142,7 @@ async function testOpenAI(key) {
 }
 
 async function testXai(key) {
-  const payload = JSON.stringify({ model: "grok-3-mini", messages: [{ role: "user", content: "hi" }], max_tokens: 4 });
+  const payload = JSON.stringify({ model: modelFor("xai"), messages: [{ role: "user", content: "hi" }], max_tokens: 4 });
   const r = await httpsPost({
     hostname: "api.x.ai",
     path: "/v1/chat/completions",

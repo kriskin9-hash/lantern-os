@@ -222,7 +222,7 @@ def test_certificate_predicts_actual_contraction():
 
 # ── Real vs Synthetic Data Separation (issue #522) ───────────────────────────
 #
-# Data-type taxonomy (arXiv:2406.07284 double-scaling law; arXiv:2309.07864):
+# Data-type taxonomy (arXiv:2402.07043 change-of-scaling-laws; Shumailov et al. 2024):
 #   synthetic (π=0) : the model is rolled out on its own outputs only.
 #                     Recursive self-reference drives model collapse — the state
 #                     freezes onto the Σ₀ null manifold (the parrot attractor).
@@ -307,7 +307,7 @@ def test_collapse_scaling_monotone_in_real_fraction(
     """Double-scaling law: collapse score is monotone-decreasing in π.
 
     synthetic (π=0) ≥ mixed (π=0.5) ≥ real (π=1), and synthetic strictly worse
-    than real — the arXiv:2406.07284 'mix real data to prevent collapse' result.
+    than real — the arXiv:2402.07043 'mix real data to prevent collapse' result.
     """
     assert synthetic_collapse_score >= mixed_collapse_score >= real_collapse_score
     assert synthetic_collapse_score > real_collapse_score
@@ -449,25 +449,36 @@ def test_certificate_full_spectrum_abscissa():
     assert rc.full_contracting is False
 
 
-def test_log_barrier_smooth_projection():
-    """Log-barrier provides smooth boundary instead of hard clamp."""
+def test_collapse_is_nonexpansive_projection():
+    """Collapse is an orthogonal projection onto the null manifold: ‖P x‖ ≤ ‖x‖.
+
+    Regression for issue #661 — the former multiplicative "log-barrier" could
+    flip sign and grow ‖x*‖ at strengths above ~0.217. A clean projector never
+    increases the norm.
+    """
     m = _model()
-    m.collapse_op = SemanticCollapseOperator(log_barrier_strength=0.5)
-    
+    m.collapse_op = SemanticCollapseOperator()
+
     # Create a collapsing regime
     for p in m.graph.active.drift_net.parameters():
         torch.nn.init.zeros_(p)
-    
+
     x0, s0 = _init_state(scale=0.01)
     _, _, tr = rollout(m, x0, s0, steps=20, base_seed=1)
-    
-    # Should still collapse but with smooth transitions
+
+    # Should collapse, and projection is non-expansive (norm never blows up)
     assert len(tr.collapses) > 0
-    # Check that norms don't jump discontinuously (smooth barrier)
     norms = tr.x_norms()
     for i in range(1, len(norms)):
-        # Allow some change but not infinite jumps
-        assert abs(norms[i] - norms[i-1]) < 10.0
+        assert abs(norms[i] - norms[i - 1]) < 10.0
+
+    # Direct check: the collapse projection cannot increase the state norm.
+    op = SemanticCollapseOperator()
+    A = torch.zeros(4, 8, 8)              # all-null Jacobian → full projector
+    x = torch.randn(4, 8)
+    x_star, outcome = op._collapse_state(x, A)
+    assert outcome == CollapseOutcome.ATTRACTOR
+    assert torch.all(x_star.norm(dim=-1) <= x.norm(dim=-1) + 1e-5)
 
 
 def test_non_symmetric_jacobian_in_rollout():

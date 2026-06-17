@@ -325,13 +325,13 @@ def main() -> None:
                 "claim": "Model-collapse phenomenon is present in the real log",
                 "evidence": f"parrot-attractor signature={parrot} "
                             f"(self_repeat={mean_self_repeat}, echo={mean_echo})",
-                "source": "Shumailov et al., Nature 2024; arXiv:2406.07284",
+                "source": "Shumailov et al., Nature 2024; Dohmatob et al., arXiv:2402.07043",
             },
             {
                 "claim": "Small-gain certificate certifies contraction on non-normal real Jacobians",
                 "evidence": f"{n_guaranteed}/{len(cert_series)} windows guaranteed "
                             f"(α<0), first@turn={first_collapse}, null modes present",
-                "source": "arXiv:2402.07827 (small-gain bounds for non-normal A)",
+                "source": "Lohmiller & Slotine 1998 (contraction / matrix measure for non-normal A)",
             },
             {
                 "claim": "NIS surprise canary detects model-reality mismatch (overconfidence)",
@@ -344,7 +344,7 @@ def main() -> None:
                          "'mix real data (π>0) to prevent collapse' mechanism",
                 "evidence": f"null-subspace persistence on/off = "
                             f"{null_persistence_ratio}× (>1 ⇒ flat direction kept alive)",
-                "source": "arXiv:2406.07284 (double-scaling law, real-data fraction π>0)",
+                "source": "Dohmatob et al., arXiv:2402.07043 (change of scaling laws, real-data fraction π>0)",
             },
         ],
         "diverged": [
@@ -370,7 +370,7 @@ def main() -> None:
             "phenomenology (parrot attractor, certified contraction, surprise spikes, "
             "anti-collapse excitation) on a REAL log. Quantitative collapse magnitude "
             "diverges from the synthetic-training regime because the log is not purely "
-            "recursive — consistent with arXiv:2406.07284's π>0 (real-data) branch."
+            "recursive — consistent with arXiv:2402.07043's π>0 (real-data) branch."
         ),
     }
 
@@ -382,7 +382,7 @@ def main() -> None:
             "504": "realizes the deprecated §6/Appendix-A router demo on real data",
             "505": "uses the small-gain collapse_certificate() for non-normal A",
             "506": "uses SurpriseMonitor (NIS) wired to anti_collapse_trigger",
-            "515-518": "research papers integrated (arXiv:2406.07284, 2402.07827, 2309.07864)",
+            "515-518": "research papers integrated (arXiv:2402.07043, arXiv:2406.07515, Lohmiller & Slotine 1998)",
         },
         "provenance": {
             "real_inputs": [

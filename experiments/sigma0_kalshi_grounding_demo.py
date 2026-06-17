@@ -8,7 +8,7 @@ Executes the full surprise-Σ₀-excitation cycle on Kalshi tight-band price dat
 4. Measure time-to-recovery (excitation restores PE)
 5. Output: run log + 1-page report
 
-Issue #523: Real-data grounding validation for arXiv:2406.07284 collapse theory.
+Issue #523: Real-data grounding validation for arXiv:2402.07043 collapse theory.
 """
 
 import json

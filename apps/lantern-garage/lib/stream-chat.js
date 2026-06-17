@@ -2,6 +2,7 @@ const https = require("https");
 const http = require("http");
 const path = require("path");
 const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, verifyResponse } = require("./dream-chat");
+const { modelFor } = require("./provider-models");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
@@ -1163,7 +1164,7 @@ async function handleStreamChat(req, url, res) {
     // Gemini model fallback chain: primary -> fallbacks on 429/quota
     // Note: gemini-2.0-flash-lite shut down June 1 2026; gemini-3.5-flash is GA with free grounding
     const GEMINI_MODEL_CHAIN = [
-      process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      modelFor("gemini"),
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
     ];
@@ -1246,7 +1247,7 @@ async function handleStreamChat(req, url, res) {
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("gemini");
-      const geminiModelName = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+      const geminiModelName = modelFor("gemini");
       await recordConvergenceSignature("gemini", geminiModelName, geminiClean, true);
       const geminiReceipt = buildPcsfReceipt("gemini", geminiModelName, true);
       sendReceipt(geminiReceipt);
@@ -1353,7 +1354,7 @@ async function handleStreamChat(req, url, res) {
       }).catch(() => {});
       recordProviderSuccess("anthropic");
       recordProviderSuccessRouter("anthropic");
-      const modelName = process.env.ANTHROPIC_MODEL || "claude-opus";
+      const modelName = claudeModel; // receipt MUST reflect the model actually sent
       await recordConvergenceSignature("anthropic", modelName, anthropicClean, true);
       const anthropicReceipt = buildPcsfReceipt("anthropic", modelName, true);
       sendReceipt(anthropicReceipt);
@@ -1377,7 +1378,7 @@ async function handleStreamChat(req, url, res) {
   if (openaiKey && message && (!requestedProvider || requestedProvider === "openai" || requestedProvider === "gpt")) {
     try {
       const payload = JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        model: modelFor("openai"),
         stream: true,
         messages: buildProviderMessages(systemPrompt, compacted, message),
       });
@@ -1431,7 +1432,7 @@ async function handleStreamChat(req, url, res) {
       }).catch(() => {});
       recordProviderSuccess("openai");
       recordProviderSuccessRouter("openai");
-      const openaiModelName = process.env.OPENAI_MODEL || "gpt-4-turbo";
+      const openaiModelName = modelFor("openai");
       await recordConvergenceSignature("openai", openaiModelName, openaiClean, true);
       const openaiReceipt = buildPcsfReceipt("openai", openaiModelName, true);
       sendReceipt(openaiReceipt);
@@ -1454,7 +1455,7 @@ async function handleStreamChat(req, url, res) {
   const xaiKey = process.env.XAI_API_KEY;
   if (xaiKey && message && (!requestedProvider || requestedProvider === "grok" || requestedProvider === "xai")) {
     try {
-      const xaiModel = process.env.XAI_MODEL || "grok-4.3";
+      const xaiModel = modelFor("xai");
       const payload = JSON.stringify({
         model: xaiModel, stream: true,
         messages: buildProviderMessages(systemPrompt, compacted, message),
@@ -1485,7 +1486,7 @@ async function handleStreamChat(req, url, res) {
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
-      const grokModelName = process.env.XAI_MODEL || "grok-2";
+      const grokModelName = xaiModel; // receipt MUST reflect the model actually sent
       await recordConvergenceSignature("grok", grokModelName, xaiClean, true);
       const grokReceipt = buildPcsfReceipt("grok", grokModelName, true);
       sendReceipt(grokReceipt);

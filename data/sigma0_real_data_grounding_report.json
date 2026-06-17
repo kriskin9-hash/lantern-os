@@ -6,7 +6,7 @@
     "504": "realizes the deprecated \u00a76/Appendix-A router demo on real data",
     "505": "uses the small-gain collapse_certificate() for non-normal A",
     "506": "uses SurpriseMonitor (NIS) wired to anti_collapse_trigger",
-    "515-518": "research papers integrated (arXiv:2406.07284, 2402.07827, 2309.07864)"
+    "515-518": "research papers integrated (arXiv:2402.07043, arXiv:2406.07515, Lohmiller & Slotine 1998)"
   },
   "provenance": {
     "real_inputs": [
@@ -88,12 +88,12 @@
       {
         "claim": "Model-collapse phenomenon is present in the real log",
         "evidence": "parrot-attractor signature=True (self_repeat=0.4587, echo=0.1451)",
-        "source": "Shumailov et al., Nature 2024; arXiv:2406.07284"
+        "source": "Shumailov et al., Nature 2024; Dohmatob et al., arXiv:2402.07043"
       },
       {
         "claim": "Small-gain certificate certifies contraction on non-normal real Jacobians",
         "evidence": "22/2320 windows guaranteed (\u03b1<0), first@turn=24, null modes present",
-        "source": "arXiv:2402.07827 (small-gain bounds for non-normal A)"
+        "source": "Lohmiller & Slotine 1998 (contraction / matrix measure for non-normal A)"
       },
       {
         "claim": "NIS surprise canary detects model-reality mismatch (overconfidence)",
@@ -103,7 +103,7 @@
       {
         "claim": "\u03a3\u2080\u207b\u00b9 anti-collapse sustains the flat (null) direction \u2014 the 'mix real data (\u03c0>0) to prevent collapse' mechanism",
         "evidence": "null-subspace persistence on/off = 1.674\u00d7 (>1 \u21d2 flat direction kept alive)",
-        "source": "arXiv:2406.07284 (double-scaling law, real-data fraction \u03c0>0)"
+        "source": "Dohmatob et al., arXiv:2402.07043 (change of scaling laws, real-data fraction \u03c0>0)"
       }
     ],
     "diverged": [
@@ -116,7 +116,7 @@
         "explanation": "Theory predicts full collapse only under purely recursive synthetic training (\u03b1t\u21920). A real mixed-source log is not purely self-referential, so it exhibits persistent excitation rather than a rescued collapse. This is the expected real-data behavior, not a contradiction."
       }
     ],
-    "verdict": "The committed \u03a3\u2080 machinery reproduces the qualitative model-collapse phenomenology (parrot attractor, certified contraction, surprise spikes, anti-collapse excitation) on a REAL log. Quantitative collapse magnitude diverges from the synthetic-training regime because the log is not purely recursive \u2014 consistent with arXiv:2406.07284's \u03c0>0 (real-data) branch."
+    "verdict": "The committed \u03a3\u2080 machinery reproduces the qualitative model-collapse phenomenology (parrot attractor, certified contraction, surprise spikes, anti-collapse excitation) on a REAL log. Quantitative collapse magnitude diverges from the synthetic-training regime because the log is not purely recursive \u2014 consistent with arXiv:2402.07043's \u03c0>0 (real-data) branch."
   },
   "series": {
     "certificate": [
