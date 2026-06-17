@@ -341,7 +341,7 @@ async function callLlm(system, user, providerHint = "auto", maxTokens = 4096) {
 
 function callOpenAI(messages, maxTokens = 4096) {
   const openaiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = require("./provider-models").modelFor("openai");
   const payload = JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 });
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -371,7 +371,7 @@ function callOpenAI(messages, maxTokens = 4096) {
 function callGrok(messages, maxTokens = 4096) {
   // XAI / Grok exposes an OpenAI-compatible Chat Completions API.
   const xaiKey = process.env.XAI_API_KEY;
-  const model = process.env.XAI_MODEL || "grok-2-latest";
+  const model = require("./provider-models").modelFor("xai");
   const payload = JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 });
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -400,7 +400,7 @@ function callGrok(messages, maxTokens = 4096) {
 
 function callClaude(system, user, maxTokens = 4096) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ANTHROPIC_MODEL || "claude-haiku-4-5-20251001";
+  const model = require("./provider-models").modelFor("anthropic");
   const payload = JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
   return new Promise((resolve, reject) => {
     const req = https.request({
@@ -429,7 +429,7 @@ function callClaude(system, user, maxTokens = 4096) {
 
 function callGemini(system, user, maxTokens = 4096) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = require("./provider-models").modelFor("gemini");
   const payload = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: `${system}\n\n${user}` }] }],
     generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
