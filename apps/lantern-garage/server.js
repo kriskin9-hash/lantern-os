@@ -83,6 +83,7 @@ const deps = {
 
 const routes = [
   require("./routes/auth"),             // Patreon OAuth + session
+  require("./routes/profiles"),         // User profiles + role configuration (CSF-backed)
   require("./routes/status"),
   require("./routes/system-overview"),
   require("./routes/ui"),
