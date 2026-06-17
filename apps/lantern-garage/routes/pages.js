@@ -19,10 +19,10 @@ const PUBLIC_PAGES = {
 
 // Protected pages with minimum role requirement
 const PROTECTED_PAGES = {
-  "/dream-chat.html": "guest", // Any authenticated user (free tier + supporters)
-  "/profile.html": "guest", // Must be logged in but any role
-  "/trader-dashboard.html": "supporter",
-  "/create.html": "supporter",
+  "/dream-chat.html": "guest",     // Free + Wanderer + all tiers
+  "/profile.html": "guest",        // Any logged-in user
+  "/create.html": "founder",       // Deep Dreamer tier ($20) + higher
+  "/trader-dashboard.html": "admin", // Guild tier ($200) only
 };
 
 module.exports = async function pagesRoute(req, res, url, deps) {
