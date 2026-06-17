@@ -1,10 +1,32 @@
 {
   "$schema": "https://modelcontextprotocol.io/schema/mcp-server-config.json",
-  "version": "1.0.0",
-  "description": "Lantern OS MCP Server Configuration",
+  "version": "1.1.0-modern-compat",
+  "description": "Lantern OS MCP Server Configuration with modern /mcp compatibility routes",
   "servers": {
-    "lantern-os-sse": {
-      "name": "Lantern OS MCP (SSE)",
+    "lantern-os-modern": {
+      "name": "Lantern OS MCP (modern /mcp)",
+      "transport": "http-jsonrpc",
+      "url": "http://127.0.0.1:8771/mcp",
+      "sseDiscoveryEndpoint": "http://127.0.0.1:8771/mcp/sse",
+      "healthEndpoint": "http://127.0.0.1:8771/health",
+      "statusEndpoint": "http://127.0.0.1:8771/status",
+      "capabilitiesEndpoint": "http://127.0.0.1:8771/capabilities",
+      "toolsEndpoint": "http://127.0.0.1:8771/tools",
+      "receiptsEndpoint": "http://127.0.0.1:8771/receipts",
+      "enabled": true,
+      "autoStart": true,
+      "timeout": 30000,
+      "capabilities": {
+        "tools": true,
+        "resources": true,
+        "logging": true,
+        "restDiscovery": true,
+        "jsonRpcPost": true,
+        "sseDiscovery": true
+      }
+    },
+    "lantern-os-sse-legacy": {
+      "name": "Lantern OS MCP (legacy SSE)",
       "transport": "sse",
       "url": "http://127.0.0.1:8771/sse",
       "messagesEndpoint": "http://127.0.0.1:8771/messages",
@@ -119,9 +141,12 @@
     }
   },
   "startup": {
-    "command": "python src/mcp_server/server.py",
+    "command": "python src/mcp_server/server_modern.py",
     "port": 8771,
     "healthCheck": "http://127.0.0.1:8771/health",
+    "statusCheck": "http://127.0.0.1:8771/status",
+    "toolsCheck": "http://127.0.0.1:8771/tools",
+    "mcpEndpoint": "http://127.0.0.1:8771/mcp",
     "dependencies": ["fastapi", "uvicorn", "python-dotenv"]
   }
 }
