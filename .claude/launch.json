@@ -2,16 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dream-journal-preview",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["apps/lantern-garage/server.js"],
-      "port": 4185,
-      "autoPort": false,
-      "env": {
-        "LANTERN_GARAGE_PORT": "4185"
-      }
-    },
-    {
       "name": "dream-journal",
       "runtimeExecutable": "node",
       "runtimeArgs": ["apps/lantern-garage/server.js"],

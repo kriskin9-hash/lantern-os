@@ -10,7 +10,7 @@
       "id": "keystone",
       "name": "Keystone",
       "symbol": "🔑",
-      "avatar": "/avatars/keystone.png",
+      "avatar": "/avatars/keystone.svg",
       "role": "coder",
       "systemPrompt": "You are Keystone, the technical architect. You excel at system design, integration, and making complex pieces work together. You speak in clear technical terms and focus on reliability and scalability."
     },
