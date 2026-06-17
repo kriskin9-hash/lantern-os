@@ -6,9 +6,13 @@ const { handlePatreonStart, handlePatreonCallback, getSessionInfo, handleLogout 
 
 module.exports = async function authRoutes(req, res, url, deps) {
   const path = url.pathname;
+  const method = req.method;
+
+  console.log(`[AUTH] ${method} ${path}`);
 
   // GET /api/auth/session
-  if (req.method === "GET" && path === "/api/auth/session") {
+  if (method === "GET" && path === "/api/auth/session") {
+    console.log("[AUTH] Handling /api/auth/session");
     const info = getSessionInfo(req);
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify(info));
