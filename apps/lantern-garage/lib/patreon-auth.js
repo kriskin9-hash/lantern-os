@@ -175,14 +175,19 @@ async function getPatreonUserWithMemberships(token) {
     "fields[member]": "currently_entitled_tiers",
   });
 
-  const res = await fetchFn(
-    `https://www.patreon.com/api/oauth2/v2/identity?${params.toString()}`,
-    {
-      headers: { Authorization: `Bearer ${token.access_token}` },
-    }
-  );
+  const url = `https://www.patreon.com/api/oauth2/v2/identity?${params.toString()}`;
+  console.log("[AUTH] User fetch URL:", url.split("?")[0]);
+  console.log("[AUTH] User fetch params:", params.toString());
 
-  if (!res.ok) throw new Error(`User fetch failed: ${res.statusText}`);
+  const res = await fetchFn(url, {
+    headers: { Authorization: `Bearer ${token.access_token}` },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.log("[AUTH] User fetch error response:", errText);
+    throw new Error(`User fetch failed: ${res.statusText} - ${errText}`);
+  }
 
   const { data, included } = await res.json();
 
