@@ -57,7 +57,7 @@ function handlePatreonStart(req, res, returnTo) {
     response_type: "code",
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: "identity identity.memberships:read",
+    scope: "identity identity.memberships",
     state,
     code_challenge: challenge,
     code_challenge_method: "S256",
