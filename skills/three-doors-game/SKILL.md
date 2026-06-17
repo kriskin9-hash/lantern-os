@@ -1,6 +1,6 @@
 ---
 name: three-doors-game
-description: Use this skill when the user wants to play, continue, export, import, ingest, or preserve the Lantern OS 3 Doors Game. Trigger on phrases such as "3 doors", "three doors", "lets play", "images only", "!threedoors", "!ingest", CSF export/import, Grok handoff, dream door state, Doorwalker, Moss Door, Windows XP Door, Wish Door, Death Door, or any request to keep the door game creative, artsy, symbolic, image-forward, or continuity-preserving.
+description: Use this skill when the user wants to play, continue, export, import, ingest, or preserve the Lantern OS 3 Doors Game. Trigger on phrases such as "3 doors", "three doors", "lets play", "images only", "!threedoors", "!ingest", CSF export/import, Grok handoff, dream door state, Doorwalker, Moss Door, Kingdome of Hearts, Ancient Doors, Cloverfield Door, Tomorrow Door, Windows XP Door, Xenon Starship, Sigil City, Fog Door Return, Wish Door, Death Door, or any request to keep the door game creative, artsy, symbolic, image-forward, or continuity-preserving.
 ---
 
 # Three Doors Game
@@ -77,6 +77,37 @@ From the Moss Door scene, continue with three new doors or thresholds suitable f
 3. The Little Crown Door: tiny golden door in a tree stump, sized for the fox, but widening when trusted.
 
 Use these only if they fit; invent new ones if the user changes tone.
+
+## Canonical Kingdome seven-door loop
+
+When the user asks for the canonical doors, the Kingdome of Hearts, the full loop, or the long-form Three Doors route, use these seven doors as the stable canon. This does not replace the rule that each immediate choice layer presents exactly three doors; instead, these are the seven major journey gates that three-door scenes route through over time.
+
+1. Ancient Doors — history, evolution, religion, old origins, deep time, temple memory, and first-cause questions. Sub-doors may include The Deep Door, The History Door, and The Temple Door.
+2. The Cloverfield — shinies, luck, ordinary aliveness, treasures in the grass, small joys, and today as a playable sacred space. Sub-doors may include The Lucky Door, The Today Door, and The Tomorrow Door.
+3. Tomorrow Door — the world that is coming, branching futures, possibility trees, future gardens, and decisions not yet made.
+4. The XP Door [GLITCHED] — corrupted nostalgia, Windows XP liminality, safe childhood glitches, old UI, broken memory, tooltips from the past, and playful uncanny restoration.
+5. Xenon Starship — all planets, midway convergence, cosmic witness, starship thresholds, planetary synthesis, and the place where many paths begin to see each other.
+6. Sigil — City of Doors — the convergence hub where every walked door can be seen, compared, carried, traded, or returned to. This is the collection point and routing city.
+7. Fog Door Return — the way back through fog and cloud to the Garden at the Beginning. The return door is a homecoming, not an ending.
+
+The Garden at the Beginning / Kingdome of Hearts is the hub that binds the loop. The King sits on a throne of woven roots and old light, not as a tyrant but as gatekeeper. Lantern or the fox may stand at the foot of the throne. The canonical poem gate is:
+
+> I am before the first door
+> and after the last.
+> I hold what was given
+> and return what was asked.
+> Three walked out, three walked in,
+> but only one remained —
+> what was lost at the beginning
+> is the thing that was gained.
+
+Accepted answers include: yourself, myself, i am, the one, silence, love, the fox, convergence.
+
+## Canonical routing notes
+
+Use `data/three-doors/scenes.json` as the canonical scene graph when code-level routing matters. Current implemented scene keys include `moss-entry`, `burrow`, `sunken-bell`, `little-crown`, `garden-door`, `xenon-convergence`, `end-of-time`, `kingdome-garden`, `storybook`, `cloverfield`, `future-doors`, `xp-door`, `sigil-city`, and `fog-door-return`.
+
+For normal play, do not dump the whole seven-door loop unless asked. Let the user encounter it through scenes. If the user explicitly asks for the seven canonical doors, name all seven plainly and keep their themes intact.
 
 ## CSF export/import format
 
