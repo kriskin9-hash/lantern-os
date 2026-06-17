@@ -43,8 +43,43 @@ function prevYesCents(m) {
   return Number.isFinite(f) ? Math.round(f * 100) : null;
 }
 
+// Structural guard: only single-outcome binary markets are tradeable entries.
+// Two market structures bled the live account (Jun 2026) and no pricing model
+// here can value them, so they must never reach a tradeable entry card:
+//   1. Multivariate / parlay series (KXMV*) — all legs must hit; e.g.
+//      KXMVESPORTSMULTIGAMEEXTENDED (8-leg), KXMVECROSSCATEGORY.
+//   2. Price-BAND range markets — resolve YES only inside a [floor, cap] band
+//      (e.g. "price range … $0.085 to 0.0899999"); identified by a cap_strike
+//      alongside floor_strike, or a "between" strike_type.
+// Returns { ok, reason }. Keep this conservative: when in doubt, exclude.
+function isSupportedEntryMarket(m) {
+  const ticker = String(m.ticker || "");
+  if (/^KXMV/i.test(ticker)) {
+    return { ok: false, reason: "multivariate/parlay series (KXMV*)" };
+  }
+  const st = String(m.strike_type || "").toLowerCase();
+  if (st === "between") {
+    return { ok: false, reason: `range-band market (strike_type=${st})` };
+  }
+  const cap = num(m.cap_strike);
+  const floor = num(m.floor_strike);
+  if (cap != null && floor != null && cap > floor) {
+    return { ok: false, reason: "range-band market (floor+cap strike)" };
+  }
+  // Belt-and-suspenders: parlay titles are comma-joined multi-leg strings.
+  const title = String(m.title || "");
+  if ((title.match(/,/g) || []).length >= 2 && /\b(yes|no)\b/i.test(title)) {
+    return { ok: false, reason: "multi-leg parlay title" };
+  }
+  return { ok: true };
+}
+
 // Check if entry passes profitability filters
 function isEntryTradeable(m, conviction, spread) {
+  // 0. Structure gate: parlays and range bands are never tradeable here.
+  const supported = isSupportedEntryMarket(m);
+  if (!supported.ok) return supported;
+
   // 1. Conviction threshold: must be ≥65%
   if (conviction < MIN_CONVICTION) return { ok: false, reason: `conviction ${conviction}% < ${MIN_CONVICTION}%` };
 
@@ -265,4 +300,4 @@ async function getSuggestions({ limit = 60, series_ticker = "KXMLBGAME", collect
   };
 }
 
-module.exports = { getSuggestions };
+module.exports = { getSuggestions, isSupportedEntryMarket };

@@ -634,6 +634,23 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       }
 
       // GET — Crypto intraday markets (15m, 1h, daily predictions)
+      // GLOBAL TRADING-PAUSE GATE — when data/kalshi/TRADING-PAUSED exists, every
+      // trade-suggestion deck returns ZERO cards. Engaged after the realized-PnL
+      // backtest showed no edge after fees (experiments/kalshi_pnl_backtest.py);
+      // remove the flag only once a strategy is proven net-profitable.
+      if (req.method === 'GET' && kalshi.tradingPaused && kalshi.tradingPaused() && [
+            '/api/trading/kalshi/crypto-intraday',
+            '/api/trading/kalshi/impossibility-deck',
+            '/api/trading/kalshi/decisive-deck',
+            '/api/trading/kalshi/positions-deck',
+          ].includes(url.pathname)) {
+        return sendJson(res, {
+          cards: [], count: 0, exitCount: 0, entryCount: 0, paused: true,
+          generatedAt: new Date().toISOString(),
+          note: 'TRADING PAUSED — all cards cleared. No strategy is proven net-profitable after fees. Remove data/kalshi/TRADING-PAUSED to re-enable.',
+        }, 200), true;
+      }
+
       if (url.pathname === '/api/trading/kalshi/crypto-intraday' && req.method === 'GET') {
         const cryptoSuggest = require('../lib/kalshi-crypto-suggester');
         const limit = q.limit ? Number(q.limit) : 20;

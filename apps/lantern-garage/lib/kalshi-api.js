@@ -27,6 +27,11 @@ const path = require("path");
 const KALSHI_DIR = path.resolve(__dirname, "..", "..", "..", "data", "kalshi");
 const LEDGER = path.join(KALSHI_DIR, "kalshi-live-ledger.jsonl");
 const KILL_SWITCH = path.join(KALSHI_DIR, "LIVE-KILL-SWITCH");
+// Trading-paused flag: when this file exists, ALL trade-suggestion decks return
+// zero entry cards. Engaged 2026-06-17 after the realized-PnL backtest showed no
+// edge after fees. Remove only once a strategy is proven net-profitable vs the
+// bet-favorite baseline (see experiments/kalshi_pnl_backtest.py).
+const TRADING_PAUSED = path.join(KALSHI_DIR, "TRADING-PAUSED");
 
 const ENV = (process.env.KALSHI_ENV || "prod").toLowerCase();
 const HOST = ENV === "demo" ? "demo-api.kalshi.co" : "external-api.kalshi.com";
@@ -44,6 +49,9 @@ function hasCredentials() {
 }
 function killSwitchActive() {
   return fs.existsSync(KILL_SWITCH);
+}
+function tradingPaused() {
+  return fs.existsSync(TRADING_PAUSED);
 }
 function tradingEnabled() {
   return process.env.KALSHI_TRADING_ENABLED === "1";
@@ -257,6 +265,7 @@ async function getConnection() {
     credentials: hasCredentials(),
     tradingEnabled: tradingEnabled(),
     killSwitch: killSwitchActive(),
+    tradingPaused: tradingPaused(),
     canTradeLive: tradingEnabled() && !killSwitchActive() && hasCredentials(),
   };
 }
@@ -265,5 +274,5 @@ module.exports = {
   getExchangeStatus, getMarkets, getEvents, getMarket, getOrderbook, getSeries,
   getBalance, getPositions, getOrders, getFills,
   placeOrder, cancelOrder, getConnection,
-  hasCredentials, killSwitchActive, tradingEnabled,
+  hasCredentials, killSwitchActive, tradingEnabled, tradingPaused,
 };

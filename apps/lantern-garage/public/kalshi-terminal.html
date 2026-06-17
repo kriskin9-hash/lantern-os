@@ -327,6 +327,23 @@ async function loadBalance(){
 // Show all open positions (exits first, then holds) + suggestion fill
 async function syncDeck(){
   const d=await j('/positions-deck');
+  // GLOBAL TRADING-PAUSE: server cleared all cards. Force-empty the deck (the
+  // in-place prune never removes the front card deck[idx]) and show why.
+  if(d.paused){
+    deck=[]; idx=0; liveMap={};
+    const stage=document.getElementById('stage'); if(stage) stage.innerHTML='';
+    const end=document.getElementById('end');
+    if(end){
+      end.style.display='flex';
+      end.innerHTML='<div style="color:var(--gold);font-weight:700">⏸ TRADING PAUSED</div>'
+        +'<div style="font-size:12px;color:var(--muted);max-width:320px">'
+        +(d.note||'All cards cleared until a strategy is proven net-profitable after fees.')+'</div>'
+        +'<button class="btn-ghost" onclick="syncDeck()">↻ Re-check</button>';
+    }
+    const prog=document.getElementById('progress'); if(prog) prog.textContent='';
+    markFresh(0);
+    return;
+  }
   if(!d.cards) return;
   stampCards(d.cards, d.generatedAt);   // re-stamped each 5s sync → positions stay live
   // Drop positions that expired more than 5 minutes ago — they can't be acted on
