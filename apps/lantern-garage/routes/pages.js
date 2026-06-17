@@ -19,7 +19,7 @@ const PUBLIC_PAGES = {
 
 // Protected pages with minimum role requirement
 const PROTECTED_PAGES = {
-  "/dream-chat.html": "supporter",
+  "/dream-chat.html": "guest", // Any authenticated user (free tier + supporters)
   "/profile.html": "guest", // Must be logged in but any role
   "/trader-dashboard.html": "supporter",
   "/create.html": "supporter",
