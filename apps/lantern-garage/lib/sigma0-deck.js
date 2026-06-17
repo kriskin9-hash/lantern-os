@@ -172,7 +172,26 @@ function selfTest() {
   return { ok: Object.values(checks).every(Boolean), checks, order, top: ranked[0].sigma0 };
 }
 
-module.exports = { endState, scoreCard, rankDeck, selfTest, readCard };
+// ── CDF-based early exit (Ouro-inspired, arXiv 2510.25741) ──────────────────
+// Tracks confidence evolution across loop iterations. Exit when the cumulative
+// distribution of confidence crosses a threshold (sufficient certainty) or
+// plateaus (entropy collapsed — no more signal to gain from another loop).
+//
+// confidenceHistory: float[] of per-loop confidence scores
+// threshold: exit when latest >= this (default 0.85, matching Ouro r4)
+// eps: exit when |Δ| < this between last two loops (default 0.04)
+function cdfExit(confidenceHistory, threshold = 0.85, eps = 0.04) {
+  const n = (confidenceHistory || []).length;
+  if (!n) return { exit: false, loop_n: 0, confidence: 0, reason: "no_data" };
+  const latest = confidenceHistory[n - 1];
+  if (latest >= threshold)
+    return { exit: true, loop_n: n, confidence: latest, reason: "threshold_met" };
+  if (n >= 2 && Math.abs(latest - confidenceHistory[n - 2]) < eps)
+    return { exit: true, loop_n: n, confidence: latest, reason: "converged" };
+  return { exit: false, loop_n: n, confidence: latest, reason: "continuing" };
+}
+
+module.exports = { endState, scoreCard, rankDeck, selfTest, readCard, cdfExit };
 
 if (require.main === module) {
   const r = selfTest();
