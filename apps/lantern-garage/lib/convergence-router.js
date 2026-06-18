@@ -212,9 +212,11 @@ class ConvergenceRouter {
    */
   async routeTask(taskType, payload) {
     const routes = {
-      "market_analysis": "/api/trading/kalshi/convergence/train",
-      "position_monitoring": "/api/trading/kalshi/monitor/positions",
-      "win_rate_check": "/api/trading/kalshi/winrate-stats"
+      "market_analysis":           "/api/trading/kalshi/convergence/train",
+      "position_monitoring":       "/api/trading/kalshi/monitor/positions",
+      "win_rate_check":            "/api/trading/kalshi/winrate-stats",
+      "pack_research_tesseract":   "/api/csf/tesseract/pack",
+      "unpack_research_tesseract": "/api/csf/tesseract/unpack",
     };
 
     if (routes[taskType]) {
