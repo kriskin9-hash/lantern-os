@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
+    "busboy": "^1.6.0",
     "exif-parser": "^0.1.12",
     "express-session": "^1.19.0",
     "pdf-parse": "^1.1.1",

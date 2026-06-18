@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const Busboy = require('busboy');
 
 function getIngestBase(repoRoot) {
   return path.join(repoRoot, 'data', 'ingest');
@@ -94,6 +95,36 @@ module.exports = async function pdfRoutes(req, res, url, deps) {
     }
 
     sendJson(res, { deleted: deleted.length, errors, filename });
+    return true;
+  }
+
+  // POST /api/pdfs/upload — save uploaded PDFs to data/ingest/
+  if (url.pathname === '/api/pdfs/upload' && req.method === 'POST') {
+    const ct = req.headers['content-type'] || '';
+    if (!ct.includes('multipart/form-data')) {
+      sendJson(res, { error: 'multipart/form-data required' }, 400);
+      return true;
+    }
+    const saved = [];
+    const errors = [];
+    const bb = Busboy({ headers: req.headers, limits: { fileSize: 100 * 1024 * 1024 } });
+    bb.on('file', (fieldname, file, info) => {
+      const { filename } = info;
+      if (!filename || !filename.toLowerCase().endsWith('.pdf')) {
+        file.resume();
+        errors.push({ filename, error: 'not a PDF' });
+        return;
+      }
+      const safe = path.basename(filename).replace(/[^a-zA-Z0-9._\- ]/g, '_');
+      const dest = path.join(ingestBase, safe);
+      const ws = fs.createWriteStream(dest);
+      file.pipe(ws);
+      ws.on('finish', () => saved.push(safe));
+      ws.on('error', e => errors.push({ filename: safe, error: e.message }));
+    });
+    bb.on('finish', () => sendJson(res, { ok: true, saved, errors }));
+    bb.on('error', e => sendJson(res, { ok: false, error: e.message }, 500));
+    req.pipe(bb);
     return true;
   }
 
