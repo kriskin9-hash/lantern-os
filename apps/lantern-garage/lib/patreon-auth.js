@@ -183,10 +183,9 @@ async function exchangePatreonCode(code, verifier) {
  * Fetch user identity and membership data from Patreon.
  */
 async function getPatreonUserWithMemberships(token) {
-  // Request identity + memberships with currently_entitled_tiers relationship
+  // Include memberships + their entitled tiers (relationship traversal, no invalid field params)
   const url = "https://www.patreon.com/api/oauth2/v2/identity" +
     "?include=memberships.currently_entitled_tiers" +
-    "&fields%5Bmember%5D=currently_entitled_tiers" +
     "&fields%5Btier%5D=title,amount_cents";
   console.log("[AUTH] User fetch URL:", url);
 
