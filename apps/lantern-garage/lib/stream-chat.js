@@ -714,6 +714,20 @@ async function handleStreamChat(req, url, res) {
     }
   }
 
+  // ── Keystone live project context (GitHub issues/PRs + MCP tools) ──────────
+  // Links Keystone chat to the project's real tools/details so ANY provider
+  // (incl. Grok) answers grounded in the live repo, not generic guesses. Cached
+  // 60s, best-effort. Disable with KEYSTONE_MCP=0.
+  if (!isKeystoneDebug && surfaceMode !== "three-doors" && message && process.env.KEYSTONE_MCP !== "0") {
+    try {
+      const { gatherProjectContext } = require("./keystone-context");
+      const proj = await gatherProjectContext({ maxItems: 8 });
+      if (proj) groundingContext = groundingContext ? `${groundingContext}\n\n${proj}` : proj;
+    } catch (e) {
+      console.error("[keystone-context] failed (non-fatal):", e.message);
+    }
+  }
+
   // CSF long-term memory + door state (query-time relevance filtered)
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
@@ -1162,7 +1176,10 @@ async function handleStreamChat(req, url, res) {
   // (or exact deterministic ones) answer without the LLM; weaker hits still GROUND
   // the LLM (better answers). Lower KB_ANSWER_MIN (e.g. 0.2) for cost-aggressive $0.
   const KB_ANSWER_MIN = parseFloat(process.env.KB_ANSWER_MIN || "0.3");
-  if (kbAnswer && kbAnswer.hit && !isKeystoneDebug && !isRpMode && !requestedProvider
+  // Live/stateful queries must NOT be answered from a static doc — they need the
+  // LLM with live project context (GitHub/MCP). Only static knowledge short-circuits.
+  const wantsLiveData = /\b(current|currently|now|today|latest|recent|open (issues?|prs?|pull)|status|right now|this (week|sprint)|what'?s? (open|happening|next))\b/i.test(message);
+  if (kbAnswer && kbAnswer.hit && !isKeystoneDebug && !isRpMode && !requestedProvider && !wantsLiveData
       && !routeDecision.requires_convergence
       && (kbAnswer.tier === "deterministic" || kbAnswer.score >= KB_ANSWER_MIN)) {
     const ans = `${kbAnswer.text}\n\n— from the Knowledge Center: ${kbAnswer.source}`;

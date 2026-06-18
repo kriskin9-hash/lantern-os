@@ -1,21 +1,22 @@
 {
-  "built_at": 1781820215.1455426,
+  "built_at": 1781820801.837854,
   "docs": [
     "README.md",
     "CLAUDE.md",
     "AGENTS.md",
     "QUICKSTART.md",
-    "docs/SIGMA0-COLLAPSE-CERTIFICATE.md",
-    "docs/SIGMA0-QUANTUM-RELATIVITY-ANALYSIS.md",
     "docs/LANTERN-SIGMA0-CODER.md",
     "docs/OURO-LOOPLM.md",
     "docs/CSF-FORMAT-SPECIFICATION.md",
+    "docs/SIGMA0-COLLAPSE-CERTIFICATE.md",
+    "docs/SIGMA0-QUANTUM-RELATIVITY-ANALYSIS.md",
+    "docs/KEYSTONE-MCP.md",
     "SECURITY.md",
     "SKILLS.md",
     "PROVIDERS.md",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md"
   ],
-  "sections": 309,
-  "sha256": "34a9baf0eb719c0b7005d201ac1341b2f1b4f43aea8ea42ba257971d0492e66d"
+  "sections": 315,
+  "sha256": "671ff3f03e4596817a4769e51719ee9c24d67434cca9a620982cedfbb3c0893a"
 }

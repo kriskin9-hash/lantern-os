@@ -42,15 +42,38 @@ function summarizeDispatchFleet(queue) {
   return `Fleet: ${active} active, ${blocked} blocked`;
 }
 
-async function callMcpTool(toolName, args, mcpReadOnlyTimeoutMs) {
+// Real MCP client: GET ${MCP_BASE_URL}/tools/{toolName}?args → parsed JSON.
+// Never throws — resolves null on any failure (server down, 401, timeout) so
+// callers can degrade gracefully. MCP_BASE_URL defaults to the local server.
+async function callMcpTool(toolName, args = {}, mcpReadOnlyTimeoutMs = 15000) {
   if (toolName === "get_agent_status") {
-    return {
-      canDispatch: false,
-      dispatchableSlots: [],
-      reason: "Dispatch held: no safe agent slots available.",
-    };
+    // Legacy local shim (no MCP round-trip).
+    return { canDispatch: false, dispatchableSlots: [], reason: "Dispatch held: no safe agent slots available." };
   }
-  return null;
+  const http = require("http");
+  const https = require("https");
+  const base = process.env.MCP_BASE_URL || "http://127.0.0.1:8771";
+  const entries = Object.entries(args || {}).map(([k, v]) => [k, String(v)]);
+  const qs = new URLSearchParams(Object.fromEntries(entries)).toString();
+  let url;
+  try { url = new URL(`${base}/tools/${encodeURIComponent(toolName)}${qs ? `?${qs}` : ""}`); }
+  catch { return null; }
+  const lib = url.protocol === "https:" ? https : http;
+  const headers = {};
+  if (process.env.MCP_TOKEN) headers["Authorization"] = `Bearer ${process.env.MCP_TOKEN}`;
+  return new Promise((resolve) => {
+    const rq = lib.request(url, { method: "GET", headers }, (resp) => {
+      let d = "";
+      resp.on("data", (c) => (d += c));
+      resp.on("end", () => {
+        if (resp.statusCode !== 200) return resolve(null);
+        try { resolve(JSON.parse(d)); } catch { resolve(null); }
+      });
+    });
+    rq.on("error", () => resolve(null));
+    rq.setTimeout(mcpReadOnlyTimeoutMs, () => { rq.destroy(); resolve(null); });
+    rq.end();
+  });
 }
 
 function runAgentDispatchBatch(now, dispatchableSlots) {
