@@ -19,12 +19,17 @@ function scanPdfs(ingestBase, repoRoot) {
       } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.pdf')) {
         const relative = path.relative(repoRoot, full).replace(/\\/g, '/');
         const folder = path.relative(ingestBase, path.dirname(full)).replace(/\\/g, '/');
+        let stat = null;
+        try { stat = fs.statSync(full); } catch { /* ignore */ }
         pdfs.push({
           name: path.basename(entry.name, '.pdf'),
           filename: entry.name,
           absolutePath: full,
           repoPath: '/repo/' + relative.split('/').map(encodeURIComponent).join('/'),
           folder,
+          size: stat ? stat.size : null,
+          createdAt: stat ? (stat.birthtime || stat.ctime).toISOString() : null,
+          modifiedAt: stat ? stat.mtime.toISOString() : null,
         });
       }
     }
