@@ -668,6 +668,68 @@
       color: var(--danger);
     }
 
+    /* ── Dream Journal Quick-Compose (#613) ── */
+    .journal-compose {
+      background: var(--surface, #111);
+      border: 1px solid var(--border, #222);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .journal-compose-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .autosave-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--surface2, #1a1a1a);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+      transition: color 0.3s, border-color 0.3s;
+    }
+    .autosave-badge.saved { color: #4ade80; border-color: #4ade80; }
+    .autosave-badge.saving { color: #facc15; border-color: #facc15; }
+    .journal-editor {
+      width: 100%;
+      background: var(--bg, #0a0a0a);
+      border: 1px solid var(--border, #1e1e1e);
+      border-radius: 8px;
+      color: var(--text, #eee);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding: 12px 14px;
+      resize: vertical;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .journal-editor:focus { border-color: var(--accent, #06b6d4); }
+    .journal-compose-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      gap: 8px;
+    }
+    .journal-word-count {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .journal-actions { display: flex; gap: 8px; }
+
     .delete-modal {
       display: none;
       position: fixed;
@@ -862,6 +924,22 @@
 
   <!-- Status Messages -->
   <div id="status" class="status-message"></div>
+
+  <!-- ── Dream Journal Quick-Compose (#613) ── -->
+  <div class="journal-compose" id="journal-compose">
+    <div class="journal-compose-header">
+      <span>✦ New Dream Entry</span>
+      <span class="autosave-badge" id="autosave-badge">Draft</span>
+    </div>
+    <textarea id="journal-editor" class="journal-editor" placeholder="Write a dream, idea, or memory…" rows="6" spellcheck="true"></textarea>
+    <div class="journal-compose-footer">
+      <div class="journal-word-count" id="journal-word-count">0 words</div>
+      <div class="journal-actions">
+        <button class="btn btn-secondary" id="journal-clear-btn" onclick="journalClear()" style="font-size:0.82rem;padding:6px 14px;">Clear</button>
+        <button class="btn btn-primary" id="journal-save-btn" onclick="journalSave()" style="font-size:0.82rem;padding:6px 14px;">Save to Journal</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Upload dropzone — drop or choose, nothing else. Project is auto-named and opened. -->
   <div id="upload-zone" class="upload-zone compact">
@@ -1195,6 +1273,81 @@ document.getElementById('deleteModal').addEventListener('click', (e) => {
   zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragging'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
   zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragging'); uploadPdfs(e.dataTransfer.files); });
+})();
+
+/* ── Dream Journal Quick-Compose (#613) ── */
+(function() {
+  const editor = document.getElementById('journal-editor');
+  const badge = document.getElementById('autosave-badge');
+  const wordCount = document.getElementById('journal-word-count');
+  const DRAFT_KEY = 'lantern-journal-draft';
+
+  // Restore draft from localStorage
+  const saved = localStorage.getItem(DRAFT_KEY);
+  if (saved) { editor.value = saved; updateWordCount(); badge.textContent = 'Draft restored'; }
+
+  function updateWordCount() {
+    const words = editor.value.trim() ? editor.value.trim().split(/\s+/).length : 0;
+    wordCount.textContent = words + ' word' + (words !== 1 ? 's' : '');
+  }
+
+  let autoSaveTimer;
+  editor.addEventListener('input', () => {
+    updateWordCount();
+    badge.textContent = 'Unsaved';
+    badge.className = 'autosave-badge';
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, editor.value);
+      badge.textContent = 'Draft saved';
+      badge.className = 'autosave-badge saved';
+    }, 10000); // auto-save draft every 10s of inactivity
+  });
+
+  window.journalClear = function() {
+    if (editor.value && !confirm('Clear the current draft?')) return;
+    editor.value = '';
+    localStorage.removeItem(DRAFT_KEY);
+    badge.textContent = 'Draft';
+    badge.className = 'autosave-badge';
+    updateWordCount();
+  };
+
+  window.journalSave = async function() {
+    const text = editor.value.trim();
+    if (!text) { showStatus('Write something first.', 'error'); return; }
+    const btn = document.getElementById('journal-save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    badge.textContent = 'Saving…';
+    badge.className = 'autosave-badge saving';
+    try {
+      const r = await fetch('/api/dream/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'dream', text, tags: ['journal'], source: 'creator-dashboard' }),
+      });
+      const d = await r.json();
+      if (d.saved || d.ok || d.id) {
+        badge.textContent = '✓ Saved';
+        badge.className = 'autosave-badge saved';
+        localStorage.removeItem(DRAFT_KEY);
+        editor.value = '';
+        updateWordCount();
+        showStatus('Entry saved to Dream Journal.', 'success');
+        setTimeout(() => loadRecentEntries(), 800);
+      } else {
+        throw new Error(d.error || 'Save failed');
+      }
+    } catch (e) {
+      badge.textContent = 'Error';
+      badge.className = 'autosave-badge';
+      showStatus('Save failed: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save to Journal';
+    }
+  };
 })();
 </script>
 <script src="/js/auth-gate.js" defer></script>
