@@ -29,6 +29,16 @@ module.exports = {
       ollamaModel: process.env.CONVERGENCE_MODEL || "lantern-convergance",
       surfaces: ["eval", "promotion", "receipts", "task-loop"],
     },
+    coder: {
+      // Continually-trained local Σ₀ coding agent. LoRA fine-tuned on Claude
+      // sessions; promoted by the continual-training loop + leaderboard.
+      profileId: "lantern-sigma0-coder",
+      ollamaModel: process.env.OLLAMA_MODEL || "lantern-sigma0-coder-v2",
+      baseModel: "Qwen/Qwen2.5-Coder-3B-Instruct",
+      trainingData: "models/lantern-sigma0-coder/training-data.jsonl",
+      surfaces: ["autowork", "coding", "code-execution", "task-loop"],
+      continualTraining: true,
+    },
   },
   image: {
     dream: {

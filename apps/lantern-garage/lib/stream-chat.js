@@ -1124,14 +1124,21 @@ async function handleStreamChat(req, url, res) {
     ]
   };
   
-  // Select model chain based on intent or use default
+  // Select model chain based on intent, then reorder by the performance
+  // leaderboard (PCSF-preferred): the best-performing local model for this task
+  // is tried first, and the continually-trained model (OLLAMA_MODEL) is always
+  // a candidate for work. Falls back to the static chain when there's no signal.
   const intent = converganceDecision?.intent || "default";
-  const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
-  
+  const { orderChainByLeaderboard, recordModelOutcome } = require("./model-leaderboard");
+  const staticChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
+  let modelChain = staticChain;
+  try { modelChain = await orderChainByLeaderboard(staticChain, intent); } catch { /* keep static */ }
+
   const ollamaLocalFirst = (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local") && !autoPrefersAnthropic;
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
     
     for (const ollamaModel of modelChain) {
+      const _ollamaStart = Date.now();
       try {
         const payload = JSON.stringify({
           model: ollamaModel,
@@ -1180,6 +1187,7 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
+          recordModelOutcome(ollamaModel, intent, true, Date.now() - _ollamaStart); // feed leaderboard
           const ollamaReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
           sendReceipt(ollamaReceipt);
           const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions, receipt: ollamaReceipt };
@@ -1188,11 +1196,12 @@ async function handleStreamChat(req, url, res) {
           return;
         }
       } catch (err) {
+        recordModelOutcome(ollamaModel, intent, false, Date.now() - _ollamaStart); // leaderboard learns failures too
         fullReply = "";
         continue; // Try next model in chain
       }
     }
-    
+
   }
 
   // Provider 0b: Keystone FT managed agent (Haiku + memory store) — explicit request only.
