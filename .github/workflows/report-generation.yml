@@ -9,6 +9,9 @@ on:
       - 'docs/ORION-MOOKMANREPORT4-STYLE.md'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-reports:
     runs-on: windows-latest
@@ -32,7 +35,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload Generated PDFs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: generated-reports
           path: artifacts/*.pdf

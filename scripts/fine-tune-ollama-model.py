@@ -64,6 +64,7 @@ def get_base_model(model_id):
     mapping = {
         "lantern-csf-dream": "unsloth/mistral-7b-v0.2",
         "lantern-pcsf": "unsloth/Qwen2.5-Coder-7B",
+        "lantern-sigma0-coder": "unsloth/Qwen2.5-Coder-7B",
         "lantern-convergance": "unsloth/Qwen2.5-Coder-14B",
     }
     return mapping.get(model_id, "unsloth/mistral-7b-v0.2")

@@ -1,12 +1,13 @@
 {
   "name": "lantern-garage-app",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "Local-first Lantern OS garage full-stack app.",
   "scripts": {
     "setup": "node ../../scripts/ensure-rust.js || true",
     "prestart": "npm run setup",
     "start": "node server.js",
+    "start:dev": "node server-dev.js",
     "start:local": "node server.js",
     "start:sd": "python ../../src/sd_image_server.py",
     "check": "node --check server.js",
@@ -20,6 +21,7 @@
     "test:ui": "npx playwright test ../../tests/test_dream_journal_ui.spec.js",
     "test:ui:headed": "npx playwright test ../../tests/test_dream_journal_ui.spec.js --headed",
     "test:three-doors": "node ../../tests/test_three_doors_integration.spec.js",
+    "test:sprint16": "node ../../tests/test_sprint16_dashboards.js",
     "test:all": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone cache ui && npm run test:three-doors",
     "dev": "node --watch server.js",
     "start:master": "git -C ../.. pull origin master && python3 ../../integrations/human-flourishing-frameworks/export_snapshot.py || true && node --watch server.js"
@@ -28,13 +30,15 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.102.0",
+    "@anthropic-ai/sdk": "^0.104.1",
+    "busboy": "^1.6.0",
     "exif-parser": "^0.1.12",
+    "express-session": "^1.19.0",
     "pdf-parse": "^1.1.1",
-    "sharp": "^0.35.0",
+    "sharp": "^0.35.1",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
-    "playwright": "^1.60.0"
+    "playwright": "^1.61.0"
   }
 }

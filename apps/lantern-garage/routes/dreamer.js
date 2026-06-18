@@ -49,7 +49,7 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
   }
   if (url.pathname === "/api/agents" && req.method === "GET") {
     sendJson(res, {
-      agents: AGENT_PERSONAS.map((a) => ({ id: a.id, name: a.name, symbol: a.symbol })),
+      agents: AGENT_PERSONAS.map((a) => ({ id: a.id, name: a.name, symbol: a.symbol, avatar: a.avatar || null, role: a.role || null })),
       default: AGENT_PERSONAS[0].id,
     });
     return true;
@@ -86,6 +86,142 @@ module.exports = async function dreamerRoutes(req, res, url, deps) {
         routing: data.routing?.dailyBootOrder || [],
         weights: data.routing?.weights || {},
       });
+    } catch (error) {
+      sendJson(res, { error: error.message }, 500);
+    }
+    return true;
+  }
+  if (url.pathname === "/api/dreamer/upload" && req.method === "POST") {
+    console.log("[UPLOAD] Starting upload handler");
+    try {
+      const fs = require("fs");
+      const busboy = require("busboy");
+      const user = normalizeDreamerUser(url.searchParams.get("user") || "dreamer");
+      console.log("[UPLOAD] Setup complete, creating busboy");
+
+      const videosDir = path.join(repoRoot, "data", "dreamer", "videos");
+      if (!fs.existsSync(videosDir)) {
+        fs.mkdirSync(videosDir, { recursive: true });
+      }
+
+      const bb = busboy({ headers: req.headers });
+      let fileInfo = null;
+      let entryJson = null;
+      let uploadError = null;
+
+      const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+      let bytesUploaded = 0;
+
+      bb.on("file", (fieldname, file, info) => {
+        if (fieldname === "file") {
+          // Validate mime type
+          if (!info.mimeType || !info.mimeType.startsWith("video/")) {
+            uploadError = new Error(`Invalid file type: ${info.mimeType}. Expected video/*`);
+            file.resume();
+            return;
+          }
+
+          const timestamp = Date.now();
+          const filename = `${timestamp}-${info.filename}`;
+          const filepath = path.join(videosDir, filename);
+          const writeStream = fs.createWriteStream(filepath);
+
+          file.on("error", (err) => { uploadError = err; });
+          writeStream.on("error", (err) => { uploadError = err; });
+
+          file.on("data", (chunk) => {
+            bytesUploaded += chunk.length;
+            if (bytesUploaded > MAX_FILE_SIZE) {
+              uploadError = new Error(`File exceeds maximum size of ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+              file.destroy();
+            }
+          });
+
+          writeStream.on("finish", () => {
+            if (!uploadError) {
+              const stats = fs.statSync(filepath);
+              fileInfo = {
+                filename: info.filename,
+                savedAs: filename,
+                mimeType: info.mimeType,
+                size: stats.size,
+                path: path.relative(repoRoot, filepath)
+              };
+            }
+          });
+
+          file.pipe(writeStream);
+        } else {
+          file.resume();
+        }
+      });
+
+      bb.on("field", (fieldname, value) => {
+        console.log(`[dreamer] Field: ${fieldname} = ${typeof value}`);
+        if (fieldname === "entry") {
+          console.log(`[dreamer] Parsing entry JSON: ${value.substring(0, 50)}...`);
+          try {
+            entryJson = JSON.parse(value);
+            // Validate entry structure
+            if (typeof entryJson !== "object" || entryJson === null) {
+              throw new Error("Entry must be an object");
+            }
+            // Sanitize title and description length
+            if (entryJson.title && typeof entryJson.title === "string") {
+              entryJson.title = entryJson.title.slice(0, 256);
+            }
+            if (entryJson.description && typeof entryJson.description === "string") {
+              entryJson.description = entryJson.description.slice(0, 2048);
+            }
+            console.log(`[dreamer] Entry parsed successfully: ${JSON.stringify(entryJson)}`);
+          } catch (e) {
+            console.log(`[dreamer] Entry parse failed: ${e.message}`);
+            uploadError = e;
+          }
+        }
+      });
+
+      bb.on("close", async () => {
+        try {
+          console.log(`[dreamer] Close event - entryJson=${entryJson ? "defined" : "null"}, uploadError=${uploadError ? "yes" : "no"}`);
+
+          if (uploadError) {
+            sendJson(res, { error: uploadError.message }, 400);
+            return;
+          }
+
+          if (!entryJson) {
+            sendJson(res, { error: "No entry data provided" }, 400);
+            return;
+          }
+
+          // Map JSON entry to dreamer schema
+          const entry = {
+            kind: entryJson.type || "video",
+            name: entryJson.title || "Untitled",
+            mood: entryJson.project || "",
+            text: entryJson.description || "",
+            tags: entryJson.tags ? entryJson.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+          };
+
+          const record = await appendDreamerEntry(user, entry);
+          sendJson(res, {
+            saved: true,
+            record: { ...record, file: fileInfo },
+            file: fileInfo
+          });
+        } catch (error) {
+          sendJson(res, { error: error.message }, 400);
+        }
+      });
+
+      bb.on("error", (error) => {
+        if (!res.headersSent) {
+          sendJson(res, { error: error.message }, 400);
+        }
+      });
+
+      req.pipe(bb);
     } catch (error) {
       sendJson(res, { error: error.message }, 500);
     }

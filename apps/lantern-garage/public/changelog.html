@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
@@ -44,16 +44,18 @@
 </head>
 <body>
 <nav class="site-nav">
-  <a class="nav-brand" href="/">
+  <a class="nav-brand" href="/trader-dashboard.html">
     <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
     Lantern OS
   </a>
   <div class="nav-links">
-    <a href="/">Home</a>
+    <a href="/trader-dashboard.html">Home</a>
     <a href="/dream-chat.html">Journal</a>
     <a href="/three-doors-game.html">Explore</a>
-    <a href="/flourishing">Dashboard</a>
+    <a href="/create.html">✏️ Create</a>
     <a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a>
     <a href="#" class="active">Changelog</a>
   </div>
   <div class="nav-actions">
@@ -174,11 +176,14 @@
 <!-- ── Footer ── -->
 <footer class="site-footer">
   <div class="footer-inner">
-    <span><strong>Lantern OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
-    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
+    <span><strong>Lantern OS</strong> · <a href="/trader-dashboard.html">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a></span>
   </div>
 </footer>
 
 <script src="/js/theme-toggle.js"></script>
+<script src="/js/auth-gate.js" defer></script>
 </body>
 </html>

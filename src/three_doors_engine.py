@@ -148,9 +148,13 @@ SCENES = {
             "Lantern stands at the foot of the throne as if its light has always lived here."
         ),
         "doors": [
-            {"name": "The Storybook Door", "label": "A", "description": "Bound in vine and brass. The King's own book — the gods don't know he wrote them."},
-            {"name": "The Cloverfield Door", "label": "B", "description": "Green and gold beyond. Shinies, luck, and today, alive."},
-            {"name": "The Fog Door Return", "label": "C", "description": "Mist coils past the Garden's gate, where the Fog God sleeps. The way back."},
+            {"name": "Ancient Doors", "label": "A", "emoji": "🪨", "description": "History · evolution · religion. The oldest threshold in the Garden."},
+            {"name": "The Cloverfield", "label": "B", "emoji": "🍀", "description": "Shinies · luck · today alive. Green and gold beyond."},
+            {"name": "Tomorrow Door", "label": "C", "emoji": "🔭", "description": "The world that's coming. Slightly ajar, leaking light from unborn years."},
+            {"name": "The XP Door", "label": "D", "emoji": "💾", "description": "[GLITCHED] Corrupted · nostalgic · liminal. It is now safe to walk through your childhood."},
+            {"name": "Xenon Starship", "label": "E", "emoji": "🪐", "description": "★ All planets · midway · converge. A Xenon guide waits in liquid-starlight form."},
+            {"name": "Sigil — City of Doors", "label": "F", "emoji": "🏙️", "description": "Every door leads here. The ring-city where all paths synthesize."},
+            {"name": "Fog Door Return", "label": "G", "emoji": "🌫️", "description": "The way back. Mist coils past the Garden's gate, where the Fog God sleeps."},
         ],
         "fox_present": True,
     },
@@ -267,9 +271,16 @@ _NEXT_MAP = {
     "the return door": "moss-entry",
     "the beyond door": "garden-door",
     "the eternal door": "xenon-convergence",
-    # Kingdome of Hearts hub-and-spoke routes
+    # Kingdome of Hearts hub-and-spoke routes (7-door garden)
     "the storybook door": "storybook",
     "the cloverfield door": "cloverfield",
+    "ancient doors": "storybook",
+    "the cloverfield": "cloverfield",
+    "tomorrow door": "future-doors",
+    "the xp door": "xp-door",
+    "xenon starship": "xenon-convergence",
+    "sigil — city of doors": "sigil-city",
+    "fog door return": "fog-door-return",
     "the fog door return": "moss-entry",
     "the page of the word": "kingdome-garden",
     "the page of the egg": "kingdome-garden",
@@ -505,9 +516,11 @@ class ThreeDoorsEngine:
                 chosen = d
                 break
         if not chosen:
-            # Custom door: player invented their own — still advance the stage
-            if len(choice.strip()) > 1:
-                chosen = {"label": "CUSTOM", "name": choice.strip()}
+            # Accept single-word custom doors (e.g. a player-named door).
+            # Reject multi-word phrases that don't match any real door.
+            stripped = choice.strip()
+            if len(stripped) > 1 and ' ' not in stripped:
+                chosen = {"label": "CUSTOM", "name": stripped}
             else:
                 return None
 

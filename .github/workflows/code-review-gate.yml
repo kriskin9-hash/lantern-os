@@ -1,0 +1,88 @@
+name: Code Review Gate
+# Prevents data-file fraud: flags PRs where >80% of changes are data files
+# rather than actual code. feat:/fix: PRs must have meaningful code changes.
+# See issue #650.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: ["master"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  code-ratio-check:
+    name: Code/data ratio check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR code/data ratio
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Count changed files by category
+          FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+
+          TOTAL=$(echo "$FILES" | grep -c . || echo 0)
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "No changed files detected — skipping ratio check."
+            exit 0
+          fi
+
+          # Data files: .jsonl, .json (in data/), .csv, .tsv, .sqlite
+          DATA=$(echo "$FILES" | grep -cE '\.(jsonl|csv|tsv|sqlite)$|^data/.*\.json$|^apps/data/' 2>/dev/null || echo 0)
+
+          # Code files: .js, .py, .ts, .tsx, .html, .css, .yml, .yaml, .sh, .rs
+          CODE=$(echo "$FILES" | grep -cE '\.(js|py|ts|tsx|html|css|yml|yaml|sh|rs|go|java|rb)$' 2>/dev/null || echo 0)
+
+          echo "Total files changed: $TOTAL"
+          echo "Data files: $DATA"
+          echo "Code files: $CODE"
+
+          # Calculate data ratio (integer arithmetic: DATA*100/TOTAL)
+          DATA_PCT=$(( DATA * 100 / TOTAL ))
+          echo "Data file ratio: ${DATA_PCT}%"
+
+          # Determine if this is a feature/fix PR
+          IS_FEAT_FIX=false
+          if echo "$PR_TITLE" | grep -qiE '^(feat|fix|feature)\b'; then
+            IS_FEAT_FIX=true
+          fi
+
+          echo "Is feat/fix PR: $IS_FEAT_FIX"
+
+          # Gate: feat/fix PRs must be >50% code files OR have at least 2 code files
+          FAIL=false
+          REASON=""
+
+          if [ "$IS_FEAT_FIX" = "true" ] && [ "$DATA_PCT" -gt 80 ] && [ "$CODE" -lt 2 ]; then
+            FAIL=true
+            REASON="feat/fix PR has ${DATA_PCT}% data files and only ${CODE} code file(s). Expected meaningful code changes."
+          fi
+
+          if [ "$FAIL" = "true" ]; then
+            echo ""
+            echo "❌ Code Review Gate FAILED: $REASON"
+            echo ""
+            echo "This PR appears to be primarily data files with a feat/fix title."
+            echo "Ensure the PR title accurately reflects the changes, or add code files."
+            echo ""
+            echo "Files changed:"
+            echo "$FILES"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ Code Review Gate passed (data ${DATA_PCT}%, code files: ${CODE})"

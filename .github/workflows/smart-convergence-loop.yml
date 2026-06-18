@@ -12,6 +12,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  GH_TOKEN: ${{ github.token }}
+
 jobs:
   cloud-convergence:
     name: Cloud repository convergence scan
@@ -20,13 +24,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Sync GitHub issues to agent slots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\orchestration\Sync-GitHubIssuesToAgentSlots.ps1 `
+            -Root . `
+            -Owner alex-place `
+            -Repo lantern-os
 
       - name: Run smart convergence loop
         shell: pwsh
@@ -40,7 +55,7 @@ jobs:
             -OutputPath smart-convergence-loop-report.json
 
       - name: Upload convergence report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: smart-convergence-loop-report

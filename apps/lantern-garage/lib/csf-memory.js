@@ -7,6 +7,7 @@ const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const CSF_MEMORY_PATH = path.join(repoRoot, "data", "csf_memory");
 const CSF_INGEST_PATH = path.join(repoRoot, "csf", "ingest");
 const DREAM_JOURNAL_PATH = path.join(repoRoot, "data", "dream_journal");
+const TESSERACT_MANIFEST = path.join(repoRoot, "data", "tesseract", "manifest.json");
 const DOOR_STATE_PATH = path.join(DREAM_JOURNAL_PATH, "door_state.json");
 const RAG_HOUSE_PATH = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
 
@@ -60,6 +61,7 @@ function relevanceScore(text, query) {
 }
 
 // Query-filtered memory: only return records relevant to the user's message
+// Σ₀ Fix: Validate scores; don't force low-relevance memories into context
 function queryMemories(message, limit = 3) {
   const allRecords = readMemoryRecords(50);
   if (allRecords.length === 0) return [];
@@ -70,8 +72,33 @@ function queryMemories(message, limit = 3) {
     return { record: r, score };
   });
   scored.sort((a, b) => b.score - a.score);
-  // Always return top-N records regardless of score so CSF context is never empty
-  return scored.slice(0, limit).map(s => s.record);
+
+  // Σ₀ Fix: Filter by relevance threshold (0.3 = at least 30% word match)
+  // Don't force low-score memories into context just to avoid empty results
+  const MIN_RELEVANCE = 0.3;
+  const qualified = scored.filter(s => s.score >= MIN_RELEVANCE);
+
+  // Return qualified memories (up to limit), even if less than limit
+  // This prevents low-relevance memories from drowning out high-relevance ones
+  const result = qualified.slice(0, limit).map(s => s.record);
+
+  // Log quality metric: how many records were filtered vs returned
+  if (scored.length > result.length) {
+    try {
+      const { appendJsonlQueued } = require("./file-queue");
+      const metricsPath = path.resolve(__dirname, "../../data/csf-query-metrics.jsonl");
+      appendJsonlQueued(metricsPath, {
+        timestamp: new Date().toISOString(),
+        messageLength: message.length,
+        candidatesCount: scored.length,
+        qualifiedCount: result.length,
+        filteredCount: scored.length - result.length,
+        topScores: scored.slice(0, 3).map(s => s.score)
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  return result;
 }
 
 // Query-filtered ingest docs: only return docs relevant to the message
@@ -134,6 +161,28 @@ function saveDoorChoice(doorText, allDoors) {
   });
   if (state.history.length > 50) state.history = state.history.slice(-50);
   saveDoorState(state);
+}
+
+// Query tesseract research library — PDF titles + text snippets scored by relevance
+let _tesseractCache = { docs: null, ts: 0 };
+function queryResearchLibrary(message, limit = 3) {
+  try {
+    if (!fs.existsSync(TESSERACT_MANIFEST)) return [];
+    const now = Date.now();
+    if (!_tesseractCache.docs || (now - _tesseractCache.ts) > 60_000) {
+      const raw = JSON.parse(fs.readFileSync(TESSERACT_MANIFEST, "utf8"));
+      _tesseractCache = { docs: raw.docs || [], ts: now };
+    }
+    const scored = _tesseractCache.docs.map(d => {
+      const haystack = [d.pdfTitle || "", d.textSnippet || "", d.filename || ""].join(" ");
+      return { doc: d, score: relevanceScore(haystack, message) };
+    });
+    return scored
+      .filter(s => s.score >= 0.15)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(s => s.doc);
+  } catch { return []; }
 }
 
 // Query RAG house knowledge base — returns relevant records by keyword matching
@@ -210,6 +259,20 @@ function formatCSFContextForPrompt(message) {
     parts.push(`Doors: ${last3 || "none yet"}`);
   }
 
+  // Research library (CSF tesseract) — PDF titles + snippets scored by relevance
+  if (message) {
+    const researchDocs = queryResearchLibrary(message, 3);
+    if (researchDocs.length > 0) {
+      const researchText = researchDocs.map(d => {
+        const title = d.pdfTitle || d.filename;
+        const date = d.publishedAt ? ` (${d.publishedAt})` : "";
+        const snippet = (d.textSnippet || "").slice(0, 300).trim();
+        return `- **${title}**${date}${snippet ? ": " + snippet : ""}`;
+      }).join("\n");
+      parts.push(`Research library:\n${researchText}`);
+    }
+  }
+
   // RAG house knowledge base — relevant external records
   if (message) {
     const ragRecords = queryRagHouse(message, 2);
@@ -228,6 +291,18 @@ function formatCSFContextForPrompt(message) {
     if (deltaCtx) parts.push(deltaCtx);
   } catch { /* non-fatal */ }
 
+  // Σ₀ Framework context — for grounding requests that mention collapse, unification, or self-reference
+  if (message && (message.includes("collapse") || message.includes("unification") || message.includes("self-reference") || message.includes("grounding"))) {
+    try {
+      const sigma0Path = path.join(repoRoot, "docs", "SIGMA0-QUANTUM-RELATIVITY-ANALYSIS.md");
+      if (fs.existsSync(sigma0Path)) {
+        const sigma0Text = fs.readFileSync(sigma0Path, "utf8");
+        const summary = sigma0Text.split("\n").slice(0, 30).join("\n"); // First 30 lines as summary
+        parts.push(`**Σ₀ Framework Context (Grounding):**\n${summary}`);
+      }
+    } catch { /* non-fatal */ }
+  }
+
   return parts.join("\n\n");
 }
 
@@ -238,6 +313,7 @@ module.exports = {
   queryIngestDocs,
   queryDreamEntries,
   queryRagHouse,
+  queryResearchLibrary,
   loadDoorState,
   saveDoorState,
   saveDoorChoice,

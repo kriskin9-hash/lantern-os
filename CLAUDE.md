@@ -19,9 +19,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 These documents are non-negotiable for safe, compliant contributions.
 
+## ⚠️ Architectural Convergence Constraint — READ FIRST
+
+**START HERE:** [!CONVERGANCE Σ₀ BRIEFING](docs/CONVERGANCE-SIGMA0-BRIEFING.md) — immutable North Star.
+
+**THEN:** [Research Canon](docs/RESEARCH-CANON.md) — living references organized by Convergence 12 component.
+
+**THEN:** [Convergence Core Mapping](docs/convergence-core-mapping.md) — how existing code aligns with architecture.
+
+---
+
+**THE ENTIRE PROJECT IS ONE LOOP:**
+
+```
+Observe → Remember → Reason → Act → Verify → Converge
+```
+
+Every feature must strengthen ONE stage of this loop. Nothing else.
+
+**FOUR CORE OBJECTS (everything else is implementation):**
+- **Memory** — append-only JSONL logs + CSF archive
+- **Task** — goal + constraints + status
+- **Tool** — name + input + output + success
+- **Convergence Record** — hypothesis + evidence + result + confidence
+
+**FORBIDDEN:**
+- Separate dream engine (use reasoning strategy: high exploration + mandatory verification)
+- Multiple memory systems (one JSONL append + one CSF archive)
+- Independent agent ecosystems (all agents use Convergence Core)
+- Digital twin / BCI / mind-uploading concepts (persistence ≠ simulation)
+- Top-level subsystems that don't improve the loop
+
+**MODELS ARE INTERCHANGEABLE.**
+The Convergence Core never assumes a specific LLM. All models plug in as replacements.
+
+**PERSISTENT LEARNING, NOT WEIGHT MODIFICATION.**
+Store experience (memories + convergence records). Improve via retrieval and reasoning, not retraining.
+
+**EXTERNAL REALITY RULE** (non-negotiable):
+```
+Nothing is accepted without evidence.
+Every important claim must have: [claim, evidence, confidence, source]
+```
+
+**Feature Gate:**
+| What | Allowed? | Reason |
+|-----|----------|--------|
+| Better memory retrieval | ✓ Yes | Improves Remember stage |
+| Better planning / routing | ✓ Yes | Improves Reason stage |
+| Better verification / grounding | ✓ Yes | Improves Verify stage |
+| Better tool execution / observability | ✓ Yes | Improves Act stage |
+| Better convergence metrics | ✓ Yes | Improves Converge stage |
+| Separate dream engine | ✗ No | Architectural sprawl |
+| Multiple memory systems | ✗ No | Coordination nightmare |
+| Swarm agents / ecosystems | ✗ No | Anti-convergence |
+| Digital personality simulation | ✗ No | Scope creep |
+
+Reject architectural sprawl. Prefer extension over addition. Maintain a single Convergence Core.
+
 ## Project Overview
 
-Lantern OS is a local-first OS cockpit built by a solo developer (Alex Place). The primary deliverable is a **Dream Journal** — a freeform RP chat interface backed by a Node.js server, with a Python MCP server and optional Discord bot.
+Lantern OS is a **persistent local-first reasoning system** built by a solo developer (Alex Place). The primary user interface is **dream-chat.html** — a freeform chat backed by a Convergence Core that remembers, reasons, acts, and verifies.
 
 ## Quickstart (Read QUICKSTART.md First)
 
@@ -137,6 +195,23 @@ Six agent personas are defined in `apps/lantern-garage/lib/dream-chat.js`: `lant
 
 `src/mcp_server/server.py` is a FastAPI + SSE service exposing MCP tools (`queue_status`, `task_intake`, `dispatch_work`, `boot_check`, `list_skills`, `get_status`). Only register tools here that have real implementations.
 
+### Trading System (Sprint 1.5)
+
+The Kalshi trading terminal (`apps/lantern-garage/public/kalshi-terminal.html`) is a swipe-deck UI backed by 60+ REST endpoints in `apps/lantern-garage/routes/trading.js`. Full endpoint reference: **[docs/trading-api-reference.md](docs/trading-api-reference.md)**.
+
+Key runtime components:
+| Module | Responsibility |
+|--------|----------------|
+| `kalshi-api.js` | Kalshi REST client (auth, order placement, market data) |
+| `kalshi-collector.js` | 6s polling loop; 429 backoff with `Retry-After`; exposes `getStatus()` |
+| `kalshi-suggest.js` | Tight-band entry suggestion engine |
+| `convergence-router.js` | Deterministic routing cache — 120 Keystone routes, >70% hit rate |
+| `trading-history-logger.js` | Trade/signal history JSONL persistence |
+
+Live data flow: `kalshi-collector` → server snapshot → UI polls `/api/trading/kalshi/decisive-deck` (no UI-direct Kalshi calls).
+
+CIO accuracy tracking: `python experiments/kalshi_tightband_analysis.py` appends each run to `data/kalshi/cio-accuracy-log.jsonl` (date, n_resolved, accuracy, avg_lead_time).
+
 ### CSF (Convergence-Fitted Searchable Format)
 
 `src/csf/` and `csf/` contain a custom binary archive format used for memory exports and symbolic data compression. See `caad/README.md` for the CADD (Context Archive for Dream Data) spec built on top of CSF.
@@ -151,7 +226,87 @@ Six agent personas are defined in `apps/lantern-garage/lib/dream-chat.js`: `lant
 
 Copy `.env.example` to `.env` at repo root. Key variables: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DISCORD_TOKEN`. The server loads `.env` from repo root at startup.
 
+**Patreon OAuth** (optional — gates entire site behind login):
+- `PATREON_CLIENT_ID`, `PATREON_CLIENT_SECRET`, `PATREON_CAMPAIGN_ID`, `PATREON_REDIRECT_URI`, `SESSION_SECRET`
+- See **[PATREON-OAUTH.md](docs/PATREON-OAUTH.md)** for full setup guide
+- When configured, unauthenticated users redirect to `/auth.html` login page
+- Patreon tiers map to roles (guest → supporter → founder → admin)
+
 `pytest.ini` sets `pythonpath = apps src` so tests can import from both trees without install.
+
+## Keystone Testing Charter
+
+**Autonomous test agent** using Agentic QE principles for continuous self-improvement.
+
+### Targets
+- **Dev server**: `http://127.0.0.1:4178` (current branch, hot-reload)
+- **Stable server**: `http://127.0.0.1:4177` (master branch)
+
+### Test Scenarios
+| Scenario | Purpose | Target |
+|---|---|---|
+| home-load | Verify home page renders + no console errors | `/` |
+| dream-chat-init | Verify dream-chat loads + textarea ready | `/dream-chat.html` |
+| dream-chat-first-message | Send test message + verify response stream | `/dream-chat.html` |
+| theme-toggle | Light ↔ dark mode works bidirectionally | All pages |
+| dream-chat-agent-select | Switch agent personas + verify prompt changes | `/dream-chat.html` |
+| dream-chat-error-handling | Send malformed input + verify error state | `/dream-chat.html` |
+| home-nav-links | Click all nav links + verify page loads | `/` → all targets |
+| trader-dashboard-load | Verify Kalshi deck renders | `/trader-dashboard.html` |
+| responsive-mobile | Test 375x812 (iPhone) viewport | All pages |
+| responsive-tablet | Test 768x1024 (iPad) viewport | All pages |
+| console-monitoring | Capture console errors during all scenarios | All pages |
+| network-monitoring | Capture failed requests (4xx, 5xx, timeout) | All pages |
+| slow-network | Flag requests >1000ms | All pages |
+
+### Confidence Thresholds
+| Score | Action |
+|---|---|
+| 0.8–1.0 (High) | File immediately with [keystone-autonomous] tag |
+| 0.5–0.79 (Medium) | File with [needs-review] tag + wait for approval |
+| 0.2–0.49 (Low) | Log to `data/keystone-insights.jsonl` (manual review later) |
+| <0.2 (Trivial) | Discard (console.warn, CSS whitespace, etc.) |
+
+### Triggering Autonomous Tests
+**In dream-chat.html:**
+- Type: `"test the app"` or `"scan for issues"` or `"audit the system"`
+- Keystone agent will autonomously:
+  1. **Observe**: Fetch list of issues needing validation
+  2. **Research**: Analyze codebase for test coverage gaps
+  3. **Reason**: Generate test plan using Playwright scenarios
+  4. **Act**: Run scenarios via Playwright MCP
+  5. **Verify**: Score findings by confidence (Σ₀ rigor)
+  6. **Converge**: File issues with evidence + confidence records
+
+### Reviewing Results
+1. **Live stream**: Watch real-time test execution in dream-chat.html test panel
+2. **Convergence log**: `data/keystone-test-runs.jsonl` — append-only record of each run
+3. **Issue tracker**: `#566-588` — full test fleet issues for ongoing improvements
+4. **GitHub issues**: Auto-filed with [keystone-autonomous] + [sigma0-grounded] labels
+
+### Convergence Records
+Each test run logs:
+```json
+{
+  "timestamp": "2026-06-16T...",
+  "runId": "keystone-20260616-...",
+  "scenarios_completed": 12,
+  "findings_total": 3,
+  "findings_high_confidence": 2,
+  "filed_issues": ["#615", "#616"],
+  "convergence": {
+    "hypothesis": "Dream-chat XSS in image gallery",
+    "evidence": ["screenshot", "console trace", "HTML snippet"],
+    "confidence": {
+      "research": 0.85,
+      "web_grounded": 0.8,
+      "observable": 1.0,
+      "overall": 0.85
+    },
+    "sources": ["codebase analysis", "web search", "playwright trace"]
+  }
+}
+```
 
 ## Per-Agent Workstream Rule (Critical)
 

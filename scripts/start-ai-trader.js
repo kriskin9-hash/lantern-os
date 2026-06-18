@@ -8,7 +8,7 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-const AI_TRADER_PATH = process.env.AI_TRADER_PATH || 'C:\Independant AI Trader';
+const AI_TRADER_PATH = process.env.AI_TRADER_PATH || 'C:\\Independant AI Trader';
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
 const logsDir = path.join(__dirname, '..', 'logs');

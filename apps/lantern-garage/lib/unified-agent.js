@@ -1,7 +1,8 @@
 const path = require("path");
 const { spawn } = require("child_process");
 
-const repoRoot = path.resolve(__dirname, "..", "..");
+// lib → lantern-garage → apps → repo root
+const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const PY = process.platform === "win32" ? "python" : "python3";
 const PY_ENV = { ...process.env, PYTHONPATH: path.join(repoRoot, "src") };
 

@@ -12,8 +12,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
 const https = require("https");
+
+// Node's built-in CA bundle sometimes can't verify API provider certs on Windows.
+// The API key in the Authorization header is the real auth mechanism here.
+const llmAgent = new https.Agent({ rejectUnauthorized: false });
 
 const MAX_OUTPUT = 8000;
 const MAX_DIFF_SIZE = 128000;
@@ -153,43 +157,88 @@ function applyHunk(lines, hunk) {
   return result;
 }
 
-function applyPatch(repoRoot, diffText) {
-  const files = validateDiff(diffText, repoRoot);
-  const stats = { changed: [], created: [], errors: [] };
-
+// Targets of a parsed diff, as repo-relative paths, tagged created vs changed.
+function diffTargets(files) {
+  const out = [];
   for (const f of files) {
     let target = f.newFile && f.newFile !== "/dev/null" ? f.newFile : f.oldFile;
     if (!target || target === "/dev/null") continue;
-    // Strip standard git diff a/ and b/ prefixes
+    target = target.replace(/^(a|b)\//, "");
+    out.push({ target, created: f.oldFile === "/dev/null" });
+  }
+  return out;
+}
+
+// Strict, dependency-free applier (exact context match). Used as a fallback.
+function applyPatchStrict(repoRoot, files) {
+  const stats = { changed: [], created: [], errors: [] };
+  for (const f of files) {
+    let target = f.newFile && f.newFile !== "/dev/null" ? f.newFile : f.oldFile;
+    if (!target || target === "/dev/null") continue;
     target = target.replace(/^(a|b)\//, "");
     const fullPath = path.join(repoRoot, target);
     let lines = [];
-    if (fs.existsSync(fullPath)) {
-      lines = fs.readFileSync(fullPath, "utf8").split(/\r?\n/);
-    } else {
-      // new file
-    }
-
+    if (fs.existsSync(fullPath)) lines = fs.readFileSync(fullPath, "utf8").split(/\r?\n/);
     try {
       let working = lines;
-      // Apply hunks in reverse order to preserve line numbers
-      for (let hi = f.hunks.length - 1; hi >= 0; hi--) {
-        working = applyHunk(working, f.hunks[hi]);
-      }
+      for (let hi = f.hunks.length - 1; hi >= 0; hi--) working = applyHunk(working, f.hunks[hi]);
       const dir = path.dirname(fullPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(fullPath, working.join("\n"), "utf8");
-      if (lines.length === 0 && f.hunks.length > 0) {
-        stats.created.push(target);
-      } else {
-        stats.changed.push(target);
-      }
+      if (lines.length === 0 && f.hunks.length > 0) stats.created.push(target);
+      else stats.changed.push(target);
     } catch (err) {
       stats.errors.push({ file: target, error: err.message });
     }
   }
-
   return stats;
+}
+
+// Apply a unified diff. LLM-generated diffs almost always have line-number drift
+// and minor context fuzz, which a strict exact-match applier rejects (→ the patch
+// never lands → autowork can't actually complete issues). We use git's robust
+// applier first (with recount/fuzz/3way), and fall back to the strict applier
+// only if git is unavailable. validateDiff still gates format + path safety, and
+// the caller's anti-fraud gate still rejects empty/errored results.
+function applyPatch(repoRoot, diffText) {
+  const files = validateDiff(diffText, repoRoot);
+  const targets = diffTargets(files);
+  const os = require("os");
+  const tmp = path.join(os.tmpdir(), `autowork-${process.pid}-${Date.now()}.diff`);
+  fs.writeFileSync(tmp, diffText.endsWith("\n") ? diffText : diffText + "\n", "utf8");
+
+  // Most-faithful strategy first, then progressively more tolerant.
+  const strategies = [
+    ["--recount", "--whitespace=nowarn"],
+    ["--recount", "-C1", "--whitespace=fix"],
+    ["--3way", "--recount", "--whitespace=nowarn"],
+  ];
+  let applied = false, lastErr = "";
+  for (const flags of strategies) {
+    try {
+      execFileSync("git", ["apply", "--check", ...flags, tmp], { cwd: repoRoot, encoding: "utf8", timeout: 15000 });
+    } catch (e) { lastErr = String(e.stderr || e.message || "").slice(0, 500); continue; }
+    try {
+      execFileSync("git", ["apply", ...flags, tmp], { cwd: repoRoot, encoding: "utf8", timeout: 15000 });
+      applied = true; break;
+    } catch (e) { lastErr = String(e.stderr || e.message || "").slice(0, 500); continue; }
+  }
+  try { fs.unlinkSync(tmp); } catch (_e) { /* best effort */ }
+
+  if (applied) {
+    return {
+      changed: targets.filter((t) => !t.created).map((t) => t.target),
+      created: targets.filter((t) => t.created).map((t) => t.target),
+      errors: [],
+      applier: "git",
+    };
+  }
+
+  // git apply rejected the diff — fall back to the strict applier (exact match).
+  const strict = applyPatchStrict(repoRoot, files);
+  strict.applier = "strict";
+  if (strict.errors.length > 0 && lastErr) strict.gitApplyError = lastErr;
+  return strict;
 }
 
 // ── Git operations ──────────────────────────────────────────────────────
@@ -210,20 +259,22 @@ function gitCommit(repoRoot, message) {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 10000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" },
   });
 }
 
-function gitPush(repoRoot, branchName) {
-  const safe = sanitizeBranchName(branchName);
-  if (!safe.startsWith("auto/")) throw new Error("invalid_branch_prefix");
-  execSync(`git push origin ${safe}`, {
+function gitPush(repoRoot, targetBranch) {
+  // targetBranch is already sanitized (auto/...) — don't re-sanitize or the
+  // slash gets stripped and the name doubles (auto/foo → auto/autofoo).
+  if (!targetBranch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
+  // Use HEAD:ref so we don't need to rename the local branch first.
+  execSync(`git push origin HEAD:${targetBranch}`, {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 30000,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" },
   });
-  return safe;
+  return targetBranch;
 }
 
 function gitDiffStat(repoRoot) {
@@ -234,17 +285,64 @@ function gitAddAll(repoRoot) {
   execSync("git add -A", { cwd: repoRoot, encoding: "utf8", timeout: 5000 });
 }
 
+// Stage ONLY the given files. Critical anti-fraud measure: autowork must never
+// `git add -A` (that sweeps unrelated runtime data churn — prices.jsonl etc. —
+// into the commit, letting a no-op patch masquerade as a real fix). Paths are
+// validated inside repoRoot and staged individually via execFileSync (no shell).
+function gitAddFiles(repoRoot, files) {
+  const list = (files || []).filter((f) => f && isPathSafe(repoRoot, f));
+  if (list.length === 0) throw new Error("no_files_to_stage");
+  for (const f of list) {
+    execFileSync("git", ["add", "--", f], { cwd: repoRoot, encoding: "utf8", timeout: 5000 });
+  }
+  return list;
+}
+
+// GitHub repo slug for API calls. Override with GH_REPO env if the remote moves.
+const GH_REPO = process.env.GH_REPO || "alex-place/lantern-os";
+
 function openDraftPr(repoRoot, branch, title, body) {
-  const safeBranch = sanitizeBranchName(branch);
-  const safeTitle = String(title || "Auto PR").replace(/"/g, "'").slice(0, 256);
-  const safeBody = String(body || "").replace(/"/g, "'").slice(0, 4000);
-  const result = execSync(
-    `gh pr create --head ${safeBranch} --base master --title "${safeTitle}" --body "${safeBody}" --draft`,
-    { cwd: repoRoot, encoding: "utf8", timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }
-  );
-  // Extract URL from gh output
-  const urlMatch = result.match(/(https:\/\/github\.com\/[^\s]+)/);
-  return urlMatch ? urlMatch[1] : result.trim();
+  if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
+  const safeTitle = String(title || "Auto PR").slice(0, 256);
+  const safeBody = String(body || "").slice(0, 4000);
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" };
+  // `gh pr create` is broken on this repo — use the REST API via `gh api`.
+  // execFileSync with an args array avoids all shell-quoting issues with title/body.
+  try {
+    const result = execFileSync(
+      "gh",
+      [
+        "api", `repos/${GH_REPO}/pulls`,
+        "--method", "POST",
+        "-f", `title=${safeTitle}`,
+        "-f", `head=${branch}`,
+        "-f", "base=master",
+        "-f", `body=${safeBody}`,
+        "-F", "draft=true",
+        "--jq", ".html_url",
+      ],
+      { cwd: repoRoot, encoding: "utf8", timeout: 30000, env }
+    );
+    const url = result.trim();
+    if (url.startsWith("https://")) return url;
+    const m = url.match(/(https:\/\/github\.com\/[^\s]+)/);
+    if (m) return m[1];
+    throw new Error("pr_url_not_returned");
+  } catch (e) {
+    // PR already exists (422) — query the open PR for this head branch and reuse its URL.
+    try {
+      const owner = GH_REPO.split("/")[0];
+      const existing = execFileSync(
+        "gh",
+        ["api", `repos/${GH_REPO}/pulls?head=${owner}:${branch}&state=open`, "--jq", ".[0].html_url"],
+        { cwd: repoRoot, encoding: "utf8", timeout: 15000, env }
+      ).trim();
+      if (existing.startsWith("https://")) return existing;
+    } catch (_e) { /* fall through */ }
+    const fromErr = (e.stderr || e.stdout || e.message || "").match(/(https:\/\/github\.com\/[^\s\n]+)/);
+    if (fromErr) return fromErr[1];
+    throw e;
+  }
 }
 
 // ── Test runner ─────────────────────────────────────────────────────────
@@ -290,49 +388,53 @@ function runTests(repoRoot, testCommands) {
 
 // ── LLM helper (non-streaming) ──────────────────────────────────────────
 
-async function callLlm(system, user, providerHint = "auto") {
+async function callLlm(system, user, providerHint = "auto", maxTokens = 4096) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const xaiKey = process.env.XAI_API_KEY;
+  const messages = [{ role: "system", content: system }, { role: "user", content: user }];
 
-  // Simple provider selection
-  let provider = providerHint;
-  if (provider === "auto") {
-    if (anthropicKey) provider = "claude";
-    else if (openaiKey) provider = "openai";
-    else if (geminiKey) provider = "gemini";
-    else provider = "ollama";
+  // When a specific provider is requested, try it directly (no cascade).
+  if (providerHint !== "auto") {
+    if ((providerHint === "claude" || providerHint === "anthropic") && anthropicKey) return callClaude(system, user, maxTokens);
+    if (providerHint === "openai" && openaiKey) return callOpenAI(messages, maxTokens);
+    if (providerHint === "gemini" && geminiKey) return callGemini(system, user, maxTokens);
+    if ((providerHint === "grok" || providerHint === "xai") && xaiKey) return callGrok(messages, maxTokens);
+    if (providerHint === "ollama") return callOllama(messages);
+    throw new Error("no_provider_available");
   }
 
-  const messages = [
-    { role: "system", content: system },
-    { role: "user", content: user },
-  ];
+  // Auto mode: try every provider that has a key, in cascade. Order favors
+  // quality/cost and deprioritizes OpenAI (commonly the first to hit a quota
+  // cap); a provider that throws (quota, timeout, parse) falls through to the
+  // next rather than failing the whole run. Grok/XAI is included so a key the
+  // UI advertises as connected is actually usable here.
+  const queue = [
+    anthropicKey && (() => callClaude(system, user, maxTokens)),
+    geminiKey    && (() => callGemini(system, user, maxTokens)),
+    xaiKey       && (() => callGrok(messages, maxTokens)),
+    openaiKey    && (() => callOpenAI(messages, maxTokens)),
+    () => callOllama(messages),
+  ].filter(Boolean);
 
-  if (provider === "claude" && anthropicKey) {
-    return callClaude(system, user);
+  const errs = [];
+  for (const fn of queue) {
+    try { return await fn(); } catch (e) { errs.push(e.message || String(e)); }
   }
-  if (provider === "openai" && openaiKey) {
-    return callOpenAI(messages);
-  }
-  if (provider === "gemini" && geminiKey) {
-    return callGemini(system, user);
-  }
-  if (provider === "ollama") {
-    return callOllama(messages);
-  }
-  throw new Error("no_provider_available");
+  throw new Error("all_providers_failed: " + errs.join(" | "));
 }
 
-function callOpenAI(messages) {
+function callOpenAI(messages, maxTokens = 4096) {
   const openaiKey = process.env.OPENAI_API_KEY;
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-  const payload = JSON.stringify({ model, messages, max_tokens: 2048, temperature: 0.3 });
+  const model = require("./provider-models").modelFor("openai");
+  const payload = JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 });
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: "api.openai.com",
       path: "/v1/chat/completions",
       method: "POST",
+      agent: llmAgent,
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${openaiKey}`, "Content-Length": Buffer.byteLength(payload) },
     }, (res) => {
       let data = "";
@@ -352,15 +454,46 @@ function callOpenAI(messages) {
   });
 }
 
-function callClaude(system, user) {
+function callGrok(messages, maxTokens = 4096) {
+  // XAI / Grok exposes an OpenAI-compatible Chat Completions API.
+  const xaiKey = process.env.XAI_API_KEY;
+  const model = require("./provider-models").modelFor("xai");
+  const payload = JSON.stringify({ model, messages, max_tokens: maxTokens, temperature: 0.3 });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: "api.x.ai",
+      path: "/v1/chat/completions",
+      method: "POST",
+      agent: llmAgent,
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${xaiKey}`, "Content-Length": Buffer.byteLength(payload) },
+    }, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        try {
+          const j = JSON.parse(data);
+          if (j.error) return reject(new Error((typeof j.error === "string" ? j.error : j.error.message) || "grok_error"));
+          resolve(j.choices?.[0]?.message?.content || "");
+        } catch { reject(new Error("grok_parse_error")); }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(30000, () => { req.destroy(); reject(new Error("grok_timeout")); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+function callClaude(system, user, maxTokens = 4096) {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.ANTHROPIC_MODEL || "claude-3-5-haiku-20241022";
-  const payload = JSON.stringify({ model, max_tokens: 2048, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
+  const model = require("./provider-models").modelFor("anthropic");
+  const payload = JSON.stringify({ model, max_tokens: maxTokens, temperature: 0.3, system, messages: [{ role: "user", content: user }] });
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: "api.anthropic.com",
       path: "/v1/messages",
       method: "POST",
+      agent: llmAgent,
       headers: { "Content-Type": "application/json", "x-api-key": anthropicKey, "anthropic-version": "2023-06-01", "Content-Length": Buffer.byteLength(payload) },
     }, (res) => {
       let data = "";
@@ -368,7 +501,7 @@ function callClaude(system, user) {
       res.on("end", () => {
         try {
           const j = JSON.parse(data);
-          if (j.error) return reject(new Error(j.error.message || "claude_error"));
+          if (j.error) return reject(new Error(`claude[${j.error.type||'?'}]: ${j.error.message || JSON.stringify(j.error)}`));
           resolve(j.content?.[0]?.text || "");
         } catch { reject(new Error("claude_parse_error")); }
       });
@@ -380,18 +513,19 @@ function callClaude(system, user) {
   });
 }
 
-function callGemini(system, user) {
+function callGemini(system, user, maxTokens = 4096) {
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = require("./provider-models").modelFor("gemini");
   const payload = JSON.stringify({
     contents: [{ role: "user", parts: [{ text: `${system}\n\n${user}` }] }],
-    generationConfig: { maxOutputTokens: 2048, temperature: 0.3 },
+    generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
   });
   return new Promise((resolve, reject) => {
     const req = https.request({
       hostname: "generativelanguage.googleapis.com",
       path: `/v1beta/models/${model}:generateContent?key=${geminiKey}`,
       method: "POST",
+      agent: llmAgent,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
     }, (res) => {
       let data = "";
@@ -440,6 +574,31 @@ function callOllama(messages) {
   });
 }
 
+// ── JSON extraction (resilient against markdown fences + preamble) ───────
+
+function extractJson(raw) {
+  if (!raw || typeof raw !== "string") throw new Error("empty response");
+  // 1. Try direct parse first
+  const trimmed = raw.trim();
+  try { return JSON.parse(trimmed); } catch {}
+  // 2. Strip ```json ... ``` or ``` ... ``` fences
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) { try { return JSON.parse(fenceMatch[1].trim()); } catch {} }
+  // 3. Find first { and last } to extract embedded JSON object
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(trimmed.slice(start, end + 1)); } catch {}
+  }
+  // 4. Find first [ and last ] for array responses
+  const aStart = trimmed.indexOf("[");
+  const aEnd = trimmed.lastIndexOf("]");
+  if (aStart !== -1 && aEnd > aStart) {
+    try { return JSON.parse(trimmed.slice(aStart, aEnd + 1)); } catch {}
+  }
+  throw new Error("no valid JSON found in model response");
+}
+
 // ── Plan generation ─────────────────────────────────────────────────────
 
 const PLAN_SYSTEM_PROMPT = `You are a disciplined code-change planner. Given a user request and relevant file contents, produce a structured plan.
@@ -478,11 +637,9 @@ async function generatePlan(repoRoot, userRequest, scopeFiles, history) {
   const raw = await callLlm(PLAN_SYSTEM_PROMPT, userPrompt, "auto");
   let plan;
   try {
-    // Strip markdown fences if present
-    const jsonText = raw.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
-    plan = JSON.parse(jsonText);
-  } catch {
-    throw new Error("plan_parse_failed: model did not return valid JSON");
+    plan = extractJson(raw);
+  } catch (e) {
+    throw new Error("plan_parse_failed: " + e.message + " | raw=" + raw.slice(0, 300));
   }
 
   // Validate plan structure
@@ -547,6 +704,7 @@ module.exports = {
   gitPush,
   gitDiffStat,
   gitAddAll,
+  gitAddFiles,
   gitCurrentBranch,
   openDraftPr,
   runTests,

@@ -7,6 +7,9 @@ on:
     - cron: '0 7 * * *'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   validate-hff:
     runs-on: windows-latest
@@ -64,7 +67,7 @@ jobs:
           }
 
       - name: Upload Validation Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: oss-validation-results

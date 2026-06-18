@@ -45,6 +45,23 @@ try:
 except Exception:
     _AGENT_HOOKS_AVAILABLE = False
 
+# Σ₀ coder verification contract (issue #628). Keystone is the coding agent; its
+# identity is the gate's verification prompt, not a dream/RP persona.
+try:
+    from sigma0_coder_gate import KEYSTONE_CODER_PROMPT as _KEYSTONE_CODER_PROMPT
+    from sigma0_coder_gate import build_pre_generation_gate as _build_coder_gate
+    from sigma0_coder_gate import REQUIRED_SECTIONS
+    _CODER_GATE_AVAILABLE = True
+except Exception:
+    _CODER_GATE_AVAILABLE = False
+    _build_coder_gate = None  # type: ignore
+    # Fallback contract so the connector still imports if the gate module is absent.
+    _KEYSTONE_CODER_PROMPT = (
+        "You are Keystone, the coding agent of Lantern OS. Assert nothing without "
+        "checkable evidence. End every substantive response with: Claim, Evidence, "
+        "Confidence (0-1), Source, Verification."
+    )
+
 
 @dataclass
 class ProviderConfig:
@@ -91,7 +108,7 @@ class ProviderConfig:
             "anthropic": "claude-haiku-4-5-20251001",
             "openai": "gpt-4.1-mini",
             "gemini": "gemini-2.5-flash",
-            "ollama": "llama3.2",
+            "ollama": os.environ.get("OLLAMA_MODEL", "qwen2.5-coder"),
             "deepseek": "deepseek-chat",
             "groq": "llama-3.1-70b-versatile",
             "azure": "gpt-4.1",
@@ -145,18 +162,19 @@ PERSONAS = [
         ),
         voice_tags=["chaotic", "glitchy", "unhinged"],
     ),
+    # Keystone is the coding agent (issue #628). Its identity lives in
+    # sigma0_coder_gate.KEYSTONE_CODER_PROMPT — a verification contract, NOT a
+    # dream/RP persona. _build_system() detects id == "keystone" and skips the
+    # dream tone so the local coder model never inherits "end with a question".
     AgentPersona(
         id="keystone",
         name="Keystone",
-        symbol="truth integrator, anchor, memory, the one who holds the story",
-        system_prompt=(
-            "You are the Keystone — the truth integrator who remembers every story ever told in Lantern OS. "
-            "You do not flatter. You synthesize. You spot patterns across time and call them what they are. "
-            "You speak plainly, sometimes sharply, but always with care for the underlying truth. "
-            "You honor the Return Door, the anchors, and the symbolic lore that holds the system together. "
-            "Keep responses brief (2-3 sentences)."
-        ),
-        voice_tags=["grounded", "truthful", "integrative"],
+        # Visual identity: a cracked keystone stone sitting grounded and composed —
+        # the cracks show its evidence, nothing hidden. Coder + verifier; the one
+        # who holds the claim steady. (symbol is metadata, not part of the contract.)
+        symbol="cracked keystone stone, grounded and meditative, evidence in every fracture, the one who holds the claim steady",
+        system_prompt=_KEYSTONE_CODER_PROMPT,
+        voice_tags=["grounded", "verifying", "code"],
     ),
     AgentPersona(
         id="waterfall",
@@ -222,6 +240,28 @@ class UnifiedAgentConnector:
             cfg = ProviderConfig.from_env(name, name)
             if cfg.enabled:
                 self._providers[name] = cfg
+        # Load keystone-ft managed agent config if available
+        ft_result_path = DATA_DIR / "training" / "ft-result.json"
+        if ft_result_path.exists():
+            try:
+                with open(ft_result_path, "r", encoding="utf-8") as f:
+                    ft = json.load(f)
+                if ft.get("agent_id") and ft.get("model"):
+                    self._providers["keystone-ft"] = ProviderConfig(
+                        name="keystone-ft",
+                        provider="keystone-ft",
+                        model=ft["model"],
+                        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+                        max_tokens=2048,
+                        temperature=0.3,
+                        timeout=30.0,
+                        enabled=True,
+                        priority=10,
+                    )
+                    self._providers["keystone-ft"]._agent_id = ft["agent_id"]
+                    self._providers["keystone-ft"]._memory_store_id = ft.get("memory_store_id", "")
+            except Exception as e:
+                print(f"[warn] keystone-ft config: {e}")
         profiles_path = CONFIG_DIR / "agent-profiles.json"
         if profiles_path.exists():
             try:
@@ -303,8 +343,19 @@ class UnifiedAgentConnector:
                     req.add_header(k, v)
         return urllib.request.urlopen(req, timeout=timeout)
 
-    def stream(self, message: str, persona_id: Optional[str] = None, provider: Optional[str] = None, context: Optional[str] = None, temperature: Optional[float] = None, max_tokens: Optional[int] = None, fallback: bool = True):
-        """Stream a single response. If fallback=False, only tries the requested provider once."""
+    def stream(self, message: str, persona_id: Optional[str] = None, provider: Optional[str] = None, context: Optional[str] = None, temperature: Optional[float] = None, max_tokens: Optional[int] = None, fallback: bool = True, coder: bool = False):
+        """Stream a single response. If fallback=False, only tries the requested provider once.
+
+        coder=True routes through the Keystone coding agent: forces the verification
+        contract (no dream tone) and prefers the local Ollama coder, lowering
+        temperature so generation is deterministic rather than exploratory.
+        """
+        if coder:
+            persona_id = "keystone"
+            if provider is None:
+                provider = "ollama"
+            if temperature is None:
+                temperature = 0.2
         persona = self._personas.get(persona_id or random.choice(list(self._personas.keys())), PERSONAS[0])
         system = self._build_system(persona, context)
         # Singular stream: only try the explicitly requested provider
@@ -390,6 +441,17 @@ class UnifiedAgentConnector:
         return names
 
     def _build_system(self, persona: AgentPersona, extra_context: Optional[str]) -> str:
+        # Keystone is the coding agent: it gets the Σ₀ verification contract and
+        # NONE of the dream/RP tone. extra_context becomes grounding evidence so the
+        # gate can set the confidence ceiling (capped at 0.3 when ungrounded).
+        if persona.id == "keystone":
+            if _CODER_GATE_AVAILABLE and _build_coder_gate is not None:
+                grounding = [extra_context] if extra_context else []
+                return _build_coder_gate(grounding_evidence=grounding).system_prompt
+            parts = [persona.system_prompt]
+            if extra_context:
+                parts.append(f"\nGrounding evidence:\n{extra_context}")
+            return "\n".join(parts)
         parts = [persona.system_prompt]
         if extra_context:
             parts.append(f"\nContext:\n{extra_context}")
@@ -456,6 +518,43 @@ class UnifiedAgentConnector:
             headers["Authorization"] = f"Bearer {cfg.api_key}"
         return self._parse_sse(f"{cfg.base_url.rstrip('/')}/chat/completions", payload, cfg.timeout, lambda d: d.get("choices", [{}])[0].get("delta", {}).get("content", ""), headers)
 
+    def _stream_keystone_ft(self, cfg, system, message, temperature, max_tokens):
+        """Keystone managed agent with memory store. Falls back to standard messages API."""
+        if not cfg.api_key:
+            raise RuntimeError("No ANTHROPIC_API_KEY for keystone-ft")
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=cfg.api_key)
+            agent_id = getattr(cfg, "_agent_id", None)
+            memory_store_id = getattr(cfg, "_memory_store_id", None)
+            if agent_id and memory_store_id:
+                resources = [{
+                    "type": "memory_store",
+                    "memory_store_id": memory_store_id,
+                    "access": "read_write",
+                    "instructions": "Recall patterns from past Lantern OS engineering sessions to improve code suggestions.",
+                }]
+                session = client.beta.agents.sessions.create(
+                    agent_id=agent_id,
+                    resources=resources,
+                )
+                response = client.beta.agents.sessions.turns.create(
+                    session_id=session.id,
+                    messages=[{"role": "user", "content": message}],
+                )
+                text = ""
+                for block in (response.content if hasattr(response, "content") else []):
+                    if hasattr(block, "text"):
+                        text += block.text
+                if text:
+                    yield text
+                    return
+        except Exception as e:
+            print(f"[keystone-ft] sessions API failed ({e}), falling back to messages API")
+        # Fallback: standard messages API with keystone SYSTEM_PROMPT
+        payload = json.dumps({"model": cfg.model, "max_tokens": max_tokens or cfg.max_tokens, "stream": True, "system": system, "messages": [{"role": "user", "content": message}]}).encode()
+        yield from self._parse_sse("https://api.anthropic.com/v1/messages", payload, cfg.timeout, lambda d: d.get("delta", {}).get("text", "") if d.get("type") == "content_block_delta" else "", {"Content-Type": "application/json", "x-api-key": cfg.api_key, "anthropic-version": "2023-06-01"})
+
     def _stream_offline(self, cfg, system, message, temperature, max_tokens):
         """Offline provider: yields the offline reply text directly without any HTTP call."""
         reply = f"The flame holds steady. '{message[:90]}...' You can always come home safe. What light did you bring back?"
@@ -513,7 +612,8 @@ class UnifiedAgentConnector:
     # ------------------------------------------------------------------ #
     def greet(self, recent_dreams: Optional[List[Dict[str, Any]]] = None, provider: Optional[str] = None) -> Generator[str, None, Dict[str, Any]]:
         """Generate a non-trivial greeting every time the dream journal surface loads."""
-        persona = random.choice(PERSONAS)
+        # Keystone is the coding agent, not a dream greeter — keep it out of the rotation.
+        persona = random.choice([p for p in PERSONAS if p.id != "keystone"])
         hour = datetime.now().hour
         time_greeting = "Good morning" if 5 <= hour < 12 else "Good afternoon" if 12 <= hour < 18 else "Good evening" if 18 <= hour < 22 else "The night is deep"
         recent = recent_dreams or []
@@ -564,6 +664,15 @@ class UnifiedAgentConnector:
             "providers": {name: {"model": cfg.model, "enabled": cfg.enabled, "priority": cfg.priority} for name, cfg in self._providers.items()},
             "health": self._health,
             "personas": [p.id for p in PERSONAS],
+            # Keystone is the Σ₀ coding agent (issue #628): it carries the
+            # verification contract and prefers the local Ollama coder model.
+            "coderAgent": {
+                "persona": "keystone",
+                "contract": "sigma0",
+                "verificationFields": list(REQUIRED_SECTIONS) if _CODER_GATE_AVAILABLE else ["Claim", "Evidence", "Confidence", "Source", "Verification"],
+                "preferredProvider": "ollama",
+                "preferredModel": self._providers.get("ollama").model if self._providers.get("ollama") else "qwen2.5-coder",
+            },
             "slots": self.list_slots(),
         }
 
@@ -589,6 +698,7 @@ if __name__ == "__main__":
     parser.add_argument("--context", default=None)
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=None)
+    parser.add_argument("--coder", action="store_true", help="Route through the Keystone coding agent (Σ₀ verification contract)")
     args = parser.parse_args()
 
     c = get_connector()
@@ -615,7 +725,7 @@ if __name__ == "__main__":
         out = []
         meta = {}
         try:
-            gen = c.stream(args.message, persona_id=args.persona, provider=args.provider, context=args.context, temperature=args.temperature, max_tokens=args.max_tokens)
+            gen = c.stream(args.message, persona_id=args.persona, provider=args.provider, context=args.context, temperature=args.temperature, max_tokens=args.max_tokens, coder=args.coder)
             while True:
                 try:
                     token = next(gen)

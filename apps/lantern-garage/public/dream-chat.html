@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
@@ -9,641 +9,106 @@
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/css/site.css">
   <link rel="stylesheet" href="/css/dream-chat.css">
-  <title>Journal</title>
-  <style>
-    #header-status { font-size: 11px; color: var(--muted); margin-left: 6px; }
+  <link rel="stylesheet" href="/css/dream-chat-ui.css">
+  <title>Dream Chat — Lantern OS</title>
 
-    /* Main container */
-    .app {
-      display: flex;
-      flex-direction: row;
-      height: 100vh;
-      width: 100%;
-      overflow: hidden;
-    }
+<style>
+  /* Patreon auth gate */
+  .patreon-pill {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    border:1px solid var(--border, rgba(255,255,255,.14));
+    border-radius:999px;
+    padding:7px 10px;
+    background:rgba(255,255,255,.04);
+    color:var(--text, #e5e7eb);
+    font-size:12px;
+    cursor:pointer;
+  }
+  .patreon-pill[data-role="guest"] { opacity:.9; }
+  .patreon-pill[data-role="supporter"],
+  .patreon-pill[data-role="founder"],
+  .patreon-pill[data-role="admin"] {
+    border-color:rgba(20,184,166,.6);
+    background:rgba(20,184,166,.12);
+  }
+  body[data-patreon-role="guest"] .patron-only { display:none !important; }
+  body[data-patreon-role="supporter"] .admin-only,
+  body[data-patreon-role="founder"] .admin-only { display:none !important; }
+  body[data-patreon-role="admin"] .admin-only { display:initial; }
+</style>
 
-    /* Sidebar */
-    .sidebar {
-      width: 240px;
-      background: var(--surface);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .sidebar-header {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .sidebar-header h3 {
-      font-size: 13px;
-      font-weight: 700;
-      margin: 0;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--muted);
-    }
-    .sidebar-new-btn {
-      background: none;
-      border: none;
-      color: var(--accent);
-      font-size: 18px;
-      cursor: pointer;
-      padding: 2px 6px;
-      line-height: 1;
-    }
-    .sidebar-new-btn:hover { opacity: 0.7; }
-
-    .sidebar-search {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .sidebar-search input {
-      width: 100%;
-      padding: 6px 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--surface2);
-      color: var(--text);
-      font-size: 12px;
-    }
-    .sidebar-search input::placeholder { color: var(--muted); }
-
-    .convo-list {
-      flex: 1;
-      overflow-y: auto;
-      list-style: none;
-      margin: 0;
-      padding: 4px;
-    }
-    .convo-item {
-      padding: 8px 10px;
-      margin: 4px 0;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      transition: all 0.15s;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 6px;
-    }
-    .convo-item:hover {
-      background: var(--surface2);
-      color: var(--text);
-    }
-    .convo-item.active {
-      background: var(--accent);
-      color: white;
-    }
-    .convo-item-delete {
-      opacity: 0;
-      font-size: 14px;
-      cursor: pointer;
-      padding: 0;
-      line-height: 1;
-      flex-shrink: 0;
-    }
-    .convo-item:hover .convo-item-delete { opacity: 0.6; }
-    .convo-item-delete:hover { opacity: 1; }
-
-    @media (max-width: 768px) {
-      .sidebar { width: 0; border: none; }
-      .sidebar.mobile-open { width: 240px; position: absolute; z-index: 100; height: 100vh; box-shadow: var(--shadow-hover); }
-      .app-main { margin-left: 0; }
-      .site-nav { flex-direction: column; padding: 8px; gap: 8px; }
-      .nav-links { display: none; }
-      .nav-actions { flex-direction: column; gap: 4px; }
-      .nav-cta { display: none; }
-      .input-wrapper { flex-direction: column; }
-      .send-button { width: 100%; }
-      .perf-monitor { bottom: 8px; right: 8px; font-size: 10px; padding: 8px 12px; }
-    }
-
-    @media (max-width: 480px) {
-      .sidebar { width: 0; }
-      .chat-container { padding: 12px; }
-      .message-content { max-width: 90%; }
-      .modal-content { margin: 16px; }
-      .input-container { padding: 12px; }
-      .file-chip { font-size: 10px; padding: 2px 4px; }
-      .empty-state { padding: 20px; }
-      .empty-state h2 { font-size: 16px; }
-    }
-
-    .app-main {
-      display: flex;
-      flex-direction: column;
-      flex: 1 1 0;
-      min-width: 0;
-      overflow: hidden;
-    }
-
-    /* Messages area - clean and spacious */
-    .chat-container {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      gap: 20px;
-      padding: 40px;
-    }
-    .empty-icon { font-size: 48px; opacity: 0.5; }
-    .empty-state h2 {
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--text);
-    }
-    .empty-state p {
-      color: var(--muted);
-      max-width: 300px;
-      line-height: 1.5;
-    }
-
-    /* Message bubbles */
-    .message {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 4px;
-      animation: fadeIn 0.3s ease;
-    }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    .message.user { justify-content: flex-end; }
-    .message-content {
-      max-width: 70%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      line-height: 1.5;
-      word-wrap: break-word;
-    }
-    .message.user .message-content {
-      background: var(--accent);
-      color: white;
-    }
-    .message.agent .message-content {
-      background: var(--surface2);
-      color: var(--text);
-    }
-
-    /* Input area - modern and prominent */
-    .input-container {
-      padding: 16px 20px 20px;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-      flex-shrink: 0;
-    }
-    .input-wrapper {
-      display: flex;
-      gap: 8px;
-      align-items: flex-end;
-    }
-
-    /* File upload */
-    .file-upload-area {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 8px;
-    }
-    #file-input { display: none; }
-    .file-upload-btn {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 18px;
-      cursor: pointer;
-      padding: 4px;
-      line-height: 1;
-    }
-    .file-upload-btn:hover { color: var(--accent); }
-    .attached-files {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      font-size: 11px;
-    }
-    .file-chip {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 3px 6px;
-      display: flex;
-      gap: 4px;
-      align-items: center;
-    }
-    .file-chip .remove { cursor: pointer; opacity: 0.6; }
-    .file-chip .remove:hover { opacity: 1; }
-
-    .input-field {
-      flex: 1;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 11px 14px;
-      color: var(--text);
-      font-size: 15px;
-      font-family: inherit;
-      outline: none;
-      transition: all 0.2s;
-      resize: none;
-      max-height: 100px;
-    }
-    .input-field:focus {
-      border-color: var(--accent);
-      background: var(--surface2);
-    }
-    .input-field::placeholder { color: var(--muted); }
-    .send-button {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      border: none;
-      background: var(--accent);
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
-      font-size: 18px;
-    }
-    .send-button:hover { background: var(--accent-hover); }
-    .send-button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    /* Performance monitor */
-    .perf-monitor {
-      position: fixed;
-      bottom: 16px;
-      right: 16px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 16px;
-      font-size: 11px;
-      color: var(--muted);
-      max-width: 200px;
-      z-index: 999;
-      opacity: 0.7;
-      transition: opacity 0.2s;
-    }
-    .perf-monitor:hover { opacity: 1; }
-    .perf-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      margin: 2px 0;
-    }
-    .perf-label { font-weight: 600; }
-    .perf-value { text-align: right; color: var(--text); }
-
-    /* Modal overlays */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      display: flex;
-      align-items: flex-end;
-      z-index: 100;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.2s;
-    }
-    .modal-overlay.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .modal-content {
-      width: 100%;
-      max-width: 600px;
-      background: var(--surface);
-      border-radius: 16px 16px 0 0;
-      max-height: 80vh;
-      overflow-y: auto;
-      margin-left: auto;
-      margin-right: auto;
-      transform: translateY(100%);
-      transition: transform 0.3s ease;
-    }
-    .modal-overlay.open .modal-content {
-      transform: translateY(0);
-    }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px;
-      border-bottom: 1px solid var(--border);
-      position: sticky;
-      top: 0;
-      background: var(--surface);
-    }
-    .modal-header h2 {
-      font-size: 18px;
-      font-weight: 600;
-    }
-    .modal-close {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-    }
-    .modal-close:hover {
-      background: var(--surface2);
-      color: var(--text);
-    }
-    .modal-body {
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    /* Form elements */
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .form-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .form-input {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 12px;
-      color: var(--text);
-      font-family: inherit;
-      font-size: 14px;
-      outline: none;
-      transition: all 0.2s;
-    }
-    .form-input:focus {
-      border-color: var(--accent);
-    }
-    .form-input::placeholder { color: var(--muted); }
-
-    /* Settings card */
-    .setting-card {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .setting-card-icon { font-size: 20px; }
-    .setting-card-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .setting-card-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text);
-    }
-    .setting-card-status {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .setting-card-status.ok { color: #34d399; }
-    .setting-card-status.err { color: var(--accent); }
-
-    /* Button styles */
-    .button-primary {
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 10px 16px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .button-primary:hover { background: var(--accent-hover); }
-    .button-secondary {
-      background: transparent;
-      color: var(--muted);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 10px 16px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .button-secondary:hover {
-      border-color: var(--text);
-      color: var(--text);
-    }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-
-    /* Streaming cursor */
-    .stream-cursor {
-      display: inline-block; width: 2px; height: 1em;
-      background: var(--accent); margin-left: 2px;
-      vertical-align: text-bottom;
-      animation: blink 0.7s step-end infinite;
-    }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-
-    /* Quick-start chips */
-    .starter-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 4px; }
-    .starter-chip {
-      background: var(--surface2); border: 1px solid var(--border);
-      color: var(--muted); font-size: 0.82rem; font-family: inherit;
-      padding: 6px 14px; border-radius: 20px; cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
-    }
-    .starter-chip:hover { border-color: var(--accent); color: var(--text); }
-
-    /* Error / muted agent text */
-    .message.agent.error .message-content { color: var(--muted); font-style: italic; }
-
-    /* TTS word highlighting */
-    .tts-word { border-radius: 2px; transition: background 0.08s; }
-    .tts-active { background: rgba(255, 220, 50, 0.22); }
-
-    /* Connector sidecar */
-    .connector-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .connector-card {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      transition: border-color 0.15s;
-    }
-    .connector-card:hover { border-color: var(--accent); }
-    .connector-card-icon { font-size: 20px; width: 28px; text-align: center; }
-    .connector-card-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .connector-card-title { font-size: 14px; font-weight: 500; color: var(--text); }
-    .connector-card-meta { font-size: 11px; color: var(--muted); }
-    .connector-card-status {
-      font-size: 11px;
-      font-weight: 500;
-      padding: 2px 8px;
-      border-radius: 12px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    .connector-card-status.ok { color: #34d399; border-color: #34d39933; background: #34d39911; }
-    .connector-card-status.err { color: var(--accent); border-color: var(--accent)33; background: var(--accent)11; }
-    .connector-card-status.pending { color: #fbbf24; border-color: #fbbf2433; background: #fbbf2411; }
-    .connector-btn {
-      font-size: 12px;
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-    .connector-btn:hover { border-color: var(--accent); color: var(--text); }
-    .connector-btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
-    .connector-btn.primary:hover { background: var(--accent-hover); }
-
-    /* Message footer: source · latency · turn */
-    .msg-footer {
-      font-size: 0.67rem;
-      color: var(--muted);
-      padding: 0 4px;
-      align-self: flex-start;
-      opacity: 0.65;
-      letter-spacing: 0.02em;
-    }
-    .msg-footer.offline { opacity: 0.45; }
-    .msg-footer.anthropic { color: var(--accent); opacity: 0.8; }
-    .msg-footer.ollama { color: #4ade80; opacity: 0.8; }
-    .msg-footer.grok { color: #e2c97e; opacity: 0.8; }
-    .msg-footer.gemini { color: #4fc3f7; opacity: 0.8; }
-  </style>
 </head>
 <body>
 <div class="app">
-  <!-- Left sidebar: Conversation list -->
-  <aside class="sidebar" id="sidebar" role="navigation" aria-label="Conversation history">
-    <div class="sidebar-header">
-      <h3>Conversations</h3>
-      <button class="sidebar-new-btn" onclick="newConversation()" title="New conversation" aria-label="Start new conversation">+</button>
-    </div>
-    <div class="sidebar-search">
-      <input type="text" id="search-convos" placeholder="Search…" onkeyup="filterConversations()" aria-label="Search conversations">
-    </div>
-    <ul class="convo-list" id="convo-list" role="list">
-      <!-- Populated by JS -->
-    </ul>
-  </aside>
-
   <div class="app-main">
-  <!-- Header -->
-  <nav class="site-nav">
-    <a class="nav-brand" href="/">
-      <img src="/mandala.svg" alt="" aria-hidden="true" style="width:18px;height:18px;vertical-align:middle">
-      Lantern OS
-    </a>
-    <div class="nav-links">
-      <a href="/dream-chat.html" class="active">Journal</a>
-      <a href="/three-doors-game.html">Explore</a>
-      <a href="/flourishing">Dashboard</a>
-      <a href="/knowledgecenter.html">Help</a>
-    </div>
-    <div class="nav-actions">
-      <span id="header-status" style="display:none">· connecting…</span>
-      <button class="nav-btn observer-toggle" id="observer-toggle-btn" onclick="toggleObserver()" title="Observer panel">◈</button>
-      <button class="nav-btn" id="settings-btn" onclick="openSettings()" title="Settings">⚙</button>
-      <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
-    </div>
-  </nav>
 
-  <!-- Chat area -->
-  <div class="chat-container" id="messages" role="log" aria-label="Conversation messages" aria-live="polite">
-    <div class="empty-state" id="empty-state">
-      <div class="empty-icon" style="opacity:0.5;font-size:48px">📝</div>
-      <h2>What's on your mind?</h2>
-      <p>Write a reflection, ask a question, or just think out loud. Everything stays private on your device.</p>
-      <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px;margin-top:8px">
-        <button onclick="fillPrompt('Today I noticed that ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">📝 Record a thought…</button>
-        <button onclick="fillPrompt('I keep thinking about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">🔄 Explore a recurring thought…</button>
-        <button onclick="fillPrompt('What do you know about ')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">✨ Ask about a topic…</button>
-        <button onclick="fillAndSend('!explore')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#a78bfa'" onmouseout="this.style.borderColor='var(--border)'" title="Start interactive story">🚪 Start an interactive story…</button>
+    <!-- Header -->
+    <nav class="site-nav">
+      <a class="nav-brand" href="/">
+        <img src="/mandala.svg" alt="" aria-hidden="true" style="width:24px;height:24px;vertical-align:middle">
+        <span style="font-size:18px;font-weight:600">Lantern OS</span>
+      </a>
+      <div class="nav-links">
+        <a href="/dream-chat.html" class="active">Journal</a>
+        <a href="/trader-dashboard.html">Trader</a>
+        <a href="/create.html">Create</a>
+        <a href="/explore.html">Explore</a>
+        <a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a>
       </div>
-      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;width:100%;max-width:320px">
-        <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Trading & Markets</div>
-        <button onclick="fillPrompt('Buy 10 shares of AAPL')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#10b981'" onmouseout="this.style.borderColor='var(--border)'">💰 Execute a trade…</button>
-        <button onclick="fillPrompt('Check my portfolio')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='var(--border)'">📊 View your portfolio…</button>
-        <button onclick="fillPrompt('What are the trading signals for today?')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='var(--border)'">📈 Ask for trading signals…</button>
-        <button onclick="fillPrompt('What is the market status?')" style="background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:border-color 0.15s;font-family:inherit" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">🌐 Check market status…</button>
+      <div class="nav-actions">
+        <a href="/profile.html" class="nav-btn" id="profile-btn" title="Your profile" aria-label="View your profile">👤</a>
+        <button class="nav-btn" id="logout-btn" onclick="logoutUser()" title="Logout" aria-label="Logout" style="display:none;">🚪</button>
+        <button class="nav-btn" id="voice-btn" aria-label="Toggle voice mode" aria-pressed="false" onclick="
+          if (!window.voiceMode) window.voiceMode = false;
+          window.voiceMode = !window.voiceMode;
+          this.setAttribute('aria-pressed', window.voiceMode);
+          this.style.opacity = window.voiceMode ? '1' : '0.5';
+          this.style.background = window.voiceMode ? 'rgba(161,139,250,0.2)' : '';
+          this.style.borderColor = window.voiceMode ? '#a78bfa' : '';
+          const voiceInputBtn = document.getElementById('voice-input-btn');
+          if (voiceInputBtn) voiceInputBtn.style.display = window.voiceMode ? 'block' : 'none';
+        " title="Voice Mode">🎙️</button>
+        <button class="nav-btn" id="settings-btn" aria-label="Open settings" onclick="openSettings()" title="Settings">⚙️</button>
       </div>
-    </div>
-  </div>
+    </nav>
 
-  <!-- Input area -->
-  <div class="input-container">
-    <div class="file-upload-area">
-      <button class="file-upload-btn" onclick="document.getElementById('file-input').click()" title="Attach file">📎</button>
-      <input type="file" id="file-input" accept=".txt,.pdf,.json,.csv,.md" onchange="attachFile(event)">
-      <div class="attached-files" id="attached-files"></div>
+
+
+    <!-- Chat area -->
+    <div class="chat-container" id="messages" role="log" aria-label="Conversation messages" aria-live="polite">
+      <div class="empty-state" id="empty-state">
+        <div style="text-align:center;padding:40px 20px">
+          <div style="margin-bottom:12px"><img src="/mandala.svg" alt="" aria-hidden="true" style="width:64px;height:64px"></div>
+          <h1 style="font-size:26px;font-weight:600;margin-bottom:6px;color:var(--text)">Keystone Desk</h1>
+          <div class="starter-chips">
+            <button class="starter-chip" onclick="fillAndSend('!ask what work needs to be done')">⚡ What needs doing?</button>
+            <button class="starter-chip" onclick="fillAndSend('!ask explain the convergence router')">⚡ How's the system?</button>
+            <button class="starter-chip" onclick="fillAndSend('!ask how do I get started')">⚡ Get started</button>
+            <button class="starter-chip" onclick="fillAndSend('Tell me a story')">⚡ Tell me a story</button>
+            <button class="starter-chip" onclick="fillAndSend('Help me learn something new')">⚡ Teach me</button>
+            <button class="starter-chip" onclick="fillAndSend('!explore')">⚡ Play game ↗</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="input-wrapper">
-      <textarea id="input" class="input-field" placeholder="Write something, ask a question…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
-      <button class="send-button" id="send-btn" onclick="sendMessage()" title="Send">↑</button>
+
+    <!-- Input area -->
+    <div class="input-container">
+      <div class="input-wrapper">
+        <button id="voice-input-btn" aria-label="Start voice input" onclick="startVoiceInput()" title="Speak" style="display:none;background:none;border:none;font-size:24px;padding:8px 12px;cursor:pointer;opacity:0.5">🎙️</button>
+        <textarea id="input" class="input-field" placeholder="Write something, ask a question…" rows="1" aria-label="Message input" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage();}"></textarea>
+        <button class="send-button" id="send-btn" aria-label="Send message" onclick="sendMessage()" title="Send">↑</button>
+      </div>
     </div>
-  </div>
+
   </div><!-- /.app-main -->
 
-  <!-- Observer side panel -->
-  <aside class="observer-panel collapsed" id="observer-panel">
+  <!-- Observer side panel (hidden by default for simplicity) -->
+  <aside class="observer-panel collapsed hidden" id="observer-panel" style="display:none">
     <div class="observer-panel-header">
       <span class="observer-panel-title">◈ Observer</span>
       <button class="observer-panel-close" onclick="toggleObserver()" title="Close">×</button>
@@ -668,8 +133,20 @@
         <div class="obs-arc-bar"><div class="obs-arc-fill" id="obs-conv-fill" style="width:0%"></div></div>
       </div>
       <div>
+        <div class="obs-section-title">Loop Depth (Σ₀)</div>
+        <div class="obs-value" id="obs-loop-depth" style="font-family:'IBM Plex Mono',monospace;font-size:11px">⟳ — loops · — conf</div>
+        <div class="obs-arc-bar"><div class="obs-arc-fill" id="obs-loop-fill" style="width:0%;background:var(--accent)"></div></div>
+      </div>
+      <div>
         <div class="obs-section-title">Dilation Ratio</div>
         <div class="obs-value" id="obs-dilation">1.0×</div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+      <div>
+        <div class="obs-section-title">Current Priorities</div>
+        <div id="priorities-panel">
+          <div style="font-size:11px;color:var(--muted)">Loading…</div>
+        </div>
       </div>
     </div>
   </aside>
@@ -677,28 +154,20 @@
 
 <!-- Performance Monitor -->
 <div class="perf-monitor" id="perf-monitor" style="display:none">
-  <div class="perf-row">
-    <span class="perf-label">Tokens:</span>
-    <span class="perf-value" id="perf-tokens">0</span>
-  </div>
-  <div class="perf-row">
-    <span class="perf-label">Cost:</span>
-    <span class="perf-value" id="perf-cost">$0</span>
-  </div>
-  <div class="perf-row">
-    <span class="perf-label">Latency:</span>
-    <span class="perf-value" id="perf-latency">0ms</span>
-  </div>
+  <div class="perf-row"><span class="perf-label">Tokens:</span><span class="perf-value" id="perf-tokens">0</span></div>
+  <div class="perf-row"><span class="perf-label">Cost:</span><span class="perf-value" id="perf-cost">$0</span></div>
+  <div class="perf-row"><span class="perf-label">Latency:</span><span class="perf-value" id="perf-latency">0ms</span></div>
 </div>
 
 <!-- Settings modal -->
-<div class="modal-overlay" id="settings-modal" onclick="if(event.target===event.currentTarget) closeSettings()">
+<div class="modal-overlay" id="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onclick="if(event.target===event.currentTarget) closeSettings()">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>Settings</h2>
-      <button class="modal-close" onclick="closeSettings()">×</button>
+      <h2 id="settings-title">Settings</h2>
+      <button class="modal-close" aria-label="Close settings" onclick="closeSettings()">×</button>
     </div>
     <div class="modal-body">
+
       <div class="form-group">
         <label class="form-label">AI Provider</label>
         <select id="provider-select" class="form-input">
@@ -708,6 +177,7 @@
           <option value="gemini">Gemini</option>
           <option value="grok">Grok</option>
           <option value="ollama">Local (Ollama)</option>
+          <option value="keystone-ft">Keystone FT (Haiku + Memory)</option>
         </select>
       </div>
 
@@ -760,772 +230,167 @@
         <a href="https://console.x.ai" target="_blank" style="font-size:0.75rem;color:var(--muted)">Get key →</a>
       </div>
 
-      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
 
-      <div class="form-group">
-        <label class="form-label">Connectors</label>
-        <div class="connector-grid">
-          <!-- MCP OAuth -->
-          <div class="connector-card">
-            <span class="connector-card-icon">🔌</span>
-            <div class="connector-card-info">
-              <div class="connector-card-title">MCP Server</div>
-              <div class="connector-card-meta">OAuth 2.0 · Port 8772</div>
-            </div>
-            <span class="connector-card-status pending" id="mcp-status">Disconnected</span>
-            <button class="connector-btn primary" id="mcp-btn" onclick="connectMcp()">Connect</button>
-          </div>
-
-          <!-- Web Search -->
-          <div class="connector-card">
-            <span class="connector-card-icon">🔍</span>
-            <div class="connector-card-info">
-              <div class="connector-card-title">Web Search</div>
-              <div class="connector-card-meta">DuckDuckGo · No key needed</div>
-            </div>
-            <span class="connector-card-status ok" id="search-status">Ready</span>
-            <button class="connector-btn" onclick="testWebSearch()">Test</button>
-          </div>
-
-          <!-- Claude -->
-          <div class="connector-card">
-            <span class="connector-card-icon">✦</span>
-            <div class="connector-card-info">
-              <div class="connector-card-title">Claude</div>
-              <div class="connector-card-meta">API Key</div>
-            </div>
-            <span class="connector-card-status err" id="conn-status-claude">No key</span>
-            <button class="connector-btn" onclick="focusKey('key-claude')">Add Key</button>
-          </div>
-
-          <!-- Gemini -->
-          <div class="connector-card">
-            <span class="connector-card-icon">🌐</span>
-            <div class="connector-card-info">
-              <div class="connector-card-title">Gemini</div>
-              <div class="connector-card-meta">API Key</div>
-            </div>
-            <span class="connector-card-status err" id="conn-status-gemini">No key</span>
-            <button class="connector-btn" onclick="focusKey('key-gemini')">Add Key</button>
-          </div>
-
-          <!-- ChatGPT -->
-          <div class="connector-card">
-            <span class="connector-card-icon">◈</span>
-            <div class="connector-card-info">
-              <div class="connector-card-title">ChatGPT</div>
-              <div class="connector-card-meta">API Key</div>
-            </div>
-            <span class="connector-card-status err" id="conn-status-openai">No key</span>
-            <button class="connector-btn" onclick="focusKey('key-openai')">Add Key</button>
-          </div>
-
-          <!-- Grok -->
-          <div class="connector-card">
-            <span class="connector-card-icon">𝕏</span>
-            <div class="connector-card-info">
-              <div class="connector-card-title">Grok</div>
-              <div class="connector-card-meta">API Key</div>
-            </div>
-            <span class="connector-card-status err" id="conn-status-grok">No key</span>
-            <button class="connector-btn" onclick="focusKey('key-grok')">Add Key</button>
-          </div>
-        </div>
-      </div>
-
-      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
-
-      <div class="form-group">
-        <label class="form-label">Context Modes</label>
-        <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
-          <label style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="ctx-search" checked onchange="updateContext()">
-            <span>Web Search (MCP)</span>
-          </label>
-          <label style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="ctx-memory" checked onchange="updateContext()">
-            <span>CSF Memory / Symbols</span>
-          </label>
-          <label style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="ctx-trading" onchange="updateContext()">
-            <span>Trading Context (IBKR)</span>
-          </label>
-          <label style="display:flex;gap:8px;align-items:center">
-            <input type="checkbox" id="ctx-perf" onchange="togglePerfMonitor()">
-            <span>Performance Monitor</span>
-          </label>
-        </div>
-      </div>
-
-      <hr style="border: none; border-top: 1px solid var(--border); margin: 8px 0;">
-
-      <div class="form-group">
-        <label class="form-label">Dream Actions</label>
-        <button class="button-primary" onclick="openLogDream()" style="width: 100%;">+ Record a Dream</button>
-      </div>
     </div>
   </div>
 </div>
 
-<script src="js/dream-chat.js"></script>
-<script src="/js/theme-toggle.js"></script>
+
 <script>
-  // ── Modal controls ─────────────────────────────────────────────────
-  function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
-  function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
-  function openLogDream() { alert('Log entry coming soon'); closeSettings(); }
-
-  // ── Cube delta writer ────────────────────────────────────────────
-  async function writeCubeDelta(eventType, symbols, payloadRef) {
-    try {
-      await fetch('/api/cubes/alex/delta', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source_surface: 'journal',
-          event_type: eventType,
-          symbols: symbols || [],
-          payload_ref: payloadRef || '',
-        }),
-      });
-    } catch (e) { /* silent — cube is best-effort */ }
-  }
-  function saveKey() {}
-
-  // ── Connector sidecar ────────────────────────────────────────────
-  function focusKey(inputId) {
-    const el = document.getElementById(inputId);
-    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
-  }
-
-  async function updateConnectorStatuses() {
-    // Check MCP health
-    try {
-      const r = await fetch('http://127.0.0.1:8772/health', { method: 'GET', mode: 'cors', cache: 'no-store' });
-      const mcpStatus = document.getElementById('mcp-status');
-      const mcpBtn = document.getElementById('mcp-btn');
-      if (r.ok) {
-        const data = await r.json();
-        mcpStatus.textContent = 'Connected';
-        mcpStatus.className = 'connector-card-status ok';
-        mcpBtn.textContent = 'Disconnect';
-        mcpBtn.onclick = disconnectMcp;
-        mcpBtn.classList.remove('primary');
-      } else {
-        throw new Error('HTTP ' + r.status);
-      }
-    } catch (e) {
-      const mcpStatus = document.getElementById('mcp-status');
-      const mcpBtn = document.getElementById('mcp-btn');
-      mcpStatus.textContent = 'Disconnected';
-      mcpStatus.className = 'connector-card-status pending';
-      mcpBtn.textContent = 'Connect';
-      mcpBtn.onclick = connectMcp;
-      mcpBtn.classList.add('primary');
-    }
-
-    // Check API key statuses from localStorage / env
-    const providers = [
-      { key: 'ANTHROPIC_API_KEY', id: 'claude', label: 'Claude' },
-      { key: 'GEMINI_API_KEY', id: 'gemini', label: 'Gemini' },
-      { key: 'OPENAI_API_KEY', id: 'openai', label: 'ChatGPT' },
-      { key: 'XAI_API_KEY', id: 'grok', label: 'Grok' },
-    ];
-    for (const p of providers) {
-      const hasKey = !!localStorage.getItem(p.key);
-      const badge = document.getElementById('conn-status-' + p.id);
-      const input = document.getElementById('key-' + p.id);
-      if (badge) {
-        if (hasKey || (input && input.value.length > 0)) {
-          badge.textContent = 'Ready';
-          badge.className = 'connector-card-status ok';
-        } else {
-          badge.textContent = 'No key';
-          badge.className = 'connector-card-status err';
-        }
-      }
-    }
-  }
-
-  async function connectMcp() {
-    const mcpStatus = document.getElementById('mcp-status');
-    const mcpBtn = document.getElementById('mcp-btn');
-    mcpStatus.textContent = 'Connecting…';
-    mcpStatus.className = 'connector-card-status pending';
-    mcpBtn.disabled = true;
-
-    try {
-      // Step 1: Health check
-      const health = await fetch('http://127.0.0.1:8772/health', { method: 'GET', mode: 'cors', cache: 'no-store' });
-      if (!health.ok) throw new Error('MCP server not responding');
-
-      // Step 2: OAuth registration (open in popup)
-      const width = 500, height = 600;
-      const left = (screen.width - width) / 2;
-      const top = (screen.height - height) / 2;
-      const popup = window.open(
-        'http://127.0.0.1:8772/oauth/register?client_name=LanternOSJournal&redirect_uri=http://127.0.0.1:4177/oauth/callback',
-        'mcpOAuth',
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
-      );
-
-      // Poll for popup close
-      const checkClosed = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(checkClosed);
-          updateConnectorStatuses();
-          mcpBtn.disabled = false;
-        }
-      }, 500);
-    } catch (e) {
-      mcpStatus.textContent = 'Error';
-      mcpStatus.className = 'connector-card-status err';
-      mcpBtn.disabled = false;
-      alert('MCP connection failed: ' + e.message);
-    }
-  }
-
-  function disconnectMcp() {
-    localStorage.removeItem('MCP_OAUTH_TOKEN');
-    updateConnectorStatuses();
-  }
-
-  async function testWebSearch() {
-    const btn = event.target;
-    const original = btn.textContent;
-    btn.textContent = 'Testing…';
-    btn.disabled = true;
-    try {
-      const r = await fetch('http://127.0.0.1:8772/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0', id: 1,
-          method: 'tools/call',
-          params: { name: 'web_search', arguments: { query: 'Lantern OS', max_results: 3 } }
-        }),
-      });
-      const data = await r.json();
-      if (data.result && data.result.success) {
-        alert('Web search works! Found ' + data.result.result_count + ' results.\nTop: ' + (data.result.results[0]?.title || '?'));
-      } else {
-        alert('Web search returned: ' + (data.result?.error || 'unknown error'));
-      }
-    } catch (e) {
-      alert('Web search test failed: ' + e.message);
-    } finally {
-      btn.textContent = original;
-      btn.disabled = false;
-    }
-  }
-
-  // Update connector badges when settings opens
-  const _origOpenSettings = openSettings;
-  openSettings = function() {
-    _origOpenSettings();
-    updateConnectorStatuses();
+  /**
+   * Patreon role gate.
+   * Server endpoints expected:
+   *   GET  /api/auth/session
+   *   GET  /api/auth/patreon/start?returnTo=/dream-chat.html
+   *   POST /api/auth/logout
+   *
+   * IMPORTANT: real limits must also be enforced server-side in your chat API.
+   */
+  const LANTERN_ROLES = {
+    guest:     { label: "Guest",     canChat: false, dailyMessages: 0,   modelAccess: ["public"] },
+    supporter: { label: "Supporter", canChat: true,  dailyMessages: 50,  modelAccess: ["keystone", "openai"] },
+    founder:   { label: "Founder",   canChat: true,  dailyMessages: 250, modelAccess: ["keystone", "openai", "claude"] },
+    admin:     { label: "Admin",     canChat: true,  dailyMessages: -1,  modelAccess: ["all"] }
   };
 
-  // ── Conversation state ─────────────────────────────────────────────
-  let isSending = false;
-  const history = [];
+  let lanternSession = { authenticated: false, role: "guest" };
 
-  // Fallback messages — shown ONLY when all providers fail (never as a normal reply)
-  const FALLBACKS = [
-    "No AI providers are set up. Add an API key in Settings (⚙) to get started.",
-    "All providers offline. Check Settings to add an API key or start a local model.",
-    "Connection quiet. Try again in a moment, or check Settings for API keys.",
-    "No provider answered. Open Settings (⚙) to configure Gemini, Claude, or OpenAI.",
-    "AI unavailable. Add a provider key in Settings, or run: ollama serve for local mode.",
-  ];
-
-  // ── Quick-start chip fill ──────────────────────────────────────────
-  function fillPrompt(text) {
-    const input = document.getElementById('input');
-    input.value = text;
-    input.focus();
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+  function normalizeRole(role) {
+    return LANTERN_ROLES[role] ? role : "guest";
   }
 
-  function fillAndSend(text) {
-    const input = document.getElementById('input');
-    input.value = text;
-    input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 100) + 'px';
-    sendMessage();
-  }
+  function applyPatreonSession(session) {
+    lanternSession = session || { authenticated: false, role: "guest" };
+    const role = normalizeRole(lanternSession.role);
+    const plan = LANTERN_ROLES[role];
 
-  // ── DOM helpers ────────────────────────────────────────────────────
-  function hideEmptyState() {
-    const el = document.getElementById('empty-state');
-    if (el) el.style.display = 'none';
-  }
+    document.body.dataset.patreonRole = role;
 
+    const gate = document.getElementById("patreon-gate");
+    const authBtn = document.getElementById("patreon-auth-btn");
+    const logoutBtn = document.getElementById("patreon-logout-btn");
+    const status = document.getElementById("patreon-session-status");
+    const input = document.getElementById("input");
+    const sendBtn = document.getElementById("send-btn");
 
-  function addUserBubble(text) {
-    hideEmptyState();
-    const container = document.getElementById('messages');
-    const msg = document.createElement('div');
-    msg.className = 'message user';
-    msg.innerHTML = `<div class="message-content">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
-    container.appendChild(msg);
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function createAgentBubble(isError) {
-    const container = document.getElementById('messages');
-    const msg = document.createElement('div');
-    msg.className = 'message agent' + (isError ? ' error' : '');
-    const bubble = document.createElement('div');
-    bubble.className = 'message-content';
-    const cursor = document.createElement('span');
-    cursor.className = 'stream-cursor';
-    bubble.appendChild(cursor);
-    msg.appendChild(bubble);
-    container.appendChild(msg);
-    container.scrollTop = container.scrollHeight;
-    return { msg, bubble, cursor };
-  }
-
-  // ── Main send ──────────────────────────────────────────────────────
-  async function sendMessage() {
-    const input = document.getElementById('input');
-    const text = input.value.trim();
-    if (!text || isSending) return;
-
-    // Kingdome of Hearts interactive game — bypass normal chat stream
-    const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts)\b/i);
-    if (kingdomeMatch) {
-      hideEmptyState();
-      input.value = '';
-      startThreeDoors();
-      return;
+    if (authBtn) {
+      authBtn.dataset.role = role;
+      authBtn.textContent = lanternSession.authenticated ? `♥ ${plan.label}` : "🔐 Patreon";
+      authBtn.onclick = lanternSession.authenticated ? null : loginWithPatreon;
     }
 
-    isSending = true;
-    document.getElementById('send-btn').disabled = true;
+    if (logoutBtn) logoutBtn.hidden = !lanternSession.authenticated;
 
-    addUserBubble(text);
-    input.value = '';
-    input.style.height = 'auto';
-    history.push({ role: 'user', text });
-    writeCubeDelta('chat_message', [], 'conversation:' + Date.now());
+    if (status) {
+      const usageText = plan.dailyMessages < 0 ? "unlimited messages" : `${plan.dailyMessages} messages/day`;
+      status.textContent = lanternSession.authenticated
+        ? `Signed in as ${plan.label} · ${usageText}`
+        : "Not signed in";
+    }
 
-    const { msg, bubble, cursor } = createAgentBubble(false);
-    const container = document.getElementById('messages');
+    if (gate) {
+      gate.classList.toggle("hidden", plan.canChat);
+    }
 
-    let fullText = '';
-    let serverErrorText = '';
-    let didError = false;
+    if (input && sendBtn) {
+      input.disabled = !plan.canChat;
+      sendBtn.disabled = !plan.canChat;
+      input.placeholder = plan.canChat
+        ? "Write something, ask a question…"
+        : "Sign in with Patreon to unlock Keystone Desk…";
+    }
 
-    try {
-      const provider = document.getElementById('provider-select')?.value || '';
-      const resp = await fetch('/api/dream/chat/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text,
-          user: 'dream-chat',
-          agent: '',
-          provider,
-          history: history.slice(-10),
-        }),
-        signal: AbortSignal.timeout(90000),
+    // Provider dropdown role filtering.
+    const provider = document.getElementById("provider-select");
+    if (provider) {
+      [...provider.options].forEach((option) => {
+        const value = option.value || "auto";
+        const allowed = role === "admin"
+          || value === "auto"
+          || value === "ollama"
+          || plan.modelAccess.includes(value)
+          || (value === "keystone-ft" && ["founder", "admin"].includes(role));
+        option.disabled = !allowed;
       });
-
-      if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const evt = JSON.parse(line.slice(6));
-            if (evt.type === 'token' && evt.text) {
-              fullText += evt.text;
-              cursor.remove();
-              // Strip [DOORS:...] during streaming
-              bubble.textContent = fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd();
-              bubble.appendChild(cursor);
-              container.scrollTop = container.scrollHeight;
-            } else if (evt.type === 'error') {
-              // Server reported an error — capture its text; may be followed by tokens so don't stop
-              didError = true;
-              if (evt.text) serverErrorText = evt.text;
-              if (!fullText) {
-                bubble.style.color = 'var(--muted)';
-              }
-            } else if (evt.type === 'done' && evt.cleanText) {
-              fullText = evt.cleanText;
-            }
-          } catch { /* skip malformed line */ }
-        }
-      }
-    } catch (e) {
-      didError = true;
-    }
-
-    // Remove streaming cursor
-    cursor.remove();
-
-    if (!fullText) {
-      // Use server error text if available, otherwise random fallback
-      fullText = serverErrorText || FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
-      msg.classList.add('error');
-      bubble.style.color = 'var(--muted)';
-      bubble.style.fontStyle = 'italic';
-    }
-
-    bubble.textContent = fullText;
-
-    if (!didError) {
-      history.push({ role: 'assistant', text: fullText });
-    }
-
-    isSending = false;
-    document.getElementById('send-btn').disabled = false;
-  }
-
-  // ── Auto-expand textarea ───────────────────────────────────────────
-  document.getElementById('input').addEventListener('input', e => {
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
-  });
-
-  // ── Observer side panel ───────────────────────────────────────────
-  function toggleObserver() {
-    const panel = document.getElementById('observer-panel');
-    const btn = document.getElementById('observer-toggle-btn');
-    const collapsed = panel.classList.toggle('collapsed');
-    btn.classList.toggle('active', !collapsed);
-    if (!collapsed) refreshObserver();
-  }
-
-  function refreshObserver() {
-    fetch('/api/csf/stats').then(r => r.ok ? r.json() : null).then(data => {
-      if (!data) return;
-      // Recurring symbols
-      const symList = document.getElementById('obs-symbols');
-      if (data.top10 && data.top10.length > 0) {
-        symList.innerHTML = data.top10.slice(0, 8).map(s =>
-          `<span class="obs-symbol-chip${s.count >= 3 ? ' hot' : ''}">${s.token} ×${s.count}</span>`
-        ).join('');
-      } else {
-        symList.textContent = 'none yet';
-      }
-      document.getElementById('obs-dilation').textContent =
-        data.delta_count ? `${data.delta_count} entries` : '—';
-    }).catch(() => {});
-
-    fetch('/api/csf/deltas?limit=5').then(r => r.ok ? r.json() : null).then(data => {
-      if (!data || !data.length) return;
-      const last = data[data.length - 1];
-      // Mood arc
-      const moods = data.filter(d => d.mood_abs != null).map(d => d.mood_abs);
-      if (moods.length >= 2) {
-        const first = moods[0], latest = moods[moods.length - 1];
-        const diff = latest - first;
-        const label = Math.abs(diff) < 0.1 ? 'stable' : diff > 0 ? '↑ rising' : '↓ falling';
-        document.getElementById('obs-mood-arc').textContent = `${label} (${first.toFixed(1)} → ${latest.toFixed(1)})`;
-        document.getElementById('obs-mood-fill').style.width = `${Math.round(latest * 100)}%`;
-      }
-      // Last delta
-      const deltaLines = [];
-      if (last.symbols_added?.length) deltaLines.push(`+symbols: ${last.symbols_added.slice(0,3).join(', ')}`);
-      if (last.tags_added?.length) deltaLines.push(`+tags: ${last.tags_added.slice(0,3).join(', ')}`);
-      if (last.mood_delta != null && Math.abs(last.mood_delta) >= 0.05)
-        deltaLines.push(`mood ${last.mood_delta > 0 ? '+' : ''}${last.mood_delta}`);
-      document.getElementById('obs-last-delta').textContent = deltaLines.join(' · ') || 'no change';
-      // Convergence
-      if (last.convergence != null) {
-        const pct = Math.round(last.convergence * 100);
-        document.getElementById('obs-convergence').textContent = `${pct}%`;
-        document.getElementById('obs-conv-fill').style.width = `${pct}%`;
-      }
-    }).catch(() => {});
-  }
-
-  // Refresh observer every 30s if open
-  setInterval(() => {
-    if (!document.getElementById('observer-panel').classList.contains('collapsed')) refreshObserver();
-  }, 30000);
-
-  // ====== CONVERSATION MANAGEMENT (SIDEBAR) ======
-  let currentConversationId = null;
-
-  function loadConversations() {
-    const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
-    const list = document.getElementById('convo-list');
-    list.innerHTML = '';
-
-    convos.forEach(c => {
-      const item = document.createElement('li');
-      item.className = 'convo-item' + (c.id === currentConversationId ? ' active' : '');
-      const time = new Date(c.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const preview = c.messages[0]?.text.slice(0, 30) || 'Empty';
-
-      item.innerHTML = `<span onclick="loadConversation('${c.id}')" style="flex:1">${preview}… ${time}</span>
-        <span class="convo-item-delete" onclick="deleteConversation(event, '${c.id}')">✕</span>`;
-      list.appendChild(item);
-    });
-  }
-
-  function newConversation() {
-    const id = 'convo-' + Date.now();
-    currentConversationId = id;
-    history = [];
-    document.getElementById('messages').innerHTML = document.getElementById('empty-state').outerHTML;
-    loadConversations();
-  }
-
-  function loadConversation(id) {
-    const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
-    const convo = convos.find(c => c.id === id);
-    if (!convo) return;
-
-    currentConversationId = id;
-    history = convo.messages;
-    document.getElementById('messages').innerHTML = '';
-
-    convo.messages.forEach(msg => {
-      if (msg.role === 'user') addUserBubble(msg.text);
-      else if (msg.role === 'assistant') {
-        const { msg: msgEl, bubble } = createAgentBubble(true);
-        bubble.textContent = msg.text;
-        document.getElementById('messages').appendChild(msgEl);
-      }
-    });
-
-    loadConversations();
-  }
-
-  function saveConversation() {
-    if (!currentConversationId) return;
-    const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
-    const idx = convos.findIndex(c => c.id === currentConversationId);
-
-    if (idx >= 0) {
-      convos[idx] = { id: currentConversationId, timestamp: convos[idx].timestamp, messages: history };
-    } else {
-      convos.unshift({ id: currentConversationId, timestamp: Date.now(), messages: history });
-    }
-
-    localStorage.setItem('conversations', JSON.stringify(convos.slice(0, 50))); // Keep 50 max
-    loadConversations();
-  }
-
-  function deleteConversation(e, id) {
-    e.stopPropagation();
-    if (confirm('Delete this conversation?')) {
-      const convos = JSON.parse(localStorage.getItem('conversations') || '[]');
-      localStorage.setItem('conversations', JSON.stringify(convos.filter(c => c.id !== id)));
-      if (currentConversationId === id) newConversation();
-      else loadConversations();
     }
   }
 
-  function filterConversations() {
-    const q = document.getElementById('search-convos').value.toLowerCase();
-    document.querySelectorAll('.convo-item').forEach(item => {
-      const text = item.textContent.toLowerCase();
-      item.style.display = text.includes(q) ? '' : 'none';
-    });
-  }
-
-  // Init sidebar
-  newConversation();
-  loadConversations();
-
-  // Auto-save on each message
-  const origAddUserBubble = window.addUserBubble;
-  window.addUserBubble = function(text) {
-    origAddUserBubble(text);
-    setTimeout(saveConversation, 100);
-  };
-
-  // ====== FILE UPLOAD ======
-  let attachedFiles = [];
-
-  function attachFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const fileObj = { name: file.name, size: file.size, type: file.type };
-    attachedFiles.push(fileObj);
-    renderAttachedFiles();
-
-    // Reset input
-    event.target.value = '';
-  }
-
-  function renderAttachedFiles() {
-    const container = document.getElementById('attached-files');
-    container.innerHTML = attachedFiles.map((f, i) => `
-      <div class="file-chip">
-        <span>📄 ${f.name}</span>
-        <span class="remove" onclick="attachedFiles.splice(${i},1);renderAttachedFiles()">✕</span>
-      </div>
-    `).join('');
-  }
-
-  function clearAttachedFiles() {
-    attachedFiles = [];
-    renderAttachedFiles();
-  }
-
-  // ====== KEYBOARD SHORTCUTS ======
-  document.addEventListener('keydown', (e) => {
-    // Cmd/Ctrl + N = new conversation
-    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
-      e.preventDefault();
-      newConversation();
-    }
-    // Cmd/Ctrl + K = focus search
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      document.getElementById('search-convos').focus();
-    }
-    // Cmd/Ctrl + ? = show help
-    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '?') {
-      e.preventDefault();
-      showHelp();
-    }
-  });
-
-  function showHelp() {
-    alert(`Dream Chat Keyboard Shortcuts
-
-⌘/Ctrl + N  — New conversation
-⌘/Ctrl + K  — Search conversations
-⌘/Ctrl + ?  — Show this help
-
-Enter       — Send message
-Shift+Enter — New line
-
-📎 Attach files (.txt, .pdf, .json, .csv, .md)
-`);
-  }
-
-  // ====== SERVER SYNC ======
-  async function syncConversationToServer(convoId) {
-    if (!convoId || !history.length) return;
-
+  async function refreshPatreonSession() {
     try {
-      // Ensure conversation exists on server
-      const createRes = await fetch('/api/dreams/conversations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: convoId })
-      }).catch(() => null);
+      const res = await fetch("/api/auth/session", { credentials: "include" });
+      if (!res.ok) throw new Error(`session ${res.status}`);
+      applyPatreonSession(await res.json());
+    } catch (err) {
+      console.warn("Patreon session unavailable:", err);
+      applyPatreonSession({ authenticated: false, role: "guest" });
+    }
+  }
 
-      // Send each message
-      for (const msg of history) {
-        await fetch(`/api/dreams/conversations/${convoId}/messages`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            role: msg.role,
-            text: msg.text || msg.content,
-            timestamp: Date.now()
-          })
-        }).catch(() => null);
+  function loginWithPatreon() {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    location.href = `/api/auth/patreon/start?returnTo=${encodeURIComponent(returnTo)}`;
+  }
+
+  async function logoutPatreon() {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    applyPatreonSession({ authenticated: false, role: "guest" });
+  }
+
+  async function logoutUser() {
+    try {
+      const res = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        location.href = '/auth.html';
+      } else {
+        alert('Logout failed');
       }
     } catch (err) {
-      console.error('Sync failed:', err);
+      console.error('Logout error:', err);
+      alert('Logout error: ' + err.message);
     }
   }
 
-  // Sync every 30s if conversation exists
-  setInterval(() => {
-    if (currentConversationId && history.length > 0) {
-      syncConversationToServer(currentConversationId);
+  // Wrap sendMessage so locked visitors cannot bypass the disabled input in DevTools.
+  const originalSendMessage = window.sendMessage;
+  window.sendMessage = function gatedSendMessage(...args) {
+    const role = normalizeRole(lanternSession.role);
+    if (!LANTERN_ROLES[role].canChat) {
+      loginWithPatreon();
+      return;
     }
-  }, 30000);
-
-  // ====== CONTEXT MANAGEMENT ======
-  let contextMode = {
-    search: true,
-    memory: true,
-    trading: false,
+    if (typeof originalSendMessage === "function") {
+      return originalSendMessage.apply(this, args);
+    }
   };
 
-  function updateContext() {
-    contextMode = {
-      search: document.getElementById('ctx-search').checked,
-      memory: document.getElementById('ctx-memory').checked,
-      trading: document.getElementById('ctx-trading').checked,
-    };
-    localStorage.setItem('contextMode', JSON.stringify(contextMode));
-  }
-
-  // Load context mode from storage
-  try {
-    const saved = JSON.parse(localStorage.getItem('contextMode') || '{}');
-    Object.assign(contextMode, saved);
-    document.getElementById('ctx-search').checked = contextMode.search;
-    document.getElementById('ctx-memory').checked = contextMode.memory;
-    document.getElementById('ctx-trading').checked = contextMode.trading;
-  } catch (e) {}
-
-  // ====== PERFORMANCE MONITORING ======
-  let perfStats = {
-    totalTokens: 0,
-    totalCost: 0,
-    lastLatency: 0,
-  };
-
-  function togglePerfMonitor() {
-    const enabled = document.getElementById('ctx-perf').checked;
-    document.getElementById('perf-monitor').style.display = enabled ? 'block' : 'none';
-    localStorage.setItem('perfMonitorEnabled', enabled);
-  }
-
-  // Load perf monitor preference
-  const perfEnabled = localStorage.getItem('perfMonitorEnabled') === 'true';
-  if (perfEnabled) {
-    document.getElementById('ctx-perf').checked = true;
-    document.getElementById('perf-monitor').style.display = 'block';
-  }
-
-  function updatePerfStats(tokens, cost, latency) {
-    perfStats.totalTokens += tokens || 0;
-    perfStats.totalCost += cost || 0;
-    perfStats.lastLatency = latency || 0;
-
-    document.getElementById('perf-tokens').textContent = perfStats.totalTokens.toLocaleString();
-    document.getElementById('perf-cost').textContent = '$' + perfStats.totalCost.toFixed(3);
-    document.getElementById('perf-latency').textContent = perfStats.lastLatency + 'ms';
-  }
-
-  // Hook into the original stream fetch to capture metrics
-  const origFetch = window.fetch;
-  window.fetch = async function(...args) {
-    const startTime = Date.now();
-    const response = await origFetch.apply(this, args);
-
-    // Capture metrics from /api/dream/chat/stream responses
-    if (args[0] && args[0].includes('dream/chat')) {
-      const latency = Date.now() - startTime;
-      // Extract tokens/cost from response headers or body
-      const tokens = parseInt(response.headers?.get('X-Tokens-Used') || '0');
-      const cost = parseFloat(response.headers?.get('X-Cost-Usd') || '0');
-      if (tokens || cost) {
-        updatePerfStats(tokens, cost, latency);
+  async function updateAuthUI() {
+    try {
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (res.ok) {
+        const session = await res.json();
+        const logoutBtn = document.getElementById('logout-btn');
+        if (session.authenticated && logoutBtn) {
+          logoutBtn.style.display = 'block';
+        }
       }
+    } catch (err) {
+      console.error('Auth check error:', err);
     }
+  }
 
-    return response;
-  };
+  document.addEventListener("DOMContentLoaded", () => {
+    refreshPatreonSession();
+    updateAuthUI();
+  });
 </script>
+
+<script src="js/dream-chat.js?v=20260615-a2"></script>
+<script src="/js/theme-toggle.js"></script>
+<script src="/js/dream-chat-ui.js?v=20260615-a2"></script>
 <script src="js/convergance-sync.js"></script>
+<script src="/js/auth-gate.js" defer></script>
 </body>
 </html>

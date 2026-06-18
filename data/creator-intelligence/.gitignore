@@ -1,0 +1,3 @@
+# Ignore collected dataset rows; keep structure + manifest tracked
+*.jsonl
+!.gitkeep

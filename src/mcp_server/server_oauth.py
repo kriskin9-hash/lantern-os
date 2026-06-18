@@ -482,9 +482,12 @@ async def root():
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_discovery():
-    host = os.getenv("MCP_OAUTH_HOST", "127.0.0.1")
-    port = os.getenv("MCP_OAUTH_PORT", "8772")
-    base = f"http://{host}:{port}"
+    # Use public URL if set (for Cloudflare tunnel), otherwise localhost
+    base = os.getenv("MCP_PUBLIC_BASE_URL")
+    if not base:
+        host = os.getenv("MCP_OAUTH_HOST", "127.0.0.1")
+        port = os.getenv("MCP_OAUTH_PORT", "8772")
+        base = f"http://{host}:{port}"
     return {
         "issuer": JWT_ISSUER,
         "authorization_endpoint": f"{base}/oauth/authorize",
@@ -500,9 +503,12 @@ async def oauth_discovery():
 
 @app.get("/.well-known/mcp")
 async def mcp_discovery():
-    host = os.getenv("MCP_OAUTH_HOST", "127.0.0.1")
-    port = os.getenv("MCP_OAUTH_PORT", "8772")
-    base = f"http://{host}:{port}"
+    # Use public URL if set (for Cloudflare tunnel), otherwise localhost
+    base = os.getenv("MCP_PUBLIC_BASE_URL")
+    if not base:
+        host = os.getenv("MCP_OAUTH_HOST", "127.0.0.1")
+        port = os.getenv("MCP_OAUTH_PORT", "8772")
+        base = f"http://{host}:{port}"
     return {
         "name": "Lantern OS MCP",
         "version": "1.0.0",

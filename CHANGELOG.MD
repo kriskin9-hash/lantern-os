@@ -1,3 +1,77 @@
+## [1.4.2] - 2026-06-18
+**Build:** 1.4.2+2026-06-18.041643
+**Commit:** 89a00dc8
+
+fix(mcp): rewrite openapi spec to use GET + query params matching ChatGPT example format
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+
+## [1.4.1] - 2026-06-16
+**Build:** 1.4.1+2026-06-16.064254
+**Commit:** 10e6fb87
+
+test: Verify auto-merge can process real code commits
+
+---
+
+## [1.4.0] - 2026-06-14
+**Build:** 1.4.0+20260614T1944
+**Commit:** 5958a30
+
+### 🐛 Fixes
+- resolve merge conflicts in data files (deltas, model-usage, three-doors-events JSONL)
+
+### 📋 Other
+- docs(sigma0): update collapse certificate with production code references and cr
+- Merge PR #447: fix(agent-orchestration) + crypto observer integration
+- docs(memory): add convergence routing system architecture to memory
+- refactor(hooks,tools): convergence-optimized routing to sunset external APIs
+- feat(kalshi-dashboard): add progress dashboard with live API endpoints
+- feat(kalshi-convergence): LoRA fine-tuned predictor + proactive training
+- feat(kalshi-convergence): self-improving continuous training loop
+- Merge branch 'master' of https://github.com/alex-place/lantern-os # 📚 Before pu
+- feat(kalshi-terminal): deterministically profitable trading system
+- feat(observer): auto-start crypto_live_trader.py + observer-status endpoint — cl
+- fix(orchestration): runTests() now runs pytest instead of convergence-manager — 
+- feat(orchestration): persist AgentSlotManager state across restarts — closes #44
+- Merge remote-tracking branch 'upstream/master' into claude/dreamy-brattain-6efcb
+- fix(agent-orchestration): stale queue recovery + monoworkstream dispatch gate
+- feat(csf-agent): test suites for embedder/scorer/suggester + scorer createdAt fi
+- chore: merge upstream/master — resolve add/add conflicts in csf-agent tests
+- feat(kalshi-cio): implement momentum-aware dual-regime model (Issue #424)
+- fix(kalshi-terminal): fix duplicate side labels when API returns identical yesLa
+- fix(kalshi-terminal): fix broken titles/labels and apply dashboard palette
+
+# 📚 Before pushing: Did you read these?
+#    □ QUICKSTART.md (dual-boot system)
+#    □ AGENTS.md (monoworkstream rules)
+#    □ CLAUDE.md (project architecture)
+
+---
+
+## [1.3.5] - 2026-06-12
+**Build:** 1.3.5+2026-06-12.081000
+**Commit:** a49db6b
+
+feat: GitHub issues to agent slots sync automation
+
+- Create Sync-GitHubIssuesToAgentSlots.ps1 to bridge GitHub issue queue to agent slots manifest
+- Fetches issues labeled dream-journal + agent-task, converts to slot entries with priority mapping
+- Integrates into smart-convergence-loop.yml workflow (runs every 6h)
+- Preserves existing non-GitHub slots (e.g., validation ring)
+- Grant write permissions to smart-convergence-loop workflow for manifest updates
+- Fix surfaces/index.html broken links (removed non-existent directories, added Creator Dashboard)
+- Create 5 Three Doors GitHub issues (hub scene, poem mechanic, challenge system, prize pipeline, progress persistence)
+
+# 📚 Before pushing: Did you read these?
+#    □ QUICKSTART.md (dual-boot system)
+#    □ AGENTS.md (monoworkstream rules)
+#    □ CLAUDE.md (project architecture)
+
+---
+
 ## [1.3.0] — 2026-06-10 — ORION v1.0 + CSF Delta Memory + Dream Chat Full-Width
 
 **Build:** 1.3.0+2026-06-10  

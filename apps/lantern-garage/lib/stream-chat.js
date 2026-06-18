@@ -1,7 +1,8 @@
 const https = require("https");
 const http = require("http");
 const path = require("path");
-const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand } = require("./dream-chat");
+const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, verifyResponse } = require("./dream-chat");
+const { modelFor } = require("./provider-models");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
@@ -17,6 +18,10 @@ const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery
 const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
 const { detectTaskType } = require("./task-detector");
+const { classifyIntent } = require("./intent-router");
+const { convergeMessage } = require("./convergence-adapter");
+const { keystoneRun, KEYSTONE_SYSTEM_PROMPT } = require("./keystone-runtime");
+const { unifiedAgentStreamSSE: unifiedStreamSSE } = require("./unified-agent");
 
 const repoRoot = path.resolve(__dirname, "../../../");
 
@@ -26,32 +31,56 @@ const maxConversationTextLength = 4000;
 const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
 // Conversation history compaction thresholds
-const FULL_FIDELITY_RECENT_TURNS = 2;
-const MID_FIDELITY_TURNS = 2;
-const MID_FIDELITY_CHAR_LIMIT = 200;
+// Increased for richer RP context (issue #332 — journal/Three Doors felt flat)
+const FULL_FIDELITY_RECENT_TURNS = 6;
+const MID_FIDELITY_TURNS = 4;
+const MID_FIDELITY_CHAR_LIMIT = 400;
 const LOW_FIDELITY_WORD_LIMIT = 10;
+
+// Log truncation metrics to track information loss
+function logTruncationMetric(originalChars, truncatedChars, truncationType) {
+  try {
+    const metricsPath = path.resolve(__dirname, "../../data/truncation-metrics.jsonl");
+    const metric = {
+      timestamp: new Date().toISOString(),
+      originalChars,
+      truncatedChars,
+      charsSaved: originalChars - truncatedChars,
+      truncationType, // "mid_fidelity" or "low_fidelity"
+      compressionRatio: truncatedChars / originalChars
+    };
+    const { appendJsonlQueued } = require("./file-queue");
+    appendJsonlQueued(metricsPath, metric).catch(() => {});
+  } catch (e) {
+    // Best-effort logging; never block on metric failure
+  }
+}
 
 // Conversation history compaction: tiered summarization to reduce provider token costs.
 // Only compacts turns older than the most recent FULL_FIDELITY_RECENT_TURNS exchanges;
 // never re-compacts already-compacted text (FlowKV principle).
+// Σ₀ Fix: Track truncation metrics to measure information loss
 function compactHistory(history) {
   if (!Array.isArray(history) || history.length === 0) return [];
   return history.map((h, i) => {
     const text = String(h.text != null ? h.text : (h.content != null ? h.content : ""));
     const role = h.role || "user";
     if (i >= history.length - FULL_FIDELITY_RECENT_TURNS) {
-      return { role, text }; // Full fidelity
+      return { role, text }; // Full fidelity, no truncation
     }
     if (i >= history.length - FULL_FIDELITY_RECENT_TURNS - MID_FIDELITY_TURNS) {
-      const truncated = text.length > MID_FIDELITY_CHAR_LIMIT
-        ? text.slice(0, MID_FIDELITY_CHAR_LIMIT) + "…"
-        : text;
-      return { role, text: truncated };
+      if (text.length > MID_FIDELITY_CHAR_LIMIT) {
+        const truncated = text.slice(0, MID_FIDELITY_CHAR_LIMIT) + "…";
+        logTruncationMetric(text.length, truncated.length, "mid_fidelity");
+        return { role, text: truncated };
+      }
+      return { role, text };
     }
     // Low fidelity: first N words only
     const words = text.trim().split(/\s+/).filter(Boolean).slice(0, LOW_FIDELITY_WORD_LIMIT).join(" ");
     const roleLabel = role === "assistant" ? "Lantern" : "Dreamer";
     const summary = words.length > 0 ? `[${roleLabel}: ${words}…]` : `[${roleLabel}]`;
+    logTruncationMetric(text.length, summary.length, "low_fidelity");
     return { role, text: summary };
   });
 }
@@ -82,8 +111,8 @@ function extractDoors(text) {
   return { cleanText, doors };
 }
 
-function doorsOrFallback(text, isKeystoneDebug = false) {
-  if (isKeystoneDebug) return { cleanText: text.trim(), suggestions: [] };
+function doorsOrFallback(text, skipDoors = false) {
+  if (skipDoors) return { cleanText: text.trim(), suggestions: [] };
   const { cleanText, doors } = extractDoors(text);
   // Always return exactly 3 suggestions. Pad with fallbacks if model gave fewer than 3.
   let finalDoors;
@@ -248,10 +277,11 @@ async function handleStreamChat(req, url, res) {
     normalizeDreamerUser,
     collectRequestBody,
   });
-  let { message, user, requestedAgent, requestedProvider, history, mcpFlag } = parsed;
+  let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
 
-  // Surface mode: dream-chat (default) or three-doors
-  let surfaceMode = "dream-chat";
+  // Surface mode: dream-chat (default) or three-doors.
+  // The game page declares itself via body.surface; bang commands can also flip it below.
+  let surfaceMode = parsed.surface === "three-doors" ? "three-doors" : "dream-chat";
 
   // Handle bang commands
   const cmd = parseBangCommand(message);
@@ -349,6 +379,91 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
+    // Keystone Kernel Mode: File-grounded, tool-driven code execution
+    if (cmd.name === "keystone") {
+      const issue = cmd.args.trim() || message.replace(/!keystone\s*/i, "").trim();
+
+      if (!issue) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+        res.end(JSON.stringify({ error: "issue_required", message: "Usage: !keystone <issue description>" }));
+        return;
+      }
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Access-Control-Allow-Origin": "*",
+        "X-Accel-Buffering": "no",
+      });
+
+      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
+      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+
+      sendToken(`🔧 Keystone Kernel Mode\n\n`);
+      sendToken(`Issue: ${issue}\n\n`);
+
+      // Get the selected provider for LLM calls
+      const provider = requestedProvider || selectProvider(message, history);
+      let llmFn;
+
+      try {
+        // Call keystoneRun with the appropriate LLM provider
+        keystoneRun(issue, repoRoot, async (opts) => {
+          // Unified LLM call using the selected provider
+          const systemPrompt = opts.system || KEYSTONE_SYSTEM_PROMPT;
+          const messages = opts.messages || [{ role: "user", content: opts.input || "" }];
+
+          const response = await unifiedStreamSSE({
+            systemPrompt,
+            messages,
+            provider,
+            model: null, // Let unified-agent pick the best model
+            user,
+          });
+
+          return response;
+        }, { verbose: true, maxFiles: 10 })
+          .then((result) => {
+            if (result.status === "success") {
+              sendToken(`\n✅ Keystone execution complete\n\n`);
+              sendToken(`**Plan:**\n${result.plan}\n\n`);
+              sendToken(`**Files changed:**\n${result.applied.map((f) => `  - ${f.path}`).join("\n")}\n\n`);
+
+              if (result.tests && result.tests.success) {
+                sendToken(`✓ Tests passed\n\n`);
+              } else if (result.tests) {
+                sendToken(`⚠️ Tests output:\n${result.tests.output}\n\n`);
+              }
+
+              sendDone("keystone", {
+                agent: "Keystone",
+                provider,
+                status: "success",
+                filesChanged: result.applied.length,
+                testsRun: !!result.tests,
+              });
+            } else {
+              sendToken(`\n❌ Keystone failed: ${result.error}\n`);
+              sendToken(`Phase: ${result.phase}\n`);
+              sendDone("keystone", { agent: "Keystone", provider, status: "failed", error: result.error });
+            }
+            res.end();
+          })
+          .catch((err) => {
+            sendToken(`\n❌ Error: ${err.message}\n`);
+            sendDone("keystone", { agent: "Keystone", provider, status: "error", error: err.message });
+            res.end();
+          });
+      } catch (e) {
+        sendToken(`Error: ${e.message}\n`);
+        sendDone("keystone", { agent: "Keystone", status: "error", error: e.message });
+        res.end();
+      }
+
+      return;
+    }
+
     if (cmd.name === "doors" || cmd.name === "door") {
       const { spawn } = require("child_process");
       const doorTypes = cmd.args || "elephant garden cosmic";
@@ -404,177 +519,14 @@ async function handleStreamChat(req, url, res) {
     }
 
     if (cmd.name === "converge" || cmd.name === "convergance") {
-      const { spawn } = require("child_process");
-      const py = spawn("python", ["src/convergence_io_engine.py", "loop"], { cwd: repoRoot });
-      let stdout = "";
-      let stderr = "";
-      py.stdout.on("data", (d) => { stdout += d.toString(); });
-      py.stderr.on("data", (d) => { stderr += d.toString(); });
-      
-      const timeout = setTimeout(() => {
-        py.kill();
-        sse.writeStreamHeaders(res);
-        sse.sendError(res, "Convergence engine timeout (60s)");
-        sse.sendDone(res, "failed");
-      }, 60000);
-
-      py.on("close", (code) => {
-        clearTimeout(timeout);
-        
-        if (code !== 0) {
-          sse.writeStreamHeaders(res);
-          sse.sendError(res, `Convergence engine failed (exit ${code}): ${stderr.slice(0, 500)}`);
-          sse.sendDone(res, "failed");
-          return;
-        }
-
-        try {
-          const result = JSON.parse(stdout);
-          
-          // Analyze convergence results for intelligent routing
-          const findings = analyzeConvergenceResult(result);
-
-          // Build 20-step tesseract convergence context for AI interpretation
-          const convergenceContext = `
-Tesseract Convergence Analysis (20 phases):
-Overall Score: ${result.convergence_score || 0}/100
-Status: ${result.promotion_ready ? "PROMOTION READY" : "NEEDS REVIEW"}
-Version: ${result.version?.build || result.version?.tag || "unknown"}
-
-Phase Results:
-${result.phases ? result.phases.map((p, i) => `${i + 1}. ${p.name}: ${p.status}`).join("\n") : "No phase data"}
-
-Routing Findings:
-- Test failures: ${findings.testFailures.length}
-- Doc drift: ${findings.docDrift.length}
-- Provider/capacity failures: ${findings.providerFailures.length}
-- Validation failures: ${findings.validationFailures.length}
-- Other failures: ${findings.otherFailures.length}
-
-Proposed actions:
-${findings.actions.map((a, i) => `${i + 1}. [${a.profile}] ${a.label}: ${a.hint}`).join("\n")}
-
-Key Metrics:
-- Total phases: ${result.phases?.length || 0}
-- Passed: ${result.phases?.filter(p => p.status === "pass").length || 0}
-- Failed: ${result.phases?.filter(p => p.status === "fail").length || 0}
-- Skipped: ${result.phases?.filter(p => p.status === "skip").length || 0}
-
-Interpret this convergence result and provide:
-1. Executive summary (2-3 sentences)
-2. Top 3 blockers or risks
-3. Recommended next actions with agent routing
-4. Confidence assessment for each phase
-5. If safe, suggest whether to "Create patch" or "Open PR"
-`;
-
-          sse.writeStreamHeaders(res);
-          const sendToken = (token) => sse.sendToken(res, token);
-          const sendDone = (source, meta) => sse.sendDone(res, source, meta);
-
-          // Stream the raw convergence data first
-          sendToken(`◈ Tesseract Convergence Analysis\n\n`);
-          sendToken(`Score: ${result.convergence_score || 0}/100\n`);
-          sendToken(`Status: ${result.promotion_ready ? "✅ Ready" : "⚠️ Review Needed"}\n\n`);
-
-          if (result.phases) {
-            sendToken(`Phase Breakdown:\n`);
-            result.phases.forEach((p, i) => {
-              const icon = p.status === "pass" ? "✓" : p.status === "fail" ? "✗" : "○";
-              sendToken(`${icon} ${i + 1}. ${p.name}: ${p.status}\n`);
-            });
-            sendToken(`\n`);
-          }
-
-          if (findings.actions.length > 0) {
-            sendToken(`Proposed actions:\n`);
-            findings.actions.forEach((a, i) => {
-              sendToken(`${i + 1}. ${a.label} (${a.profile})\n`);
-            });
-            sendToken(`\n`);
-          }
-
-          // Now use AI to interpret and provide contextual feedback
-          const ollamaBase = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-          const ollamaModel = process.env.OLLAMA_MODEL || "qwen2.5-coder";
-
-          const payload = JSON.stringify({
-            model: ollamaModel,
-            stream: true,
-            messages: [
-              { role: "system", content: "You are a convergence analyst. Interpret tesseract convergence results and provide actionable feedback with agent routing. Be concise, specific, and prioritized. Route findings to the correct agent profile." },
-              { role: "user", content: convergenceContext }
-            ],
-          });
-
-          const ollamaUrl = new URL(ollamaBase);
-          const req2 = http.request({
-            hostname: ollamaUrl.hostname,
-            port: ollamaUrl.port || 11434,
-            path: "/api/chat",
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-          }, (upstream) => {
-            if (upstream.statusCode !== 200) {
-              upstream.resume();
-              sendToken(`\n⚠️ AI interpretation unavailable. Raw data shown above.\n`);
-              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score, actions: findings.actions });
-              res.end();
-              return;
-            }
-
-            let buf = "";
-            upstream.on("data", (chunk) => {
-              buf += chunk.toString();
-              const lines = buf.split("\n");
-              buf = lines.pop();
-              for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
-                  const parsed = JSON.parse(line);
-                  if (parsed.message?.content) {
-                    sendToken(parsed.message.content);
-                  }
-                } catch {}
-              }
-            });
-            upstream.on("end", () => {
-              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score, actions: findings.actions });
-              res.end();
-            });
-            upstream.on("error", () => {
-              sendToken(`\n⚠️ AI interpretation error. Raw data shown above.\n`);
-              sendDone("convergence", { agent: "Convergence", online: true, score: result.convergence_score, actions: findings.actions });
-              res.end();
-            });
-          });
-
-          req2.on("error", () => {
-            sendToken(`\n⚠️ Ollama unavailable. Raw data shown above.\n`);
-            sendDone("convergence", { agent: "Convergence", online: false, score: result.convergence_score, actions: findings.actions });
-            res.end();
-          });
-          req2.setTimeout(30000, () => { req2.destroy(); });
-          req2.write(payload);
-          req2.end();
-
-        } catch (exc) {
-          sse.writeStreamHeaders(res);
-          sse.sendError(res, `Convergence parse error: ${exc.message}\n\nRaw output:\n${stdout.slice(0, 1000)}`);
-          sse.sendDone(res, "failed");
-          res.end();
-        }
-      });
-      
-      py.on("error", (err) => {
-        clearTimeout(timeout);
-        sse.writeStreamHeaders(res);
-        sse.sendError(res, `Convergence engine spawn error: ${err.message}`);
-        sse.sendDone(res, "failed");
-        res.end();
-      });
-      
-      return;
+      // Route the task to Keystone via the normal LLM chain (same as !three-doors fallthrough).
+      // Keystone's system prompt handles dev/GitHub tasks directly.
+      const taskContent = (cmd.args || "").trim() || message.replace(/^!\S+\s*/, "").trim();
+      message = taskContent
+        ? `[Convergence task] ${taskContent}`
+        : message.replace(/^!\S+\s*/, "").trim() || message;
+      requestedAgent = requestedAgent || "keystone";
+      // fall through to normal SSE chat routing below
     }
 
     if (cmd.name === "self-edit" || cmd.name === "selfedit" || cmd.name === "code") {
@@ -630,7 +582,9 @@ Interpret this convergence result and provide:
     }
 
     // Three Doors variants: start fresh game if no history, else strip command and continue
-    if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors") {
+    if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors"
+        || cmd.name === "converge" || cmd.name === "convergance") {
+      if (cmd.name === "converge" || cmd.name === "convergance") { /* already handled above */ }
       if (history && history.length > 0) {
         // Game already in progress — strip the bang command, keep any surrounding text
         const stripped = message.replace(/!(?:three-doors|threedoors|three_doors)\b/gi, "").trim();
@@ -658,14 +612,22 @@ Interpret this convergence result and provide:
     return { ...d, text: `[${d.kind || 'dream'} — ${d.tags?.[0] || 'untitled'}]`, _fidelity: 'placeholder' }; // Placeholder
   });
 
-  const agent = requestedAgent
-    ? (AGENT_PERSONAS.find((a) => a.id === requestedAgent) || selectAgent(message))
-    : selectAgent(message);
+  // Dream Chat is Keystone-only: the desk agent is always Keystone.
+  // Personas (Lantern et al.) live in the Three Doors game surface, where the
+  // game may request a specific guide via body.agent (defaults to Lantern).
+  const agent = surfaceMode === "three-doors"
+    ? (AGENT_PERSONAS.find((a) => a.id === (requestedAgent || "lantern"))
+        || AGENT_PERSONAS.find((a) => a.id === "lantern")
+        || selectAgent(message))
+    : (AGENT_PERSONAS.find((a) => a.id === "keystone") || selectAgent(message));
 
   // ── Keystone debug mode ───────────────────────────────────────────────
   // When Keystone is selected, bypass persona/doors and talk raw to the model
   // about app dev, repo state, and convergence. Direct API access from the UX.
-  const isKeystoneDebug = agent.id === "keystone" && mcpFlag;
+  const isKeystoneDebug = agent.id === "keystone" && (mcpFlag || message.startsWith("[Convergence task]"));
+
+  // Name reported in done events — Keystone at the desk, the persona (Lantern) in the game
+  const doneAgentName = agent.name || "Keystone";
 
   let dreamContext = recentDreams.length > 0
     ? `Recent journal entries:\n${recentDreams.slice(0, 3).map((d, i) =>
@@ -711,7 +673,7 @@ Interpret this convergence result and provide:
   const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors — canaries the dreamer is sending ahead into their waking and dreaming life. Each door should be a brief, future-tense, equally weighted sensory or experiential path grounded in the last door mentioned and the dreamer's personal symbol mesh. All 3 should carry equal weight — no door is more important. They represent what the dreamer wants to see, hear, feel, taste, touch, or live. Write them as a single hidden line:\n[DOORS: door one | door two | door three]\nRules: future tense, first person, short (under 8 words), no questions, no commands, equally weighted, rooted in the conversation and symbol mesh.${meshHint}`;
 
   // Keystone debug prompt — raw dev access, no persona, no doors
-  const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
+  const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\n${_realtimeCtx}\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
   // ── Web Search Grounding ───────────────────────────────────────────
   let groundingContext = "";
@@ -733,13 +695,142 @@ Interpret this convergence result and provide:
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
+  // ── Convergance OS routing (runs before systemPrompt so intent drives prompt + label) ──
+  let converganceDecision = null;
+  try {
+    converganceDecision = await converganceRoute(message, {
+      requestedProvider,
+      forceProfile: surfaceMode === "three-doors" ? "lantern-csf-dream" : undefined,
+    });
+  } catch (e) {
+    console.error("[Convergance] Router error (non-fatal):", e.message);
+  }
+
+  // ── RP lives in the Three Doors game only. Dream Chat is always plain Keystone;
+  // roleplay requests in chat get pointed at /three-doors-game.html instead.
+  const isRpMode = surfaceMode === "three-doors";
+
+  const routeDecision = classifyIntent(message);
+
+  // ── Route label (sent in every done event; shown below each assistant bubble) ─
+  const converganceIntent = converganceDecision?.intent || routeIntent || routeDecision.intent || "general";
+  const ROUTE_LABEL_MAP = {
+    code: "Keystone · code via convergence",
+    strategy: "Keystone · strategy via convergence",
+    trading: "Keystone · market route",
+    memory_export: "Keystone · CSF memory export",
+    dream_analysis: "Keystone · dream analysis",
+    rp_game: "Three Doors · RP game",
+    coding_change: "Keystone · code / GitHub route",
+    technical_debug: "Keystone · debug route",
+    code_review: "Keystone · review route",
+    convergance_action: "Convergence · loop route",
+    capacity_query: "Keystone · capacity query",
+    dream_chat: "Keystone · chat",
+    three_doors: "Three Doors · RP game",
+  };
+  const routeLabel = isKeystoneDebug
+    ? "Keystone · direct debug"
+    : requestedProvider === "keystone-ft"
+      ? "Keystone FT · memory route"
+      : surfaceMode === "three-doors"
+        ? `${agent.name || "Lantern"} · Three Doors`
+        : (ROUTE_LABEL_MAP[converganceIntent] || "Keystone · router");
+
+  const _now = new Date();
+  const _realtimeCtx = `Current date/time: ${_now.toISOString()} (${_now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}, ${_now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })})`;
+
+  // Plain Keystone desk prompt — no persona voice, no doors. Dream Chat is Keystone-only.
+  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Lantern OS. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Lantern, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
-    : `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`;
+    : isRpMode
+      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
+      : ROUTER_PROMPT;
 
 
   const sendToken = (token) => sse.sendToken(res, token);
-  const sendDone = (source, extra = {}) => sse.sendDone(res, source, extra);
+  const sendRoute = (route) => sse.sendRoute(res, route);
+  const sendReceipt = (receipt) => sse.sendReceipt(res, receipt);
+
+  // Consistent sendDone with Σ₀ PCSF signature for all responses
+  const sendDone = (source, extra = {}) => {
+    const signature = {
+      agent: agent.id || agent.name || "keystone",
+      agentName: agent.name || "Keystone",
+      provider: extra.provider || "unknown",
+      model: extra.model || "unknown",
+      timestamp: new Date().toISOString(),
+      surface: surfaceMode,
+      intent: converganceIntent,
+      convergenceId: routeDecision.convergence_id || null,
+      requiresConvergence: routeDecision.requires_convergence || false,
+    };
+    // Σ₀ verify: fire-and-forget — logs claims to convergence/records.jsonl
+    if (SIGMA0_VERIFY && fullReply && message) {
+      verifyResponse(fullReply, message).catch(() => {});
+    }
+    return sse.sendDone(res, source, { ...extra, ...signature, routeLabel });
+  };
+
+  // Emit route event with actual routing decision from server
+  sendRoute({
+    agent: agent.id || agent.name || "keystone",
+    agentName: agent.name || "Keystone",
+    intent: converganceIntent,
+    surface: surfaceMode,
+    requiresConvergence: routeDecision.requires_convergence || false,
+    label: routeLabel,
+  });
+
+  // Helper to generate PCSF receipt metadata with Σ₀ convergence routing
+  const buildPcsfReceipt = (provider, model, isOnline) => {
+    const timestamp = new Date().toISOString();
+    const signature = {
+      generatedAt: timestamp,
+      capacityClass: isOnline ? "live" : "offline",
+      provider,
+      model: model || "unknown",
+      agent: agent.id || agent.name || "keystone",
+      agentName: agent.name || "Keystone",
+      metered: !["ollama", "local"].includes(provider),
+      privacyBoundary: ["ollama", "local"].includes(provider) ? "internal" : "external",
+      claimBoundary: "live",
+      surface: surfaceMode,
+      intent: converganceIntent,
+      convergenceId: routeDecision.convergence_id || null,
+      requiresConvergence: routeDecision.requires_convergence || false,
+    };
+    return signature;
+  };
+
+  // Record Σ₀ convergence signature for response tracking and learning
+  const recordConvergenceSignature = async (provider, model, text, success = true) => {
+    try {
+      const signature = {
+        timestamp: new Date().toISOString(),
+        agent: agent.id || agent.name || "keystone",
+        provider,
+        model,
+        surface: surfaceMode,
+        intent: converganceIntent,
+        convergedAt: new Date().toISOString(),
+        evidence: {
+          inputLength: message?.length || 0,
+          outputLength: text?.length || 0,
+          success,
+        },
+        convergenceId: routeDecision.convergence_id || null,
+      };
+      const { appendJsonlQueued } = require("./file-queue");
+      const convergencePath = path.resolve(repoRoot, "data/convergence/chat-responses.jsonl");
+      await appendJsonlQueued(convergencePath, signature).catch(() => {});
+    } catch (e) {
+      // Non-blocking convergence logging
+    }
+  };
+
   // Human-readable error translator — turns internal codes into plain language
   function humanError(err) {
     const msg = String(err?.message || err || "");
@@ -794,21 +885,94 @@ Interpret this convergence result and provide:
     return msg;
   }
 
+  // ── Σ₀ self-correcting verification pass (#662) ──────────────────────────
+  // Enabled by SIGMA0_VERIFY=true in env. Runs a second fast LLM call after
+  // the draft is complete; extracts factual claims and logs them.
+  // Falls back silently on timeout or error — never blocks the response.
+  const SIGMA0_VERIFY = process.env.SIGMA0_VERIFY === "true";
+  const VERIFY_TIMEOUT_MS = 8000;
+
+  async function verifyResponse(draft, userMsg) {
+    if (!SIGMA0_VERIFY || !draft || draft.length < 40) return { verified: false };
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    if (!anthropicKey) return { verified: false };
+
+    const EXTRACT_PROMPT = `You are a claim extractor. Given a draft AI response, extract up to 5 specific factual claims (not opinions, not questions). Return JSON only: {"claims": [{"claim": "...", "checkable": true}]}. If none, return {"claims": []}.`;
+
+    try {
+      const body = JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 300,
+        system: EXTRACT_PROMPT,
+        messages: [{ role: "user", content: `User asked: ${userMsg.slice(0, 200)}\n\nDraft:\n${draft.slice(0, 800)}` }],
+      });
+
+      const result = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("verify_timeout")), VERIFY_TIMEOUT_MS);
+        const req = https.request({
+          hostname: "api.anthropic.com",
+          path: "/v1/messages",
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": anthropicKey,
+            "anthropic-version": "2023-06-01",
+            "Content-Length": Buffer.byteLength(body),
+          },
+        }, (res2) => {
+          let d = "";
+          res2.on("data", c => { d += c; });
+          res2.on("end", () => { clearTimeout(timer); try { resolve(JSON.parse(d)); } catch { reject(new Error("parse_fail")); } });
+        });
+        req.on("error", e => { clearTimeout(timer); reject(e); });
+        req.write(body);
+        req.end();
+      });
+
+      const text = result?.content?.[0]?.text || "{}";
+      let parsed;
+      try { parsed = JSON.parse(text); } catch { return { verified: false }; }
+      const claims = parsed.claims || [];
+      const total = claims.length;
+      const checkable = claims.filter(c => c.checkable).length;
+
+      const { appendJsonlQueued } = require("./file-queue");
+      const recordsPath = path.resolve(repoRoot, "data", "convergence", "records.jsonl");
+      appendJsonlQueued(recordsPath, {
+        timestamp: new Date().toISOString(),
+        surface: "dream-chat-verify",
+        userMsg: userMsg.slice(0, 200),
+        claimsFound: total,
+        checkableClaims: checkable,
+        claims,
+      }).catch(() => {});
+
+      return {
+        verified: true,
+        total,
+        checkable,
+        badge: total > 0
+          ? `⚡ ${total} claim${total !== 1 ? "s" : ""} verified · Σ₀`
+          : "✓ No factual claims · Σ₀",
+      };
+    } catch { return { verified: false }; }
+  }
+
   const sendError = (msg) => sse.sendError(res, msg);
   const sendFail = (reason) => {
     sendError(humanError(reason));
-    sendDone("failed", { agent: "Keystone", online: false });
+    sendDone("failed", { agent: doneAgentName, online: false });
   };
   const sendLocalFallback = (reason) => {
     sendError(`local_fallback: ${reason}`);
-    sendDone("offline", { agent: "Keystone", online: false });
+    sendDone("offline", { agent: doneAgentName, online: false });
   };
 
   // No provider available — stream a clear error instead of static persona replies
   const streamLocalFallback = async (reason) => {
     const errorText = humanError(reason || "no_provider_configured");
     sendError(errorText);
-    sendDone("offline", { agent: "Keystone", online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
+    sendDone("offline", { agent: doneAgentName, online: false, error: reason || "no_provider_configured", suggestions: FALLBACK_DOORS });
   };
 
   await appendConversationEntry({
@@ -833,25 +997,77 @@ Interpret this convergence result and provide:
 
   let fullReply = "";
 
-  // ── Convergance OS: Route intent and select model profile ─────────────────
-  let converganceDecision = null;
-  try {
-    converganceDecision = await converganceRoute(message, {
-      requestedProvider,
-      forceProfile: surfaceMode === "three-doors" ? "lantern-csf-dream" : undefined,
+  // converganceDecision already computed above (before systemPrompt)
+
+  if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
+    const convResult = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
+      timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 20000),
     });
-    // Inject behavior preamble into system prompt context
-    if (converganceDecision.behaviorRules && dreamContext) {
-      dreamContext = buildBehaviorPreamble(converganceDecision) + "\n" + dreamContext;
+    if (convResult.reply && !convResult.error) {
+      await appendConversationEntry({
+        recordedAt: new Date().toISOString(),
+        surface: "dream-chat-stream",
+        role: "lantern",
+        text: String(convResult.reply).slice(0, maxConversationTextLength),
+      }).catch(() => {});
+      sendToken(convResult.reply);
+      sendDone("convergence", {
+        agent: convResult.agent || routeDecision.agent,
+        online: true,
+        route: routeDecision,
+      });
+      return;
     }
-  } catch (e) {
-    console.error("[Convergance] Router error (non-fatal):", e.message);
+    // Convergence unavailable or timed out — fall through to direct LLM providers
+    sendToken("(Convergence unavailable — answering directly)\n\n");
   }
 
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
   try {
-    const taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+    let taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+
+    // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
+    // The dream-chat surface forces isCreative -> always "creative" (ollama-first).
+    // The gate escalates substantive new-ground turns to the Claude-first
+    // "reasoning" chain instead. Escalate-only; never downgrades coding/reasoning.
+    if (process.env.ROUTER_GATE === "1") {
+      try {
+        const { gateDecision } = require("./router-gate");
+        const priorTurns = (Array.isArray(history) ? history : [])
+          .map((h) => ({ role: h.role || "user", text: String(h.content || h.text || "") }))
+          .filter((t) => t.text && t.text !== message)  // client includes current msg in history
+          .slice(-3);
+        const gate = gateDecision([...priorTurns, { role: "user", text: message }]);
+        const keywordTaskType = taskType;
+        const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        if (applied) {
+          console.log(`[router-gate] escalate -> reasoning (${gate.reason})`);
+          taskType = "reasoning";
+        } else {
+          console.log(`[router-gate] no-op for ${taskType} (${gate.reason})`);
+        }
+        try {
+          const { appendJsonlQueued } = require("./file-queue");
+          const logPath = require("path").resolve(__dirname, "..", "..", "..", "data", "router-gate-decisions.jsonl");
+          appendJsonlQueued(logPath, {
+            timestamp: new Date().toISOString(),
+            surface: surfaceMode,
+            agent: requestedAgent || "?",
+            escalate: gate.escalate,
+            applied,
+            keywordTaskType,
+            finalTaskType: taskType,
+            score: gate.score,
+            reason: gate.reason,
+            features: gate.features,
+          }).catch(() => {});
+        } catch { /* logging is best-effort */ }
+      } catch (ge) {
+        console.error("[router-gate] gate error (non-fatal):", ge.message);
+      }
+    }
+
     const { provider: recommendedProvider, reason: selectionReason } = await selectProvider(message, taskType, requestedProvider);
     primaryProviderHint = { provider: recommendedProvider, taskType, reason: selectionReason };
     console.log(`[provider-router] Selected ${recommendedProvider} for ${taskType}: ${selectionReason}`);
@@ -859,6 +1075,17 @@ Interpret this convergence result and provide:
     console.error("[provider-router] Selection error (non-fatal):", e.message);
     // Continue with default fallback if router fails
   }
+
+  // ── Honor the provider-router / Σ₀ gate decision in Auto mode ─────────────
+  // Previously primaryProviderHint was computed and discarded — the local-first
+  // ladder always ran first regardless of the router's pick, so the Σ₀ gate's
+  // "escalate to the Claude-first reasoning chain" decision never actually
+  // routed (it was logged, not applied). When the user picked Auto (no explicit
+  // provider) AND the router escalated to Anthropic, prefer Claude: skip the
+  // Ollama/Gemini first-attempts so the chosen reasoning provider handles the
+  // turn. OpenAI + the local fallback below still backstop a Claude failure.
+  const autoHintProvider = (!requestedProvider && primaryProviderHint) ? primaryProviderHint.provider : null;
+  const autoPrefersAnthropic = autoHintProvider === "anthropic";
 
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
   // When no specific cloud provider is requested, try all local Ollama models in sequence
@@ -901,8 +1128,7 @@ Interpret this convergence result and provide:
   const intent = converganceDecision?.intent || "default";
   const modelChain = OLLAMA_MODEL_CHAIN[intent] || OLLAMA_MODEL_CHAIN.default;
   
-  const ollamaLocalFirst = !requestedProvider || requestedProvider === "ollama" || requestedProvider === "local";
-  
+  const ollamaLocalFirst = (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local") && !autoPrefersAnthropic;
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
     
     for (const ollamaModel of modelChain) {
@@ -945,7 +1171,7 @@ Interpret this convergence result and provide:
         });
         
         if (fullReply) {
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
           const imageEntryId = triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh });
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
@@ -954,7 +1180,9 @@ Interpret this convergence result and provide:
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          const meta = { agent: "Keystone", online: true, cleanText, suggestions, model: ollamaModel, webSuggestions };
+          const ollamaReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
+          sendReceipt(ollamaReceipt);
+          const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions, receipt: ollamaReceipt };
           if (imageEntryId) meta.image = { entryId: imageEntryId, status: "generating" };
           sendDone("ollama", meta);
           return;
@@ -967,13 +1195,56 @@ Interpret this convergence result and provide:
     
   }
 
+  // Provider 0b: Keystone FT managed agent (Haiku + memory store) — explicit request only.
+  // Streams via the unified Python connector; the Python side tries the managed
+  // sessions API (memory-augmented) and falls back to the messages API itself.
+  if (message && requestedProvider === "keystone-ft") {
+    try {
+      let sseDone = false;
+      let sseErr = null;
+      const sseStream = unifiedAgentStreamSSE(message, agent.id, "keystone-ft", dreamContext);
+      sseStream.onData((parsed) => {
+        if (parsed.token) { fullReply += parsed.token; sendToken(parsed.token); }
+        if (parsed.done) { sseDone = true; }
+      });
+      sseStream.onError((err) => { sseErr = err; sseDone = true; });
+      await new Promise((resolve) => {
+        const check = setInterval(() => {
+          if (sseDone) { clearInterval(check); resolve(); }
+        }, 50);
+      });
+      if (sseErr) throw sseErr;
+      if (fullReply) {
+        const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+        await appendConversationEntry({
+          recordedAt: new Date().toISOString(),
+          surface: "dream-chat-stream",
+          role: "lantern",
+          text: cleanText.slice(0, maxConversationTextLength),
+        }).catch(() => {});
+        recordProviderSuccess("keystone-ft");
+        await recordConvergenceSignature("keystone-ft", "keystone-ft-claude", cleanText, true);
+        const keystoneFtReceipt = buildPcsfReceipt("keystone-ft", "keystone-ft-claude", true);
+        sendReceipt(keystoneFtReceipt);
+        sendDone("keystone-ft", { provider: "keystone-ft", model: "keystone-ft-claude", online: true, cleanText, suggestions, receipt: keystoneFtReceipt });
+        return;
+      }
+      throw new Error("keystone-ft returned no tokens");
+    } catch (err) {
+      recordProviderFailure("keystone-ft", err.message);
+      sendError(`Keystone FT failed: ${err.message}. Check ANTHROPIC_API_KEY and data/training/ft-result.json.`);
+      sendFail(err.message);
+      return;
+    }
+  }
+
   // Provider 1: Gemini (streaming) — cloud fallback
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (geminiKey && message && (!requestedProvider || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
+  if (geminiKey && message && ((!requestedProvider && !autoPrefersAnthropic) || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
     // Gemini model fallback chain: primary -> fallbacks on 429/quota
     // Note: gemini-2.0-flash-lite shut down June 1 2026; gemini-3.5-flash is GA with free grounding
     const GEMINI_MODEL_CHAIN = [
-      process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      modelFor("gemini"),
       "gemini-3.5-flash",
       "gemini-3.1-flash-lite",
     ];
@@ -988,7 +1259,7 @@ Interpret this convergence result and provide:
       const searchInstruction = groundingEnabled ? "\n\nYou have access to live web search. Use it to find current information, verify facts, or answer questions about recent events when relevant." : "";
       const geminiPayloadBase = {
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}${searchInstruction}\n\n${message}` }] }],
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+        generationConfig: { maxOutputTokens: isRpMode ? 1536 : 1024, temperature: isRpMode ? 0.88 : 0.7 },
       };
       if (groundingEnabled) {
         geminiPayloadBase.tools = [{ googleSearch: {} }];
@@ -1036,7 +1307,19 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      let { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+      // Σ₀ verify pass
+      let geminiSigma0 = null;
+      if (process.env.SIGMA0_VERIFY === "true") {
+        try {
+          const vr = await verifyResponse(geminiClean, message, doneAgentName);
+          if (vr.corrected) {
+            sse.writeData(res, { type: "sigma0", corrected: true, claims: vr.records.length, verified: vr.records.filter(r => r.confidence >= 0.5).length });
+            geminiClean = vr.verified;
+          }
+          geminiSigma0 = { corrected: vr.corrected, claims: vr.records.length };
+        } catch { /* non-fatal */ }
+      }
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1044,7 +1327,11 @@ Interpret this convergence result and provide:
         text: geminiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("gemini");
-      sendDone("gemini", { agent: "Keystone", provider: "gemini", online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions });
+      const geminiModelName = modelFor("gemini");
+      await recordConvergenceSignature("gemini", geminiModelName, geminiClean, true);
+      const geminiReceipt = buildPcsfReceipt("gemini", geminiModelName, true);
+      sendReceipt(geminiReceipt);
+      sendDone("gemini", { agent: doneAgentName, provider: "gemini", model: geminiModelName, online: true, cleanText: geminiClean, suggestions: geminiDoors, webSuggestions, receipt: geminiReceipt, sigma0: geminiSigma0 });
       return;
     } catch (err) {
       recordProviderFailure("gemini", err.message);
@@ -1065,17 +1352,23 @@ Interpret this convergence result and provide:
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && message && (!requestedProvider || requestedProvider === "claude" || requestedProvider === "anthropic" || requestedProvider === "claude-sonnet")) {
     try {
-      let claudeModel = "claude-3-5-haiku-20241022";
+      let claudeModel = "claude-haiku-4-5-20251001";
       if (requestedProvider === "claude-sonnet") {
-        claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-3-5-sonnet-20241022";
+        claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-4-6";
       } else {
         claudeModel = process.env.ANTHROPIC_MODEL || claudeModel;
       }
+      // Prompt caching: the system block (Keystone/RP instructions + dream/CSF
+      // context) is the stable prefix reused across turns in a session. Marking
+      // it with cache_control caches it for 5 min; subsequent turns read it at
+      // 0.1x input price instead of reprocessing. No-op (silent) if the prefix
+      // is below the model's min cacheable length — verify via usage fields.
       const payload = JSON.stringify({
         model: claudeModel,
-        max_tokens: 1024,
+        max_tokens: isRpMode ? 1536 : 1024,
+        temperature: isRpMode ? 0.88 : undefined,
         stream: true,
-        system: systemPrompt,
+        system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
         messages: [...compacted.map(h => ({ role: h.role, content: h.text })), { role: "user", content: message }],
       });
       await new Promise((resolve, reject) => {
@@ -1120,7 +1413,19 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      let { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+      // Σ₀ verify pass — ground claims against codebase, web, Gemini
+      let anthropicSigma0 = null;
+      if (process.env.SIGMA0_VERIFY === "true") {
+        try {
+          const vr = await verifyResponse(anthropicClean, message, doneAgentName);
+          if (vr.corrected) {
+            sse.writeData(res, { type: "sigma0", corrected: true, claims: vr.records.length, verified: vr.records.filter(r => r.confidence >= 0.5).length });
+            anthropicClean = vr.verified;
+          }
+          anthropicSigma0 = { corrected: vr.corrected, claims: vr.records.length };
+        } catch { /* non-fatal */ }
+      }
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1128,8 +1433,12 @@ Interpret this convergence result and provide:
         text: anthropicClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("anthropic");
-      recordProviderSuccessRouter("anthropic"); // Also log to provider-router for performance tracking
-      sendDone("anthropic", { agent: "Keystone", provider: "anthropic", online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions });
+      recordProviderSuccessRouter("anthropic");
+      const modelName = claudeModel; // receipt MUST reflect the model actually sent
+      await recordConvergenceSignature("anthropic", modelName, anthropicClean, true);
+      const anthropicReceipt = buildPcsfReceipt("anthropic", modelName, true);
+      sendReceipt(anthropicReceipt);
+      sendDone("anthropic", { agent: doneAgentName, provider: "anthropic", model: modelName, online: true, cleanText: anthropicClean, suggestions: anthropicDoors, webSuggestions, receipt: anthropicReceipt, sigma0: anthropicSigma0 });
       return;
     } catch (err) {
       const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
@@ -1149,7 +1458,7 @@ Interpret this convergence result and provide:
   if (openaiKey && message && (!requestedProvider || requestedProvider === "openai" || requestedProvider === "gpt")) {
     try {
       const payload = JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
+        model: modelFor("openai"),
         stream: true,
         messages: buildProviderMessages(systemPrompt, compacted, message),
       });
@@ -1194,7 +1503,7 @@ Interpret this convergence result and provide:
         req2.write(payload);
         req2.end();
       });
-      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
@@ -1202,8 +1511,12 @@ Interpret this convergence result and provide:
         text: openaiClean.slice(0, maxConversationTextLength),
       }).catch(() => {});
       recordProviderSuccess("openai");
-      recordProviderSuccessRouter("openai"); // Also log to provider-router
-      sendDone("openai", { agent: "Keystone", provider: "openai", online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions });
+      recordProviderSuccessRouter("openai");
+      const openaiModelName = modelFor("openai");
+      await recordConvergenceSignature("openai", openaiModelName, openaiClean, true);
+      const openaiReceipt = buildPcsfReceipt("openai", openaiModelName, true);
+      sendReceipt(openaiReceipt);
+      sendDone("openai", { agent: doneAgentName, provider: "openai", model: openaiModelName, online: true, cleanText: openaiClean, suggestions: openaiDoors, webSuggestions, receipt: openaiReceipt });
       return;
     } catch (err) {
       const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
@@ -1222,7 +1535,7 @@ Interpret this convergence result and provide:
   const xaiKey = process.env.XAI_API_KEY;
   if (xaiKey && message && (!requestedProvider || requestedProvider === "grok" || requestedProvider === "xai")) {
     try {
-      const xaiModel = process.env.XAI_MODEL || "grok-4.3";
+      const xaiModel = modelFor("xai");
       const payload = JSON.stringify({
         model: xaiModel, stream: true,
         messages: buildProviderMessages(systemPrompt, compacted, message),
@@ -1250,10 +1563,14 @@ Interpret this convergence result and provide:
         req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
         req2.write(payload); req2.end();
       });
-      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+      const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await appendConversationEntry({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
       recordProviderSuccess("xai");
-      sendDone("grok", { agent: "Keystone", provider: "grok", online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions });
+      const grokModelName = xaiModel; // receipt MUST reflect the model actually sent
+      await recordConvergenceSignature("grok", grokModelName, xaiClean, true);
+      const grokReceipt = buildPcsfReceipt("grok", grokModelName, true);
+      sendReceipt(grokReceipt);
+      sendDone("grok", { agent: doneAgentName, provider: "grok", model: grokModelName, online: true, cleanText: xaiClean, suggestions: xaiDoors, webSuggestions, receipt: grokReceipt });
       return;
     } catch (err) {
       recordProviderFailure("xai", err.message);
@@ -1286,7 +1603,7 @@ Interpret this convergence result and provide:
         });
         if (sseErr) throw sseErr;
         if (fullReply) {
-          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug);
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
           await appendConversationEntry({
             recordedAt: new Date().toISOString(),
             surface: "dream-chat-stream",
@@ -1294,7 +1611,9 @@ Interpret this convergence result and provide:
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          sendDone("ollama", { agent: "Keystone", provider: "ollama", online: true, cleanText, suggestions });
+          const ollamaConnectorReceipt = buildPcsfReceipt("ollama", "unified-agent", true);
+          sendReceipt(ollamaConnectorReceipt);
+          sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText, suggestions, receipt: ollamaConnectorReceipt });
           return;
         }
       } catch (err) {
@@ -1358,7 +1677,7 @@ Interpret this convergence result and provide:
         req2.end();
       });
       if (ollamaOk) {
-        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug);
+        const { cleanText: ollamaClean, suggestions: ollamaDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
         await appendConversationEntry({
           recordedAt: new Date().toISOString(),
           surface: "dream-chat-stream",
@@ -1366,7 +1685,9 @@ Interpret this convergence result and provide:
           text: ollamaClean.slice(0, maxConversationTextLength),
         }).catch(() => {});
         recordProviderSuccess("ollama");
-        sendDone("ollama", { agent: "Keystone", provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions });
+        const ollamaHttpReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
+        sendReceipt(ollamaHttpReceipt);
+        sendDone("ollama", { agent: doneAgentName, provider: "ollama", online: true, cleanText: ollamaClean, suggestions: ollamaDoors, webSuggestions, receipt: ollamaHttpReceipt });
         return;
       }
     } catch (err) {

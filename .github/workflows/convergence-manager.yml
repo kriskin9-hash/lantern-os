@@ -14,6 +14,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   convergence-scan:
     name: Convergence scan (anti-sprawl + repo health)
@@ -21,9 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Run convergence manager
         id: scan
@@ -33,7 +36,7 @@ jobs:
         continue-on-error: true
 
       - name: Upload convergence receipt
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: convergence-receipt

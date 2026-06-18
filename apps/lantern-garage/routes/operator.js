@@ -47,6 +47,7 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       const proc = spawn(py, [path.join(repoRoot, "src", "convergence_io_engine.py"), "loop"], {
         cwd: repoRoot,
         timeout: 60000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
       });
       let stdout = "";
       let stderr = "";
@@ -61,6 +62,27 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
       sendJson(res, result, result.ok ? 200 : 500);
     } catch (err) {
       sendJson(res, { ok: false, error: err.message }, 500);
+    }
+    return true;
+  }
+  if (url.pathname === "/api/actions/inspect" && req.method === "GET") {
+    try {
+      const py = process.platform === "win32" ? "python" : "python3";
+      const proc = spawn(py, [path.join(repoRoot, "src", "convergence_io_engine.py"), "inspect"], {
+        cwd: repoRoot,
+        timeout: 15000,
+        env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+      });
+      let stdout = "";
+      proc.stdout.on("data", (d) => { stdout += d; });
+      await new Promise((resolve) => proc.on("close", resolve));
+      try {
+        sendJson(res, JSON.parse(stdout));
+      } catch {
+        sendJson(res, { error: "parse_failed", raw: stdout.slice(0, 500) }, 500);
+      }
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
     }
     return true;
   }
@@ -90,7 +112,15 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
         try {
           currentBranch = execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf8" }).trim();
         } catch {}
-        const pull = execSync(`git pull origin ${currentBranch}`, { cwd: repoRoot, encoding: "utf8", timeout: 30000 });
+        // Stash local data-file changes so pull doesn't fail on dirty working tree
+        try { execSync("git stash --include-untracked -m autoupdate", { cwd: repoRoot, encoding: "utf8" }); } catch {}
+        let pull;
+        try {
+          pull = execSync(`git pull origin ${currentBranch}`, { cwd: repoRoot, encoding: "utf8", timeout: 30000 });
+        } finally {
+          // Always restore stashed data files after pull
+          try { execSync("git stash pop", { cwd: repoRoot, encoding: "utf8" }); } catch {}
+        }
         steps.push({ step: "git_pull", ok: true, output: pull.trim(), branch: currentBranch });
       } catch (e) {
         steps.push({ step: "git_pull", ok: false, output: e.stdout?.trim() || e.message });
@@ -154,9 +184,13 @@ module.exports = async function operatorRoutes(req, res, url, deps) {
               // Watchdog failed, final fallback
             }
             // Final fallback: detached spawn (old behavior)
+            // Use server-dev.js when running on dev port 4178, otherwise server.js
+            const serverScript = (process.env.LANTERN_GARAGE_PORT === "4178")
+              ? "apps/lantern-garage/server-dev.js"
+              : "apps/lantern-garage/server.js";
             const restartScript = process.platform === "win32"
-              ? `Start-Sleep -Seconds 2; Start-Process node -ArgumentList "apps/lantern-garage/server.js" -WindowStyle Hidden`
-              : `sleep 2 && node apps/lantern-garage/server.js`;
+              ? `Start-Sleep -Seconds 2; Start-Process node -ArgumentList "${serverScript}" -WindowStyle Hidden`
+              : `sleep 2 && node ${serverScript}`;
             const shell = process.platform === "win32" ? "powershell.exe" : "sh";
             const args = process.platform === "win32" ? ["-Command", restartScript] : ["-c", restartScript];
             spawn(shell, args, { detached: true, stdio: "ignore", cwd: repoRoot });

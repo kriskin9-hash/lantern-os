@@ -1,0 +1,1567 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#7c6af7">
+  <script>
+    /* Theme bootstrap — set before first paint to avoid flash of wrong theme */
+    (function() {
+      try {
+        var stored = localStorage.getItem('lantern-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored ? stored === 'dark' : prefersDark;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+  <title>Creator Dashboard — Lantern OS</title>
+  <link rel="stylesheet" href="/css/site.css">
+  <style>
+    :root {
+      --radius: 14px;
+      --shadow: 0 1px 4px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+      --shadow-hover: 0 4px 16px rgba(0,0,0,0.1);
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 20px 24px 80px;
+    }
+
+    /* ── Header / Page Title (Compact) ── */
+    .page-header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .page-header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin: 0 0 4px;
+      letter-spacing: -0.5px;
+    }
+
+    .page-header p {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    /* ── Hero Section (Hidden) ── */
+    .hero {
+      display: none;
+    }
+
+    .hero-content h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin: 0 0 16px;
+      letter-spacing: -0.3px;
+    }
+
+    .hero-content p {
+      font-size: 1.05rem;
+      color: var(--muted);
+      margin: 0 0 24px;
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hero-actions button {
+      padding: 12px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .hero-actions .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .hero-actions .btn-primary:hover {
+      background: var(--accent-hover);
+      box-shadow: var(--shadow-hover);
+    }
+
+    .hero-actions .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .hero-actions .btn-secondary:hover {
+      border-color: var(--accent);
+      background: var(--surface2);
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Section Headers ── */
+    .section-header {
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .section-header h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .section-header p {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0;
+    }
+
+    /* ── Upload Form ── */
+    .form-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 32px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+
+    .form-group input::placeholder,
+    .form-group select::placeholder,
+    .form-group textarea::placeholder {
+      color: var(--muted);
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .form-group textarea {
+      grid-column: 1 / -1;
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .upload-zone {
+      grid-column: 1 / -1;
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 48px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--surface2);
+    }
+
+    .upload-zone:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .upload-zone.dragging {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .upload-zone .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .upload-zone p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .upload-zone .file-input-button {
+      display: inline-block;
+      padding: 10px 24px;
+      background: var(--accent);
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .upload-zone .file-input-button:hover {
+      background: var(--accent-hover);
+    }
+
+    .upload-zone input[type="file"] {
+      display: none;
+    }
+
+    .file-preview {
+      grid-column: 1 / -1;
+      padding: 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: none;
+    }
+
+    .file-preview.show {
+      display: block;
+    }
+
+    .file-preview-info {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .file-preview-name {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    .file-preview-size {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .file-preview-remove {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 4px 8px;
+      font-weight: 600;
+      transition: opacity 0.2s ease;
+    }
+
+    .file-preview-remove:hover {
+      opacity: 0.8;
+    }
+
+    .form-actions {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+    }
+
+    /* ── Status Messages ── */
+    .status-message {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      display: none;
+      border: 1px solid;
+      font-size: 0.95rem;
+    }
+
+    .status-message.show {
+      display: block;
+    }
+
+    .status-message.success {
+      background: rgba(52, 211, 153, 0.1);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .status-message.error {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .status-message.loading {
+      background: rgba(6, 182, 212, 0.1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ── Tools Grid (Hidden - tools in project view only) ── */
+    .tools-grid {
+      display: none;
+    }
+
+    .tool-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .tool-card:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+
+    .tool-card.disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .tool-card-icon {
+      font-size: 2.4rem;
+    }
+
+    .tool-card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .tool-card-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0;
+      flex: 1;
+    }
+
+    .tool-card-status {
+      font-size: 0.8rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--surface2);
+      color: var(--muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .tool-card-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tool-card-btn:hover {
+      background: var(--accent-hover);
+    }
+
+    .tool-card-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* ── Results Panel ── */
+    .results-panel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .results-panel.show {
+      display: block;
+    }
+
+    .results-panel h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 0 0 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-item {
+      font-size: 0.85rem;
+      color: var(--text);
+      margin-bottom: 12px;
+      padding: 12px;
+      background: var(--surface);
+      border-radius: 6px;
+    }
+
+    .result-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      margin: 8px 0;
+      padding: 6px 0;
+    }
+
+    .stat-label {
+      color: var(--muted);
+    }
+
+    .stat-value {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* ── Projects Library ── */
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    .project-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .project-card:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+
+    .project-thumbnail {
+      aspect-ratio: 16 / 9;
+      background: var(--surface2);
+      overflow: hidden;
+      position: relative;
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+
+    .project-thumbnail img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: var(--surface2);
+    }
+
+    .project-thumbnail .status-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-size: 1.5rem;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      padding: 6px 10px;
+      border-radius: 6px;
+    }
+
+    .thumbnail-meta {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(to top, rgba(0, 0, 0, 0.8), rgba(0, 0, 0, 0) 60%);
+      color: var(--text);
+      padding: 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      z-index: 5;
+    }
+
+    .project-info {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .project-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin: 0;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .project-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .project-meta-sep {
+      width: 1px;
+      height: 16px;
+      background: var(--border);
+    }
+
+    .project-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .project-actions {
+      display: flex;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .project-actions a,
+    .project-actions button {
+      flex: 1;
+      display: block;
+      text-align: center;
+      padding: 8px 12px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .project-actions a:hover,
+    .project-actions button:hover {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .project-actions button.delete-btn {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .project-actions button.delete-btn:hover {
+      border-color: var(--danger);
+      background: rgba(224, 85, 85, 0.1);
+      color: var(--danger);
+    }
+
+    /* ── Dream Journal Editor (#613 #616) ── */
+    .journal-compose {
+      background: var(--surface, #111);
+      border: 1px solid var(--border, #222);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 28px;
+    }
+    .journal-compose-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+    .autosave-badge {
+      font-size: 0.72rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--surface2, #1a1a1a);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 500;
+      letter-spacing: 0;
+      text-transform: none;
+      transition: color 0.3s, border-color 0.3s;
+    }
+    .autosave-badge.saved { color: #4ade80; border-color: #4ade80; }
+    .autosave-badge.saving { color: #facc15; border-color: #facc15; }
+    .template-select {
+      background: var(--surface2, #1a1a1a);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.78rem;
+      padding: 4px 8px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .btn-icon {
+      background: var(--surface2, #1a1a1a);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+    .btn-icon:hover, .btn-icon[aria-pressed="true"] {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .editor-wrap {
+      display: flex;
+      gap: 12px;
+    }
+    .editor-wrap .journal-editor { flex: 1; min-width: 0; }
+    .md-preview {
+      flex: 1;
+      min-width: 0;
+      background: var(--bg, #0a0a0a);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 0.9rem;
+      line-height: 1.65;
+      overflow-y: auto;
+      max-height: 320px;
+      color: var(--text);
+    }
+    .md-preview h1, .md-preview h2, .md-preview h3 { color: var(--accent); margin: 0.5em 0 0.3em; }
+    .md-preview p { margin: 0.3em 0; }
+    .md-preview ul, .md-preview ol { padding-left: 1.4em; margin: 0.3em 0; }
+    .md-preview code { font-family: 'IBM Plex Mono', monospace; background: var(--surface2); padding: 1px 4px; border-radius: 3px; font-size: 0.85em; }
+    .md-preview blockquote { border-left: 3px solid var(--accent-dim); padding-left: 10px; color: var(--muted); margin: 0.4em 0; }
+    .md-preview strong { color: var(--text); }
+
+    .journal-editor {
+      width: 100%;
+      background: var(--bg, #0a0a0a);
+      border: 1px solid var(--border, #1e1e1e);
+      border-radius: 8px;
+      color: var(--text, #eee);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      padding: 12px 14px;
+      resize: vertical;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .journal-editor:focus { border-color: var(--accent, #06b6d4); }
+    .journal-compose-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      gap: 8px;
+    }
+    .journal-word-count {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    .journal-actions { display: flex; gap: 8px; }
+
+    /* ── Share panel (#618) ── */
+    .share-panel {
+      background: rgba(74,222,128,0.06);
+      border: 1px solid #4ade80;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+    }
+    .share-panel-header {
+      font-weight: 700;
+      color: #4ade80;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+    }
+    .share-panel-body {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .share-link-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.82rem;
+      padding: 6px 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      min-width: 0;
+    }
+    .share-intents { display: flex; gap: 8px; flex-wrap: wrap; }
+    .share-intent {
+      font-size: 0.8rem;
+      padding: 5px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .share-intent:hover { border-color: var(--accent); color: var(--accent); }
+
+    .delete-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .delete-modal.show {
+      display: flex;
+    }
+
+    .delete-modal-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 400px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .delete-modal-header {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    .delete-modal-message {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    .delete-modal-project {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 24px;
+      word-break: break-word;
+    }
+
+    .delete-modal-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .delete-modal-actions button {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .delete-modal-actions .cancel-btn {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .delete-modal-actions .cancel-btn:hover {
+      border-color: var(--accent);
+    }
+
+    .delete-modal-actions .confirm-btn {
+      background: var(--danger);
+      color: white;
+    }
+
+    .delete-modal-actions .confirm-btn:hover {
+      opacity: 0.9;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--muted);
+    }
+
+    .empty-state .icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    .empty-state p {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    /* ── Compact dashboard banner ── */
+    .dash-banner {
+      display: flex; align-items: center; gap: 16px; width: 100%;
+      background: linear-gradient(135deg, var(--surface), var(--surface2));
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 0 20px; height: 56px; margin-bottom: 20px; cursor: pointer;
+      color: var(--text); text-align: left; transition: all 0.2s; font-family: inherit;
+    }
+    .dash-banner:hover { border-color: var(--accent); }
+    .dash-banner-main { display: flex; align-items: baseline; gap: 14px; flex: 1; min-width: 0; }
+    .dash-banner-title { font-size: 1.05rem; font-weight: 700; }
+    .dash-banner-sub { font-size: 0.85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dash-banner-cta { font-size: 0.85rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+    @media (max-width: 560px) { .dash-banner-sub { display: none; } }
+
+    .upload-zone.compact { padding: 28px 24px; margin-bottom: 8px; }
+
+    /* ── Status pills on project cards ── */
+    .status-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+    .status-pill.gray { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .status-pill.blue { background: rgba(124,106,247,.15); color: var(--accent); border: 1px solid var(--accent); }
+    .status-pill.green { background: rgba(76,175,130,.15); color: var(--green); border: 1px solid var(--green); }
+    .status-pill.red { background: rgba(224,85,85,.12); color: var(--danger); border: 1px solid var(--danger); }
+
+    /* ── Help modal ── */
+    .help-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+    .help-modal.show { display: flex; }
+    .help-modal-content { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; max-width: 480px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+    .help-modal-content ul { line-height: 1.9; color: var(--muted); padding-left: 20px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 32px;
+        padding: 32px 24px;
+      }
+
+      .hero-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .page-header h1 {
+        font-size: 1.8rem;
+      }
+
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .projects-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .tools-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Site nav -->
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
+    Lantern OS
+  </a>
+  <div class="nav-links">
+    <a href="/dream-chat.html">Journal</a>
+    <a href="/trader-dashboard.html">Trader</a>
+    <a href="/create.html" class="active">Create</a>
+    <a href="/explore.html">Explore</a>
+    <a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">☀</button>
+  </div>
+</nav>
+
+<div class="page">
+  <!-- Compact dashboard banner — click to expand help -->
+  <button class="dash-banner" id="dash-banner" onclick="openHelp()" title="What can I do here?">
+    <div class="dash-banner-main">
+      <span class="dash-banner-title">Creator Dashboard</span>
+      <span class="dash-banner-sub">Upload • Analyze • Edit • Export</span>
+    </div>
+    <span class="dash-banner-cta">Learn more</span>
+  </button>
+
+  <!-- Status Messages -->
+  <div id="status" class="status-message"></div>
+
+  <!-- ── Dream Journal Editor (#613 #616) ── -->
+  <div class="journal-compose" id="journal-compose">
+    <div class="journal-compose-header">
+      <span>✦ New Dream Entry</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="journal-template" class="template-select" onchange="applyTemplate(this.value)" title="Load a template">
+          <option value="">Templates…</option>
+          <option value="dream">🌙 Dream Log</option>
+          <option value="gratitude">🙏 Gratitude</option>
+          <option value="idea">💡 Idea Capture</option>
+          <option value="reflection">🪞 Reflection</option>
+          <option value="story">📖 Story Seed</option>
+        </select>
+        <button class="btn-icon" id="preview-toggle" onclick="togglePreview()" title="Toggle live preview" aria-pressed="false">⬡ Preview</button>
+        <span class="autosave-badge" id="autosave-badge">Draft</span>
+      </div>
+    </div>
+    <div class="editor-wrap" id="editor-wrap">
+      <textarea id="journal-editor" class="journal-editor" placeholder="Write a dream, idea, or memory… (Markdown supported)" rows="8" spellcheck="true"></textarea>
+      <div class="md-preview" id="md-preview" style="display:none" aria-label="Markdown preview"></div>
+    </div>
+    <div class="journal-compose-footer">
+      <div class="journal-word-count" id="journal-word-count">0 words</div>
+      <div class="journal-actions">
+        <button class="btn btn-secondary" id="journal-clear-btn" onclick="journalClear()" style="font-size:0.82rem;padding:6px 14px;">Clear</button>
+        <button class="btn btn-primary" id="journal-save-btn" onclick="journalSave()" style="font-size:0.82rem;padding:6px 14px;">Save to Journal</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Post-publish share panel (#618) ── -->
+  <div class="share-panel" id="share-panel" style="display:none" aria-live="polite">
+    <div class="share-panel-header">✓ Published to Dream Journal</div>
+    <div class="share-panel-body">
+      <input id="share-link" class="share-link-input" readonly type="text" value="">
+      <button class="btn btn-secondary" onclick="copyShareLink()" style="font-size:0.82rem;padding:6px 14px;" id="copy-btn">Copy Link</button>
+    </div>
+    <div class="share-intents">
+      <a id="share-twitter" href="#" target="_blank" rel="noopener noreferrer" class="share-intent twitter">𝕏 Share</a>
+      <a id="share-reddit" href="#" target="_blank" rel="noopener noreferrer" class="share-intent reddit">Reddit</a>
+      <a id="share-email" href="#" class="share-intent email">✉ Email</a>
+    </div>
+  </div>
+
+  <!-- Upload dropzone — drop or choose, nothing else. Project is auto-named and opened. -->
+  <div id="upload-zone" class="upload-zone compact">
+    <span class="icon">⬆️</span>
+    <p><strong>Drop a video to start a project</strong></p>
+    <p style="font-size: 0.85rem; margin: 0 0 12px;">named automatically — rename it later inside the project</p>
+    <button type="button" class="file-input-button" onclick="document.getElementById('file-input').click()">Choose Video</button>
+    <input type="file" id="file-input" accept="video/*">
+  </div>
+
+  <!-- Recent Projects -->
+  <div class="section-header" style="margin: 32px 0 16px;">
+    <div><h2 style="font-size: 1.2rem; margin: 0;">Recent Projects</h2></div>
+    <button class="btn btn-secondary" onclick="loadRecentEntries()" style="padding: 6px 14px; font-size: 0.85rem;">Refresh</button>
+  </div>
+
+  <div id="recent-list" class="projects-grid">
+    <div class="empty-state">
+      <div class="icon">📚</div>
+      <p>No projects yet. Drop a video above to start.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Research PDF Upload -->
+<div class="dash-section" style="margin-top: 40px;">
+  <div class="section-header" style="margin-bottom: 16px;">
+    <div>
+      <h2 style="font-size: 1.2rem; margin: 0;">Research Library</h2>
+      <p style="font-size: 0.85rem; color: var(--muted); margin: 4px 0 0;">PDFs added here appear in the <a href="/knowledgecenter.html" style="color:var(--accent)">Knowledge Center</a> and are indexed for search.</p>
+    </div>
+  </div>
+  <div id="pdf-upload-zone" class="upload-zone compact" style="border-style: dashed;">
+    <span class="icon">📄</span>
+    <p><strong>Drop PDFs to add to the research library</strong></p>
+    <p style="font-size: 0.85rem; margin: 0 0 12px;">Multiple files supported · max 100 MB each</p>
+    <button type="button" class="file-input-button" onclick="document.getElementById('pdf-file-input').click()">Choose PDFs</button>
+    <input type="file" id="pdf-file-input" accept=".pdf" multiple>
+  </div>
+  <div id="pdf-upload-status" style="font-size:13px; color:var(--muted); font-family:'IBM Plex Mono',monospace; margin-top:10px; min-height:18px;"></div>
+</div>
+
+<!-- Help Modal (expanded from the banner) -->
+<div id="helpModal" class="help-modal" onclick="if(event.target.id==='helpModal')closeHelp()">
+  <div class="help-modal-content">
+    <h2 style="margin-top: 0;">Creator Dashboard</h2>
+    <p style="color: var(--muted);">Drop a video and Lantern opens a project workspace where you can:</p>
+    <ul>
+      <li><strong>Analyze Highlights</strong> — find the best moments (motion, audio, scenes)</li>
+      <li><strong>Generate Variants</strong> — ranked short-form edits</li>
+      <li><strong>Generate Captions</strong> — burn-in captions</li>
+      <li><strong>Detect Safe Zones</strong> — facecam/HUD-aware 9:16 crop</li>
+      <li><strong>Render Shorts</strong> — export to 1080×1920, validated</li>
+    </ul>
+    <p style="color: var(--muted); font-size: 0.9rem;">Everything lives inside each project — reopen any project anytime and continue from any stage.</p>
+    <div style="text-align: right; margin-top: 16px;">
+      <button class="btn btn-primary" onclick="closeHelp()">Got it</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="delete-modal">
+  <div class="delete-modal-content">
+    <div class="delete-modal-header">Delete Project?</div>
+    <div class="delete-modal-message">
+      This action cannot be undone. Are you sure you want to permanently delete this project?
+    </div>
+    <div class="delete-modal-project" id="deleteProjectName">—</div>
+    <div class="delete-modal-actions">
+      <button class="cancel-btn" onclick="closeDeleteModal()">Cancel</button>
+      <button class="confirm-btn" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/theme-toggle.js"></script>
+<script>
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+const statusEl = document.getElementById('status');
+
+function showStatus(message, type) {
+  statusEl.textContent = message;
+  statusEl.className = `status-message show ${type}`;
+  if (type !== 'loading') {
+    setTimeout(() => statusEl.classList.remove('show'), 5000);
+  }
+}
+
+// Help modal (expanded banner)
+function openHelp() { document.getElementById('helpModal').classList.add('show'); }
+function closeHelp() { document.getElementById('helpModal').classList.remove('show'); }
+
+// Auto project name: warzone_clutch.mp4 -> "Warzone Clutch"; fallback to timestamp.
+function autoName(filename) {
+  const base = (filename || '').replace(/\.[^.]+$/, '').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (base) return base.replace(/\b\w/g, (c) => c.toUpperCase());
+  const d = new Date(); const p = (n) => String(n).padStart(2, '0');
+  return `Video Project ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Drag & drop → upload immediately
+uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragging'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragging'));
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault(); uploadZone.classList.remove('dragging');
+  if (e.dataTransfer.files.length) uploadAndOpen(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files.length) uploadAndOpen(fileInput.files[0]); });
+
+// Upload → create auto-named project → open the project workspace (no naming step).
+let uploading = false;
+async function uploadAndOpen(file) {
+  if (!file || uploading) return;
+  uploading = true;
+  const title = autoName(file.name);
+  showStatus(`Uploading "${file.name}"…`, 'loading');
+  try {
+    const fd = new FormData();
+    fd.append('entry', JSON.stringify({ title, type: 'video' }));
+    fd.append('file', file);
+    const up = await fetch('/api/dreamer/upload', { method: 'POST', body: fd });
+    if (!up.ok) { const e = await up.json().catch(() => ({})); showStatus('✗ ' + (e.error || 'Upload failed'), 'error'); return; }
+    const upRes = await up.json();
+    const filePath = upRes.file?.path;
+    const cr = await fetch('/api/creator-entries', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, type: 'video', filePath })
+    });
+    if (!cr.ok) { const e = await cr.json().catch(() => ({})); showStatus('✗ ' + (e.error || 'Could not create project'), 'error'); return; }
+    const { entry } = await cr.json();
+    showStatus('✓ Project created — opening…', 'success');
+    // Land directly in the project workspace (Phase 7/8).
+    window.location.href = `/entry.html?id=${encodeURIComponent(entry.id)}`;
+  } catch (err) {
+    showStatus('✗ ' + err.message, 'error');
+  } finally {
+    uploading = false; fileInput.value = '';
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function statusPill(status) {
+  if (status === 'analyzing') return '<span class="status-pill blue">Analyzing</span>';
+  if (status === 'ready') return '<span class="status-pill green">Ready</span>';
+  if (status === 'failed') return '<span class="status-pill red">Error</span>';
+  return '<span class="status-pill gray">Not Analyzed</span>';
+}
+
+function durStr(sec) {
+  if (!sec || !isFinite(sec)) return '';
+  sec = Math.round(sec);
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m ? `${m}m ${s}s` : `${s}s`;
+}
+
+// Load recent projects (project-first launcher: thumbnail + meta + status + quick actions)
+async function loadRecentEntries() {
+  try {
+    const response = await fetch('/api/creator-entries');
+    if (!response.ok) return;
+    const data = await response.json();
+    const list = document.getElementById('recent-list');
+
+    if (!data.entries || data.entries.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="icon">📚</div><p>No projects yet. Drop a video above to start.</p></div>';
+      return;
+    }
+
+    const sorted = [...data.entries].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    list.innerHTML = sorted.map(entry => {
+      const title = entry.title || autoName('');
+      const thumbnail = entry.thumbnail ? '/media/' + entry.thumbnail : '/placeholder.png';
+      const d = new Date(entry.createdAt);
+      const when = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+                   ' • ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+      const dur = durStr(entry.scoreV10 && entry.scoreV10.viral && entry.scoreV10.viral.signals && entry.scoreV10.viral.signals.durationSec);
+
+      return `
+        <div class="project-card">
+          <div class="project-thumbnail">
+            <img src="${esc(thumbnail)}" alt="${esc(title)}" onerror="this.src='/placeholder.png';">
+          </div>
+          <div class="project-info">
+            <h3 class="project-title">${esc(title)}</h3>
+            <div class="project-meta">
+              <span>${esc(when)}</span>
+              ${dur ? `<div class="project-meta-sep"></div><span>${esc(dur)}</span>` : ''}
+            </div>
+            <div style="margin: 2px 0 6px;">${statusPill(entry.status)}</div>
+            <div class="project-actions">
+              <a href="/entry.html?id=${esc(entry.id)}">Open</a>
+              <a href="/entry.html?id=${esc(entry.id)}&autoanalyze=1">Analyze</a>
+              <button data-id="${esc(entry.id)}" data-title="${esc(title)}" onclick="renameProject(this.dataset.id, this.dataset.title)">Rename</button>
+              <button class="delete-btn" data-id="${esc(entry.id)}" data-title="${esc(title)}" onclick="openDeleteModal(this.dataset.id, this.dataset.title)">Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Error loading entries:', err);
+  }
+}
+
+// Quick rename from a card (full inline rename lives on the project page).
+async function renameProject(id, current) {
+  const next = prompt('Rename project:', current || '');
+  if (next === null) return;
+  const title = next.trim();
+  if (!title || title === current) return;
+  try {
+    const r = await fetch(`/api/creator-entries/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title })
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); showStatus('✗ ' + (e.error || 'Rename failed'), 'error'); return; }
+    showStatus('✓ Renamed', 'success');
+    loadRecentEntries();
+  } catch (e) { showStatus('✗ ' + e.message, 'error'); }
+}
+
+// (Homepage Creator Tools removed — analysis/variants/captions/safe-zones now
+//  live inside each project workspace at /entry.html?id=…)
+
+// Initial load
+loadRecentEntries();
+// REMOVED: setInterval(loadRecentEntries, 30000);
+// Reason: Polling every 30 seconds caused project title flickering
+// Solution: User can manually refresh or page reloads when project is created/deleted
+console.log("✅ Project list loaded. Manual refresh available via 'Refresh' button.");
+
+// Delete Modal Functions
+let deleteTargetId = null;
+
+function openDeleteModal(entryId, projectName) {
+  console.log("🗑️ openDeleteModal called", { entryId, projectName });
+  deleteTargetId = entryId;
+  document.getElementById('deleteProjectName').textContent = projectName;
+  document.getElementById('deleteModal').classList.add('show');
+  console.log("✅ Modal opened, deleteTargetId set to:", deleteTargetId);
+}
+
+function closeDeleteModal() {
+  console.log("🔐 Closing delete modal");
+  deleteTargetId = null;
+  document.getElementById('deleteModal').classList.remove('show');
+}
+
+async function confirmDelete() {
+  console.log("🗑️ confirmDelete called, deleteTargetId:", deleteTargetId);
+  if (!deleteTargetId) {
+    console.error("❌ confirmDelete: deleteTargetId is null or undefined");
+    return;
+  }
+
+  const modal = document.getElementById('deleteModal');
+  const confirmBtn = modal.querySelector('.confirm-btn');
+  const originalText = confirmBtn.textContent;
+
+  // Disable button and show loading state
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Deleting...';
+
+  try {
+    console.log("🌐 Making DELETE request to /api/creator-entries/" + deleteTargetId);
+    const response = await fetch(`/api/creator-entries/${deleteTargetId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    console.log("📊 Response status:", response.status, response.ok);
+
+    if (response.ok) {
+      console.log("✅ Delete successful, reloading entries");
+      showStatus('✓ Project deleted successfully', 'success');
+      closeDeleteModal();
+      await loadRecentEntries();
+    } else {
+      const error = await response.json();
+      console.error("❌ Delete failed:", error);
+      showStatus(`✗ Error: ${error.error}`, 'error');
+    }
+  } catch (err) {
+    console.error("❌ Delete error:", err);
+    showStatus(`✗ Error: ${err.message}`, 'error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalText;
+  }
+}
+
+// Close modal when clicking outside
+document.getElementById('deleteModal').addEventListener('click', (e) => {
+  if (e.target.id === 'deleteModal') {
+    closeDeleteModal();
+  }
+});
+</script>
+
+<script>
+(function () {
+  const zone = document.getElementById('pdf-upload-zone');
+  const input = document.getElementById('pdf-file-input');
+  const status = document.getElementById('pdf-upload-status');
+
+  async function uploadPdfs(files) {
+    const pdfs = [...files].filter(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (!pdfs.length) { status.textContent = 'No PDF files selected.'; return; }
+    status.textContent = `Uploading ${pdfs.length} file${pdfs.length > 1 ? 's' : ''}…`;
+    const fd = new FormData();
+    pdfs.forEach(f => fd.append('file', f));
+    try {
+      const res = await fetch('/api/pdfs/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.ok) {
+        const names = data.saved.join(', ');
+        status.textContent = `Saved: ${names || '(none)'}` + (data.errors.length ? ` · ${data.errors.map(e => e.filename).join(', ')} failed` : '');
+      } else {
+        status.textContent = 'Upload failed: ' + (data.error || 'unknown');
+      }
+    } catch (e) { status.textContent = 'Error: ' + e.message; }
+    input.value = '';
+  }
+
+  input.addEventListener('change', () => uploadPdfs(input.files));
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragging'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragging'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragging'); uploadPdfs(e.dataTransfer.files); });
+})();
+
+/* ── Dream Journal Quick-Compose (#613) ── */
+(function() {
+  const editor = document.getElementById('journal-editor');
+  const badge = document.getElementById('autosave-badge');
+  const wordCount = document.getElementById('journal-word-count');
+  const DRAFT_KEY = 'lantern-journal-draft';
+
+  // ── Templates (#616) ──
+  const TEMPLATES = {
+    dream: `## Dream · ${new Date().toLocaleDateString()}\n\n**Setting:** \n\n**What happened:** \n\n**How I felt:** \n\n**Symbols / themes:** \n\n**On waking:** `,
+    gratitude: `## Gratitude · ${new Date().toLocaleDateString()}\n\n1. \n2. \n3. \n\n**Why these matter today:** `,
+    idea: `## Idea · ${new Date().toLocaleDateString()}\n\n**The idea:** \n\n**Why now:** \n\n**First step:** \n\n**Open questions:** `,
+    reflection: `## Reflection · ${new Date().toLocaleDateString()}\n\n**What I'm sitting with:** \n\n**What I learned:** \n\n**What I want to carry forward:** `,
+    story: `## Story Seed · ${new Date().toLocaleDateString()}\n\n**Opening image:** \n\n**Character:** \n\n**Tension:** \n\n**Where it goes:** `,
+  };
+
+  window.applyTemplate = function(key) {
+    if (!key) return;
+    if (editor.value.trim() && !confirm('Replace current draft with template?')) {
+      document.getElementById('journal-template').value = '';
+      return;
+    }
+    editor.value = TEMPLATES[key] || '';
+    updateWordCount();
+    badge.textContent = 'Template loaded';
+    badge.className = 'autosave-badge';
+    document.getElementById('journal-template').value = '';
+    renderPreview();
+  };
+
+  // ── Markdown preview (#616) ──
+  const preview = document.getElementById('md-preview');
+  let previewOn = false;
+
+  function renderPreview() {
+    if (!previewOn) return;
+    // Minimal Markdown → HTML (no dependencies)
+    let md = editor.value;
+    let html = md
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>')
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+    preview.innerHTML = '<p>' + html + '</p>';
+  }
+
+  window.togglePreview = function() {
+    previewOn = !previewOn;
+    const btn = document.getElementById('preview-toggle');
+    btn.setAttribute('aria-pressed', String(previewOn));
+    preview.style.display = previewOn ? 'block' : 'none';
+    renderPreview();
+  };
+
+  // Ctrl+S manual save
+  editor.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); journalSave(); }
+  });
+
+  // Restore draft from localStorage
+  const saved = localStorage.getItem(DRAFT_KEY);
+  if (saved) { editor.value = saved; updateWordCount(); badge.textContent = 'Draft restored'; }
+
+  function updateWordCount() {
+    const words = editor.value.trim() ? editor.value.trim().split(/\s+/).length : 0;
+    wordCount.textContent = words + ' word' + (words !== 1 ? 's' : '');
+  }
+
+  let autoSaveTimer;
+  editor.addEventListener('input', () => {
+    updateWordCount();
+    badge.textContent = 'Unsaved';
+    badge.className = 'autosave-badge';
+    renderPreview();
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(() => {
+      localStorage.setItem(DRAFT_KEY, editor.value);
+      badge.textContent = 'Draft saved';
+      badge.className = 'autosave-badge saved';
+    }, 10000); // auto-save draft every 10s of inactivity
+  });
+
+  function showSharePanel(text, id) {
+    const panel = document.getElementById('share-panel');
+    const linkInput = document.getElementById('share-link');
+    const base = window.location.origin;
+    const url = id ? `${base}/dream-chat.html?entry=${id}` : `${base}/dream-chat.html`;
+    linkInput.value = url;
+    const snippet = encodeURIComponent(text.slice(0, 120).replace(/\n/g, ' '));
+    const encodedUrl = encodeURIComponent(url);
+    document.getElementById('share-twitter').href = `https://twitter.com/intent/tweet?text=${snippet}&url=${encodedUrl}`;
+    document.getElementById('share-reddit').href = `https://www.reddit.com/submit?url=${encodedUrl}&title=${snippet}`;
+    document.getElementById('share-email').href = `mailto:?subject=Dream%20Journal%20Entry&body=${snippet}%0A%0A${encodedUrl}`;
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    setTimeout(() => { panel.style.display = 'none'; }, 30000);
+  }
+
+  window.copyShareLink = function() {
+    const val = document.getElementById('share-link').value;
+    navigator.clipboard.writeText(val).then(() => {
+      const btn = document.getElementById('copy-btn');
+      btn.textContent = '✓ Copied';
+      setTimeout(() => { btn.textContent = 'Copy Link'; }, 2000);
+    }).catch(() => {
+      document.getElementById('share-link').select();
+      document.execCommand('copy');
+    });
+  };
+
+  window.journalClear = function() {
+    if (editor.value && !confirm('Clear the current draft?')) return;
+    editor.value = '';
+    localStorage.removeItem(DRAFT_KEY);
+    badge.textContent = 'Draft';
+    badge.className = 'autosave-badge';
+    updateWordCount();
+  };
+
+  window.journalSave = async function() {
+    const text = editor.value.trim();
+    if (!text) { showStatus('Write something first.', 'error'); return; }
+    const btn = document.getElementById('journal-save-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    badge.textContent = 'Saving…';
+    badge.className = 'autosave-badge saving';
+    try {
+      const r = await fetch('/api/dream/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'dream', text, tags: ['journal'], source: 'creator-dashboard' }),
+      });
+      const d = await r.json();
+      if (d.saved || d.ok || d.id) {
+        badge.textContent = '✓ Saved';
+        badge.className = 'autosave-badge saved';
+        localStorage.removeItem(DRAFT_KEY);
+        const savedText = editor.value;
+        editor.value = '';
+        updateWordCount();
+        showStatus('Entry saved to Dream Journal.', 'success');
+        showSharePanel(savedText, d.id);
+        setTimeout(() => loadRecentEntries(), 800);
+      } else {
+        throw new Error(d.error || 'Save failed');
+      }
+    } catch (e) {
+      badge.textContent = 'Error';
+      badge.className = 'autosave-badge';
+      showStatus('Save failed: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save to Journal';
+    }
+  };
+})();
+</script>
+<script src="/js/auth-gate.js" defer></script>
+</body>
+</html>

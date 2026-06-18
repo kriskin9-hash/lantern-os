@@ -146,18 +146,8 @@ module.exports = async function selfEditRoutes(req, res, url, deps) {
       gitAddAll(repoRoot);
       gitCommit(repoRoot, title);
 
+      // Push HEAD to auto/ branch — no local rename needed
       const branch = sanitizeBranchName(branchHint);
-      // Rename current branch to the safe name if needed
-      if (currentBranch !== branch) {
-        try {
-          const { execSync } = require("child_process");
-          execSync(`git branch -m ${branch}`, { cwd: repoRoot, encoding: "utf8", timeout: 5000 });
-        } catch (renameErr) {
-          // branch may already exist or other issue — continue with current
-        }
-      }
-
-      // Push
       gitPush(repoRoot, branch);
 
       // Open draft PR

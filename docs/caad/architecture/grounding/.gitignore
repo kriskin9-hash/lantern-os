@@ -1,0 +1,3 @@
+# Grounding KB: keep the manifest tracked, the large PDFs local + re-downloadable.
+*.pdf
+!grounding-manifest.md

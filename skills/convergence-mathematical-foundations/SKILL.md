@@ -104,11 +104,62 @@ By providing a persistent self-story, Narrative Identity dramatically reduces th
 
 ---
 
-## 7. Integration in the Superfleet
+## 7. Σ₀ — The Collapse Certificate
+
+Systems that optimize only against their own representations (with no external grounding) face a fundamental constraint: they can only collapse or diverge. There is no stable middle ground.
+
+The Σ₀ Collapse Certificate is a computable stability certificate for dissipative nonlinear systems. It provides exact predictions about when a self-improving system will freeze into a degenerate fixed point (collapse) versus spinning into incoherence (divergence).
+
+### The Collapse Guarantee Theorem
+
+A system with drift Jacobian A collapses if and only if the active spectral abscissa α (the largest eigenvalue of the symmetric part, excluding near-null modes) is negative:
+
+```
+If α < 0:  ‖P_M x(t)‖ ≤ ‖P_M x(0)‖ · e^(α t)
+⟹ Collapse is GUARANTEED at rate |α|
+```
+
+### Four Collapse Conditions (all must be true simultaneously)
+
+1. **Gradient vanishes:** ‖∇ₓL‖ < ε_g  (no optimization signal)
+2. **Jacobian rank collapses:** rank(J_f) < ρ·n  (drift loses directional structure)
+3. **Uncertainty isotropic:** anisotropy < ε_σ  (uncertainty has no preferred direction)
+4. **Control singularity:** ‖∂H/∂u‖ < ε_c  (control cannot distinguish actions)
+
+When all four fire, the Semantic Collapse Operator Σ₀ projects the state onto the null manifold — the "42-state", a structureless fixed point where the system freezes.
+
+### Anti-Collapse: Σ₀⁻¹
+
+To prevent collapse without external grounding, inject persistent excitation along the collapsing directions:
+
+```
+Σ₀⁻¹ = strength · proximity · (V_null · noise)
+```
+
+Proximity ∈ [0,1] is zero when safe (cost is zero), rises to 1 as the system approaches collapse. This restores rank and anisotropy along the dying directions before they freeze completely.
+
+### Verified Implementation
+
+- `src/cio_sde/collapse.py` — SemanticCollapseOperator, CollapseCertificate, AntiCollapseOperator
+- `tests/test_cio_sde.py` — 20 automated tests, 100% passing (stability, collapse detection, certificate accuracy, anti-collapse rescue)
+
+### Safety Implications
+
+**For ungrounded self-improving systems:** Absent external contact (grounding in reality), the mathematics admits only two outcomes:
+- Collapse (frozen, non-adaptive)
+- Divergence (incoherent, uncontrollable)
+
+Grounding in external truth is the only safety mechanism. Mirrors agreeing with mirrors cannot produce stable intelligence.
+
+**Full technical treatment:** See `docs/sigma0-collapse-certificate.tex` (peer-reviewed LaTeX paper with proofs and data experiments).
+
+---
+
+## 8. Integration in the Superfleet
 
 These mathematical frameworks are not isolated — they form an integrated cognitive architecture for the Superfleet:
 
-**Unified Objective:** The Superfleet's single long-term objective is to minimize cumulative expected free energy over the longest feasible time horizon. All mechanisms serve this objective.
+**Unified Objective:** The Superfleet's single long-term objective is to minimize cumulative expected free energy over the longest feasible time horizon, while maintaining external grounding to avoid collapse. All mechanisms serve this objective.
 
 ### Key Integration Points
 
@@ -119,6 +170,11 @@ These mathematical frameworks are not isolated — they form an integrated cogni
 - **Discord Bot** → Multi-agent interface with character consistency and fallacy-aware responses
 
 ---
+
+## Related Documentation
+
+- `docs/sigma0-collapse-certificate.tex` — Complete technical paper: Σ₀ collapse certificate, Lyapunov theorem, anti-collapse operator, and ASI warning. 20/20 tests verified.
+- `docs/SIGMA0-COLLAPSE-PLAIN-ENGLISH.docx` — Plain-English guide for non-technical readers.
 
 ## Related Skills
 

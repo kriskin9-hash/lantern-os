@@ -1,7 +1,7 @@
 {
-  "version": "1.2.5",
-  "buildId": "1.2.5+2026-06-10.235834",
-  "timestamp": "2026-06-10T23:58:34.191Z",
-  "branch": "master",
-  "commit": "1441d9e"
+  "version": "1.4.2",
+  "buildId": "1.4.2+2026-06-18.041643",
+  "timestamp": "2026-06-18T04:16:43.389Z",
+  "branch": "claude/fix-chat-673-647-devbypass",
+  "commit": "89a00dc8"
 }

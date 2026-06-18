@@ -98,6 +98,9 @@ async function selectProvider(message, taskType = "default", requestedProvider =
   };
 }
 
+// Σ₀ Fix: Track fallback cost per message to detect and escalate runaway chains
+const _fallbackContext = new Map(); // messageId → {startTime, attemptCount, totalCost, providers}
+
 /**
  * Call a specific LLM provider with intelligent fallback
  * @param {string} provider
@@ -107,10 +110,29 @@ async function selectProvider(message, taskType = "default", requestedProvider =
  * @param {object} context - {agent, recentDreams, csfContext, etc.}
  * @returns {Promise<{content, provider, model, attempt, fallbackReason, latencyMs, tokensUsed, cost}>}
  */
-async function callProvider(provider, model, payload, taskType = "default", context = {}) {
+async function callProvider(provider, model, payload, taskType = "default", context = {}, _globalAttempt = 0) {
   const startTime = Date.now();
   let attempt = 1;
   let lastError = null;
+
+  // Σ₀ Fix: Track global attempt count across all providers
+  const MAX_FALLBACK_ATTEMPTS = 5; // Escalate after 5 failed attempts (stop the bleed)
+  const messageId = JSON.stringify([payload, taskType]).substring(0, 20); // Quick message fingerprint
+
+  if (!_fallbackContext.has(messageId)) {
+    _fallbackContext.set(messageId, { startTime, attemptCount: 0, providers: [] });
+  }
+  const fallbackState = _fallbackContext.get(messageId);
+  fallbackState.attemptCount++;
+
+  // Escalation gate: if we've tried too many providers, stop and return error
+  if (fallbackState.attemptCount > MAX_FALLBACK_ATTEMPTS) {
+    console.error(`[provider-router] ESCALATION: Exceeded max fallback attempts (${MAX_FALLBACK_ATTEMPTS}) for ${taskType}`);
+    _fallbackContext.delete(messageId);
+    throw new Error(
+      `[provider-router] ESCALATION: Message failed across ${fallbackState.providers.join(", ")}. Stopped after ${MAX_FALLBACK_ATTEMPTS} attempts. Last error: ${lastError?.message || "unknown"}`
+    );
+  }
 
   const chain = PROVIDER_CHAINS[taskType] || PROVIDER_CHAINS.default;
   const providerStep = chain.find((s) => s.provider === provider);
@@ -126,26 +148,29 @@ async function callProvider(provider, model, payload, taskType = "default", cont
       await _logProviderCall({
         provider,
         model: tryModel,
-        attempt,
+        attempt: fallbackState.attemptCount,
         status: "success",
         latencyMs,
         taskType,
         tokensUsed: result.tokensUsed || 0,
         cost: result.cost || 0,
+        attemptChain: fallbackState.providers.join(" -> "),
       });
 
       // Record success in provider state
       recordProviderSuccess(provider);
+      _fallbackContext.delete(messageId); // Clean up
 
       return {
         content: result.content,
         provider,
         model: tryModel,
-        attempt,
-        fallbackReason: null,
+        attempt: fallbackState.attemptCount,
+        fallbackReason: fallbackState.providers.length > 0 ? `Fallback after ${fallbackState.providers.join(", ")}` : null,
         latencyMs,
         tokensUsed: result.tokensUsed || 0,
         cost: result.cost || 0,
+        attemptChain: fallbackState.providers,
       };
     } catch (err) {
       lastError = err;
@@ -155,15 +180,17 @@ async function callProvider(provider, model, payload, taskType = "default", cont
       await _logProviderCall({
         provider,
         model: tryModel,
-        attempt,
+        attempt: fallbackState.attemptCount,
         status: "failure",
         errorCode: err.code || err.message.split(" ")[0],
         latencyMs,
         taskType,
+        escalationRisk: fallbackState.attemptCount >= MAX_FALLBACK_ATTEMPTS ? "HIGH" : "normal",
       });
 
       // Record failure in provider state
       recordProviderFailure(provider, err.code || "unknown");
+      fallbackState.providers.push(provider);
 
       attempt++;
     }
@@ -174,14 +201,15 @@ async function callProvider(provider, model, payload, taskType = "default", cont
     (s, idx) => idx > chain.findIndex((s) => s.provider === provider)
   );
 
-  if (nextProviderStep) {
-    console.log(`[provider-router] Fallback: ${provider} failed, trying ${nextProviderStep.provider}`);
-    return await callProvider(nextProviderStep.provider, nextProviderStep.models[0], payload, taskType, context);
+  if (nextProviderStep && fallbackState.attemptCount < MAX_FALLBACK_ATTEMPTS) {
+    console.log(`[provider-router] Fallback: ${provider} failed, trying ${nextProviderStep.provider} (attempt ${fallbackState.attemptCount}/${MAX_FALLBACK_ATTEMPTS})`);
+    return await callProvider(nextProviderStep.provider, nextProviderStep.models[0], payload, taskType, context, fallbackState.attemptCount);
   }
 
-  // All providers exhausted
+  // Escalation: all providers exhausted OR max attempts exceeded
+  _fallbackContext.delete(messageId);
   throw new Error(
-    `[provider-router] All providers failed for ${taskType}. Last error: ${lastError?.message || "unknown"}`
+    `[provider-router] All providers failed for ${taskType} (${fallbackState.attemptCount} attempts). Last error: ${lastError?.message || "unknown"}`
   );
 }
 

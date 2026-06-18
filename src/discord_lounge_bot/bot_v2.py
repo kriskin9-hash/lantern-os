@@ -512,12 +512,22 @@ class LoungeState:
     _pool: dict[str, list[LoungeTrack]] = field(default_factory=dict)
 
 
+# Memory limits to prevent unbounded growth
+_MAX_QUEUE_SIZE = 50
+_MAX_CATALOG_TRACKS = 200
+_MAX_GUILD_STATES = 100
+
 _LOUNGE_STATES: dict[int, LoungeState] = {}
 _LOUNGE_CATALOG: dict[str, list[LoungeTrack]] = {}
 
 
 def _lounge_state(guild_id: int) -> LoungeState:
     if guild_id not in _LOUNGE_STATES:
+        # LRU eviction if too many guild states
+        if len(_LOUNGE_STATES) >= _MAX_GUILD_STATES:
+            # Remove oldest state (first key in dict)
+            oldest_guild = next(iter(_LOUNGE_STATES))
+            del _LOUNGE_STATES[oldest_guild]
         _LOUNGE_STATES[guild_id] = LoungeState()
     return _LOUNGE_STATES[guild_id]
 
@@ -527,7 +537,10 @@ def _lounge_refill(state: LoungeState, mode: str) -> None:
     if not pool:
         return
     random.shuffle(pool)
-    state.queue.extend(pool)
+    # Limit queue size to prevent unbounded growth
+    remaining_slots = _MAX_QUEUE_SIZE - len(state.queue)
+    if remaining_slots > 0:
+        state.queue.extend(pool[:remaining_slots])
 
 
 # ── Lounge: catalog resolution ─────────────────────────────────────────────────
@@ -581,6 +594,9 @@ def _lounge_build_catalog() -> dict[str, list[LoungeTrack]]:
         tracks: list[LoungeTrack] = []
         for ident in ids:
             tracks.extend(_lounge_resolve_item(ident, mode))
+        # Limit catalog size to prevent unbounded memory growth
+        if len(tracks) > _MAX_CATALOG_TRACKS:
+            tracks = tracks[:_MAX_CATALOG_TRACKS]
         catalog[mode] = tracks
         print(f"  [lounge] mode={mode}: {len(tracks)} tracks total")
     return catalog
@@ -738,7 +754,7 @@ async def _lounge_start(ctx, mode: str) -> None:
 
 # ── Slash Commands --
 
-@tree.command(name="status", description="Lantern OS health summary")
+@tree.command(name="status", description="Check system health and status")
 async def cmd_status(interaction: discord.Interaction):
     embed = discord.Embed(title="Lantern OS Status", color=0x0D9488)
     embed.add_field(name="Time", value=now_utc(), inline=False)
@@ -751,19 +767,55 @@ async def cmd_status(interaction: discord.Interaction):
 @tree.command(name="help", description="List available commands for your tier")
 async def cmd_help(interaction: discord.Interaction):
     tier = get_user_tier(interaction.user)
-    embed = discord.Embed(title="Lantern OS Commands", color=0x2563EB)
-    embed.add_field(name="🌿 Wanderer (free)", value="`/status`, `/help`, `/subscribe`, `/threedoors`", inline=False)
+    embed = discord.Embed(
+        title="🏮 Lantern OS Commands",
+        description=f"Your access tier: **{_tier_display(tier)}**",
+        color=0x0D9488
+    )
+    
+    # Music & Voice (available to all)
+    embed.add_field(
+        name="� Music Lounge",
+        value="`/lounge` — Sinatra radio\n`/dreams` — Sleep & dream waves\n`/focus` — Focus & flow beats\n`/skip` — Skip track\n`/nowplaying` — Current track\n`/volume <0-100>` — Set volume\n`/leave` — Disconnect voice",
+        inline=False
+    )
+    
+    # Core (available to all)
+    embed.add_field(
+        name="🌿 Core",
+        value="`/status` — System health\n`/help` — This menu\n`/subscribe` — Upgrade tier\n`/threedoors` — Enter the game",
+        inline=False
+    )
+    
+    # Notebook (Supporter+)
     if tier in (ROLE_SUPPORTER, ROLE_PILOT, ROLE_FOUNDER):
-        embed.add_field(name="🌙 Deep Dreamer+", value="`/dream`, `/note`, `/wish`, `/recall`, `/mirror`, `/wallet`", inline=False)
+        embed.add_field(
+            name="📓 Notebook",
+            value="`/dream` — Save a dream\n`/note` — Save a note\n`/wish` — Save a wish\n`/recall` — Search entries\n`/mirror` — View all facets\n`/place` — Save a place\n`/character` — Save a character\n`/symbol` — Save a symbol\n`/wallet` — Subscription status",
+            inline=False
+        )
+    
+    # Fleet (Pilot+)
     if tier in (ROLE_PILOT, ROLE_FOUNDER):
-        embed.add_field(name="✨ Synthesasia Guild+", value="`/converge`, `/rag-status`, `/queue`, `/place`, `/character`, `/symbol`", inline=False)
+        embed.add_field(
+            name="🚀 Fleet",
+            value="`/converge` — Convergence report\n`/rag-status` — RAG intake status\n`/queue` — Agent fleet queue",
+            inline=False
+        )
+    
+    # Founder only
     if tier == ROLE_FOUNDER:
-        embed.add_field(name="🔐 Founder", value="`/dispatch`, `/controls`, `/boot-check`, `/release-gate`", inline=False)
-    embed.set_footer(text=f"Your tier: {_tier_display(tier)}")
+        embed.add_field(
+            name="🔐 Founder",
+            value="`/dispatch` — Dispatch fleet\n`/controls` — Local controls\n`/boot-check` — Dual boot check\n`/release-gate` — v1.0.0 gate",
+            inline=False
+        )
+    
+    embed.set_footer(text="Local-first. Evidence-backed. Lantern OS v2")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(name="subscribe", description="Get your Stripe checkout link")
+@tree.command(name="subscribe", description="View subscription tiers and upgrade options")
 async def cmd_subscribe(interaction: discord.Interaction):
     embed = discord.Embed(title="Lantern OS Subscriptions", color=0x0D9488)
     embed.add_field(name="Supporter -- $20/month", value="Weekly digest, report packs, Discord priority.\n[Subscribe](https://buy.stripe.com/test_00g2aRcWk2Xa6OI144)", inline=False)
@@ -773,7 +825,7 @@ async def cmd_subscribe(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(name="dream", description="Save a dream to your private notebook")
+@tree.command(name="dream", description="Record a dream to your private notebook")
 @app_commands.describe(text="What did you see?")
 @require_tier(ROLE_SUPPORTER)
 async def cmd_dream(interaction: discord.Interaction, text: str):
@@ -789,7 +841,7 @@ async def cmd_note(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(f"Note saved. ID: `{record['id']}`", ephemeral=True)
 
 
-@tree.command(name="wish", description="Save a wish to your private notebook")
+@tree.command(name="wish", description="Record a wish to your private notebook")
 @app_commands.describe(text="What do you wish for?")
 @require_tier(ROLE_SUPPORTER)
 async def cmd_wish(interaction: discord.Interaction, text: str):
@@ -797,7 +849,7 @@ async def cmd_wish(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(f"Wish saved behind the door. ID: `{record['id']}`", ephemeral=True)
 
 
-@tree.command(name="recall", description="Search your private notebook")
+@tree.command(name="recall", description="Search your notebook entries")
 @app_commands.describe(query="Search query (empty for latest)")
 @require_tier(ROLE_SUPPORTER)
 async def cmd_recall(interaction: discord.Interaction, query: Optional[str] = None):
@@ -808,7 +860,7 @@ async def cmd_recall(interaction: discord.Interaction, query: Optional[str] = No
     await interaction.response.send_message(f"```{text}```", ephemeral=True)
 
 
-@tree.command(name="mirror", description="Mirror all your notebook facets")
+@tree.command(name="mirror", description="View all your notebook entries")
 @require_tier(ROLE_SUPPORTER)
 async def cmd_mirror(interaction: discord.Interaction):
     entries = recall_notebook_entries(interaction.user, "", limit=500)
@@ -821,7 +873,7 @@ async def cmd_mirror(interaction: discord.Interaction):
     await interaction.response.send_message(f"Mirrored {len(ids)} facets. ID: `{record['id']}`", ephemeral=True)
 
 
-@tree.command(name="wallet", description="Check your subscription and wallet status")
+@tree.command(name="wallet", description="View subscription and wallet status")
 @require_tier(ROLE_SUPPORTER)
 async def cmd_wallet(interaction: discord.Interaction):
     tier = get_user_tier(interaction.user)
@@ -833,7 +885,7 @@ async def cmd_wallet(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(name="converge", description="Run convergence loop report")
+@tree.command(name="converge", description="Run convergence loop analysis")
 @require_tier(ROLE_PILOT)
 async def cmd_converge(interaction: discord.Interaction):
     await interaction.response.send_message("Convergence loop report requested. Check #queue-visibility for results.", ephemeral=True)
@@ -845,13 +897,13 @@ async def cmd_rag_status(interaction: discord.Interaction):
     await interaction.response.send_message("RAG status: flat-rag-house is current. Use /queue for intake details.", ephemeral=True)
 
 
-@tree.command(name="queue", description="View agent fleet queue")
+@tree.command(name="queue", description="View agent fleet queue status")
 @require_tier(ROLE_PILOT)
 async def cmd_queue(interaction: discord.Interaction):
     await interaction.response.send_message("Agent fleet queue is operational. 36 designed ring slots, 64 elastic pool target.", ephemeral=True)
 
 
-@tree.command(name="place", description="Save a place to your notebook")
+@tree.command(name="place", description="Record a place to your notebook")
 @app_commands.describe(text="Describe the place")
 @require_tier(ROLE_PILOT)
 async def cmd_place(interaction: discord.Interaction, text: str):
@@ -859,7 +911,7 @@ async def cmd_place(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(f"Place saved. ID: `{record['id']}`", ephemeral=True)
 
 
-@tree.command(name="character", description="Save a character to your notebook")
+@tree.command(name="character", description="Record a character to your notebook")
 @app_commands.describe(text="Describe the character")
 @require_tier(ROLE_PILOT)
 async def cmd_character(interaction: discord.Interaction, text: str):
@@ -867,7 +919,7 @@ async def cmd_character(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(f"Character saved. ID: `{record['id']}`", ephemeral=True)
 
 
-@tree.command(name="symbol", description="Save a symbol to your notebook")
+@tree.command(name="symbol", description="Record a symbol to your notebook")
 @app_commands.describe(text="Describe the symbol")
 @require_tier(ROLE_PILOT)
 async def cmd_symbol(interaction: discord.Interaction, text: str):
@@ -875,25 +927,25 @@ async def cmd_symbol(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(f"Symbol saved. ID: `{record['id']}`", ephemeral=True)
 
 
-@tree.command(name="dispatch", description="Dispatch agent fleet")
+@tree.command(name="dispatch", description="Dispatch agent fleet to task")
 @require_tier(ROLE_FOUNDER)
 async def cmd_dispatch(interaction: discord.Interaction):
     await interaction.response.send_message("Agent fleet dispatch signal sent. Held until operator confirmation.", ephemeral=True)
 
 
-@tree.command(name="controls", description="Local controls status")
+@tree.command(name="controls", description="View local controls status")
 @require_tier(ROLE_FOUNDER)
 async def cmd_controls(interaction: discord.Interaction):
     await interaction.response.send_message("Local controls: held. Require operator-machine auth proof.", ephemeral=True)
 
 
-@tree.command(name="boot-check", description="Dual boot readiness check")
+@tree.command(name="boot-check", description="Check dual boot readiness")
 @require_tier(ROLE_FOUNDER)
 async def cmd_boot_check(interaction: discord.Interaction):
     await interaction.response.send_message("Dual boot: held until physical operator action. Windows remains host.", ephemeral=True)
 
 
-@tree.command(name="release-gate", description="v1.0.0 promotion gate check")
+@tree.command(name="release-gate", description="Check v1.0.0 promotion gate status")
 @require_tier(ROLE_FOUNDER)
 async def cmd_release_gate(interaction: discord.Interaction):
     await interaction.response.send_message("v1.0.0 gate: held. No release without operator approval and evidence.", ephemeral=True)
@@ -907,19 +959,19 @@ async def cmd_lounge(interaction: discord.Interaction):
     await _lounge_start(interaction, "sinatra")
 
 
-@tree.command(name="dreams", description="Binaural beats for dreaming and sleep (delta/theta waves)")
+@tree.command(name="dreams", description="Play sleep & dream binaural beats")
 async def cmd_dreams(interaction: discord.Interaction):
     await interaction.response.defer()
     await _lounge_start(interaction, "dreams")
 
 
-@tree.command(name="focus", description="Binaural beats for focus and flow (alpha/beta waves)")
+@tree.command(name="focus", description="Play focus & flow binaural beats")
 async def cmd_focus(interaction: discord.Interaction):
     await interaction.response.defer()
     await _lounge_start(interaction, "focus")
 
 
-@tree.command(name="skip", description="Skip current lounge track")
+@tree.command(name="skip", description="Skip to next track")
 async def cmd_skip(interaction: discord.Interaction):
     state = _lounge_state(interaction.guild_id)
     vc = state.voice_client
@@ -930,7 +982,7 @@ async def cmd_skip(interaction: discord.Interaction):
         await interaction.response.send_message("Nothing playing in the lounge.", ephemeral=True)
 
 
-@tree.command(name="leave", description="Stop lounge playback and disconnect from voice")
+@tree.command(name="leave", description="Stop music and disconnect from voice")
 async def cmd_leave(interaction: discord.Interaction):
     state = _lounge_state(interaction.guild_id)
     vc = state.voice_client
@@ -945,7 +997,7 @@ async def cmd_leave(interaction: discord.Interaction):
         await interaction.response.send_message("Not in a voice channel.", ephemeral=True)
 
 
-@tree.command(name="nowplaying", description="What's playing in the lounge")
+@tree.command(name="nowplaying", description="Show currently playing track")
 async def cmd_nowplaying(interaction: discord.Interaction):
     state = _lounge_state(interaction.guild_id)
     if not state.current:
@@ -968,7 +1020,7 @@ async def cmd_nowplaying(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-@tree.command(name="volume", description="Set lounge volume (0–100)")
+@tree.command(name="volume", description="Set volume level (0-100)")
 @app_commands.describe(level="Volume 0–100")
 async def cmd_volume(interaction: discord.Interaction, level: int):
     vol = max(0, min(100, level)) / 100.0
@@ -1002,7 +1054,7 @@ async def cmd_threedoors(interaction: discord.Interaction):
         await interaction.response.send_message(embed=_format_three_doors_embed(state))
 
 
-@tree.command(name="threedoors-choose", description="Choose a door in the Three Doors game")
+@tree.command(name="threedoors-choose", description="Choose a door (A, B, or C)")
 @app_commands.describe(door="Door name or letter (A, B, C)")
 async def cmd_threedoors_choose(interaction: discord.Interaction, door: str):
     state = load_three_doors_state(interaction.user)
