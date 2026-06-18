@@ -7,7 +7,22 @@
 ## Goal
 "Ollama hooked to our own custom Σ₀ coding-agent LoRA, trained on past Claude sessions + external grounding, looped into the knowledge base and a central CSF store."
 
-## Status: live + staged; one GPU step remains
+## Status: ✅ COMPLETE — LoRA trained, merged, deployed, wired, verified (2026-06-18)
+
+**Training done.** QLoRA via peft+bitsandbytes (`scripts/train-qlora-peft.py`) on base
+`Qwen/Qwen2.5-Coder-3B-Instruct` (3B chosen to fit the 8 GB RTX 3070), 365 Claude-session
+pairs, 3 epochs / 135 steps, **loss 2.87 → 1.78**. Adapter (119 MB) → merged fp16
+(`scripts/merge-lora.py`) → imported to Ollama as **`lantern-sigma0-coder-v2`**.
+Verified: the model returns real code, and autowork's `callOllama` path reaches it.
+
+Runtime wiring (persisted): `OLLAMA_MODELS=D:\ollama-models` (User env),
+`OLLAMA_MODEL=lantern-sigma0-coder-v2` (.env.local). Ollama store relocated to D:
+(C: was full at 0.1 GB) with all prior models copied over.
+
+Weights stay OFF-repo: `D:\lantern-train\sigma0-adapters` (adapter),
+`D:\lantern-train\sigma0-merged` (merged fp16), `D:\ollama-models` (GGUF).
+
+### Original plan (kept for reference)
 
 ### Done & verified
 - **Ollama live** on `127.0.0.1:11434` (`ollama serve`). Models: `qwen2.5-coder`, `lantern-sigma0-coder`, `lantern-csf-dream`, `mistral`.
