@@ -4,6 +4,7 @@ const { getDictStats, readDeltas } = require("../lib/csf-delta-store");
 const { execFile } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const knowledgeRouter = require("../lib/knowledge-router");
 
 const TESSERACT_SCRIPT = path.resolve(__dirname, "../../../scripts/csf_research_tesseract.py");
 const TESSERACT_MANIFEST = path.resolve(__dirname, "../../../data/tesseract/manifest.json");
@@ -40,7 +41,48 @@ function resolveInRepo(repoRoot, p) {
 module.exports = async function csfRoutes(req, res, url, deps) {
   const { sendJson, repoRoot } = deps || {};
 
-  if (!url.pathname.startsWith("/api/csf/")) return false;
+  const p = url.pathname;
+  if (!p.startsWith("/api/csf/") && !p.startsWith("/api/knowledge/")) return false;
+
+  // GET/POST /api/knowledge/query — cheaper deterministic/near routing over the
+  // base Knowledge Center index. Answers $0 (no LLM) on a near hit; else miss.
+  if (p === "/api/knowledge/query") {
+    try {
+      let q = url.searchParams.get("q") || "";
+      if (req.method === "POST") { const b = JSON.parse(await readBody(req)); q = b.query || b.q || q; }
+      if (!q) return sendJson(res, { error: "q/query required" }, 400);
+      sendJson(res, knowledgeRouter.answer(q));
+    } catch (err) { sendJson(res, { error: err.message }, 500); }
+    return true;
+  }
+
+  // POST /api/csf/profile/pack { user } — one file compacting all a user's CSF data + KB grounding
+  if (req.method === "POST" && p === "/api/csf/profile/pack") {
+    try {
+      const body = JSON.parse(await readBody(req));
+      const user = String(body.user || "").replace(/[^a-zA-Z0-9._-]/g, "");
+      if (!user) return sendJson(res, { ok: false, error: "user required" }, 400);
+      const out = `data/profiles/${user}.csf`;
+      const log = await runPython(["-m", "csf.profile_pack", "pack", user, "-o", out], repoRoot,
+        { PYTHONPATH: path.resolve(repoRoot, "src") });
+      const full = path.resolve(repoRoot, out);
+      sendJson(res, { ok: true, log, out, bytes: fs.existsSync(full) ? fs.statSync(full).size : null });
+    } catch (err) { sendJson(res, { ok: false, error: err.message }, 500); }
+    return true;
+  }
+
+  // GET /api/csf/profile/info?user=<id> — embedded profile manifest (no extract)
+  if (req.method === "GET" && p === "/api/csf/profile/info") {
+    try {
+      const user = String(url.searchParams.get("user") || "").replace(/[^a-zA-Z0-9._-]/g, "");
+      const arc = path.resolve(repoRoot, `data/profiles/${user}.csf`);
+      if (!user || !fs.existsSync(arc)) return sendJson(res, { error: "profile not found" }, 404);
+      const log = await runPython(["-m", "csf.profile_pack", "info", arc], repoRoot,
+        { PYTHONPATH: path.resolve(repoRoot, "src") });
+      sendJson(res, JSON.parse(log));
+    } catch (err) { sendJson(res, { error: err.message }, 500); }
+    return true;
+  }
 
   if (req.method === "GET" && url.pathname === "/api/csf/stats") {
     const stats = getDictStats();

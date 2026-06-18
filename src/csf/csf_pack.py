@@ -78,11 +78,10 @@ def _safe_join(dest: Path, arc_path: str) -> Path:
 # Pack
 # ---------------------------------------------------------------------------
 
-def pack(paths: Iterable[str], out_path: str, compress: bool = True) -> dict:
-    """Pack arbitrary files into a CSF-Pack archive. Returns the manifest."""
+def _write_archive(items, out_path: str, compress: bool, extra_meta: dict | None) -> dict:
+    """Core writer. items = iterable of (arc_path, raw_bytes)."""
     files, blob = [], bytearray()
-    for abs_path, arc in _iter_files(paths):
-        raw = Path(abs_path).read_bytes()
+    for arc, raw in items:
         sha = hashlib.sha256(raw).hexdigest()
         stored = zlib.compress(raw, 9) if compress else raw
         files.append({
@@ -95,6 +94,8 @@ def pack(paths: Iterable[str], out_path: str, compress: bool = True) -> dict:
         "format": "csf-pack", "version": "0.8", "created_at": time.time(),
         "compressed": bool(compress), "file_count": len(files), "files": files,
     }
+    if extra_meta:
+        manifest.update(extra_meta)
     manifest_bytes = json.dumps(manifest, separators=(",", ":")).encode("utf-8")
 
     body = bytearray()
@@ -104,13 +105,22 @@ def pack(paths: Iterable[str], out_path: str, compress: bool = True) -> dict:
     body += struct.pack(">I", len(manifest_bytes))
     body += manifest_bytes
     body += blob
-
-    digest = hashlib.sha256(bytes(body)).digest()
-    body += digest
+    body += hashlib.sha256(bytes(body)).digest()
     body += struct.pack(FOOTER_FMT, len(body) + 8)
 
     Path(out_path).write_bytes(bytes(body))
     return manifest
+
+
+def pack(paths: Iterable[str], out_path: str, compress: bool = True) -> dict:
+    """Pack arbitrary files/dirs into a CSF-Pack archive. Returns the manifest."""
+    items = ((arc, Path(abs_path).read_bytes()) for abs_path, arc in _iter_files(paths))
+    return _write_archive(items, out_path, compress, None)
+
+
+def pack_blobs(blobs: dict, out_path: str, compress: bool = True, extra_meta: dict | None = None) -> dict:
+    """Pack in-memory {arc_path: bytes} blobs (e.g. generated manifests). Returns manifest."""
+    return _write_archive(blobs.items(), out_path, compress, extra_meta)
 
 
 # ---------------------------------------------------------------------------

@@ -241,3 +241,6 @@ models/*/adapters/
 
 # isolated training venv
 .venv-train/
+
+# per-user CSF profile archives (user data — privacy)
+data/profiles/*.csf

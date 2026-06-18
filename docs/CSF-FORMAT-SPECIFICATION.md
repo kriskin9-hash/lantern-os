@@ -110,6 +110,45 @@ file bytes at all. Use CSF-Pack when integrity + safety matter; it's the format 
 
 ---
 
+## 2.8 Per-user profile pack (one file per user, KB-grounded)
+
+`src/csf/profile_pack.py` compacts **all of one user's CSF data into a single
+file** — `data/profiles/<user>.csf` (CSF-Pack v0.8) — and grounds it in the base
+Knowledge Center.
+
+Archive contents:
+- `user/…` — the user's cube (`data/cubes/<user>.private`), deltas, indexes,
+  dreamer notebooks, `csf_memory`, profile json.
+- `knowledge/index.jsonl` — the **embedded base KB grounding index** (so the file
+  is self-contained *and* grounded), plus its `.meta.json`.
+- `_profile.json` — sources, user file count, and the grounding reference (KB sha256 + section count).
+
+```bash
+python -m csf.profile_pack pack <user>            # -> data/profiles/<user>.csf
+python -m csf.profile_pack info  <archive>        # embedded _profile.json
+python -m csf.profile_pack unpack <archive> -d <dest>
+```
+Routes: `POST /api/csf/profile/pack {user}` · `GET /api/csf/profile/info?user=<id>`.
+User profile archives are **gitignored** (user data — privacy). Tests:
+[`tests/test_csf_profile.py`](../tests/test_csf_profile.py).
+
+## 2.9 Base Knowledge Center grounding + cheaper routing
+
+- **KB index** — `scripts/build_knowledge_index.py` turns the Knowledge Center
+  source docs into `data/knowledge/index.jsonl` (one record per doc *section* with
+  heading path + snippet). This is the base grounding corpus for "better LLM grounding."
+- **Cheaper deterministic / near routing** —
+  [`lib/knowledge-router.js`](../apps/lantern-garage/lib/knowledge-router.js)
+  answers from the KB index **before** paying for an LLM:
+  1. **deterministic** — exact heading match → that section verbatim ($0)
+  2. **near** — TF-IDF nearest section above threshold → grounded answer ($0)
+  3. **miss** — caller falls through to the provider chain
+  Route: `GET|POST /api/knowledge/query { q }` → `{ tier, hit, source, text, score }`.
+
+Rebuild the KB index after editing core docs: `python scripts/build_knowledge_index.py`.
+
+---
+
 ## 3. Legacy / symbolic formats (brief)
 
 ### 3.1 v0.3 symbolic (`csf_file.py`)
