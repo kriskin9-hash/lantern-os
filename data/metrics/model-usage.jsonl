@@ -292,3 +292,7 @@
 {"timestamp":"2026-06-13T10:30:03.854Z","modelId":"lantern-convergance","provider":"static","action":"decide","metadata":{"entryId":"dream_1781346603845_xqz1qo","decision":"hold"}}
 {"timestamp":"2026-06-13T10:30:04.131Z","modelId":"lantern-pcsf","provider":"static","action":"receipt","metadata":{"entryId":"dream_1781346604128_0cnrth","privacyBoundary":"local_private"}}
 {"timestamp":"2026-06-13T10:30:04.146Z","modelId":"lantern-convergance","provider":"static","action":"decide","metadata":{"entryId":"dream_1781346604128_0cnrth","decision":"hold"}}
+{"timestamp":"2026-06-18T07:14:57.670Z","modelId":"lantern-pcsf","provider":"static","action":"receipt","metadata":{"entryId":"dream_1781766897667_0zt43v","privacyBoundary":"local_private"}}
+{"timestamp":"2026-06-18T07:14:57.687Z","modelId":"lantern-convergance","provider":"static","action":"decide","metadata":{"entryId":"dream_1781766897667_0zt43v","decision":"hold"}}
+{"timestamp":"2026-06-18T07:15:47.683Z","modelId":"lantern-pcsf","provider":"static","action":"receipt","metadata":{"entryId":"dream_1781766947681_owwgjn","privacyBoundary":"local_private"}}
+{"timestamp":"2026-06-18T07:15:47.683Z","modelId":"lantern-convergance","provider":"static","action":"decide","metadata":{"entryId":"dream_1781766947681_owwgjn","decision":"hold"}}

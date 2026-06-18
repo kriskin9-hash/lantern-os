@@ -21,6 +21,7 @@
     "test:ui": "npx playwright test ../../tests/test_dream_journal_ui.spec.js",
     "test:ui:headed": "npx playwright test ../../tests/test_dream_journal_ui.spec.js --headed",
     "test:three-doors": "node ../../tests/test_three_doors_integration.spec.js",
+    "test:sprint16": "node ../../tests/test_sprint16_dashboards.js",
     "test:all": "node ../../tests/run-dream-journal-tests.js api chat multiturn keystone cache ui && npm run test:three-doors",
     "dev": "node --watch server.js",
     "start:master": "git -C ../.. pull origin master && python3 ../../integrations/human-flourishing-frameworks/export_snapshot.py || true && node --watch server.js"

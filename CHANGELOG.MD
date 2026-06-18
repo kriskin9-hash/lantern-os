@@ -1,3 +1,13 @@
+## [1.4.2] - 2026-06-18
+**Build:** 1.4.2+2026-06-18.041643
+**Commit:** 89a00dc8
+
+fix(mcp): rewrite openapi spec to use GET + query params matching ChatGPT example format
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+
 ## [1.4.1] - 2026-06-16
 **Build:** 1.4.1+2026-06-16.064254
 **Commit:** 10e6fb87
