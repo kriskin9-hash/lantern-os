@@ -12,6 +12,8 @@
 const { getRouter } = require("../lib/convergence-router");
 const convergenceAgent = require("../lib/convergence-agent");
 const { sendJson } = require("../lib/http-utils");
+const { appendConversationEntry } = require("../lib/conversation-store");
+const maxConversationTextLength = 2000;
 
 module.exports = async (req, res, url, deps) => {
   const router = getRouter();
@@ -69,6 +71,12 @@ module.exports = async (req, res, url, deps) => {
         }
 
         const result = await convergenceAgent.respond(message);
+        // Persist both sides so history reload shows the full exchange
+        const now = new Date().toISOString();
+        appendConversationEntry({ recordedAt: now, surface: "convergence-agent", role: "operator", text: message.slice(0, maxConversationTextLength) }).catch(() => {});
+        if (result.answer) {
+          appendConversationEntry({ recordedAt: now, surface: "convergence-agent", role: "lantern", text: String(result.answer).slice(0, maxConversationTextLength) }).catch(() => {});
+        }
         sendJson(res, {
           success: true,
           ...result,
