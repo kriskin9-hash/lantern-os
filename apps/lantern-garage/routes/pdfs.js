@@ -6,6 +6,19 @@ function getIngestBase(repoRoot) {
   return path.join(repoRoot, 'data', 'ingest');
 }
 
+function loadPublicationDates(repoRoot) {
+  try {
+    const manifest = path.join(repoRoot, 'data', 'tesseract', 'manifest.json');
+    if (!fs.existsSync(manifest)) return {};
+    const { docs } = JSON.parse(fs.readFileSync(manifest, 'utf-8'));
+    const map = {};
+    for (const d of (docs || [])) {
+      if (d.filename) map[d.filename.toLowerCase()] = { publishedAt: d.publishedAt || null, pdfTitle: d.pdfTitle || null };
+    }
+    return map;
+  } catch { return {}; }
+}
+
 function scanPdfs(ingestBase, repoRoot) {
   const pdfs = [];
 
@@ -47,24 +60,29 @@ module.exports = async function pdfRoutes(req, res, url, deps) {
   // GET /api/pdfs — list all unique PDFs
   if (url.pathname === '/api/pdfs' && req.method === 'GET') {
     const pdfs = scanPdfs(ingestBase, repoRoot);
+    const pubDates = loadPublicationDates(repoRoot);
 
-    // Deduplicate by filename — keep first occurrence when both ingest folders have the same file
     const seen = new Set();
     const unique = pdfs.filter(p => {
       const key = p.filename.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    }).map(({ absolutePath, ...rest }) => rest); // strip internal absolutePath from response
+    }).map(({ absolutePath, ...rest }) => {
+      const meta = pubDates[rest.filename.toLowerCase()] || {};
+      return { ...rest, publishedAt: meta.publishedAt || null, pdfTitle: meta.pdfTitle || null };
+    });
 
+    // Sort: PDF publication date → file modification date → alphabetical
     unique.sort((a, b) => {
-      const da = a.modifiedAt || a.createdAt || '';
-      const db = b.modifiedAt || b.createdAt || '';
-      if (da && db) return db.localeCompare(da); // newest first
+      const da = a.publishedAt || a.modifiedAt || a.createdAt || '';
+      const db = b.publishedAt || b.modifiedAt || b.createdAt || '';
+      if (da && db) return db.localeCompare(da);
       if (da) return -1;
       if (db) return 1;
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
+
     sendJson(res, { pdfs: unique, total: unique.length });
     return true;
   }

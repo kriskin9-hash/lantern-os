@@ -76,6 +76,40 @@ def scan_pdfs() -> list[dict]:
     return pdfs
 
 
+def parse_pdf_date(raw: str) -> str:
+    """Convert PDF date string (D:YYYYMMDDHHmmSS...) to ISO 8601."""
+    if not raw:
+        return ""
+    s = raw.lstrip("D:").replace("'", "")
+    # Strip timezone offset chars so only digits remain
+    s = "".join(c for c in s if c.isdigit())[:14]
+    if len(s) < 8:
+        return ""
+    try:
+        year = int(s[0:4])
+        month = int(s[4:6])
+        day = int(s[6:8])
+        if not (1900 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31):
+            return ""
+        return f"{year:04d}-{month:02d}-{day:02d}"
+    except Exception:
+        return ""
+
+
+def extract_pdf_metadata(pdf_path: str) -> dict:
+    """Return publication date and title from PDF internal metadata."""
+    if not _FITZ:
+        return {}
+    try:
+        doc = fitz.open(pdf_path)
+        meta = doc.metadata or {}
+        doc.close()
+        pub = parse_pdf_date(meta.get("creationDate", "")) or parse_pdf_date(meta.get("modDate", ""))
+        return {"publishedAt": pub, "pdfTitle": meta.get("title", "")}
+    except Exception:
+        return {}
+
+
 def extract_text(pdf_path: str) -> str:
     if not _FITZ:
         return ""
@@ -109,7 +143,8 @@ def pack():
     for i, meta in enumerate(pdfs):
         text = extract_text(meta["path"])
         sha = sha256_file(meta["path"])
-        record = {**meta, "sha256": sha, "textLength": len(text), "text": text}
+        pdf_meta = extract_pdf_metadata(meta["path"])
+        record = {**meta, **pdf_meta, "sha256": sha, "textLength": len(text), "text": text}
         records.append(record)
         print(f"[pack] {i+1}/{len(pdfs)} {meta['filename']} ({meta['size']} B, {len(text)} chars)", flush=True)
 
