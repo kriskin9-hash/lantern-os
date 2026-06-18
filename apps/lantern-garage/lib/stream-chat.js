@@ -741,7 +741,7 @@ async function handleStreamChat(req, url, res) {
   const _realtimeCtx = `Current date/time: ${_now.toISOString()} (${_now.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}, ${_now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })})`;
 
   // Plain Keystone desk prompt — no persona voice, no doors. Dream Chat is Keystone-only.
-  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Lantern OS. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. Never reply with only your name or a greeting — always provide a substantive answer. If the user asks for roleplay, Lantern, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Lantern OS. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Lantern, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nContext:\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
