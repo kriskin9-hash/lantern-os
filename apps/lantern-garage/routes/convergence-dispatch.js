@@ -287,7 +287,7 @@ module.exports = async (req, res, url, deps) => {
       const {
         generatePlan, generatePatch, applyPatch, runTests,
         gitAddFiles, gitCommit, gitPush, openDraftPr,
-        gitCurrentBranch, gitCreateBranch,
+        gitCurrentBranch, gitCreateBranch, gitEnsureClean,
       } = require("../lib/self-edit-engine");
 
       // honest running record of what actually happened
@@ -348,8 +348,10 @@ module.exports = async (req, res, url, deps) => {
           try {
             branchName = gitCreateBranch(REPO_ROOT, `issue-${issueNumber}`);
           } catch (e) {
-            // Branch already exists — check it out
+            // Branch already exists — check it out, but never clobber an
+            // uncommitted working tree (gitEnsureClean throws if dirty).
             const { execSync } = require("child_process");
+            gitEnsureClean(REPO_ROOT);
             execSync(`git checkout ${targetBranch}`, { cwd: REPO_ROOT, timeout: 5000, env: { ...process.env, SKIP_MONOWORKSTREAM: "1" } });
           }
         }
