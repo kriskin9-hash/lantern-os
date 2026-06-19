@@ -199,3 +199,16 @@ A1 makes the headline pacing feature real; A4 + the shipped calibration set make
   hook-strength proxy, explicitly NOT a calibrated intro-retention %. Tests:
   `tests/test_variant_hookfirst.js` (5/5) + A1/A4/A3/calibration regressions all green.
   **Next: A2 (unsupervised audio-visual recurrence highlight scoring).**
+- **2026-06-19 — A2 DONE (recurrence novelty).** New `apps/lantern-garage/lib/recurrence-novelty.js`:
+  `noveltyScores()` scores each time-window by its robust z-distance (median+MAD) from
+  the clip's OWN typical window, in the **salient direction only** (a quiet/still window
+  is not a highlight). Label-free / self-supervised — replaces "max(motion,audio,scene)"
+  so a loud-but-repeated moment no longer scores like a genuinely surprising one.
+  `recurrenceHighlights()` merges high-novelty windows into candidate spans;
+  `framesToWindows()` bins the existing motion/audio/scene frame series. HONESTY hard
+  guarantee (tested): a UNIFORM clip yields zero novelty everywhere — no min-max
+  stretching, no manufactured contrast; <4 windows → no scores. Tests:
+  `tests/test_recurrence_novelty.js` (6/6) + all prior regressions green.
+  *Wiring note:* not yet fused into `mergeDetections` (would add a `novel` tag /
+  blend into the gameplay-first composite) — that integration is the remaining glue.
+  **Next: B2 (drop-off-aware cutting — needs the A4 retention curves + calibration).**
