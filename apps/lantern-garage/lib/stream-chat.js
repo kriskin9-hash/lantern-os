@@ -1263,7 +1263,14 @@ async function handleStreamChat(req, url, res) {
           resp.on("end", () => { try { resolve(JSON.parse(d).message?.content || ""); } catch (e) { reject(e); } });
         });
         rq.on("error", reject);
-        rq.setTimeout(120000, () => { rq.destroy(); reject(new Error("ollama_timeout")); });
+        // FAST (interactive default) fails over quickly when the local model
+        // stalls; DEEP native loop (OURO_NATIVE=1) keeps the long ceiling. This
+        // is the loop-reasoner path (called up to maxLoops times), so a flat 120s
+        // here could stall a single streamed reply for minutes on a dead model.
+        // OLLAMA_TIMEOUT_MS overrides both.
+        const _ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10)
+          || (/^(1|true|yes)$/i.test(process.env.OURO_NATIVE || "") ? 120000 : 15000);
+        rq.setTimeout(_ollamaTimeout, () => { rq.destroy(); reject(new Error("ollama_timeout")); });
         rq.write(body); rq.end();
       });
       const lr = await loopedReason({ prompt: message, systemPrompt, callLLM, maxLoops: 4 });

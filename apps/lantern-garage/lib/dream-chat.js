@@ -385,7 +385,14 @@ Be honest. If there's not enough data, say so.`;
         upstream.on("error", reject);
       });
       req.on("error", reject);
-      const ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10) || 120000;
+      // Interactive (FAST, the product default) fails over fast when the local
+      // model stalls; the DEEP native Σ₀ loop (OURO_NATIVE=1) keeps the long
+      // ceiling it legitimately needs. A flat 120s here meant a cold/stuck local
+      // model (e.g. an oversized GGUF that never loads) blocked EVERY reply for
+      // two full minutes before failing over to a working cloud provider.
+      // OLLAMA_TIMEOUT_MS overrides both.
+      const ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10)
+        || (/^(1|true|yes)$/i.test(process.env.OURO_NATIVE || "") ? 120000 : 15000);
       req.setTimeout(ollamaTimeout, () => { req.destroy(); reject(new Error("timeout")); });
       req.write(payload);
       req.end();
@@ -767,7 +774,14 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
           upstream.on("error", reject);
         });
         req2.on("error", reject);
-        const ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10) || 120000;
+        // Interactive (FAST, the product default) fails over fast when the local
+      // model stalls; the DEEP native Σ₀ loop (OURO_NATIVE=1) keeps the long
+      // ceiling it legitimately needs. A flat 120s here meant a cold/stuck local
+      // model (e.g. an oversized GGUF that never loads) blocked EVERY reply for
+      // two full minutes before failing over to a working cloud provider.
+      // OLLAMA_TIMEOUT_MS overrides both.
+      const ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10)
+        || (/^(1|true|yes)$/i.test(process.env.OURO_NATIVE || "") ? 120000 : 15000);
         req2.setTimeout(ollamaTimeout, () => { req2.destroy(); reject(new Error("timeout")); });
         req2.write(payload);
         req2.end();

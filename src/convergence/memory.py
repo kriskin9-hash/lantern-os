@@ -10,6 +10,7 @@ Reference: CONVERGANCE-SIGMA0-BRIEFING.md, convergence-core-mapping.md
 """
 
 import json
+import itertools
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Union
@@ -74,6 +75,11 @@ class MemoryStore:
                 log_path.touch()
 
         self.cache: Dict[str, MemoryEntry] = {}
+        # Monotonic suffix so two appends from the same source can never collide
+        # on an ID. datetime.now().timestamp() has coarse resolution on Windows
+        # (~15ms system tick), so rapid same-source appends would otherwise share
+        # a timestamp -> identical ID -> the first entry is silently lost.
+        self._id_counter = itertools.count()
         self._load_cache()
 
     def _load_cache(self) -> None:
@@ -135,7 +141,7 @@ class MemoryStore:
 
         Returns: MemoryEntry with assigned ID
         """
-        mem_id = f"{source}-{datetime.now().timestamp()}"
+        mem_id = f"{source}-{datetime.now().timestamp()}-{next(self._id_counter)}"
         timestamp = datetime.now()
         evidence_ids = evidence_ids or []
 

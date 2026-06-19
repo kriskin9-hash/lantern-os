@@ -247,8 +247,26 @@ function gitCurrentBranch(repoRoot) {
   return execSync("git branch --show-current", { cwd: repoRoot, encoding: "utf8", timeout: 5000 }).trim();
 }
 
+// Guard against clobbering in-progress work. This automation operates on the
+// primary working tree (REPO_ROOT), so a branch switch here would silently
+// discard any uncommitted edits a human (or another process) has staged or
+// modified — and a stray staged file would also leak into the next commit.
+// Refuse the switch when the tree is dirty rather than destroy that work.
+function gitEnsureClean(repoRoot) {
+  const dirty = execSync("git status --porcelain", { cwd: repoRoot, encoding: "utf8", timeout: 5000 }).trim();
+  if (dirty) {
+    const n = dirty.split("\n").length;
+    throw new Error(
+      `git_tree_dirty: refusing to switch branches in ${repoRoot} — ${n} uncommitted ` +
+      `change(s) would be clobbered. Commit, stash, or run this automation in a ` +
+      `dedicated git worktree.`
+    );
+  }
+}
+
 function gitCreateBranch(repoRoot, branchName) {
   const safe = sanitizeBranchName(branchName);
+  gitEnsureClean(repoRoot);
   execSync(`git checkout -b ${safe}`, { cwd: repoRoot, encoding: "utf8", timeout: 10000 });
   return safe;
 }
@@ -704,6 +722,7 @@ module.exports = {
   validateDiff,
   applyPatch,
   gitCreateBranch,
+  gitEnsureClean,
   gitCommit,
   gitPush,
   gitDiffStat,

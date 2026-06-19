@@ -928,6 +928,18 @@ except Exception as _gh_exc:  # pragma: no cover - optional module
     _GITHUB_INT_PARAMS = set()
     logger.warning("GitHub tools not loaded: %s", _gh_exc)
 
+# ── Local deterministic repo-fix runner — the local execution layer ──
+# Worktree-sandboxed, scope+secret-gated, allowlisted tests, receipt-backed. The LLM
+# proposes; this layer validates and executes. Never writes/pushes a protected branch.
+try:
+    import local_runner
+    _lr_added = local_runner.register(TOOLS_REGISTRY)
+    _LOCAL_INT_PARAMS = local_runner.INT_PARAMS
+    logger.info("Local runner tools registered (%d): repo=%s", len(_lr_added), local_runner.REPO_ROOT)
+except Exception as _lr_exc:  # pragma: no cover - optional module
+    _LOCAL_INT_PARAMS = set()
+    logger.warning("Local runner not loaded: %s", _lr_exc)
+
 # ── Convergence / workflow tools — the !convergance + PR-work backbone ──
 # convergence_run, github_triage_prs, github_pr_status, worker_tick, lantern_command.
 # Wired with the live queue + task_run so worker_tick proves pickup.
@@ -979,7 +991,7 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
                 "required": [],
             }
             for param_name, param in sig.parameters.items():
-                if param_name in ("limit", "max_results") or param_name in _GITHUB_INT_PARAMS:
+                if param_name in ("limit", "max_results") or param_name in _GITHUB_INT_PARAMS or param_name in _LOCAL_INT_PARAMS:
                     parameters["properties"][param_name] = {
                         "type": "integer",
                         "default": param.default if param.default is not inspect.Parameter.empty else (5 if param_name == "max_results" else 10),

@@ -110,6 +110,20 @@ class TestMemoryStore:
         entry2 = store.append(source="test", content={}, confidence=-0.5)
         assert entry2.confidence == 0.0
 
+    def test_rapid_same_source_appends_are_unique(self, store):
+        """Rapid appends from one source must not collide on ID.
+
+        Regression: append() built IDs from datetime.now().timestamp() alone,
+        whose ~15ms resolution on Windows let two quick same-source appends share
+        a timestamp -> identical ID -> the first entry was silently overwritten in
+        the cache. This caused flaky failures in the query tests below.
+        """
+        n = 50
+        entries = [store.append("rapid", {"i": i}, confidence=0.9) for i in range(n)]
+        ids = {e.id for e in entries}
+        assert len(ids) == n, "append() produced duplicate IDs"
+        assert len(store.cache) >= n, "an entry was lost to an ID collision"
+
     def test_query_by_pattern_source(self, store):
         """Query finds entries by source pattern."""
         store.append("price-collector", {"price": 45.2}, confidence=0.99)
