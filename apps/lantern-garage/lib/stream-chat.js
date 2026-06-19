@@ -27,6 +27,7 @@ const { route: converganceRoute, buildBehaviorPreamble } = require("./converganc
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
+const { chatDilation, groundingPolicy } = require("./grounding-policy");
 const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
 const { detectTaskType } = require("./task-detector");
@@ -90,7 +91,7 @@ function compactHistory(history) {
     }
     // Low fidelity: first N words only
     const words = text.trim().split(/\s+/).filter(Boolean).slice(0, LOW_FIDELITY_WORD_LIMIT).join(" ");
-    const roleLabel = role === "assistant" ? "Lantern" : "Dreamer";
+    const roleLabel = role === "assistant" ? "Keystone" : "Dreamer";
     const summary = words.length > 0 ? `[${roleLabel}: ${words}…]` : `[${roleLabel}]`;
     logTruncationMetric(text.length, summary.length, "low_fidelity");
     return { role, text: summary };
@@ -632,8 +633,8 @@ async function handleStreamChat(req, url, res) {
   });
 
   // Dream Chat is Keystone-only: the desk agent is always Keystone.
-  // Personas (Lantern et al.) live in the Three Doors game surface, where the
-  // game may request a specific guide via body.agent (defaults to Lantern).
+  // Personas (Keystone et al.) live in the Three Doors game surface, where the
+  // game may request a specific guide via body.agent (defaults to Keystone).
   const agent = surfaceMode === "three-doors"
     ? (AGENT_PERSONAS.find((a) => a.id === (requestedAgent || "lantern"))
         || AGENT_PERSONAS.find((a) => a.id === "lantern")
@@ -645,7 +646,7 @@ async function handleStreamChat(req, url, res) {
   // about app dev, repo state, and convergence. Direct API access from the UX.
   const isKeystoneDebug = agent.id === "keystone" && (mcpFlag || message.startsWith("[Convergence task]"));
 
-  // Name reported in done events — Keystone at the desk, the persona (Lantern) in the game
+  // Name reported in done events — Keystone at the desk, the persona (Keystone) in the game
   const doneAgentName = agent.name || "Keystone";
 
   let dreamContext = recentDreams.length > 0
@@ -667,7 +668,7 @@ async function handleStreamChat(req, url, res) {
   // historyContext is kept for Keystone debug prompt only — not injected into dream system prompt.
   const compacted = compactHistory(history);
   const historyContext = compacted.length > 0
-    ? `\nPrior conversation turns:\n${compacted.map(h => `${h.role === "assistant" ? "Lantern" : "Dreamer"}: ${h.text}`).join("\n")}`
+    ? `\nPrior conversation turns:\n${compacted.map(h => `${h.role === "assistant" ? "Keystone" : "Dreamer"}: ${h.text}`).join("\n")}`
     : "";
 
   // Co-occurrence pairs: symbols that appear together in the same entry strengthen the edge
@@ -692,15 +693,20 @@ async function handleStreamChat(req, url, res) {
   const DOORS_INSTRUCTION = `\n\nAt the end of every response, imagine exactly 3 forward-facing doors — canaries the dreamer is sending ahead into their waking and dreaming life. Each door should be a brief, future-tense, equally weighted sensory or experiential path grounded in the last door mentioned and the dreamer's personal symbol mesh. All 3 should carry equal weight — no door is more important. They represent what the dreamer wants to see, hear, feel, taste, touch, or live. Write them as a single hidden line:\n[DOORS: door one | door two | door three]\nRules: future tense, first person, short (under 8 words), no questions, no commands, equally weighted, rooted in the conversation and symbol mesh.${meshHint}`;
 
   // Keystone debug prompt — raw dev access, no persona, no doors
-  const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Lantern OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\n${_realtimeCtx}\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
+  const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Keystone OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\n${_realtimeCtx}\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
-  // ── Web Search Grounding ───────────────────────────────────────────
+  // ── Web Search Grounding (dilation-gated; within→without bridge) ─────
+  // Chat-level time-dilation drives how hard to reach external reality: an
+  // uncertain/analytical/fresh-fact query dilates → wider grounding; a normal one
+  // stays at the base. (convergence_io.dilation ↔ grounding-policy.js)
   let groundingContext = "";
-  if (!isKeystoneDebug && needsGrounding(message)) {
+  const groundingD = chatDilation(message);
+  const gpol = groundingPolicy(groundingD);
+  if (!isKeystoneDebug && (needsGrounding(message) || groundingD >= 1.5)) {
     const searchQuery = extractSearchQuery(message);
     if (searchQuery) {
       try {
-        const searchResult = await webSearchMcp(searchQuery, 5);
+        const searchResult = await webSearchMcp(searchQuery, gpol.maxResults);
         if (searchResult.success && searchResult.results) {
           groundingContext = formatGroundingContext(searchResult.results, searchQuery);
         }
@@ -732,7 +738,7 @@ async function handleStreamChat(req, url, res) {
         if (canonical && canonical.hit) kbAnswer = canonical;
       }
       if (kbAnswer && kbAnswer.hit) {
-        const kbBlock = `Knowledge Center (Lantern OS docs) — grounding from ${kbAnswer.source}:\n${kbAnswer.text}`;
+        const kbBlock = `Knowledge Center (Keystone OS docs) — grounding from ${kbAnswer.source}:\n${kbAnswer.text}`;
         groundingContext = groundingContext ? `${groundingContext}\n\n${kbBlock}` : kbBlock;
       }
     } catch (e) {
@@ -797,7 +803,7 @@ async function handleStreamChat(req, url, res) {
     : requestedProvider === "keystone-ft"
       ? "Keystone FT · memory route"
       : surfaceMode === "three-doors"
-        ? `${agent.name || "Lantern"} · Three Doors`
+        ? `${agent.name || "Keystone"} · Three Doors`
         : (ROUTE_LABEL_MAP[converganceIntent] || "Keystone · router");
 
   // Plain Keystone desk prompt — no persona voice, no doors. Dream Chat is Keystone-only.
@@ -805,7 +811,7 @@ async function handleStreamChat(req, url, res) {
   // cloud providers are unavailable) a correct, concrete answer to "what is this?" so new
   // users get an orientation instead of improvised dream-journal filler. The journal block
   // is explicitly labelled background so the model does not narrate it as if it were the app.
-  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Lantern OS — a local-first, private journaling and reasoning app (journal, chat, and trading tools) that runs on the user's own machine with no account required. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. If the user asks "what is this?", "what can you do?", or anything about the app itself, give a plain one- or two-sentence description of Lantern OS; do NOT describe the journal entries below as if they were the app, and do NOT use mystical or "dream" language. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Lantern, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nBackground (the user's recent journal entries — do not treat as the subject unless they ask about their journal):\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+  const ROUTER_PROMPT = `You are Keystone, the engineering desk agent for Keystone OS — a local-first, private journaling and reasoning app (journal, chat, and trading tools) that runs on the user's own machine with no account required. Answer directly, technically, and concisely — no roleplay, no dream personas, no door suggestions. If the user asks "what is this?", "what can you do?", or anything about the app itself, give a plain one- or two-sentence description of Keystone OS; do NOT describe the journal entries below as if they were the app, and do NOT use mystical or "dream" language. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Keystone, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nBackground (the user's recent journal entries — do not treat as the subject unless they ask about their journal):\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
@@ -849,7 +855,26 @@ async function handleStreamChat(req, url, res) {
     if (SIGMA0_VERIFY && fullReply && message) {
       verifyResponse(fullReply, message).catch(() => {});
     }
-    return sse.sendDone(res, source, { ...extra, ...signature, routeLabel: finalRouteLabel });
+    // Convergence loop (Reason → Act): surface per-reply confidence and emit a
+    // ConvergenceRecord so streamed dream-chat / Keystone replies feed the loop
+    // (the non-stream /api/dream/chat path already emits; this mirrors it).
+    const cvReply = fullReply || extra.cleanText || "";
+    const cvGrounded = extra.online === true || (extra.online !== false && source !== "offline" && source !== "failed");
+    const cvConfidence = (typeof extra.confidence === "number") ? extra.confidence : (cvGrounded ? 0.7 : 0.3);
+    const cvReasoner = signature.agent || "keystone";
+    if (cvReply && message && source !== "failed" && source !== "offline" && !extra.error) {
+      try {
+        const { emitConvergenceRecord } = require("./convergence-records");
+        emitConvergenceRecord({
+          hypothesis: String(message).slice(0, 280),
+          evidence_ids: [],
+          result: String(cvReply).slice(0, 2000),
+          confidence: cvConfidence,
+          reasoner: cvReasoner,
+        }).catch(() => {});
+      } catch { /* convergence record non-critical */ }
+    }
+    return sse.sendDone(res, source, { ...extra, ...signature, confidence: cvConfidence, grounded: cvGrounded, reasoner: cvReasoner, routeLabel: finalRouteLabel });
   };
 
   // Emit route event with actual routing decision from server
@@ -1263,7 +1288,14 @@ async function handleStreamChat(req, url, res) {
           resp.on("end", () => { try { resolve(JSON.parse(d).message?.content || ""); } catch (e) { reject(e); } });
         });
         rq.on("error", reject);
-        rq.setTimeout(120000, () => { rq.destroy(); reject(new Error("ollama_timeout")); });
+        // FAST (interactive default) fails over quickly when the local model
+        // stalls; DEEP native loop (OURO_NATIVE=1) keeps the long ceiling. This
+        // is the loop-reasoner path (called up to maxLoops times), so a flat 120s
+        // here could stall a single streamed reply for minutes on a dead model.
+        // OLLAMA_TIMEOUT_MS overrides both.
+        const _ollamaTimeout = parseInt(process.env.OLLAMA_TIMEOUT_MS, 10)
+          || (/^(1|true|yes)$/i.test(process.env.OURO_NATIVE || "") ? 120000 : 15000);
+        rq.setTimeout(_ollamaTimeout, () => { rq.destroy(); reject(new Error("ollama_timeout")); });
         rq.write(body); rq.end();
       });
       const lr = await loopedReason({ prompt: message, systemPrompt, callLLM, maxLoops: 4 });

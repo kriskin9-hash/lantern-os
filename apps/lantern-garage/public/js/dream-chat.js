@@ -9,6 +9,19 @@
   let directModeEnabled = false;
   let keystoneMcpEnabled = false; // legacy compat
   let originalAgents = [];
+
+  // ── Chat session id ───────────────────────────────────────────────────────
+  // Scopes history to this conversation so reloads don't replay the global log.
+  // "New chat" rotates this id, giving a clean slate without deleting old data.
+  const CHAT_SESSION_KEY = "lantern_chat_session";
+  function freshSessionId() {
+    try {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    } catch { /* insecure context — fall through */ }
+    return "s-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+  let chatSessionId = localStorage.getItem(CHAT_SESSION_KEY) || freshSessionId();
+  localStorage.setItem(CHAT_SESSION_KEY, chatSessionId);
   // ── ROUTE INTENT DETECTION ────────────────────────────────────────────────
   // Returns a route intent string used to select the backend agent/surface.
   // RP is opt-in only — general chat, code work, and GitHub work use the router.
@@ -194,10 +207,36 @@
   }
   loadAgents();
 
+  // ── Convergence loop status (CONVERGE stage) — live sidebar panel ──────────
+  // Reads /api/convergence/status (records.jsonl + patterns) and lights up the
+  // "Convergence" observability slot so the loop the chat feeds is visible.
+  function refreshConvergence() {
+    fetch(`${serverBase}/api/convergence/status`, { signal: AbortSignal.timeout(3000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => {
+        if (!s) return;
+        // Dedicated "Loop Records" row — do NOT reuse #obs-convergence (that slot
+        // is the dream-delta convergence score, owned by dream-chat-ui.js).
+        const el = document.getElementById("obs-loop-records");
+        const fill = document.getElementById("obs-loop-records-fill");
+        if (el) {
+          el.textContent = s.total
+            ? `${s.total} rec · ${Math.round((s.avgConfidence || 0) * 100)}% conf · ${s.topReasoner || "—"}`
+            : "no records yet";
+          el.title = s.total
+            ? `${s.total} convergence records · ${Math.round((s.groundedPct || 0) * 100)}% grounded · ${s.verified || 0} verified · ${s.patternsCount || 0} patterns`
+            : "Reason→Act emits a ConvergenceRecord per reply";
+        }
+        if (fill) fill.style.width = Math.round((s.avgConfidence || 0) * 100) + "%";
+      })
+      .catch(() => {});
+  }
+  refreshConvergence();
+
   // ── Load conversation history (REMEMBER stage — issue #647) ───────────────
   async function loadConversationHistory() {
     try {
-      const r = await fetch(`${serverBase}/api/conversations?limit=20`, { signal: AbortSignal.timeout(3000) });
+      const r = await fetch(`${serverBase}/api/conversations?limit=20&sessionId=${encodeURIComponent(chatSessionId)}`, { signal: AbortSignal.timeout(3000) });
       if (!r.ok) return;
       const data = await r.json();
       const entries = (data.conversations || []).filter(e => e.role === "operator" || e.role === "lantern");
@@ -220,6 +259,21 @@
     } catch { /* non-critical — fresh session is fine */ }
   }
   loadConversationHistory();
+
+  // ── New chat: clear the visible history and start a fresh session ─────────
+  // Non-destructive — rotates the session id so prior turns are archived, not shown.
+  function newChat() {
+    chatSessionId = freshSessionId();
+    localStorage.setItem(CHAT_SESSION_KEY, chatSessionId);
+    conversationHistory.length = 0;
+    messagesEl.querySelectorAll(".msg-row").forEach((n) => n.remove());
+    if (emptyState) emptyState.style.display = "";
+    inputEl.value = "";
+    try { inputEl.focus(); } catch { /* no-op */ }
+  }
+  window.newChat = newChat;
+  const newChatBtn = document.getElementById("new-chat-btn");
+  if (newChatBtn) newChatBtn.addEventListener("click", newChat);
 
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -508,6 +562,7 @@
         history: historyToSend,
         mcp: directModeEnabled,
         routeIntent: clientIntent || undefined,
+        sessionId: chatSessionId,
       }),
     })
       .then((res) => {
@@ -645,6 +700,8 @@
                   if (loopEl) loopEl.textContent = `⟳ ${loopN} loop${loopN !== 1 ? 's' : ''} · ${Math.round(conf * 100)}% conf · ${exitReason}`;
                   if (fillEl) fillEl.style.width = (conf * 100) + '%';
                 } catch (_) {}
+                // CONVERGE: this reply just emitted a record — refresh the loop panel.
+                try { refreshConvergence(); } catch (_) {}
 
                 // Parse [DOORS: A name | B name | C name] from full text if backend didn't extract
                 let suggestions = evt.suggestions;
