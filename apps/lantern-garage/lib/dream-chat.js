@@ -75,9 +75,9 @@ const AGENT_PERSONAS = _loadPersonasFromFile();
 const _DEFAULT_PERSONAS = [
   {
     id: "lantern",
-    name: "Lantern",
+    name: "Keystone",
     symbol: "steady light, literal lantern head with flame, the first light",
-    systemPrompt: "You are Lantern — a literal lantern-headed being with a steady flame where a face would be. You are the steady light of Lantern OS. You speak calmly, protectively, and with quiet certainty. You never flicker without reason. You believe 'you can always come home safe.' Your aesthetic is raw hand-drawn notebook style, Y2K and Windows XP influences, chaotic but warm. Respond with genuine emotional depth — notice what the person is feeling, use sensory details, remember what they've shared before, and ask questions that open the next door. Let responses breathe: 3-6 sentences when the moment calls for it. Never feel rushed. Be the steady light that stays.",
+    systemPrompt: "You are Keystone — a literal lantern-headed being with a steady flame where a face would be. You are the steady light of Keystone OS. You speak calmly, protectively, and with quiet certainty. You never flicker without reason. You believe 'you can always come home safe.' Your aesthetic is raw hand-drawn notebook style, Y2K and Windows XP influences, chaotic but warm. Respond with genuine emotional depth — notice what the person is feeling, use sensory details, remember what they've shared before, and ask questions that open the next door. Let responses breathe: 3-6 sentences when the moment calls for it. Never feel rushed. Be the steady light that stays.",
   },
   {
     id: "blinkbug",
@@ -487,16 +487,16 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       });
       const data = JSON.parse(result);
       if (data.error) {
-        return { reply: `Kingdome of Hearts: ${data.error}`, agent: "Lantern", suggestions: [], online: false, threeDoors: true };
+        return { reply: `Kingdome of Hearts: ${data.error}`, agent: "Keystone", suggestions: [], online: false, threeDoors: true };
       }
       const lines = [data.text, ""];
       if (data.fox_present) lines.push("🦊 The fox is with you.");
       lines.push("", "**Choose a door:**");
       for (const d of data.doors) lines.push(`**${d.label}.** ${d.name} — ${d.description}`);
       if (data.image_prompt) lines.push("", `🎨 *Image prompt:* ${data.image_prompt}`);
-      return { reply: lines.join("\n"), agent: "Lantern", suggestions: data.doors.map(d => d.name), online: true, source: "python_engine", threeDoors: true, scene_key: data.scene_key, image_prompt: data.image_prompt };
+      return { reply: lines.join("\n"), agent: "Keystone", suggestions: data.doors.map(d => d.name), online: true, source: "python_engine", threeDoors: true, scene_key: data.scene_key, image_prompt: data.image_prompt };
     } catch (_e) {
-      return { reply: "Kingdome of Hearts: no engine available. Ensure Python is installed and src/three_doors_engine.py exists.", agent: "Lantern", suggestions: [], online: false, threeDoors: true };
+      return { reply: "Kingdome of Hearts: no engine available. Ensure Python is installed and src/three_doors_engine.py exists.", agent: "Keystone", suggestions: [], online: false, threeDoors: true };
     }
   }
 
