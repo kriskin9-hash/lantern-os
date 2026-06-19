@@ -1,5 +1,5 @@
 {
-  "built_at": 1781856362.2194524,
+  "built_at": 1781879398.4771278,
   "docs": [
     "README.md",
     "CLAUDE.md",
@@ -8,6 +8,7 @@
     "docs/LANTERN-SIGMA0-CODER.md",
     "docs/OURO-LOOPLM.md",
     "docs/research/2026-06-19-kernel-model-frontier.md",
+    "docs/research/2026-06-19-convergence-core-agent-spine.md",
     "docs/SIGMA0-OURO-CODER.md",
     "docs/CSF-FORMAT-SPECIFICATION.md",
     "docs/SIGMA0-COLLAPSE-CERTIFICATE.md",
@@ -19,6 +20,6 @@
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md"
   ],
-  "sections": 339,
-  "sha256": "cbf5669df5a242b2bbb5dfa4d4c963a3d9b595f407da45471cb6a4c9ab407f5e"
+  "sections": 350,
+  "sha256": "cb655ab7d9f64b3284d693946f838d492319376ea22d63a374611f12303bdf8c"
 }

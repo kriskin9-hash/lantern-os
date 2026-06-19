@@ -163,6 +163,7 @@
         <a href="/repo/docs/LANTERN-SIGMA0-CODER.md">lantern-sigma0-coder</a>,
         <a href="/repo/docs/OURO-LOOPLM.md">Ouro / LoopLM (Q-exit)</a>,
         <a href="/repo/docs/research/2026-06-19-kernel-model-frontier.md">Kernel model frontier</a>,
+        <a href="/repo/docs/research/2026-06-19-convergence-core-agent-spine.md">Convergence Core spine</a>,
         <a href="/repo/docs/SIGMA0-OURO-CODER.md">Σ₀ Ouro Coder</a>,
         <a href="/repo/docs/CSF-FORMAT-SPECIFICATION.md">CSF-Pack v0.8</a>.
       </p>
@@ -293,6 +294,11 @@
           <span class="icon">🧭</span>
           <h3>Kernel model frontier <span class="gloss" aria-hidden="true">?<span class="gloss-bubble">A grounded comparison of the looped model Lantern runs (Ouro) against the current crop of small open models — scored on our own metrics, not generic leaderboards.</span></span></h3>
           <p>Ouro LoopLM (current kernel) vs the 2026 dense small-model frontier (Qwen3-4B, Phi-4-mini, Gemma 3n E2B) — primary-source-verified, scored on Lantern's own metrics, with a benchmark plan instead of a pick.</p>
+        </a>
+        <a class="link-card" href="/repo/docs/research/2026-06-19-convergence-core-agent-spine.md">
+          <span class="icon">🧩</span>
+          <h3>Convergence Core spine <span class="gloss" aria-hidden="true">?<span class="gloss-bubble">The design for turning Lantern's already-built parts (memory, task, tool, record + the Σ₀ safety system) into one closed agent loop — and the single feedback wire that's still missing.</span></span></h3>
+          <p>The four core objects, the six-stage loop, and the write-back closure already exist in code (kernel.py, verify.py); the gap is that none of it runs end-to-end in the serving path. Verified file-by-file, with the honest "durable agent, not AGI" ceiling.</p>
         </a>
         <a class="link-card" href="/repo/docs/SIGMA0-OURO-CODER.md">
           <span class="icon">🌀</span>
