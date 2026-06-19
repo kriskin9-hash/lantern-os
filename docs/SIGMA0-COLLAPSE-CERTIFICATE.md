@@ -43,10 +43,13 @@ status cannot silently drift.
 - [#508] — `.md`/`.tex` status-box reconcile pass.
 
 **Open (the deterministic next gaps — what this pass re-tracks):**
-- [#657] — **§4 residual.** The NIS canary is wired but the engine self-observes (`y = x`), so during collapse the innovation `→ 0` and the canary may not fire. `test_surprise_monitor_integration` stays `xfail` until an observation model triggers spooks under collapse. *This is the only open technical gap in the Σ₀ machinery.*
-- [#658] — **§3 sufficiency.** Σ₀⁻¹ is HEURISTIC with N=1 evidence; no theorem says it *prevents* collapse. Upgrade via proof under explicit hypotheses, or a regime sweep to MEASURED-over-distribution.
-- [#659] — **§4 decision.** `p_gate`/`p_unbounded` are documented but not in code (superseded by the `surprise.py` NIS canary). Formally retire them, or implement and wire `p_gate`.
+- [#658] — **§3 sufficiency (downgraded).** Σ₀⁻¹ was N=1 HEURISTIC; the regime sweep below upgrades it to MEASURED-over-distribution (option b). A closed-form *sufficiency theorem* (option a) remains the only residual.
 - [#660] — **housekeeping.** Reconcile the persistent-excitation attribution across `.md`/`.tex`, and verify all web citations before formal publication.
+
+**Resolved (landed 2026-06-19):**
+- [#658] — **§3 evidence upgraded N=1 → MEASURED.** `experiments/sigma0_regime_sweep.py` runs a forced-collapse rollout with/without Σ₀⁻¹ over an α × non-normality × noise grid with a fixed underdetermined (3-dim null) Jacobian. Over **180 trials that genuinely collapse without protection**, Σ₀⁻¹ suppressed collapse AND re-excited the state in **100%** (`data/sigma0_regime_sweep_report.json`). Honest caveat: in this construction the non-normal off-diagonal lifts the Jacobian's effective rank, so the collapse-prone cells are the diagonal ones (non_normality=0); the measured distribution spans α∈{−0.5,−0.2,−0.05} × noise∈{0.01,0.05,0.2}. The §3 label moves from N=1 HEURISTIC to MEASURED; a sufficiency theorem is still future work.
+- [#657] — **§4 residual CLOSED.** The engine no longer self-observes; `forward_step` runs a Kalman predict/update cycle with process noise `Q=(g·dilation)²·dt`, so smooth exploration stays consistent (NIS≈m, silent) while the collapse snap / Σ₀⁻¹ kick spikes NIS — the canary fires under collapse. `test_surprise_monitor_integration` flipped `xfail` → hard pass (30 passed). *This was the last open technical gap in the Σ₀ machinery.*
+- [#659] — **§4 decision CLOSED (RETIRED).** `p_gate`/`p_unbounded` formally retired, superseded by the `surprise.py` NIS canary; never implemented in `collapse.py` and will not be.
 
 **Resolved (landed 2026-06-17):**
 - [#661] — **§2 / Appendix A defect.** `_collapse_state`'s "log-barrier" was a misnamed multiplicative shrink that flipped sign for `strength > 0.217`. **Fixed:** the term is dropped; collapse is now the clean orthogonal projection `x* = P x` (non-expansive, smooth). The `log_barrier_strength` parameter was removed. Regression: `test_collapse_is_nonexpansive_projection`. *Flagged in external review 2026-06-16.*
@@ -321,11 +324,13 @@ correctly redundant. **However:**
   (the slowest mode), which is **not** §1's `α = max λᵢ(A_s)` (the largest /
   least-stable active eigenvalue). Disambiguate before use.
 
-**Action required ([#659]):** either implement `p_unbounded` / `p_gate` in
-`collapse.py` and wire `p_gate` into `AntiCollapseOperator`, **or** formally retire
-them as superseded by the NIS canary below. As verified 2026-06-16, the
-`p_gate`/`p_unbounded` signal is still not computed anywhere in code; the working
-early-warning is the NIS monitor (`src/cio_sde/surprise.py`).
+**Decision ([#659], RETIRED 2026-06-19):** `p_unbounded` / `p_gate` are formally
+**retired** as superseded by the NIS canary below. They were never implemented in
+`collapse.py` (a source search returns no match — verified again 2026-06-19) and
+will not be: the eigenvalue readout was the wrong early-warning (see the Update),
+and the actual driver of Σ₀⁻¹ is `proximity()`, not `p_gate`. The live early-warning
+is the Kalman NIS monitor (`src/cio_sde/surprise.py`), now fully integrated into the
+rollout ([#657], below). With this, §4 has no remaining open gaps.
 
 **Update — the right canary, now implemented (`src/cio_sde/surprise.py`).** The
 eigenvalue readout above was the wrong early-warning. The correct one is *surprise
