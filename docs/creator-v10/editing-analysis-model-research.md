@@ -189,3 +189,13 @@ A1 makes the headline pacing feature real; A4 + the shipped calibration set make
   analysis job-worker does not yet call `transcribeToSpeechFeatures` to populate
   `metadata.speech` — that integration (+ optional whisper dependency) is the
   remaining glue for A3 to run end-to-end on uploads.
+- **2026-06-19 — B1 DONE (hook-first variant assembly).** `variant-engine-v10.js`:
+  `maximum_rewatch` previously opened with the WEAKEST segment (ascending) and
+  `story_arc` opened with whatever was chronologically first — both tank intro
+  retention (the platform's #1 lever). Now rewatch opens with a strong hook AND still
+  ends on the single strongest payoff; story_arc is a cold open (strongest first, then
+  chronological). retention/excitement/balanced already opened strong. Every variant
+  now exposes `introStrength` (the opener's real segment score, 0-1) — a structural
+  hook-strength proxy, explicitly NOT a calibrated intro-retention %. Tests:
+  `tests/test_variant_hookfirst.js` (5/5) + A1/A4/A3/calibration regressions all green.
+  **Next: A2 (unsupervised audio-visual recurrence highlight scoring).**
