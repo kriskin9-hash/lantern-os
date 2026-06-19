@@ -22,6 +22,7 @@ Outputs:
 import argparse
 import json
 import os
+import sys
 import time
 import urllib.request
 
@@ -30,10 +31,20 @@ PROMPTS = os.path.join(ROOT, "data", "eval", "sigma0-prompts.jsonl")
 
 
 def score(expected: str, reply: str) -> bool:
-    """Keyword-coverage: every comma-separated key in `expected` must appear."""
+    """Keyword-coverage rubric: the reply must satisfy EVERY comma-separated key.
+
+    A key may list `|`-separated alternatives; the key is satisfied if ANY
+    alternative appears (case-insensitive substring) — this absorbs synonyms and
+    spelling variants so a correct answer isn't failed on phrasing. A key with no
+    `|` is a single literal, so legacy `expected` strings score exactly as before.
+    """
     r = reply.lower()
     keys = [k.strip().lower() for k in expected.split(",") if k.strip()]
-    return all(k in r for k in keys)
+
+    def key_ok(key: str) -> bool:
+        return any(alt.strip() in r for alt in key.split("|") if alt.strip())
+
+    return all(key_ok(k) for k in keys)
 
 
 def ask(base: str, model: str, prompt: str, num_predict: int, timeout: float):
@@ -67,6 +78,22 @@ def make_loop_engine(base_model: str, adapter, mode: str, q: float, eps: float, 
 
 
 def main():
+    # Windows consoles default to cp1252; model replies routinely contain chars
+    # outside it (em-dashes, box-drawing, emoji). Without this, the per-prompt
+    # print() crashes mid-run (UnicodeEncodeError) and NO leaderboard row is
+    # written — the whole eval is lost on the last surprising character.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+    def cprint(s):
+        """Print a progress line that can never crash on console encoding.
+        Replaces chars the current stdout can't encode (cp1252 on Windows) with
+        '?'. The full reply is preserved verbatim in the utf-8 detail JSONL."""
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(s.encode(enc, "replace").decode(enc, "replace"), flush=True)
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", required=True, help="backend label for the leaderboard")
     ap.add_argument("--base", default="http://127.0.0.1:11434")
@@ -87,7 +114,6 @@ def main():
 
     ask_loop = None
     if a.engine == "loop":
-        import sys
         sys.path.insert(0, os.path.join(ROOT, "src"))
         ask_loop = make_loop_engine(a.base_model, a.adapter, a.mode, a.q, a.eps, a.num_predict)
 
@@ -118,7 +144,7 @@ def main():
                 d["mean_contraction"] = meta["mean_contraction"]
                 contractions.append(meta["mean_contraction"])
         detail.append(d)
-        print(f"{r['id']:>2}  {'OK ' if ok else 'x  '} {dt:>5.1f}s  {r['expected'][:18]!r} -> {reply[:50]!r}", flush=True)
+        cprint(f"{r['id']:>2}  {'OK ' if ok else 'x  '} {dt:>5.1f}s  {r['expected'][:18]!r} -> {reply[:50]!r}")
 
     n = len(rows)
     summary = {

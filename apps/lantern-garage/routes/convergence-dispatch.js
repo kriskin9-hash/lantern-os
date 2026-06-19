@@ -33,6 +33,17 @@ module.exports = async (req, res, url, deps) => {
     return true;
   }
 
+  // GET /api/convergence/status — live loop state (Converge stage) for the chat UX
+  if (pathname === "/api/convergence/status" && req.method === "GET") {
+    try {
+      const { convergenceStatus } = require("../lib/convergence-status");
+      sendJson(res, convergenceStatus(), 200);
+    } catch (e) {
+      sendJson(res, { total: 0, avgConfidence: 0, groundedPct: 0, verified: 0, reasoners: [], topReasoner: null, patternsCount: 0, error: e.message }, 200);
+    }
+    return true;
+  }
+
   // POST /api/convergence/route-intent — Route a message intent
   if (pathname === "/api/convergence/route-intent" && req.method === "POST") {
     let body = "";
