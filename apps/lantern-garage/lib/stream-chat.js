@@ -1249,7 +1249,7 @@ async function handleStreamChat(req, url, res) {
   // loop_n/confidence/exit_reason for the "Ouro Σ₀ CDF exit" panel the UI reads.
   // Falls through to normal streaming on any error.
   if (process.env.LOOP_REASONER === "1" && !isKeystoneDebug && !isRpMode && !requestedProvider
-      && (intent === "coding" || intent === "reasoning")) {
+      && (intent === "coding_change" || intent === "code_review" || intent === "coding" || intent === "reasoning")) {
     try {
       const http = require("http");
       const { loopedReason } = require("./loop-reasoner");
