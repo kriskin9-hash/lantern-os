@@ -44,3 +44,29 @@ def test_both_modes_enable_antirepetition():
     assert serving_modes.DEEP_MODE.decode_antirepetition is True
     assert serving_modes.FAST_MODE.max_latency_ms == 2000
     assert serving_modes.DEEP_MODE.max_latency_ms == 120000
+
+
+# ── dilation-gated serving mode (within→without bridge, #764/#731) ──────────────
+
+def test_serving_mode_for_none_is_env_default(monkeypatch):
+    monkeypatch.delenv("OURO_NATIVE", raising=False)
+    assert serving_modes.serving_mode_for(None).name == "fast"
+
+
+def test_serving_mode_for_low_dilation_stays_fast(monkeypatch):
+    monkeypatch.delenv("OURO_NATIVE", raising=False)
+    assert serving_modes.serving_mode_for(0.5).name == "fast"
+    assert serving_modes.serving_mode_for(1.0).name == "fast"
+    assert serving_modes.serving_mode_for(2.0).name == "fast"   # deep only at D>=3
+
+
+def test_serving_mode_for_high_dilation_escalates_to_deep(monkeypatch):
+    monkeypatch.delenv("OURO_NATIVE", raising=False)
+    assert serving_modes.serving_mode_for(3.0).name == "deep"
+    assert serving_modes.serving_mode_for(5.0).name == "deep"
+
+
+def test_serving_mode_for_ouro_native_forces_deep(monkeypatch):
+    monkeypatch.setenv("OURO_NATIVE", "1")
+    assert serving_modes.serving_mode_for(0.1).name == "deep"
+    assert serving_modes.serving_mode_for(None).name == "deep"

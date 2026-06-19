@@ -27,6 +27,7 @@ const { route: converganceRoute, buildBehaviorPreamble } = require("./converganc
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
+const { chatDilation, groundingPolicy } = require("./grounding-policy");
 const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
 const { detectTaskType } = require("./task-detector");
@@ -694,13 +695,18 @@ async function handleStreamChat(req, url, res) {
   // Keystone debug prompt — raw dev access, no persona, no doors
   const KEYSTONE_DEBUG_PROMPT = `You are Keystone, a direct debug interface for Keystone OS development. You have access to the full repo context below. Respond as a senior engineer — concise, honest, actionable. No dream persona, no doors, no metaphors.\n\n${_realtimeCtx}\n\nRepo state:\n- Server: apps/lantern-garage/server.js (modular routes under routes/)\n- Streaming: lib/stream-chat.js (Gemini→Claude→OpenAI→Grok→Ollama chain)\n- Dream journal: ${allRecent.length} entries in data/dream_journal/\n- Providers configured: ${['GEMINI_API_KEY','ANTHROPIC_API_KEY','OPENAI_API_KEY','XAI_API_KEY'].filter(k => process.env[k]).join(', ') || 'none'}\n- Symbol mesh: ${symbolMesh.slice(0, 5).join(', ') || 'empty'}\n- Co-occurrence: ${topPairs || 'none'}\n${historyContext}\n\nYou can EXECUTE commands. When you output a single-line bash code block, the UI renders a ▶ Run button.\nONLY use these exact commands (anything else is blocked):\n\nTESTS: \`npm test\` or \`node tests/test_dream_journal_api.js\` or \`node tests/test_dream_journal_chat.js\` or \`node tests/test_dream_chat_multiturns.js\` or \`node tests/test_dream_journal_keystone.js\`\nGIT: \`git status\` \`git diff --stat\` \`git log --oneline -N\` \`git add FILE\` \`git commit -m "MSG"\` \`git push origin master\` \`git branch\`\nPR: \`gh pr create --repo alex-place/lantern-os --head cdblasioli-gif:master --base master --title "TITLE" --body "BODY"\`\nORCH: \`python src/convergence_io_engine.py health\` or \`loop\` or \`inspect\`\nREAD: \`cat FILE\` \`head -N FILE\`\n\nWhen asked to do something, output the EXACT command in a bash code block. The user clicks ▶ to run it. Do NOT suggest commands outside this list.\n\nAnswer directly. Reference file paths. Check data/pcsf/ for state. Check manifests/dream-journal-v1-agent-slots.json and csf/ingest/*.md for work queue.`;
 
-  // ── Web Search Grounding ───────────────────────────────────────────
+  // ── Web Search Grounding (dilation-gated; within→without bridge) ─────
+  // Chat-level time-dilation drives how hard to reach external reality: an
+  // uncertain/analytical/fresh-fact query dilates → wider grounding; a normal one
+  // stays at the base. (convergence_io.dilation ↔ grounding-policy.js)
   let groundingContext = "";
-  if (!isKeystoneDebug && needsGrounding(message)) {
+  const groundingD = chatDilation(message);
+  const gpol = groundingPolicy(groundingD);
+  if (!isKeystoneDebug && (needsGrounding(message) || groundingD >= 1.5)) {
     const searchQuery = extractSearchQuery(message);
     if (searchQuery) {
       try {
-        const searchResult = await webSearchMcp(searchQuery, 5);
+        const searchResult = await webSearchMcp(searchQuery, gpol.maxResults);
         if (searchResult.success && searchResult.results) {
           groundingContext = formatGroundingContext(searchResult.results, searchQuery);
         }
