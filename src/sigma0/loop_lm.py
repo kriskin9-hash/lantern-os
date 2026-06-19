@@ -86,7 +86,8 @@ class Sigma0LoopLM:
         return n, min(1.0, cdf), "max_depth"
 
     # ── generation with per-token adaptive depth ─────────────────────────────
-    def generate(self, prompt: str, q: float = 0.5, max_new_tokens: int = 200, messages=None):
+    def generate(self, prompt: str, q: float = 0.5, max_new_tokens: int = 200, messages=None,
+                 rep_penalty: float = 1.3):
         torch, *_ = _lazy()
         if messages is not None:
             ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
@@ -107,6 +108,11 @@ class Sigma0LoopLM:
                 depths.append(step)
                 hidden = hidden_states_list[step - 1][:, -1:, :]   # hidden at exit depth, last token
                 logits = lm_head(hidden)[0, -1]
+                if rep_penalty and rep_penalty != 1.0 and depths:
+                    # CTRL-style repetition penalty over tokens already generated this turn
+                    for tid in set(ids[0, -len(depths):].tolist()):
+                        v = logits[tid]
+                        logits[tid] = v / rep_penalty if v > 0 else v * rep_penalty
                 nxt = int(torch.argmax(logits))
                 ids = torch.cat([ids, torch.tensor([[nxt]], device=ids.device)], dim=1)
                 if nxt == eos:

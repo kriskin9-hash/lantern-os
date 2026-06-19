@@ -42,26 +42,34 @@ be cleaned in the dataset next pass so it stops leaking into replies.
 
 ## Measured baseline (2026-06-18, RTX 3070 8GB)
 
-First leaderboard row, `ouro-fast` (cached path, Σ₀ adapter, 48-tok cap):
+Leaderboard rows (cached path, Σ₀ adapter, 48-tok cap):
 
-| label | accuracy | avg latency | tok/s |
+| label | accuracy | avg latency | notes |
 |---|---|---|---|
-| ouro-fast | **80%** (8/10) | 65.8 s | ~0.5–1.0 |
+| ouro-fast | **80%** (8/10) | 65.8 s | unmerged LoRA, eager attn |
+| **ouro-fast-merged-sdpa** | **80%** (8/10) | **23.7 s** | `OURO_MERGE=1 OURO_ATTN=sdpa` — **~2.8× faster, recommended** |
 
-Decode degeneration is **fixed** (coherent replies, no `✅✅✅`). But the benchmark
-surfaced the real blocker: **the cached path is still ~1 s/token** — model is fully on
-GPU (~6 GB, no offload), so this is **per-token compute**, not cache. Cause: Ouro's
-**4× weight-tied recurrence** (≈5.6B-equiv compute) × **unmerged LoRA** × the custom
-modeling's eager attention. Misses were #5 (multi-step arithmetic) and #6 (primary
-colors → answered RGB) — small-model reasoning limits.
+Decode degeneration is **fixed** (coherent replies, no `✅✅✅`). The benchmark then
+surfaced that the cached path was bottlenecked on **per-token compute** (model fully on
+GPU, ~6 GB, no offload): Ouro's **4× weight-tied recurrence** × **unmerged LoRA** ×
+eager attention. **Merging the LoRA + SDPA attention cut avg latency 65.8 s → 23.7 s at
+equal accuracy** — so the recommended serve config is `OURO_MERGE=1 OURO_ATTN=sdpa`.
+Persistent misses were #5 (multi-step arithmetic) and #6 (primary colors → answered
+RGB) — small-model reasoning limits, addressed by the roadmap (bigger base / cleaner tune).
+
+**Recommended serve command:**
+```
+OURO_MODEL=ByteDance/Ouro-1.4B OURO_ADAPTER=<adapter> OURO_MERGE=1 OURO_ATTN=sdpa \
+  python scripts/ouro_serve.py
+```
 
 ## Roadmap (highest-leverage first — speed is now the gating issue)
 
-1. **Per-token speed (the product gate).** Measured ~1 s/tok is too slow for chat.
-   Levers, each graded on the leaderboard: (a) **merge the LoRA** into base (kill
-   per-forward LoRA matmuls), (b) **SDPA/flash attention** if Ouro's modeling accepts
-   `attn_implementation`, (c) **fewer `total_ut_steps`** (speed↔quality tradeoff),
-   (d) a faster **runtime** (vLLM/TGI — note llama.cpp can't run the looped arch).
+1. **Per-token speed (the product gate).** (a) **merge the LoRA** ✅ done, (b) **SDPA
+   attention** ✅ done — together ~2.8× (65.8→23.7 s). Remaining: (c) **fewer
+   `total_ut_steps`** (speed↔quality tradeoff), (d) a faster **runtime** (vLLM/TGI —
+   note llama.cpp can't run the looped arch). 23.7 s/prompt is better but still not
+   interactive; (c)/(d) are the next pass.
 2. **Cache the deep loop** — `UniversalTransformerCache` in `loop_lm.generate` (today
    it re-runs the prefix per token); makes deep mode usable once (1) lands.
 3. **Bigger base only when it pays** — bench Ouro-2.6B/-Thinking vs 1.4B before VRAM spend.
