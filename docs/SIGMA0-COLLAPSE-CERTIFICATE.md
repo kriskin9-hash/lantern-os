@@ -7,7 +7,7 @@ account of why an ungrounded self-improving system tends to collapse or diverge.
 
 ## Plain-language summary
 
-**What this is.** A stability certificate — a computable test — for a system that
+**What this is.** A stability certificate — a computable test (a check a computer can run automatically) — for a system that
 updates itself over time, together with an honest account of what happens to a
 self-improving system that has *no contact with outside reality*.
 
@@ -127,6 +127,8 @@ status cannot silently drift.
 
 We study a dissipative nonlinear system
 
+*In plain words:* the state keeps changing over time, and how it changes depends on where it is now (`x`), what we feed in (`u`), and some slowly-shifting settings (`θ`) — the three symbols defined below.
+
 $$\dot{x} = f(x, u, \theta), \qquad x \in \mathbb{R}^n$$
 
 - `x` — internal state (for the router: a conversation's encoded state)
@@ -142,6 +144,8 @@ part `A_s = ½(A + Aᵀ)`. The non-symmetric (skew) part `A_k = ½(A − Aᵀ)`
 carries rotation and is **not** captured by `A_s`; the gap between the two is
 exactly what makes the general case in §1 harder than the symmetric one.
 
+*In plain words:* the symmetric part tracks whether a system shrinks toward a point (decay); the skew part tracks whether it also swirls around it (rotation). The easy, proven case has no swirl — and that swirl is exactly what makes the general case in §1 hard.
+
 ---
 
 ## 1. The collapse-guarantee theorem
@@ -155,6 +159,8 @@ Split the state space using the symmetric part `A_s`:
 - **active subspace** `M` — its orthogonal complement, projector `P_M`
 
 Define the Lyapunov function on the active modes only:
+
+*In plain words:* `V` is a single "energy" number that measures how far the system still is from going stuck. If we can show this number only ever shrinks, the system is provably settling down rather than running away.
 
 $$V(x) = \tfrac{1}{2}\,\lVert P_M\,x \rVert^2.$$
 
@@ -193,6 +199,8 @@ energy bound can fail outright:
 > integrating from `x₀ = [0.3, 1.0]` makes `V` *grow* `0.045 → 0.341` — a sign
 > violation of `V̇ ≤ 2αV`. Collapse still occurs here, but it is rescued by a
 > *different* argument (below), not by the energy proof.
+>
+> *In plain words:* this is us being honest about a limit. For swirling systems the simple energy argument can wrongly suggest things are blowing up; the system still settles, but only a more careful argument proves it.
 
 So for non-normal `A`, the §1 energy proof is **insufficient on its own**; the
 cross term must be separately bounded (e.g. via `‖P_M A P_N‖` and a small-gain /
@@ -261,12 +269,16 @@ already on the invariant manifold.
 **Definition (operational).** Σ₀ fires when **all four** conditions hold
 simultaneously:
 
+*In plain words: this section defines the smoke alarm. Σ₀ is the moment we declare the system "stuck" — when, by four independent measures at once, it has stopped learning anything new and can no longer tell its options apart. We are honest that this is a sensible rule of thumb we chose, not something the theorem forces.*
+
 | condition | meaning |
 |---|---|
 | `‖∇ₓL‖ < ε_g` | no optimization signal remains |
 | `rank(J_f) < ρ·n` | drift Jacobian has lost directional structure |
 | `Σ` isotropically flat | uncertainty has no preferred direction |
 | `‖∂H/∂u‖ < ε_c` | control cannot distinguish actions |
+
+*In plain words, the four together say: nothing left to learn, no direction left to move in, no uncertainty pointing anywhere useful, and no action that changes the outcome. A system in that corner has nowhere to go.*
 
 **This is a definition, not a consequence.** None of these four quantities is
 the spectral abscissa `α` that Theorem 1 uses. They are an *operational
@@ -395,7 +407,7 @@ eigenvalue readout above was the wrong early-warning. The correct one is *surpri
 relative to uncertainty*: the Kalman normalized innovation squared (NIS),
 `νᵀS⁻¹ν` with `ν = y − Cx̂`, `S = CΣCᵀ + R`. `NIS ≈ m` means model and reality
 agree; `NIS ≫ m` means the model is overconfident relative to reality — it has
-drifted and does not know it. This is the standard innovation-consistency χ² test
+drifted and does not know it. *In plain words: this measures how surprised the system should be given how confident it claims to be. A small value means its picture of the world matches what it sees; a large value means reality has diverged from its beliefs and it hasn't noticed.* This is the standard innovation-consistency χ² test
 (Bar-Shalom, Li & Kirubarajan 2001), and unlike `p_gate` it is a property the
 engine can actually compute: the `CovarianceField` already propagates Σ, but the
 rollout never fused an observation — `SurpriseMonitor` adds the missing
@@ -422,7 +434,7 @@ in the Σ₀ machinery; it is now closed.
 
 **Status: STANDARD CONSTRUCTION — correct, with a timescale-separation caveat.**
 
-The system is **multistable**. Collect its attractors `{A₁,…,A_k}` (fixed
+The system is **multistable**. In plain words: the system has several stable patterns it can settle into (think of valleys a marble could roll into). Each such resting pattern is an "attractor," and its "basin" is the set of starting points that all drain into it. Collect its attractors `{A₁,…,A_k}` (fixed
 points, limit cycles, strange attractors), each with a basin
 
 $$B_i = \{\, x_0 : \lim_{t\to\infty}\phi_t(x_0) \in A_i \,\}.$$
@@ -440,7 +452,7 @@ sets. It is correct, with one standard caveat: the induced chain is genuinely
 Markov only under **timescale separation** (fast intra-basin relaxation vs.
 slow inter-basin hops); without it, `P_ij` carries memory.
 
-**Safe passages.** A basin boundary studded with **saddles** (mixed-sign
+**Safe passages.** In plain words: the system threads narrow ridges between the valleys, neither captured by a trap nor flung away. A basin boundary studded with **saddles** (mixed-sign
 `Re λ`) has *stable manifolds* — ridges you can traverse without being captured
 by a deep attractor. "Spin the vanda fast" = ride a boundary saddle with
 rotation set by `Im λ`.
@@ -458,7 +470,7 @@ rotation set by `Im λ`.
 > python experiments/router_reservoir_G.py       # → data/sigma0/reservoir-G-output.jsonl
 > ```
 
-Each turn is encoded as `x = [novelty, self_repeat, echo, length] ∈ [0,1]⁴`
+Each turn is encoded as `x = [novelty, self_repeat, echo, length] ∈ [0,1]⁴` In plain words: we took a real chat log and turned every message into four numbers — how new it was, how much it repeated itself, how much it echoed the prompt, and how long it was — then watched where a self-feeding copy of the conversation drifts with nothing real to check itself against.
 (`router_sigma0_encoder.py`), with a local Jacobian fitted over a 10-turn
 sliding window via finite difference.
 
@@ -506,7 +518,7 @@ so the deliverable is the reproducible pipeline, not a population-level value.
 **Status: the one downstream claim worth keeping — but as a machine-learning
 claim, on ML evidence, NOT as a consequence of the physics or of §6.**
 
-The same equations read as a safety argument:
+The same equations read as a safety argument: In plain words: a powerful AI that only ever learns from its own outputs — never checking against the real world — has no good long-term outcome. It either freezes into a dead, self-agreeing rut or runs away with no limit. The thing that saves it is staying tethered to reality: real data, real feedback.
 
 A system that **"comes out of its own eyes"** — that optimizes against its own
 representations with no external anchor — is the flow `ẋ = f(x)` where `f` only
@@ -524,7 +536,7 @@ projection back onto the real domain). **Grounding is the safety mechanism.**
 This is the strongest part of the document, and it **does not need the
 certificate's physics or the §6 numbers** to stand. It is the documented
 phenomenon of **model collapse** — the degradation of learned models when trained
-recursively on synthetic data. Key recent works:
+recursively on synthetic data. In plain words: it is like repeatedly photocopying a photocopy — each generation trained on the previous one's output gets a little worse. Key recent works:
 
 - **Dohmatob, Feng, Yang, Charton & Kempe**, *A Tale of Tails: Model Collapse as
   a Change of Scaling Laws* (arXiv:2402.07043, ICML 2024) shows synthetic data
@@ -589,7 +601,7 @@ contraction math is attributed to Lohmiller & Slotine 1998 and Khalil 2002).*
 ## Appendix A: Router Demonstration Design (original sketch)
 
 > **ℹ HISTORICAL.** This appendix preserves the *original* design sketch and its
-> hand-entered numbers for provenance. The demonstration is now implemented and
+> hand-entered numbers for provenance. In plain words: this section is just the first guess we wrote down before running the real test — its numbers were never confirmed by data (see §6 for what actually happened). The demonstration is now implemented and
 > reproducible — see §6 for the produced results. The "parrot attractor" numbers
 > below were the pre-implementation hypothesis and were **not** confirmed by the
 > real run (the data settles at high-novelty / low-echo instead).
