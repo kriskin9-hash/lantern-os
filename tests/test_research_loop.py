@@ -17,6 +17,7 @@ from src.convergence.research import (
     ResearchLoop,
     ResearchProgram,
     duckduckgo_search,
+    web_search,
     heuristic_reasoner,
     _jaccard,
     _overlap,
@@ -89,6 +90,43 @@ def test_searcher_gives_up_after_retries(monkeypatch):
     out = rm.duckduckgo_search("q", retries=3, _sleep=lambda s: None)
     assert out == []
     assert calls["n"] == 3
+
+
+def _clear_search_keys(monkeypatch):
+    for k in ("BRAVE_SEARCH_API_KEY", "SERPER_API_KEY", "TAVILY_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+
+
+def test_web_search_prefers_keyed_provider(monkeypatch):
+    import src.convergence.research as rm
+    _clear_search_keys(monkeypatch)
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "k")
+    monkeypatch.setattr(rm, "_brave_search",
+                        lambda q, n, key: [{"rank": 1, "title": "b", "url": "https://brave.example", "snippet": "s"}])
+    monkeypatch.setattr(rm, "duckduckgo_search", lambda q, n=5: [{"rank": 1, "url": "https://ddg.example"}])
+    out = rm.web_search("q", 5)
+    assert out[0]["url"] == "https://brave.example"  # keyed provider wins
+
+
+def test_web_search_falls_back_to_ddg_without_key(monkeypatch):
+    import src.convergence.research as rm
+    _clear_search_keys(monkeypatch)
+    monkeypatch.setattr(rm, "duckduckgo_search",
+                        lambda q, n=5: [{"rank": 1, "title": "d", "url": "https://ddg.example", "snippet": "s"}])
+    out = rm.web_search("q", 5)
+    assert out[0]["url"] == "https://ddg.example"
+
+
+def test_web_search_skips_failing_provider(monkeypatch):
+    # keyed provider configured but erroring/empty → fall back to DDG, no crash
+    import src.convergence.research as rm
+    _clear_search_keys(monkeypatch)
+    monkeypatch.setenv("BRAVE_SEARCH_API_KEY", "k")
+    def boom(q, n, key): raise RuntimeError("provider down")
+    monkeypatch.setattr(rm, "_brave_search", boom)
+    monkeypatch.setattr(rm, "duckduckgo_search", lambda q, n=5: [{"rank": 1, "url": "https://ddg.example"}])
+    out = rm.web_search("q", 5)
+    assert out[0]["url"] == "https://ddg.example"
 
 
 # ───────────────────────────── text utilities ─────────────────────────────

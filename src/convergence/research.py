@@ -28,6 +28,7 @@ Reference: CONVERGANCE-SIGMA0-BRIEFING.md (External Reality Rule), convergence-c
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 import urllib.parse
@@ -205,6 +206,87 @@ def _normalize_ddg_url(href: str) -> str:
     return href
 
 
+# ─────────────────────── keyed search providers (the reliability fix) ───────────────────────
+# DuckDuckGo-lite scraping is throttle-fragile under the loop's burst pattern. When a
+# search-API key is present in the environment, use it instead — clean JSON, no scraping,
+# no soft rate-limits. Falls back to the hardened DuckDuckGo scraper when no key is set.
+
+def _json_post(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout: int = 15) -> Dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", **headers}, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def _json_get(url: str, headers: Dict[str, str], timeout: int = 15) -> Dict[str, Any]:
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
+def _brave_search(query: str, max_results: int, api_key: str) -> List[Dict[str, Any]]:
+    """Brave Search API — https://api.search.brave.com (free tier available)."""
+    url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode(
+        {"q": query, "count": max_results})
+    data = _json_get(url, {"Accept": "application/json", "X-Subscription-Token": api_key})
+    hits = (data.get("web") or {}).get("results") or []
+    return [
+        {"rank": i + 1, "title": h.get("title", ""), "url": h.get("url", ""), "snippet": h.get("description", "")}
+        for i, h in enumerate(hits[:max_results])
+    ]
+
+
+def _serper_search(query: str, max_results: int, api_key: str) -> List[Dict[str, Any]]:
+    """Serper.dev (Google results) — https://google.serper.dev/search."""
+    data = _json_post("https://google.serper.dev/search", {"q": query, "num": max_results},
+                      {"X-API-KEY": api_key})
+    hits = data.get("organic") or []
+    return [
+        {"rank": i + 1, "title": h.get("title", ""), "url": h.get("link", ""), "snippet": h.get("snippet", "")}
+        for i, h in enumerate(hits[:max_results])
+    ]
+
+
+def _tavily_search(query: str, max_results: int, api_key: str) -> List[Dict[str, Any]]:
+    """Tavily Search API — https://api.tavily.com/search."""
+    data = _json_post("https://api.tavily.com/search",
+                      {"api_key": api_key, "query": query, "max_results": max_results}, {})
+    hits = data.get("results") or []
+    return [
+        {"rank": i + 1, "title": h.get("title", ""), "url": h.get("url", ""), "snippet": h.get("content", "")}
+        for i, h in enumerate(hits[:max_results])
+    ]
+
+
+def web_search(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    """Default Lantern searcher: a keyed search API if one is configured, else the
+    hardened DuckDuckGo-lite scraper.
+
+    Set ONE of these in the environment to get reliable, throttle-free search:
+    `BRAVE_SEARCH_API_KEY` (recommended; free tier), `SERPER_API_KEY`, or
+    `TAVILY_API_KEY`. With none set it falls back to DuckDuckGo scraping, which works
+    but is rate-limit-fragile under bursts. Still fully pluggable — pass `searcher=`
+    to ResearchLoop to override entirely.
+    """
+    # Provider refs resolved per call (so they stay overridable/testable). First key wins.
+    for env_var, provider in (
+        ("BRAVE_SEARCH_API_KEY", _brave_search),
+        ("SERPER_API_KEY", _serper_search),
+        ("TAVILY_API_KEY", _tavily_search),
+    ):
+        key = os.environ.get(env_var)
+        if not key:
+            continue
+        try:
+            results = provider(query, max_results, key)
+        except Exception:
+            results = []
+        if results:
+            return results
+        # keyed provider configured but returned nothing → try the next / DDG
+    return duckduckgo_search(query, max_results)
+
+
 # ───────────────────────────── default reasoner ─────────────────────────────
 
 def heuristic_reasoner(question: str, evidence: List[Any]) -> List[Dict[str, Any]]:
@@ -374,7 +456,7 @@ class ResearchLoop:
         min_sources: int = 2,
         similarity_threshold: float = 0.45,
     ):
-        self.searcher: Searcher = searcher or duckduckgo_search
+        self.searcher: Searcher = searcher or web_search
         self.reasoner: Reasoner = reasoner or heuristic_reasoner
         self.data_dir = Path(data_dir)
         self.min_sources = min_sources
