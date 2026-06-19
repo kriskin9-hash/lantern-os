@@ -788,6 +788,14 @@ async function handleStreamChat(req, url, res) {
   const sendRoute = (route) => sse.sendRoute(res, route);
   const sendReceipt = (receipt) => sse.sendReceipt(res, receipt);
 
+  // Degradation tracking (issue #740): set true once we attempt any CLOUD
+  // provider. If the cascade then falls through to the local Ollama last-resort
+  // fallback, every attempted cloud provider failed and we are answering with the
+  // weak local model — surfaced via sendDone's degraded flag below. Local-first
+  // Ollama (Provider 0) is intended and does NOT set this flag. Declared here so
+  // the sendDone closure can read it (it is only invoked after the cascade runs).
+  let cloudAttempted = false;
+
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
     const signature = {
@@ -808,11 +816,17 @@ async function handleStreamChat(req, url, res) {
     // happens, flag it so the UI shows "degraded — local model" instead of
     // passing the weak answer off as the normal route. Explicit ollama/local
     // requests are intentional and not flagged.
+    //
+    // Gate on `cloudAttempted`: only flag when a cloud provider was actually tried
+    // and failed. On a local-first install with no cloud keys (the product's
+    // "runs locally, no account/cloud required" mode) Ollama is the intended path,
+    // not a degradation — flagging it there would be a false positive.
     const isLocalSource = source === "ollama" || source === "offline";
-    const degradedLocal = isLocalSource && !requestedProvider && !isRpMode;
+    const degradedLocal = isLocalSource && !requestedProvider && !isRpMode && cloudAttempted;
     let finalRouteLabel = routeLabel;
     if (degradedLocal) {
       signature.degraded = true;
+      signature.degradedReason = "Cloud providers unreachable — answered with the local model";
       finalRouteLabel = `${routeLabel} · ⚠ degraded — local model (cloud unreachable)`;
     }
     // Σ₀ verify: fire-and-forget — logs claims to convergence/records.jsonl
@@ -1367,6 +1381,7 @@ async function handleStreamChat(req, url, res) {
   // Provider 1: Gemini (streaming) — cloud fallback
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (geminiKey && message && ((!requestedProvider && !autoPrefersAnthropic) || requestedProvider === "gemini" || requestedProvider === "google" || requestedProvider.startsWith("gemini-"))) {
+    cloudAttempted = true;
     // Gemini model fallback chain: primary -> fallbacks on 429/quota
     // Note: gemini-2.0-flash-lite shut down June 1 2026; gemini-3.5-flash is GA with free grounding
     const GEMINI_MODEL_CHAIN = [
@@ -1477,6 +1492,7 @@ async function handleStreamChat(req, url, res) {
   // Provider 2: Anthropic Claude (streaming)
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (anthropicKey && message && (!requestedProvider || requestedProvider === "claude" || requestedProvider === "anthropic" || requestedProvider === "claude-sonnet")) {
+    cloudAttempted = true;
     try {
       let claudeModel = "claude-haiku-4-5-20251001";
       if (requestedProvider === "claude-sonnet") {
@@ -1582,6 +1598,7 @@ async function handleStreamChat(req, url, res) {
   // Provider 3: OpenAI (streaming)
   const openaiKey = process.env.OPENAI_API_KEY;
   if (openaiKey && message && (!requestedProvider || requestedProvider === "openai" || requestedProvider === "gpt")) {
+    cloudAttempted = true;
     try {
       const payload = JSON.stringify({
         model: modelFor("openai"),
@@ -1660,6 +1677,7 @@ async function handleStreamChat(req, url, res) {
   // Provider 4: Grok / xAI (streaming — OpenAI-compatible)
   const xaiKey = process.env.XAI_API_KEY;
   if (xaiKey && message && (!requestedProvider || requestedProvider === "grok" || requestedProvider === "xai")) {
+    cloudAttempted = true;
     try {
       const xaiModel = modelFor("xai");
       const payload = JSON.stringify({
