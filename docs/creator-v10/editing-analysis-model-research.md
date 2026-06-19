@@ -174,3 +174,18 @@ A1 makes the headline pacing feature real; A4 + the shipped calibration set make
   calibration namespace. Tests: `tests/test_retention_curve.js` (10/10) + A1 (8/8) +
   calibration (12/12). Honesty: sparse/unknown curves yield nulls, never guesses.
   **Next: A3 (Whisper speech → measured hook/CTA/caption features).**
+- **2026-06-19 — A3 DONE (speech features).** New `apps/lantern-garage/lib/speech-features.js`:
+  `parseWhisperJson()` (tolerant of `{segments}` or bare array) + pure
+  `deriveSpeechFeatures(segments, durationSec)` → measured `hookStyle`
+  (question/countdown/shock/reaction/text), `wordsPerSec` (real caption density),
+  `speechCoverage`, CTA presence/timestamp/position, and `deadAirMaxSec` (largest gap
+  to cut). `viral-score-v10.js deriveSignals` surfaces these when
+  `analysis.metadata.speech.measured`; numeric ones (`wordsPerSec`, `speechCoverage`,
+  `deadAirMaxSec`) added to the calibration feature keys. The Whisper invocation is a
+  thin `transcribeToSpeechFeatures()` wrapper that honestly returns `measured:false`
+  when the CLI/model is absent (not unit-tested). Tests: `tests/test_speech_features.js`
+  (6/6) + A1 (8/8) + A4 (10/10) + calibration (12/12). **Next: B1 (hook-first variant
+  assembly against the >70% intro-retention target).** *Pipeline wiring note:* the
+  analysis job-worker does not yet call `transcribeToSpeechFeatures` to populate
+  `metadata.speech` — that integration (+ optional whisper dependency) is the
+  remaining glue for A3 to run end-to-end on uploads.

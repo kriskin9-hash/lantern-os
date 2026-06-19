@@ -35,6 +35,7 @@ const SIGNAL_KEYS = [
   "durationSec", "highlightsCount", "timeToFirstEventSec", "cutsPerMin",
   "avgShotLengthSec", "coverage", "gapCV", "audioActivityPerMin", "audioPeak",
   "multiSignalSpikesPerMin", "endPayoff", "lateSurprise", "excessMotion", "strongBeats",
+  "wordsPerSec", "speechCoverage", "deadAirMaxSec",
 ];
 const HEADLINE_KEYS = ["viralScore", "predictedCompletionRate", "predictedShareRate"];
 
