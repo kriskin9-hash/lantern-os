@@ -4,7 +4,7 @@
 account of why an ungrounded self-improving system tends to collapse or diverge.*
 
 Status: **Theorem 1 is proven and machine-checked** (`src/cio_sde/collapse.py`,
-`tests/test_cio_sde.py` — **29 passing, 1 xfail** pending [#657]) **for the symmetric /
+`tests/test_cio_sde.py` — **30 passing, 0 xfail**, [#657] closed) **for the symmetric /
 normal case**. The collapse trigger (§2), the anti-collapse operator (§3), and the
 early-warning readout (§4) are control-design heuristics — empirically supported, not
 theorems. The §6 demonstration is now **reproducible**: both driver scripts are
@@ -348,13 +348,13 @@ growing error) during the gap before an unobserved disturbance "rustles" into a
 visible dimension and the NIS spikes past threshold. The dangerous state is not the
 spook — it is the quiet that precedes it.
 
-**Residual ([#657]).** The monitor is wired into `engine.forward_step`, but in the
+**Resolved ([#657]).** The monitor is wired into `engine.forward_step`, but in the
 shipped engine the observation is the identity (`y = x`): during collapse the
 innovation `ν = y − Cx̂ → 0`, so the canary may not fire on the very trajectory it
-is meant to catch. `test_surprise_monitor_integration` is `xfail` until an
-observation model with genuine reality-coupling is supplied; flipping that test to a
-hard pass is the acceptance check. This is the only open technical gap in the Σ₀
-machinery as of 2026-06-16.
+is meant to catch. `test_surprise_monitor_integration` was `xfail` until an
+observation model with genuine reality-coupling was supplied; [#657] is now closed
+(`forward_step` runs a Kalman predict/update cycle), and that test is a **hard pass**.
+This was the last open technical gap in the Σ₀ machinery; closed 2026-06-16.
 
 ---
 
@@ -593,7 +593,7 @@ the hand-entered claims in this appendix are kept only for provenance.
 ---
 
 *Source of record: `src/cio_sde/collapse.py` (Theorem 1, Σ₀, Σ₀⁻¹);
-`tests/test_cio_sde.py` (29 passing, 1 xfail pending [#657]); framework `docs/sigma0-collapse-certificate.tex`.
+`tests/test_cio_sde.py` (30 passing, 0 xfail; [#657] closed); framework `docs/sigma0-collapse-certificate.tex`.
 The router demonstration scripts `experiments/router_sigma0_encoder.py` and
 `experiments/router_reservoir_G.py` are **committed and reproducible** — see §6
 for produced results and Appendix A for the original design sketch.*
