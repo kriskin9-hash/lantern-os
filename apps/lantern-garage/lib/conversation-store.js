@@ -1,10 +1,14 @@
 const path = require("path");
-const { appendJsonlQueued, readJsonl } = require("./file-queue");
+const { appendJsonlQueued, readJsonl, rotateJsonlIfNeeded } = require("./file-queue");
 
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 const conversationLogPath = path.join(repoRoot, "data", "conversations", "garage-conversations.jsonl");
 const operatorNotesPath = path.join(repoRoot, "data", "operator-notes", "notes.jsonl");
 const maxConversationTextLength = 4000;
+// #771 — bound the append-only conversation log. Rotate to timestamped archives past the
+// size cap and keep only the most recent N. Tunable via env.
+const conversationLogMaxBytes = Math.max(64 * 1024, Number(process.env.CONV_LOG_MAX_BYTES) || 5 * 1024 * 1024);
+const conversationLogKeepArchives = Math.max(0, Number(process.env.CONV_LOG_KEEP_ARCHIVES) || 5);
 
 function normalizeConversationEntry(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -33,6 +37,19 @@ function normalizeConversationEntry(input) {
 
 async function appendConversationEntry(entry) {
   await appendJsonlQueued(conversationLogPath, entry);
+  // #771: keep the file bounded — rotate + prune once it exceeds the cap (serialized
+  // behind the append in the same per-path write queue).
+  return rotateJsonlIfNeeded(conversationLogPath, {
+    maxBytes: conversationLogMaxBytes,
+    keepArchives: conversationLogKeepArchives,
+  });
+}
+
+function rotateConversationLogIfNeeded() {
+  return rotateJsonlIfNeeded(conversationLogPath, {
+    maxBytes: conversationLogMaxBytes,
+    keepArchives: conversationLogKeepArchives,
+  });
 }
 
 function readConversationLog(limit = 50) {
@@ -94,6 +111,7 @@ function readOperatorQueue() {
 module.exports = {
   normalizeConversationEntry,
   appendConversationEntry,
+  rotateConversationLogIfNeeded,
   readConversationLog,
   normalizeRagCacheItem,
   appendExternalRagItem,
