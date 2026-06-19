@@ -1,0 +1,164 @@
+# Editing & Analysis Model Research — Improvement Plan
+
+**Status:** research (no code committed beyond this doc)
+**Date:** 2026-06-19
+**Scope:** concrete, implementable improvements to the two model families behind the
+creator dashboard — the **analysis model** (perception: what's in the clip) and the
+**editing model** (decision: how to cut/order it). Grounded in the current code and
+in current short-form/highlight-detection methods. Builds on
+[learning-pipeline-research.md](learning-pipeline-research.md) and the shipped
+analytics-calibration module.
+
+Every improvement here obeys the project's two non-negotiables: **no fabricated
+metrics** (External Reality Rule) and **one loop, not a parallel engine** — each item
+strengthens Observe/Reason/Verify, it does not add a new subsystem.
+
+---
+
+## A. Analysis model (perception)
+
+### Current mechanism (verified in code)
+`apps/lantern-garage/lib/highlight-engine.js` runs three ffmpeg passes (motion,
+audio loudness, scene difference) over the operator's own clip and merges them into a
+`HighlightTimeline`. `viral-score-v10.js → deriveSignals()` then turns that timeline
+into the signals the scorer uses.
+
+### Weaknesses (honest)
+1. **"Cuts" are not cuts.** `deriveSignals` computes `cutsPerMin = highlights.length / durationMin`
+   (`viral-score-v10.js:45`). That's *number of detected highlights*, not the clip's
+   real shot-boundary rate. Pacing, retention, and caption-potential all lean on this
+   proxy.
+2. **Highlight selection is a hand-tuned composite** (gameplay-first weighting). It has
+   no notion of *novelty* or *recurrence* — a loud-but-boring repeated moment scores
+   like a genuinely surprising one.
+3. **No speech understanding.** Hook *type*, CTA placement, and caption density are
+   inferred from audio energy, not from what is actually said.
+4. **No outcome grounding.** Signals are never checked against where viewers actually
+   drop off.
+
+### Improvements
+
+**A1 — Real shot-boundary detection (measured `cutsPerMin`).**
+Replace the highlight-count proxy with true shot boundaries. PySceneDetect's
+`AdaptiveDetector` (rolling average of HSV frame differences) is the right choice for
+gaming's fast motion; `ContentDetector` for talking-head. Best practice from the
+project itself applies: *tune the threshold against your own samples* (generate the
+stats file, don't trust the default 30 — ~27 is a better starting point). Output: a
+measured `cutsPerMin`, `avgShotLengthSec`, and shot-length variance, all with
+`own_render` provenance so the calibration set and `score-engine` `FEATURE_KEYS` get a
+*real* number instead of a proxy. No new heavy dependency is strictly required — an
+honest first cut can reuse the ffmpeg `select='gt(scene,...)'` scores already in the
+pipeline; PySceneDetect is the accuracy upgrade.
+
+**A2 — Unsupervised audio-visual recurrence for highlight scoring.**
+Current SOTA for *label-free* highlight detection scores moments by how much they
+stand out from the rest of the same video (and from a cluster of similar videos) —
+"audio-visual recurrence." This fits the honesty rule perfectly: it is
+**self-supervised on the user's own clip**, inventing no external labels. Concretely:
+embed short windows (audio + visual), score each window by its distance from the
+clip's typical window; surprising = far. This replaces "max(motion, audio, scene)"
+with a novelty signal and directly attacks weakness #2. Start cheap (per-window
+feature distance), upgrade to learned embeddings (VideoMAE/CLIP + audio) later.
+
+**A3 — Speech layer (Whisper) → measured hook/CTA/caption features.**
+Transcribe with Whisper; derive *measured* features: hook style (question / claim /
+countdown) from the first-window text, CTA presence + timestamp, words-per-second
+(true caption density), and silence gaps ("dead air" to cut). This is Layer 2 from the
+pipeline research, and it converts three currently-faked features into real ones.
+
+**A4 — Retention-curve alignment (the highest-leverage item).**
+The analytics calibration set now exists. YouTube/TikTok expose a **second-by-second
+retention curve**, and the platform's own ranking signal is *intro retention* (% past
+3 s, target > 70%) and *% viewed*, not total watch time. So: ingest the retention
+curve, align it to the edit timeline, and attribute **drop-off cliffs to the specific
+edit at that timestamp**. A healthy curve is a gentle decline; a cliff means "something
+happened here." This turns the analysis model from "guess what's good" into "learn,
+from your own audience, exactly which edits shed viewers." It plugs straight into the
+calibration module as a richer outcome than the single `avgPercentViewed` scalar.
+
+---
+
+## B. Editing model (decision)
+
+### Current mechanism
+`variant-engine-v10.js` selects and orders real highlight segments into 5 strategy
+variants, each re-scored by `scoreVideoV10` and ranked by viral score. Weights are
+heuristic priors in `research/viral_patterns.json` (`calibrated:false`).
+
+### Improvements
+
+**B1 — Hook-first assembly against the > 70% intro-retention target.**
+Make the first 1–3 s a hard constraint, not a soft score: the opening segment must be
+the strongest *novelty* moment (A2) or a strong spoken hook (A3). Current code rewards
+an early event; the change is to *guarantee* a high-intro-retention opener because that
+is the single measured lever the algorithm rewards most.
+
+**B2 — Drop-off-aware cutting (needs A4 + calibration).**
+Once retention curves are aligned, penalize segment *types* that historically precede
+cliffs in the operator's own data, and favor those that hold a flat curve. This is the
+editing model consuming the Verify stage — the first genuinely *calibrated* editing
+decision, gated behind the same ≥100-outcome threshold as everything else.
+
+**B3 — Curiosity-stacking / open-loop ordering.**
+Order segments so each delivers one payoff while opening the next loop, rather than
+front-loading all payoffs. Implementable now as an ordering heuristic over the existing
+segment scores; validate later via B2.
+
+**B4 — Calibrated re-weighting of the priors.**
+Today `viral_patterns.json` weights are fixed guesses. Once `calibration.correlations()`
+is calibrated, use the measured feature↔outcome correlations to *re-weight* the
+components (with shrinkage toward the priors, never a hard overwrite), and flip
+`calibrated:true`. This closes the loop: Observe (A1–A3) → Reason (score/variant) →
+Verify (A4/calibration) → Converge (B4).
+
+---
+
+## Prioritization
+
+| # | Item | Effort | Unblocks | Honesty risk |
+|---|------|--------|----------|--------------|
+| 1 | **A1** real shot boundaries | low (reuse ffmpeg) → med (PySceneDetect) | real `cutsPerMin` everywhere | none |
+| 2 | **A4** retention-curve alignment | med | B2, true calibration | none (own data) |
+| 3 | **A3** Whisper speech features | med | real hook/CTA/caption | none |
+| 4 | **A2** recurrence highlight scoring | med→high | better selection | none (self-supervised) |
+| 5 | **B1** hook-first assembly | low | intro-retention gains | none |
+| 6 | **B4** calibrated re-weighting | low (after #2) | `calibrated:true` | gated by data |
+
+**Recommended order:** A1 → A4 → A3 → B1 → A2 → B2/B4. A1 and A4 are the foundation:
+A1 makes the headline pacing feature real; A4 + the shipped calibration set make the
+*editing* decisions answerable to the operator's actual audience instead of priors.
+
+## Validation (consistent with the honesty rule)
+- A1: compare measured shot boundaries to a hand-counted sample of the operator's own
+  clips (tune threshold on those samples, per PySceneDetect guidance).
+- A2/A3/A4: store as `own_render` measured features; they earn trust only when the
+  calibration correlations show they track real outcomes — never asserted as predictive
+  before that.
+- B2/B4: stay behind the existing ≥100-labeled-outcome gate; until then the dashboard
+  keeps showing structural estimates labeled "not calibrated."
+
+## Sources
+- [Unsupervised Video Highlight Detection by Learning from Audio and Visual Recurrence (arXiv 2407.13933)](https://arxiv.org/abs/2407.13933)
+- [The Effective Highlight-Detection Model for Video Clips Using Spatial–Perceptual (MDPI Electronics 2025)](https://www.mdpi.com/2079-9292/14/18/3640)
+- [Deep Unsupervised Multi-View Detection of Video Game Stream Highlights (arXiv 1807.09715)](https://arxiv.org/pdf/1807.09715)
+- [PySceneDetect — Detection Algorithms (ContentDetector vs AdaptiveDetector vs ThresholdDetector)](https://www.scenedetect.com/docs/latest/api/detectors.html)
+- [PySceneDetect threshold tuning discussion (issue #246)](https://github.com/Breakthrough/PySceneDetect/issues/246)
+- [Ideal YouTube Shorts length & format for retention (OpusClip)](https://www.opus.pro/blog/ideal-youtube-shorts-length-format-retention)
+- [How the YouTube Shorts algorithm works in 2025 — intro retention (Shortimize)](https://www.shortimize.com/blog/how-does-youtube-shorts-algorithm-work)
+
+---
+
+## Progress log (autonomous research loop)
+
+- **2026-06-19 — A1 DONE (real shot boundaries).** `highlight-engine.js` now aggregates
+  the already-detected scene cuts into a measured `shotBoundaries` block
+  (`cutsPerMin`, `avgShotLengthSec`, `shotLengthCV`, count, source `ffmpeg_scene_hsv`,
+  `measured` flag) via the pure, testable `computeShotMetrics()`. `viral-score-v10.js
+  deriveSignals` prefers the measured cut rate when present and flags
+  `cutsPerMinMeasured`, falling back to the highlight-count proxy otherwise;
+  `avgShotLengthSec` is exposed and added to the calibration feature keys. Tests:
+  `tests/test_shot_metrics.js` (8/8) + calibration regression (12/12).
+  No new dependency — reuses existing ffmpeg scene detection (PySceneDetect remains the
+  future accuracy upgrade). **Next: A4 (retention-curve alignment).**
+  *Note:* work moved to an isolated git worktree (`lantern-os-calib`) after the shared
+  tree switched branches mid-edit twice.

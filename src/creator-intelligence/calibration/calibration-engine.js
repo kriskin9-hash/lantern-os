@@ -33,7 +33,7 @@ function insufficient(have, need, reason) { return { status: "insufficient_data"
 // HighlightTimeline analysis of the user's own clip — see viral-score-v10.js).
 const SIGNAL_KEYS = [
   "durationSec", "highlightsCount", "timeToFirstEventSec", "cutsPerMin",
-  "coverage", "gapCV", "audioActivityPerMin", "audioPeak",
+  "avgShotLengthSec", "coverage", "gapCV", "audioActivityPerMin", "audioPeak",
   "multiSignalSpikesPerMin", "endPayoff", "lateSurprise", "excessMotion", "strongBeats",
 ];
 const HEADLINE_KEYS = ["viralScore", "predictedCompletionRate", "predictedShareRate"];

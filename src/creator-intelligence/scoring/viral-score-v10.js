@@ -43,7 +43,17 @@ function deriveSignals(analysis) {
     ? Math.min(...highlights.map((h) => h.start))
     : null;
 
-  const cutsPerMin = durationMin > 0 ? highlights.length / durationMin : 0;
+  // A1: prefer the MEASURED shot-boundary cut rate (real scene cuts) when the
+  // analysis carries it; fall back to the highlight-count proxy otherwise. The
+  // flag makes the provenance auditable downstream (and in calibration).
+  const shot = analysis.metadata && analysis.metadata.shotBoundaries;
+  const cutsPerMinMeasured = !!(shot && shot.measured && typeof shot.cutsPerMin === "number");
+  const cutsPerMin = cutsPerMinMeasured
+    ? shot.cutsPerMin
+    : (durationMin > 0 ? highlights.length / durationMin : 0);
+  const avgShotLengthSec = cutsPerMinMeasured && typeof shot.avgShotLengthSec === "number"
+    ? shot.avgShotLengthSec
+    : null;
   const coverage = clamp01(
     highlights.reduce((s, h) => s + (h.duration || Math.max(0, (h.end || 0) - (h.start || 0))), 0) / durationSec
   );
@@ -81,7 +91,7 @@ function deriveSignals(analysis) {
   return {
     durationSec, durationMin, highlightsCount: highlights.length,
     hasAudioSignal: audioHl.length > 0,
-    timeToFirstEventSec, cutsPerMin, coverage,
+    timeToFirstEventSec, cutsPerMin, cutsPerMinMeasured, avgShotLengthSec, coverage,
     gapCV, audioActivityPerMin, audioPeak, multiSignalSpikesPerMin,
     endPayoff, lateSurprise, excessMotion, strongBeats,
   };
