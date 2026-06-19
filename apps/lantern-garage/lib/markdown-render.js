@@ -173,7 +173,7 @@ function renderMarkdownDocument(markdown, sourcePath) {
   </a>
   <div class="nav-links">
     <a href="/">Home</a>
-    <a href="/dream-chat.html">Journal</a>
+    <a href="/dream-chat.html">Chat</a>
     <a href="/three-doors-game.html">Explore</a>
     <a href="/flourishing">Dashboard</a>
     <a href="/knowledgecenter.html">Help</a>
@@ -192,7 +192,7 @@ function renderMarkdownDocument(markdown, sourcePath) {
 
 <footer class="site-footer">
   <div class="footer-inner">
-    <span><strong>Keystone OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span><strong>Keystone OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Chat</a> · <a href="/three-doors-game.html">Explore</a></span>
     <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
   </div>
 </footer>
