@@ -8,7 +8,9 @@ const { analyzeVideoForHighlights } = require("./highlight-engine");
 const { generateCaptions } = require("./caption-engine");
 const { detectSafeZones } = require("./safe-zone-detector");
 const { reencodeToShortForm, renderSegments, probeSource, burnCaptionsToVideo } = require("./video-export");
-const { analyzeForCrop } = require("./safe-zone-v2");
+// Facecam V3-aware crop analysis: same plan as safe-zone-v2 but with the facecam
+// region upgraded by the thorough multi-window detector (falls back to v2 on error).
+const { analyzeForCropV3: analyzeForCrop } = require("./safe-zone-v3");
 const ci = require("../../../src/creator-intelligence");
 
 // Stage manifests — defines named stages and their progress weight for each job type.
