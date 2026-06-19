@@ -171,7 +171,35 @@ These mathematical frameworks are not isolated — they form an integrated cogni
 
 ---
 
+## 9. The 3¹² Convergence Lattice (CSF × Tesseract)
+
+The system's state space is a **balanced-ternary lattice**: `3 ** 12 = 531,441` cells, one
+ternary axis per Convergence-12 component. It is **one object seen from two faces** — the CSF
+format is the *storage* face (where the system is) and the Converged Tesseract is the *motion*
+face (where it is going). Use this when reasoning about memory layout, state compression, or
+where a convergence trajectory sits.
+
+- **Why base 3.** Ternary is the most economical integer radix (radix economy is minimised at
+  `e ≈ 2.718`, nearest integer 3); balanced ternary `{-1,0,+1}` gives symmetric arithmetic.
+  Same substrate as BitNet b1.58's ternary weights ([arXiv:2402.17764](https://arxiv.org/abs/2402.17764)).
+- **Sparsity.** Most cells are implicit "dust" (`quantum_dust.py`) — the storage twin of
+  BitNet's ~66 % zero-weight sparsity. "No change is free."
+- **Convergence.** A reasoning trajectory spirals toward a fixed point `h* ≈ f(h*)` via
+  contraction `‖Δh‖/‖h‖ < ε` (`loop_lm.converge_step`); STARS-style Jacobian Spectral Radius
+  Regularisation ([arXiv:2605.26733](https://arxiv.org/html/2605.26733)) is the literature's
+  route to guaranteeing the contraction. This is the same fixed-point story as §7's Σ₀
+  collapse certificate, restricted to the lattice.
+- **Status-Cube = `3**3` projection.** belief × observer × state is three of the twelve axes.
+
+**Implemented substrate:** `src/csf/v07/qutrit_delta.py` (`NUM_DIMENSIONS=12`), `quantum_dust.py`,
+`src/converged_tesseract.py`. **Full design + grounding + falsifiable experiments:**
+`docs/TESSERACT-CSF-SINGULARITY.md`.
+
+---
+
 ## Related Documentation
+- `docs/TESSERACT-CSF-SINGULARITY.md` — the 3¹² lattice (CSF ≡ Tesseract) design reference
+- `docs/research/2026-06-19-convergence-tesseract-spiral.md` — the spiral geometry paper
 
 - `docs/sigma0-collapse-certificate.tex` — Complete technical paper: Σ₀ collapse certificate, Lyapunov theorem, anti-collapse operator, and ASI warning. 20/20 tests verified.
 - `docs/SIGMA0-COLLAPSE-PLAIN-ENGLISH.docx` — Plain-English guide for non-technical readers.
