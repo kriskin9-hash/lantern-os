@@ -17,7 +17,7 @@ Six-stage loop:
 Reference: CONVERGANCE-SIGMA0-BRIEFING.md
 """
 
-from .objects import Memory, Task, Tool, ToolResult, ConvergenceRecord, TaskStatus
+from .objects import Memory, Task, Tool, ToolOutcome, ToolResult, ConvergenceRecord, TaskStatus
 from .kernel import Kernel
 from .research import ResearchLoop, ResearchProgram, ResearchReport, ResearchClaim
 
@@ -25,6 +25,7 @@ __all__ = [
     "Memory",
     "Task",
     "Tool",
+    "ToolOutcome",
     "ToolResult",
     "ConvergenceRecord",
     "TaskStatus",
