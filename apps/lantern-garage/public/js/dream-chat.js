@@ -661,8 +661,8 @@
               if (evt.type === "token" && evt.text) {
                 if (!hasTokens) { hasTokens = true; setThinking(false); }
                 fullText += evt.text;
-                streamTtsBuf += evt.text;
-                streamTtsFlush(false);
+                // Narration (top 🔊 toggle) — only speak replies when enabled.
+                if (window.narrateReplies) { streamTtsBuf += evt.text; streamTtsFlush(false); }
                 analytics.tokensReceived++;
                 cursor.remove();
                 // Strip [DOORS:...] tag during streaming; chips rendered on done
@@ -1190,7 +1190,7 @@
     setThinking(false);
     scrollToBottom();
     // TTS — flush remainder and wrap bubble for word highlighting
-    if (text && source !== "failed" && source !== "error") streamTtsFinish(text, bubble);
+    if (window.narrateReplies && text && source !== "failed" && source !== "error") streamTtsFinish(text, bubble);
   }
 
   function appendErrorNotice(row, msg) {
@@ -1548,7 +1548,9 @@
   // ════════════════════════════════════════════════════════════════
   //  Voice — STT (Web Speech API) + TTS
   // ════════════════════════════════════════════════════════════════
-  const voiceBtn = document.getElementById("voice-btn");
+  // STT "listening" feedback shows on the composer mic (#voice-input-btn).
+  // The top #voice-btn is now the narration toggle (speaks replies) — a separate control.
+  const voiceBtn = document.getElementById("voice-input-btn");
   let recognition = null;
   let isListening = false;
 
@@ -1577,10 +1579,11 @@
     recognition.onend = () => {
       isListening = false;
       voiceBtn.classList.remove("listening");
-      inputEl.placeholder = "Tell me a dream…";
-      const toSend = accumulated.trim();
+      inputEl.placeholder = "Write something, ask a question…";
+      // Dictation: drop the transcript into the composer for review (no auto-send).
+      const dictated = accumulated.trim();
       accumulated = "";
-      if (toSend) { inputEl.value = toSend; sendMessage(); }
+      if (dictated) { inputEl.value = dictated; inputEl.dispatchEvent(new Event("input")); try { inputEl.focus(); } catch (e) {} }
     };
     recognition.onerror = () => {
       isListening = false; voiceBtn.classList.remove("listening");
