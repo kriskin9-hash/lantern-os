@@ -250,6 +250,9 @@ data/profiles/*.csf
 # Open-video research: per-machine extracted features (never videos)
 research/open_video/features/*.jsonl
 
+# Creator Intelligence loop — per-machine checkpoint/metadata/calibration (never commit)
+research/ci_loop/
+
 # Open-video research: generated SQLite corpus (regenerate with --corpus)
 research/corpus.db
 
