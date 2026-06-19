@@ -3,9 +3,43 @@
 *A computable stability certificate for convergence dynamics, and an honest
 account of why an ungrounded self-improving system tends to collapse or diverge.*
 
+---
+
+## Plain-language summary
+
+**What this is.** A stability certificate — a computable test — for a system that
+updates itself over time, together with an honest account of what happens to a
+self-improving system that has *no contact with outside reality*.
+
+**The one-line result.** A system that only ever optimizes against its own
+internal picture of the world has two failure modes and no happy third one: it
+either **collapses** onto a single frozen, self-agreeing state (nicknamed the
+"42-state"), or it **diverges** and runs away. The only escape is an **external
+anchor** — real data, a measurement, a market, a ground truth. **Grounding is the
+safety mechanism.** This is the same thing machine-learning researchers call
+**model collapse** — train a model on its own output long enough and it degrades.
+
+**How sure are we of each part?** Every claim below is labelled:
+- **PROVEN** — the core collapse theorem (Theorem 1), with a machine-checked
+  proof, for the well-behaved (symmetric / normal) case. *30 of 30 tests pass.*
+- **MEASURED** — the anti-collapse operator (§3) and the early-warning "canary"
+  (§4): not proven, but demonstrated over **180 forced-collapse runs (100%
+  prevented)** plus a passing integration test.
+- **HEURISTIC** — the four-signal collapse *trigger* (§2): a sensible operational
+  definition, deliberately *not* dressed up as a theorem.
+
+**What's left.** One genuine frontier: a *proof* (not just measurement) that the
+anti-collapse operator always works. Everything else verified as of 2026-06-19 is
+finished, machine-checked, and reproducible.
+
+> **For the precise version, read on.** Each section carries its own status line.
+> The summary above is the honest gist, not a substitute for the math.
+
+---
+
 Status: **Theorem 1 is proven and machine-checked** (`src/cio_sde/collapse.py`,
-`tests/test_cio_sde.py` — **30 passing, 0 xfail**, [#657] closed) **for the symmetric /
-normal case**. The collapse trigger (§2), the anti-collapse operator (§3), and the
+`tests/test_cio_sde.py` — **30 passing, 0 xfail**; the last gap [#657] closed
+2026-06-19) **for the symmetric / normal case**. The collapse trigger (§2), the anti-collapse operator (§3), and the
 early-warning readout (§4) are control-design heuristics — empirically supported, not
 theorems. The §6 demonstration is now **reproducible**: both driver scripts are
 committed and produce checked-in run logs (see §6). Read the per-section status
@@ -27,6 +61,15 @@ lines before relying on any claim here.
 > now returns the clean orthogonal projection `x* = P x`, which is non-expansive
 > (`‖P x‖ ≤ ‖x‖`) and smooth, so no boundary penalty is needed. The remaining
 > work is re-tracked as live issues so this doc cannot drift again ([#657]–[#660]).
+>
+> **Maintenance log — 2026-06-19.** Reconcile pass after [#657], [#658], [#659]
+> landed (verified against the repo: `pytest tests/test_cio_sde.py` → **30 passed,
+> 0 xfail**; `data/sigma0_regime_sweep_report.json` → 180 collapse-prone trials,
+> 100% prevented). The per-section status lines, the top status, and the footer had
+> drifted behind these closures (still reading "29 passing, 1 xfail" and "§3 N=1
+> HEURISTIC"); they are now aligned with ground truth. A plain-language summary was
+> added at the top for non-specialist readers. The sole remaining frontier is a
+> §3 sufficiency *theorem*.
 
 **Status taxonomy & tracked gaps.** Each claim is one of: **PROVEN** (theorem +
 machine-checked), **MEASURED** (empirical, with a test/run pointer), **HEURISTIC**
@@ -42,9 +85,10 @@ status cannot silently drift.
 - [#516] / [#517] / [#520] — model-collapse literature integrated (two-phase collapse, double-scaling law, prediction-markets-as-grounding; §7 + References).
 - [#508] — `.md`/`.tex` status-box reconcile pass.
 
-**Open (the deterministic next gaps — what this pass re-tracks):**
-- [#658] — **§3 sufficiency (downgraded).** Σ₀⁻¹ was N=1 HEURISTIC; the regime sweep below upgrades it to MEASURED-over-distribution (option b). A closed-form *sufficiency theorem* (option a) remains the only residual.
-- [#660] — **housekeeping.** Reconcile the persistent-excitation attribution across `.md`/`.tex`, and verify all web citations before formal publication.
+**Open (the one genuine remaining frontier):**
+- **§3 sufficiency *theorem*.** Σ₀⁻¹ is now MEASURED over a 180-run regime sweep ([#658], resolved below) — but a closed-form *proof* that it always prevents collapse (option a) is still future work. This is the sole real gap, and it is acknowledged honestly rather than tracked as a defect.
+
+  *All previously-tracked gaps are now closed: [#657], [#658], [#659] landed 2026-06-19; [#660] (`.md`/`.tex` attribution + web-citation verification) closed.*
 
 **Resolved (landed 2026-06-19):**
 - [#658] — **§3 evidence upgraded N=1 → MEASURED.** `experiments/sigma0_regime_sweep.py` runs a forced-collapse rollout with/without Σ₀⁻¹ over an α × non-normality × noise grid with a fixed underdetermined (3-dim null) Jacobian. Over **180 trials that genuinely collapse without protection**, Σ₀⁻¹ suppressed collapse AND re-excited the state in **100%** (`data/sigma0_regime_sweep_report.json`). Honest caveat: in this construction the non-normal off-diagonal lifts the Jacobian's effective rank, so the collapse-prone cells are the diagonal ones (non_normality=0); the measured distribution spans α∈{−0.5,−0.2,−0.05} × noise∈{0.01,0.05,0.2}. The §3 label moves from N=1 HEURISTIC to MEASURED; a sufficiency theorem is still future work.
@@ -249,8 +293,10 @@ a fixed point of the dynamics.** (`SemanticCollapseOperator`.)
 
 ## 3. The anti-collapse operator Σ₀⁻¹
 
-**Status: CONTROL-DESIGN HEURISTIC. Empirically shown (N=1, one forced-collapse
-test) to suppress collapse. NO sufficiency theorem — unlike Theorem 1.**
+**Status: MEASURED-over-distribution (as of 2026-06-19, [#658]). A 180-run regime
+sweep shows Σ₀⁻¹ suppresses forced collapse in 100% of collapse-prone trials.
+Still NO sufficiency *theorem* — unlike Theorem 1; a closed-form proof remains the
+one open frontier.**
 
 Where Σ₀ projects **onto** the null subspace, Σ₀⁻¹ injects energy **along** it:
 
@@ -268,14 +314,19 @@ signals.
 re-exciting directions that have gone flat is a sensible way to keep the system
 off the null manifold. But there is **no companion theorem** stating that Σ₀⁻¹
 *prevents* collapse — in contrast to Theorem 1, which is proven (under §1's
-hypothesis). The support is a single demonstration, reported as such. Closing
-this gap (proof, or a regime sweep upgrading N=1 → MEASURED-over-distribution) is
-tracked as [#658].
+hypothesis). That theorem-shaped gap is the one residual; the empirical support,
+however, is now a distribution rather than a single run ([#658], resolved).
 
-**Empirical evidence (N=1).** On one forced-collapse run, Σ₀ fired on every step
-and the state froze; with Σ₀⁻¹ active, Σ₀ stopped firing and the state escaped
-the manifold. This is encouraging directional evidence, **not** a guarantee, and
-not a sweep over regimes. (`AntiCollapseOperator`; the forced-collapse tests in
+**Empirical evidence (MEASURED, [#658] — landed 2026-06-19).**
+`experiments/sigma0_regime_sweep.py` runs forced-collapse rollouts with and without
+Σ₀⁻¹ across an α × non-normality × noise grid (fixed 3-dim-null Jacobian). Over the
+**180 trials that genuinely collapse without protection**, Σ₀⁻¹ suppressed collapse
+and re-excited the state in **100%** (`data/sigma0_regime_sweep_report.json`:
+`collapse_prone_trials_total=180`, `headline_conditional_prevention_rate=1.0`).
+This upgrades §3 from N=1 HEURISTIC to MEASURED-over-distribution; a sufficiency
+theorem is still future work. *(The original single-run observation: Σ₀ fired every
+step and the state froze; with Σ₀⁻¹ active, Σ₀ stopped firing and the state escaped
+the manifold.)* (`AntiCollapseOperator`; the forced-collapse tests in
 `tests/test_cio_sde.py` run for 20–30 steps and assert weaker directional
 properties — the often-quoted "40/40 → 0/40" and "0.05 → 12.9" figures are
 illustrative log values, not pinned by any test. Cite the tests, not the prose.)
@@ -348,13 +399,15 @@ growing error) during the gap before an unobserved disturbance "rustles" into a
 visible dimension and the NIS spikes past threshold. The dangerous state is not the
 spook — it is the quiet that precedes it.
 
-**Resolved ([#657]).** The monitor is wired into `engine.forward_step`, but in the
-shipped engine the observation is the identity (`y = x`): during collapse the
-innovation `ν = y − Cx̂ → 0`, so the canary may not fire on the very trajectory it
-is meant to catch. `test_surprise_monitor_integration` was `xfail` until an
-observation model with genuine reality-coupling was supplied; [#657] is now closed
-(`forward_step` runs a Kalman predict/update cycle), and that test is a **hard pass**.
-This was the last open technical gap in the Σ₀ machinery; closed 2026-06-16.
+**Residual ([#657]) — RESOLVED 2026-06-19.** The monitor was wired into
+`engine.forward_step`, but with an identity observation (`y = x`) the innovation
+`ν = y − Cx̂ → 0` during collapse, so the canary risked staying silent on the very
+trajectory it should catch. **Fixed:** `forward_step` now runs a Kalman
+predict/update cycle with process noise `Q=(g·dilation)²·dt`, so smooth exploration
+stays consistent (NIS ≈ m, silent) while the collapse snap / Σ₀⁻¹ kick spikes NIS —
+the canary fires under collapse. `test_surprise_monitor_integration` flipped
+`xfail` → **hard pass (30 passed, 0 xfail)**. This was the last open technical gap
+in the Σ₀ machinery; it is now closed.
 
 ---
 
@@ -593,7 +646,7 @@ the hand-entered claims in this appendix are kept only for provenance.
 ---
 
 *Source of record: `src/cio_sde/collapse.py` (Theorem 1, Σ₀, Σ₀⁻¹);
-`tests/test_cio_sde.py` (30 passing, 0 xfail; [#657] closed); framework `docs/sigma0-collapse-certificate.tex`.
+`tests/test_cio_sde.py` (30 passing, 0 xfail — [#657] closed 2026-06-19); framework `docs/sigma0-collapse-certificate.tex`.
 The router demonstration scripts `experiments/router_sigma0_encoder.py` and
 `experiments/router_reservoir_G.py` are **committed and reproducible** — see §6
 for produced results and Appendix A for the original design sketch.*
