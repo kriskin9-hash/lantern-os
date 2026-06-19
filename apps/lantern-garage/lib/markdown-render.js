@@ -12,23 +12,28 @@ function inlineMarkdown(value) {
   return escapeHtml(value)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    // italics: single * or _ not adjacent to a word char on the open/close boundary
+    .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\w)/g, "$1<em>$2</em>")
+    .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!\w)/g, "$1<em>$2</em>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, href) => (
       `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`
     ));
 }
 
-function renderMarkdownDocument(markdown, sourcePath) {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+// Render an array of markdown lines to an array of HTML fragments.
+// Recursive so blockquotes can contain headings, lists, tables, etc.
+function renderBlock(lines) {
   const body = [];
   let inCode = false;
   let inList = false;
+  let listTag = "ul";
   let inTable = false;
   let tableRows = [];
-  let title = path.basename(sourcePath);
+  let quoteBuf = null;
 
   const closeList = () => {
     if (inList) {
-      body.push("</ul>");
+      body.push(`</${listTag}>`);
       inList = false;
     }
   };
@@ -47,9 +52,18 @@ function renderMarkdownDocument(markdown, sourcePath) {
       inTable = false;
     }
   };
+  const flushQuote = () => {
+    if (quoteBuf) {
+      body.push("<blockquote>");
+      renderBlock(quoteBuf).forEach((html) => body.push(html));
+      body.push("</blockquote>");
+      quoteBuf = null;
+    }
+  };
 
   lines.forEach((line) => {
     if (/^```/.test(line.trim())) {
+      flushQuote();
       closeList();
       closeTable();
       body.push(inCode ? "</code></pre>" : "<pre><code>");
@@ -60,6 +74,16 @@ function renderMarkdownDocument(markdown, sourcePath) {
       body.push(`${escapeHtml(line)}\n`);
       return;
     }
+    // Blockquote: gather consecutive `>` lines, strip the marker, render recursively.
+    const quote = /^\s*>\s?(.*)$/.exec(line);
+    if (quote) {
+      closeList();
+      closeTable();
+      if (!quoteBuf) quoteBuf = [];
+      quoteBuf.push(quote[1]);
+      return;
+    }
+    flushQuote();
     if (/^\s*\|.+\|\s*$/.test(line)) {
       closeList();
       inTable = true;
@@ -67,21 +91,30 @@ function renderMarkdownDocument(markdown, sourcePath) {
       return;
     }
     closeTable();
-    const heading = /^(#{1,4})\s+(.+)$/.exec(line);
+    // Horizontal rule: ---, ***, ___ (3+).
+    if (/^\s*([-*_])\1{2,}\s*$/.test(line)) {
+      closeList();
+      body.push("<hr>");
+      return;
+    }
+    const heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (heading) {
       closeList();
-      const level = heading[1].length;
-      if (level === 1) title = heading[2].trim();
+      const level = Math.min(heading[1].length, 6);
       body.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
       return;
     }
-    const listItem = /^\s*[-*]\s+(.+)$/.exec(line);
-    if (listItem) {
+    const ordered = /^\s*\d+\.\s+(.+)$/.exec(line);
+    const unordered = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (ordered || unordered) {
+      const tag = ordered ? "ol" : "ul";
+      if (inList && listTag !== tag) closeList();
       if (!inList) {
-        body.push("<ul>");
+        body.push(`<${tag}>`);
         inList = true;
+        listTag = tag;
       }
-      body.push(`<li>${inlineMarkdown(listItem[1])}</li>`);
+      body.push(`<li>${inlineMarkdown((ordered || unordered)[1])}</li>`);
       return;
     }
     if (!line.trim()) {
@@ -93,7 +126,16 @@ function renderMarkdownDocument(markdown, sourcePath) {
   });
   closeList();
   closeTable();
+  flushQuote();
   if (inCode) body.push("</code></pre>");
+  return body;
+}
+
+function renderMarkdownDocument(markdown, sourcePath) {
+  const normalized = markdown.replace(/\r\n/g, "\n");
+  const titleMatch = /^#\s+(.+)$/m.exec(normalized);
+  const title = titleMatch ? titleMatch[1].trim() : path.basename(sourcePath);
+  const body = renderBlock(normalized.split("\n"));
 
   return `<!doctype html>
 <html lang="en" data-theme="dark">
@@ -115,6 +157,11 @@ function renderMarkdownDocument(markdown, sourcePath) {
     .md-page th, .md-page td { border: 1px solid var(--border); padding: 9px; vertical-align: top; }
     .md-page th { text-align: left; background: var(--surface2); color: var(--muted); text-transform: uppercase; font-size: 0.78rem; }
     .md-page a { color: var(--accent); font-weight: 600; }
+    .md-page blockquote { margin: 20px 0; padding: 4px 20px; background: var(--surface); border-left: 4px solid var(--accent); border-radius: 0 8px 8px 0; }
+    .md-page blockquote h2 { margin-top: 14px; border-top: none; padding-top: 0; font-size: 1.25rem; }
+    .md-page blockquote h3 { margin-top: 12px; }
+    .md-page blockquote > :first-child { margin-top: 8px; }
+    .md-page hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
     .md-source { color: var(--muted); font-size: 0.86rem; margin-bottom: 24px; }
   </style>
 </head>
@@ -126,7 +173,7 @@ function renderMarkdownDocument(markdown, sourcePath) {
   </a>
   <div class="nav-links">
     <a href="/">Home</a>
-    <a href="/dream-chat.html">Journal</a>
+    <a href="/dream-chat.html">Chat</a>
     <a href="/three-doors-game.html">Explore</a>
     <a href="/flourishing">Dashboard</a>
     <a href="/knowledgecenter.html">Help</a>
@@ -145,7 +192,7 @@ function renderMarkdownDocument(markdown, sourcePath) {
 
 <footer class="site-footer">
   <div class="footer-inner">
-    <span><strong>Keystone OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Journal</a> · <a href="/three-doors-game.html">Explore</a></span>
+    <span><strong>Keystone OS</strong> · <a href="/">Home</a> · <a href="/dream-chat.html">Chat</a> · <a href="/three-doors-game.html">Explore</a></span>
     <span style="margin-left: auto;"><a href="/knowledgecenter.html">Help</a></span>
   </div>
 </footer>

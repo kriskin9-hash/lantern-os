@@ -1,5 +1,5 @@
 {
-  "built_at": 1781843457.3200023,
+  "built_at": 1781856362.2194524,
   "docs": [
     "README.md",
     "CLAUDE.md",
@@ -7,6 +7,7 @@
     "QUICKSTART.md",
     "docs/LANTERN-SIGMA0-CODER.md",
     "docs/OURO-LOOPLM.md",
+    "docs/research/2026-06-19-kernel-model-frontier.md",
     "docs/SIGMA0-OURO-CODER.md",
     "docs/CSF-FORMAT-SPECIFICATION.md",
     "docs/SIGMA0-COLLAPSE-CERTIFICATE.md",
@@ -18,6 +19,6 @@
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md"
   ],
-  "sections": 329,
-  "sha256": "7cc11c7c7de456c85d8e3e4cb4b4530c3a6531ba283a052de1b7d5b9d97e3a4f"
+  "sections": 339,
+  "sha256": "cbf5669df5a242b2bbb5dfa4d4c963a3d9b595f407da45471cb6a4c9ab407f5e"
 }
