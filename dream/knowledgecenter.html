@@ -42,6 +42,59 @@
     .link-card .icon { font-size: 22px; }
     .link-card h3 { font-size: 0.92rem; font-weight: 600; }
     .link-card p { font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+
+    /* PDF gallery */
+    .pdf-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+    .pdf-search {
+      flex: 1; min-width: 180px; padding: 7px 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: 0.88rem;
+    }
+    .pdf-search:focus { outline: none; border-color: var(--accent); }
+    .pdf-count { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+    .pdf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+    }
+    .pdf-card {
+      position: relative;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 12px 10px 10px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; text-decoration: none; color: var(--text);
+      transition: border-color 0.2s, background 0.2s, transform 0.15s;
+      overflow: hidden;
+    }
+    .pdf-card:hover { border-color: var(--accent); background: var(--surface2); transform: translateY(-2px); }
+    .pdf-card.hidden { display: none; }
+    .pdf-delete {
+      position: absolute; top: 6px; right: 6px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(239,68,68,0.85); color: #fff;
+      border: none; cursor: pointer; font-size: 13px; line-height: 22px; text-align: center;
+      opacity: 0; transition: opacity 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2;
+    }
+    .pdf-card:hover .pdf-delete { opacity: 1; }
+    .pdf-delete:hover { background: rgb(220,38,38); }
+    .pdf-thumb-wrap {
+      width: 140px; height: 180px; display: flex; align-items: center; justify-content: center;
+      background: var(--surface2); border-radius: 6px; overflow: hidden; flex-shrink: 0;
+    }
+    .pdf-canvas { display: none; max-width: 140px; max-height: 180px; }
+    .pdf-placeholder { font-size: 48px; line-height: 1; }
+    .pdf-name {
+      font-size: 0.72rem; color: var(--muted); text-align: center;
+      word-break: break-word; line-height: 1.3; max-height: 3.9em; overflow: hidden;
+    }
+    .pdf-meta {
+      font-size: 0.65rem; color: var(--muted); text-align: center;
+      opacity: 0.7; margin-top: -4px; line-height: 1.4;
+    }
+    .pdf-loading { text-align: center; color: var(--muted); padding: 40px 0; }
+
   </style>
 </head>
 <body>
@@ -68,6 +121,49 @@
       <h1>Knowledge Center</h1>
       <p>Guides, live tools, research, and reference for Lantern OS.</p>
     </div>
+
+    <div class="section">
+      <h2>Grounding &amp; Σ₀ updates</h2>
+      <p style="opacity:.8;margin:-2px 0 12px">
+        These docs <strong>are the live grounding corpus</strong>: the assistant retrieves
+        the nearest section before answering (deterministic/near routing, $0 before the LLM).
+        Recent Σ₀ additions —
+        <a href="/repo/docs/LANTERN-SIGMA0-CODER.md">lantern-sigma0-coder</a>,
+        <a href="/repo/docs/OURO-LOOPLM.md">Ouro / LoopLM (Q-exit)</a>,
+        <a href="/repo/docs/CSF-FORMAT-SPECIFICATION.md">CSF-Pack v0.8</a>.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="kb-q" type="text" placeholder="Ask the knowledge base… e.g. what is Ouro looped reasoning"
+          style="flex:1;min-width:240px;padding:10px 12px;border-radius:8px;border:1px solid var(--border,#2a2a2a);background:var(--bg,#0e0e0e);color:inherit;font:inherit"
+          onkeydown="if(event.key==='Enter')kbAsk()">
+        <button onclick="kbAsk()" class="link-card" style="padding:10px 16px;cursor:pointer">Search grounding</button>
+      </div>
+      <div id="kb-result" style="margin-top:10px"></div>
+    </div>
+    <script>
+      async function kbAsk() {
+        const q = document.getElementById('kb-q').value.trim();
+        const out = document.getElementById('kb-result');
+        if (!q) return;
+        out.innerHTML = '<span style="opacity:.6">searching grounding corpus…</span>';
+        try {
+          const r = await fetch('/api/knowledge/query?q=' + encodeURIComponent(q));
+          const d = await r.json();
+          if (d && d.hit) {
+            const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+            out.innerHTML =
+              '<div class="link-card" style="display:block;cursor:default">' +
+              '<div style="font-size:.8em;opacity:.7">tier: <b>' + d.tier + '</b> · score ' + (d.score ?? '—') +
+              ' · <a href="/repo/' + esc((d.source||'').split('#')[0]) + '">' + esc(d.source) + '</a></div>' +
+              '<pre style="white-space:pre-wrap;margin:8px 0 0;font:inherit">' + esc((d.text||'').slice(0,900)) + '</pre></div>';
+          } else {
+            out.innerHTML = '<span style="opacity:.6">No strong grounding match — the assistant would answer with the full LLM.</span>';
+          }
+        } catch (e) {
+          out.innerHTML = '<span style="opacity:.6">Grounding API unavailable: ' + e.message + '</span>';
+        }
+      }
+    </script>
 
     <div class="section">
       <h2>Getting Started</h2>
@@ -149,6 +245,21 @@
           <h3>Tesseract Convergence Loop</h3>
           <p>The 20-step convergence method — 4D status cube, Bayesian beliefs, and receipts.</p>
         </a>
+        <a class="link-card" href="/repo/docs/LANTERN-SIGMA0-CODER.md">
+          <span class="icon">🤖</span>
+          <h3>lantern-sigma0-coder</h3>
+          <p>The local Σ₀ coding agent — a LoRA fine-tuned on past Claude sessions, served via Ollama, leaderboard-routed, and continually retrained.</p>
+        </a>
+        <a class="link-card" href="/repo/docs/OURO-LOOPLM.md">
+          <span class="icon">🔁</span>
+          <h3>Ouro / LoopLM</h3>
+          <p>Looped latent reasoning (arXiv 2510.25741) — adaptive depth + Q-exit CDF, implemented over our local model (loop-reasoner.js) and grounded in the KB.</p>
+        </a>
+        <a class="link-card" href="/repo/docs/KEYSTONE-MCP.md">
+          <span class="icon">🔌</span>
+          <h3>Keystone ↔ MCP</h3>
+          <p>Keystone chat is linked to live project tools/details (GitHub issues+PRs, MCP tools) — any provider, incl. Grok, answers grounded in the real repo.</p>
+        </a>
       </div>
     </div>
 
@@ -163,7 +274,7 @@
         <a class="link-card" href="/repo/docs/CSF-FORMAT-SPECIFICATION.md">
           <span class="icon">🗄️</span>
           <h3>CSF Format</h3>
-          <p>Convergence-Fitted Searchable Format — the binary archive specification.</p>
+          <p>Convergence-Fitted Searchable Format — consolidated spec. Now includes <strong>CSF-Pack v0.8</strong>: pack/unpack arbitrary files with SHA-256 integrity, path-safety, and zip-class compression (benchmarked).</p>
         </a>
         <a class="link-card" href="/observer-mesh-cube.html">
           <span class="icon">🧊</span>
@@ -187,6 +298,15 @@
           <p>Source code, issues, and contributions.</p>
         </a>
       </div>
+    </div>
+
+    <div class="section" id="documents-section">
+      <h2>Documents</h2>
+      <div class="pdf-controls">
+        <input class="pdf-search" id="pdf-search" type="search" placeholder="Filter documents…" aria-label="Filter documents">
+        <span class="pdf-count" id="pdf-count"></span>
+      </div>
+      <div id="pdf-gallery"><p class="pdf-loading">Loading documents…</p></div>
     </div>
 
     <div class="section">
@@ -231,5 +351,175 @@
 </footer>
 
 <script src="/js/theme-toggle.js"></script>
+<script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+(function () {
+  if (typeof pdfjsLib === 'undefined') return;
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+  let allCards = [];
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      // Date-only strings (YYYY-MM-DD) must be parsed as local time to avoid UTC-shift
+      const d = iso.length === 10 ? new Date(iso + 'T00:00:00') : new Date(iso);
+      return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch { return ''; }
+  }
+
+  function fmtSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  async function renderThumb(card) {
+    const wrap = card.querySelector('.pdf-thumb-wrap');
+    const canvas = card.querySelector('.pdf-canvas');
+    const placeholder = card.querySelector('.pdf-placeholder');
+    const url = card.dataset.pdfUrl;
+    try {
+      const loadingTask = pdfjsLib.getDocument(url);
+      const pdf = await loadingTask.promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = 140 / viewport.width;
+      const sv = page.getViewport({ scale });
+      canvas.width = sv.width;
+      canvas.height = sv.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: sv }).promise;
+      placeholder.style.display = 'none';
+      canvas.style.display = 'block';
+    } catch {
+      placeholder.textContent = '📄';
+    }
+  }
+
+  function applyFilter(query) {
+    const q = query.toLowerCase().trim();
+    let visible = 0;
+    for (const card of allCards) {
+      const match = !q || card.dataset.name.includes(q) || card.dataset.folder.includes(q);
+      card.classList.toggle('hidden', !match);
+      if (match) visible++;
+    }
+    const countEl = document.getElementById('pdf-count');
+    if (countEl) countEl.textContent = `${visible} of ${allCards.length}`;
+  }
+
+  async function init() {
+    const gallery = document.getElementById('pdf-gallery');
+    if (!gallery) return;
+
+    let data;
+    try {
+      const resp = await fetch('/api/pdfs');
+      data = await resp.json();
+    } catch {
+      gallery.innerHTML = '<p class="pdf-loading">Failed to load documents.</p>';
+      return;
+    }
+
+    const { pdfs } = data;
+    if (!pdfs || !pdfs.length) {
+      gallery.innerHTML = '<p class="pdf-loading">No documents found.</p>';
+      return;
+    }
+
+    const countEl = document.getElementById('pdf-count');
+    if (countEl) countEl.textContent = `${pdfs.length} documents`;
+
+    const grid = document.createElement('div');
+    grid.className = 'pdf-grid';
+
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          renderThumb(entry.target);
+          observer.unobserve(entry.target);
+        }
+      }
+    }, { rootMargin: '300px' });
+
+    for (const pdf of pdfs) {
+      const card = document.createElement('a');
+      card.className = 'pdf-card';
+      card.href = pdf.repoPath;
+      card.target = '_blank';
+      card.rel = 'noopener';
+      card.dataset.pdfUrl = pdf.repoPath;
+      card.dataset.filename = pdf.filename;
+      card.dataset.name = pdf.name.toLowerCase();
+      card.dataset.folder = (pdf.folder || '').toLowerCase();
+      const metaParts = [];
+      const dateVal = pdf.publishedAt || pdf.modifiedAt;
+      if (dateVal) metaParts.push(fmtDate(dateVal));
+      if (pdf.size) metaParts.push(fmtSize(pdf.size));
+      const metaTitle = pdf.publishedAt ? 'Published: ' + pdf.publishedAt : 'Modified: ' + (pdf.modifiedAt || '');
+      const metaHtml = metaParts.length
+        ? '<span class="pdf-meta" title="' + metaTitle + '">' + metaParts.join(' · ') + '</span>'
+        : '';
+
+      card.innerHTML =
+        '<button class="pdf-delete" title="Delete document" aria-label="Delete">✕</button>' +
+        '<div class="pdf-thumb-wrap">' +
+          '<span class="pdf-placeholder">⏳</span>' +
+          '<canvas class="pdf-canvas"></canvas>' +
+        '</div>' +
+        '<span class="pdf-name">' + (pdf.pdfTitle || pdf.name).replace(/</g, '&lt;') + '</span>' +
+        metaHtml;
+
+      card.querySelector('.pdf-delete').addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const name = pdf.filename;
+        if (!confirm('Delete "' + pdf.name + '"?\n\nThis permanently removes the file from the research pool.')) return;
+        try {
+          const r = await fetch('/api/pdfs?filename=' + encodeURIComponent(name), { method: 'DELETE' });
+          const data = await r.json();
+          if (data.deleted > 0) {
+            card.style.transition = 'opacity 0.2s';
+            card.style.opacity = '0';
+            setTimeout(() => {
+              card.remove();
+              allCards = allCards.filter(c => c !== card);
+              const countEl = document.getElementById('pdf-count');
+              if (countEl) {
+                const vis = allCards.filter(c => !c.classList.contains('hidden')).length;
+                countEl.textContent = vis + ' of ' + allCards.length;
+              }
+            }, 200);
+          } else {
+            alert('Delete failed: ' + (data.errors && data.errors[0] && data.errors[0].error || 'unknown error'));
+          }
+        } catch {
+          alert('Delete failed — server error.');
+        }
+      });
+
+      grid.appendChild(card);
+      allCards.push(card);
+      observer.observe(card);
+    }
+
+    gallery.innerHTML = '';
+    gallery.appendChild(grid);
+
+    const searchEl = document.getElementById('pdf-search');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => applyFilter(searchEl.value));
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
@@ -146,6 +146,8 @@
     <a href="/trading-news.html" class="active">News</a>
     <a href="/create.html">✏️ Create</a>
     <a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a>
   </div>
   <div class="nav-actions">
     <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light / dark mode">☀</button>
@@ -458,5 +460,6 @@ loadNews();
 setInterval(loadNews, 300000); // refresh every 5 min
 </script>
 <script src="/js/theme-toggle.js"></script>
+<script src="/js/auth-gate.js" defer></script>
 </body>
 </html>

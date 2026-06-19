@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -245,6 +245,8 @@
     <a href="/three-doors.html" class="active">Kingdome</a>
     <a href="/create.html">✏️ Create</a>
     <a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a>
   </div>
   <div class="nav-actions">
     <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode">☀</button>
@@ -324,9 +326,10 @@
     <a href="/three-doors-game.html">Kingdome</a>
     <a href="/create.html">✏️ Create</a>
     <a href="/knowledgecenter.html">Help</a>
+        <span class="sep" style="margin: 0 4px;">·</span>
+        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Lantern on Patreon</a>
     <a href="/changelog.html">Changelog</a>
     <a href="https://github.com/alex-place/lantern-os" target="_blank">GitHub</a>
-    <span class="sep ml">Open source · runs locally · no account needed</span>
   </div>
 </footer>
 
@@ -423,5 +426,6 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(checkHealth, 10000);
 })();
 </script>
+<script src="/js/auth-gate.js" defer></script>
 </body>
 </html>

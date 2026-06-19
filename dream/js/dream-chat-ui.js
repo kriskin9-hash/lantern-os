@@ -269,13 +269,155 @@ function createAgentBubble(isError) {
   msg.className = 'message agent' + (isError ? ' error' : '');
   const bubble = document.createElement('div');
   bubble.className = 'message-content';
+  const thinking = document.createElement('span');
+  thinking.className = 'thinking-mandala';
+  thinking.innerHTML = '<img src="/mandala.svg" alt="" style="width:20px;height:20px;opacity:0.5;animation:spin 2s linear infinite;vertical-align:middle">';
+  bubble.appendChild(thinking);
   const cursor = document.createElement('span');
   cursor.className = 'stream-cursor';
   bubble.appendChild(cursor);
   msg.appendChild(bubble);
   container.appendChild(msg);
   container.scrollTop = container.scrollHeight;
-  return { msg, bubble, cursor };
+  return { msg, bubble, cursor, thinking };
+}
+
+// ── Autowork live-step panel (issue #527 / autonomous-work/stream) ─────────────
+// Consumes the SSE stream and renders each phase as it happens, so the user can
+// watch plan → patch → tests → commit → push → PR in real time.
+const AUTOWORK_PHASES = [
+  ['fetch_issue', 'Fetch issue'],
+  ['branch',      'Create branch'],
+  ['research',    'Research (codebase + web)'],
+  ['plan',        'Generate plan'],
+  ['patch',       'Generate patch'],
+  ['apply',       'Apply changes'],
+  ['tests',       'Run tests'],
+  ['commit',      'Commit'],
+  ['push',        'Push'],
+  ['pr',          'Open PR'],
+  ['convergence', 'Convergence record'],
+  ['record',      'Log record'],
+];
+
+async function runAutowork(issue, btn, base) {
+  base = base || ((typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  hideEmptyState();
+  const messages = document.getElementById('messages');
+
+  // Build the panel
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const stepRowsHtml = AUTOWORK_PHASES.map(([k, label]) =>
+    `<div class="aw-step" data-phase="${k}" style="display:flex;align-items:center;gap:8px;padding:3px 0;opacity:0.4">
+       <span class="aw-icon" style="width:16px;text-align:center">○</span>
+       <span class="aw-label" style="font-size:12.5px">${label}</span>
+       <span class="aw-extra" style="font-size:11px;opacity:0.6;margin-left:auto"></span>
+     </div>`).join('');
+  row.innerHTML =
+    `<div class="msg-label">Keystone · Autowork #${esc(issue)}</div>
+     <div class="bubble" style="font-size:13px">
+       <div class="aw-steps">${stepRowsHtml}</div>
+       <div class="aw-diff" style="display:none;margin-top:8px"></div>
+       <div class="aw-final" style="margin-top:8px;font-weight:600"></div>
+     </div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+
+  const setStep = (phase, status, extra) => {
+    const el = row.querySelector(`.aw-step[data-phase="${phase}"]`);
+    if (!el) return;
+    el.style.opacity = '1';
+    const icon = el.querySelector('.aw-icon');
+    const ex = el.querySelector('.aw-extra');
+    if (status === 'start')        { icon.textContent = '◐'; icon.style.color = 'var(--accent)'; }
+    else if (status === 'done')    { icon.textContent = '✓'; icon.style.color = '#4ade80'; }
+    else if (status === 'error')   { icon.textContent = '✗'; icon.style.color = '#f87171'; }
+    else if (status === 'skipped') { icon.textContent = '⊘'; icon.style.color = '#facc15'; }
+    if (extra) ex.textContent = extra;
+  };
+
+  try {
+    const resp = await fetch(`${base}/api/convergence/autonomous-work/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ issue, commit: true, push: true }),
+    });
+    if (!resp.ok || !resp.body) throw new Error(`stream_unavailable_${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let finalDone = null;
+
+    const handleEvent = (evName, data) => {
+      let d = {};
+      try { d = JSON.parse(data); } catch { return; }
+      if (evName === 'step') {
+        let extra = '';
+        if (d.phase === 'tests' && d.status === 'done') extra = d.passed ? 'passed' : (d.ran ? 'failed' : 'none');
+        else if (d.phase === 'research' && d.status === 'done') extra = `${d.filesFound || 0} files · ${d.webSourcesFound || 0} web`;
+        else if (d.phase === 'pr' && d.status === 'done') extra = 'PR opened';
+        setStep(d.phase, d.status, extra);
+      } else if (evName === 'diff') {
+        const diffEl = row.querySelector('.aw-diff');
+        const files = (d.files || []).join(', ');
+        diffEl.style.display = 'block';
+        diffEl.innerHTML =
+          `<details><summary style="cursor:pointer;opacity:0.8">📄 Diff — ${esc(files) || 'changes'}</summary>
+             <pre style="white-space:pre-wrap;max-height:240px;overflow:auto;background:var(--bg,#0a0a0a);border:1px solid var(--border,#222);border-radius:6px;padding:8px;font-size:11px;margin-top:6px">${esc(d.diffText || '')}</pre>
+           </details>`;
+      } else if (evName === 'error') {
+        const fin = row.querySelector('.aw-final');
+        fin.style.color = '#f87171';
+        fin.textContent = `✗ ${d.error || 'error'}`;
+      } else if (evName === 'done') {
+        finalDone = d;
+      }
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+    };
+
+    // SSE parse loop
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const chunks = buf.split('\n\n');
+      buf = chunks.pop();
+      for (const chunk of chunks) {
+        const evMatch = chunk.match(/^event:\s*(.+)$/m);
+        const dataMatch = chunk.match(/^data:\s*([\s\S]+)$/m);
+        if (evMatch && dataMatch) handleEvent(evMatch[1].trim(), dataMatch[1].trim());
+      }
+    }
+
+    // Render final state
+    const fin = row.querySelector('.aw-final');
+    if (finalDone && finalDone.ok) {
+      btn.textContent = '✓ Done';
+      btn.style.color = '#4ade80';
+      fin.style.color = '#4ade80';
+      fin.innerHTML = finalDone.prUrl
+        ? `✓ Auto-worked #${esc(issue)} — <a href="${esc(finalDone.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a>`
+        : `✓ ${esc(finalDone.message || 'Done')}`;
+    } else {
+      btn.textContent = '✗ Failed';
+      btn.style.color = '#f87171';
+      if (!fin.textContent) {
+        fin.style.color = '#f87171';
+        fin.textContent = `✗ ${esc((finalDone && finalDone.message) || 'Auto-work failed')}`;
+      }
+    }
+    if (typeof scrollToBottom === 'function') scrollToBottom();
+  } catch (e) {
+    btn.textContent = '✗ Error';
+    btn.style.color = '#f87171';
+    const fin = row.querySelector('.aw-final');
+    fin.style.color = '#f87171';
+    fin.textContent = `✗ Auto-work error: ${e.message}`;
+    if (typeof scrollToBottom === 'function') scrollToBottom();
+  }
 }
 
 // ── Main send ─────────────────────────────────────────────────────────────────
@@ -285,7 +427,7 @@ async function sendMessage() {
   if (!text || isSending) return;
 
   // Three-doors game lives on its own page now — Lantern guides there, not in chat
-  const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts)\b/i);
+  const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts|explore)\b/i);
   if (kingdomeMatch) {
     input.value = '';
     window.location.href = '/three-doors-game.html';
@@ -381,38 +523,12 @@ async function sendMessage() {
           const btn = document.createElement('button');
           btn.className = 'starter-chip';
           btn.textContent = a.label;
-          if (a.href) btn.onclick = () => { window.location.href = a.href; };
+          if (a.href) btn.onclick = () => { window.open(a.href, '_blank', 'noopener'); };
           else if (a.autonomous && a.issue) {
-            btn.onclick = async () => {
+            btn.onclick = () => {
               btn.disabled = true;
               btn.textContent = 'Working…';
-              try {
-                const workResp = await fetch(`${base}/api/convergence/autonomous-work`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ issue: a.issue }),
-                });
-                const workResult = await workResp.json();
-                if (workResult.ok) {
-                  btn.textContent = '✓ Done';
-                  btn.style.color = '#4ade80';
-                  const resultRow = document.createElement('div');
-                  resultRow.className = 'msg-row agent';
-                  resultRow.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">✓ Auto-worked #${workResult.issue}<br><a href="${workResult.prUrl}" target="_blank" style="color:var(--accent)">View PR</a></div>`;
-                  messages.appendChild(resultRow);
-                } else {
-                  btn.textContent = '✗ Failed';
-                  btn.style.color = '#f87171';
-                  const errorRow = document.createElement('div');
-                  errorRow.className = 'msg-row agent';
-                  errorRow.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px;color:#f87171">✗ Auto-work failed: ${workResult.error}</div>`;
-                  messages.appendChild(errorRow);
-                }
-                if (typeof scrollToBottom === 'function') scrollToBottom();
-              } catch (e) {
-                btn.textContent = '✗ Error';
-                btn.style.color = '#f87171';
-              }
+              runAutowork(a.issue, btn, base).catch(e => console.error('[autowork]', e));
             };
           }
           else if (a.command) btn.onclick = () => fillAndSend(a.command);
@@ -427,12 +543,80 @@ async function sendMessage() {
     return;
   }
 
-  // !work / !edit — observable autonomous workspace (Sigma-0, issue #527)
-  const workMatch = text.match(/^!(?:work|edit)\s+([\s\S]+)/i);
+  // !work / !edit <issue#> — observable autonomous workspace (Sigma-0, issue #527)
+  const workMatch = text.match(/^!(?:work|edit)\s+#?(\d+)/i);
   if (workMatch) {
     input.value = '';
     addUserBubble(text);
-    runWorkspace(workMatch[1].trim()).catch(err => console.error('[workspace]', err));
+    const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
+    // Dummy button so runAutowork can report status without a chip
+    const dummyBtn = { textContent: '', style: {} };
+    runAutowork(parseInt(workMatch[1], 10), dummyBtn, base).catch(err => console.error('[autowork]', err));
+    return;
+  }
+
+  // Auto-route work/status queries to convergence agent (no LLM cost, instant)
+  const WORK_INTENT = /\b(what (work|issues?|tasks?|bugs?|tickets?|pr[s']?|pull requests?)|what (needs?|needs to be) (done|fixed|closed|worked on)|what'?s? (open|pending|left|next|the status|blocking)|show (me )?(open |the )?issues?|status (of|update)|list (issues?|tasks?|open)|open issues?|any issues?|what should i (work on|fix|do)|top issues?|priority (issues?|tasks?))\b/i;
+  if (WORK_INTENT.test(text) && !text.startsWith('!')) {
+    input.value = '';
+    input.style.height = 'auto';
+    const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    addUserBubble(text);
+    const messages = document.getElementById('messages');
+    const sysRow = document.createElement('div');
+    sysRow.className = 'msg-row agent';
+    sysRow.innerHTML = '<div class="msg-label">Convergence</div><div class="bubble" style="font-size:13px">Routing locally…</div>';
+    messages.appendChild(sysRow);
+    if (typeof scrollToBottom === 'function') scrollToBottom();
+    try {
+      const r = await fetch(`${base}/api/convergence/agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+      });
+      const d = await r.json();
+      const bubble = sysRow.querySelector('.bubble');
+      const badge = d.grounded ? '⚡ Instant answer · from live repo data' : '⚡ Instant answer · no AI cost';
+      const meta = `<div style="font-size:11px;opacity:0.55;margin-top:8px">${badge}</div>`;
+      bubble.innerHTML = `<div style="white-space:pre-wrap;line-height:1.5">${esc(d.answer || '(no answer)')}</div>` + meta;
+      const acts = Array.isArray(d.actions) ? d.actions : [];
+      if (acts.length) {
+        const wrap = document.createElement('div');
+        wrap.className = 'starter-chips';
+        wrap.style.marginTop = '10px';
+        acts.forEach(a => {
+          const btn = document.createElement('button');
+          btn.className = 'starter-chip';
+          btn.textContent = a.label;
+          if (a.href) btn.onclick = () => window.open(a.href, '_blank', 'noopener');
+          else if (a.autonomous && a.issue) {
+            btn.onclick = async () => {
+              btn.disabled = true; btn.textContent = 'Working…';
+              try {
+                const wr = await fetch(`${base}/api/convergence/autonomous-work`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ issue: a.issue }) });
+                const wres = await wr.json();
+                if (wres.ok) { btn.textContent = '✓ Done'; btn.style.color = '#4ade80'; }
+                else {
+                  btn.textContent = '✗ Failed';
+                  btn.style.color = '#f87171';
+                  const errRow = document.createElement('div');
+                  errRow.className = 'msg-row agent';
+                  errRow.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px;color:#f87171">✗ Auto-work failed: ${wres.error || 'unknown error'}</div>`;
+                  document.getElementById('messages').appendChild(errRow);
+                  if (typeof scrollToBottom === 'function') scrollToBottom();
+                }
+              } catch { btn.textContent = '✗ Error'; btn.style.color = '#f87171'; }
+            };
+          } else if (a.command) btn.onclick = () => fillAndSend(a.command);
+          wrap.appendChild(btn);
+        });
+        bubble.appendChild(wrap);
+      }
+    } catch (e) {
+      sysRow.querySelector('.bubble').textContent = `Convergence failed: ${e.message}`;
+    }
+    if (typeof scrollToBottom === 'function') scrollToBottom();
     return;
   }
 
@@ -452,6 +636,7 @@ async function sendMessage() {
   let serverErrorText = '';
   let didError = false;
   let routeLabel = '';
+  let receivedDone = false;
 
   try {
     const provider = document.getElementById('provider-select')?.value || '';
@@ -485,13 +670,14 @@ async function sendMessage() {
         try {
           const evt = JSON.parse(line.slice(6));
           if (evt.type === 'route') {
-            if (!document.querySelector('.route-card')) {
+            if (!bubble.querySelector('.route-card')) {
               const rc = document.createElement('div');
               rc.className = 'route-card';
               rc.textContent = evt.label || `${evt.agentName} · ${evt.surface}`;
               bubble.insertBefore(rc, cursor);
             }
           } else if (evt.type === 'token' && evt.text) {
+            if (thinking.parentNode) thinking.remove();
             fullText += evt.text;
             cursor.remove();
             bubble.innerHTML = renderMarkdown(fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd());
@@ -501,9 +687,14 @@ async function sendMessage() {
             didError = true;
             if (evt.text) serverErrorText = evt.text;
             if (!fullText) bubble.style.color = 'var(--muted)';
+          } else if (evt.type === 'sigma0' && evt.corrected) {
+            // Response was revised by Σ₀ verify pass — show badge after stream completes
+            bubble.dataset.sigma0Corrected = '1';
+            bubble.dataset.sigma0Claims = evt.claims || 0;
           } else if (evt.type === 'done') {
             if (evt.cleanText) fullText = evt.cleanText;
             if (evt.routeLabel) routeLabel = evt.routeLabel;
+            receivedDone = true;
           }
         } catch { /* skip malformed line */ }
       }
@@ -511,6 +702,15 @@ async function sendMessage() {
   } catch (e) { didError = true; }
 
   cursor.remove();
+
+  // Truncation detection: stream ended without a done event and text looks cut off
+  if (fullText && !receivedDone) {
+    const truncBadge = document.createElement('span');
+    truncBadge.title = 'Stream ended without completing — response may be truncated';
+    truncBadge.style.cssText = 'font-size:10px;opacity:0.5;margin-left:6px;vertical-align:middle;cursor:help';
+    truncBadge.textContent = '⚠ truncated';
+    bubble.appendChild(truncBadge);
+  }
 
   if (!fullText) {
     fullText = serverErrorText || FALLBACKS[Math.floor(Math.random() * FALLBACKS.length)];
@@ -520,6 +720,14 @@ async function sendMessage() {
   }
 
   bubble.innerHTML = renderMarkdown(fullText);
+
+  if (bubble.dataset.sigma0Corrected) {
+    const badge = document.createElement('span');
+    badge.title = `Σ₀ verified — ${bubble.dataset.sigma0Claims} claim(s) grounded`;
+    badge.style.cssText = 'font-size:10px;opacity:0.55;margin-left:6px;vertical-align:middle';
+    badge.textContent = '✓ Σ₀';
+    bubble.appendChild(badge);
+  }
 
   if (routeLabel) {
     const sig = document.createElement('div');
