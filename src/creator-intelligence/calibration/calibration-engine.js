@@ -313,6 +313,9 @@ const HIGHER_IS_BETTER = {
   views: true, avgPercentViewed: true, avgViewDurationSec: true, watchTimeHours: true,
   impressions: true, ctrPercent: true, subscribersGained: true, shares: true,
   likes: true, comments: true,
+  // A4 retention-curve outcomes:
+  introRetention: true, meanRetention: true,
+  maxCliffDrop: false, // a bigger drop-off cliff is WORSE
 };
 
 /**

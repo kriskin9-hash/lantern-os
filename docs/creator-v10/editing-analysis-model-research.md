@@ -162,3 +162,15 @@ A1 makes the headline pacing feature real; A4 + the shipped calibration set make
   future accuracy upgrade). **Next: A4 (retention-curve alignment).**
   *Note:* work moved to an isolated git worktree (`lantern-os-calib`) after the shared
   tree switched branches mid-edit twice.
+- **2026-06-19 — A4 DONE (retention-curve alignment).** New
+  `retention-curve-import.js` parses a YouTube "Audience retention" CSV into a
+  normalized curve (ratio or % auto-detected); `retention-analysis.js` computes the
+  metrics the platforms actually reward — intro retention (3s/ratio), mean retention,
+  and the steepest drop-off **cliff** — and `attributeCliffToSegments()` maps that
+  cliff to the exact edit segment it lands in, so the editing model can learn which
+  edits shed viewers. `retentionOutcomeMetrics()` exposes intro/mean/maxCliffDrop as
+  numeric outcomes that flow into the calibration correlations; the recommender knows
+  a bigger cliff is worse (`maxCliffDrop` not higher-is-better). Exposed via the
+  calibration namespace. Tests: `tests/test_retention_curve.js` (10/10) + A1 (8/8) +
+  calibration (12/12). Honesty: sparse/unknown curves yield nulls, never guesses.
+  **Next: A3 (Whisper speech → measured hook/CTA/caption features).**

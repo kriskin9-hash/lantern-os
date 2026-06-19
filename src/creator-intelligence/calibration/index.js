@@ -11,6 +11,8 @@ const fs = require("fs");
 const path = require("path");
 
 const { parseAnalyticsCsv } = require("./youtube-analytics-import");
+const { parseRetentionCsv } = require("./retention-curve-import");
+const retention = require("./retention-analysis");
 const store = require("./outcome-store");
 const engine = require("./calibration-engine");
 
@@ -122,6 +124,11 @@ module.exports = {
   correlations: engine.correlations,
   calibratedRecommendations: engine.calibratedRecommendations,
   loadFeaturesFromEntry: engine.loadFeaturesFromEntry,
+  // A4 — audience-retention curve: parse, analyze, attribute drop-offs to edits.
+  parseRetentionCsv,
+  retentionCurveMetrics: retention.curveMetrics,
+  retentionOutcomeMetrics: retention.retentionOutcomeMetrics,
+  attributeCliffToSegments: retention.attributeCliffToSegments,
   count: store.count,
   usableRows: store.usableRows,
   thresholds: {
