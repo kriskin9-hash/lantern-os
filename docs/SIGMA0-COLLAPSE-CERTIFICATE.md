@@ -242,6 +242,36 @@ non-normal systems that the small-gain bound over-rejects (see
 
 [#505]: https://github.com/alex-place/lantern-os/issues/505
 
+#### 1.2.1 Provable region-wideners for non-normal `A` ([#768])
+
+The small-gain `alpha` over-rejects strongly non-normal `A`, and `max Re λ(A) < 0`
+alone is necessary-not-sufficient (transient growth). `stability_gates()` adds **two
+sufficient, provable** contraction certificates — each strictly wider than small-gain:
+
+1. **Numerical-range gate (monotone).** `ω(A) = λ_max(A_s) < −margin ⟹ ‖e^{tA}‖₂ ≤ e^{ωt}`
+   — a strict, no-transient contraction (matrix measure μ₂; Lohmiller–Slotine 1998).
+   `ω(A)` is the rightmost point of the numerical range `W(A)`; since `spec(A) ⊂ W(A)`,
+   this gate **implies** the Lyapunov gate (it is the stricter one).
+2. **Lyapunov gate (asymptotic, optimal metric).** For margin `m ≥ 0`,
+   `∃P≻0 : (A+mI)ᵀP+P(A+mI) ≺ 0 ⟺ max Re λ(A) < −m` (classical Lyapunov theorem;
+   `= inf_T μ₂(TAT⁻¹) < −m`). Certified by solving `(A+mI)ᵀP+P(A+mI) = −I` and checking
+   `P≻0` (with a relative ill-conditioning guard, so the stability boundary is never
+   certified independent of solver warnings). Accepts strongly non-normal `A` with
+   transient growth (e.g. `[[−1,3],[−3,0]]`, Hurwitz at `−0.5`) that small-gain
+   over-rejects. `√cond(P₀)` (from the margin-0 solve) upper-bounds the Euclidean
+   transient `sup_t ‖e^{tA}‖`.
+
+**Honest scope.** Sufficient, not necessary; they certify the **full Jacobian's**
+contraction, not collapse-onto-manifold (the L1 alignment gap is separate). The PROVEN
+transient constant is **Crouzeix–Palencia (2017): `‖e^{tA}‖ ≤ (1+√2)` when `W(A) ⊂ LHP`**
+(`ω ≤ 0`); the sharper constant `2` is Crouzeix's still-open conjecture. Verified by
+`test_stability_gates.py` (the `[[−1,3],[−3,0]]` case, a 400-matrix red-team showing no
+false-positive certificates, and matrix-exponential checks that the monotone (`e^{ωt}`),
+Lyapunov (`√cond(P)`), and Crouzeix–Palencia (`1+√2`) bounds each hold).
+These **extend the proven region of §1; they do not make the system globally uncollapsible.**
+
+[#768]: https://github.com/alex-place/lantern-os/issues/768
+
 ### 1.3 What the test actually checks
 
 **Verification.** The shipped test uses `A = −0.8·I`, which is **symmetric**
@@ -327,10 +357,10 @@ $$dx = f\,dt + dW + \Sigma_0^{-1}, \qquad \Sigma_0^{-1} = s\cdot p \cdot (V_{\te
 with `ξ` random and `p ∈ [0,1]` the **collapse proximity** — 0 far from the
 boundary (a no-op that costs nothing), rising toward 1 as `∇L`, rank, anisotropy,
 and control sensitivity all approach their thresholds. The implementation
-(`excite()`, `collapse.py` lines 261–275) correctly injects noise in the null
-subspace and re-anisotropizes `Σ`. The proximity gate `proximity()` (lines
-245–259) is the soft-AND `min(p_grad, p_rank, p_flat, p_ctrl)` over the four §2
-signals.
+(`AntiCollapseOperator.excite` in `src/cio_sde/collapse.py`) correctly injects
+noise in the null subspace and re-anisotropizes `Σ`. The proximity gate
+(`AntiCollapseOperator.proximity`) is the soft-AND `min(p_grad, p_rank, p_flat,
+p_ctrl)` over the four §2 signals.
 
 **What is and isn't claimed.** This is a *well-motivated* control design:
 re-exciting directions that have gone flat is a sensible way to keep the system
