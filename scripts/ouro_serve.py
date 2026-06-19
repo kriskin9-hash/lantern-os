@@ -34,6 +34,19 @@ MODEL_ID = os.environ.get("OURO_MODEL", "ByteDance/Ouro-1.4B-Thinking")
 ADAPTER = os.environ.get("OURO_ADAPTER", "")
 PORT = int(os.environ.get("OURO_PORT", "11434"))
 MODEL_NAME = "ouro:latest"  # what the Ollama API advertises
+# Serving mode. Product DEFAULT = fast cached generate (Ouro's UniversalTransformerCache).
+# The native Σ₀ adaptive Q-exit loop is a no-cache research/"deep" mode — opt in with
+# OURO_NATIVE=1. It is far slower (~1 s/token) so it is NOT the chat default.
+NATIVE = os.environ.get("OURO_NATIVE", "0") == "1"
+NATIVE_Q = float(os.environ.get("OURO_Q", "0.5"))
+NATIVE_MAX = int(os.environ.get("OURO_NATIVE_MAX", "80"))
+# Decode quality (both paths): repetition penalty + no-repeat n-gram kill the small-model
+# degeneration (e.g. "✅✅✅…"). Greedy by default for reproducibility; set OURO_SAMPLE=1 for chat-natural sampling.
+REP_PENALTY = float(os.environ.get("OURO_REP_PENALTY", "1.3"))
+NO_REPEAT_NGRAM = int(os.environ.get("OURO_NO_REPEAT_NGRAM", "3"))
+DO_SAMPLE = os.environ.get("OURO_SAMPLE", "0") == "1"
+TEMPERATURE = float(os.environ.get("OURO_TEMPERATURE", "0.7"))
+TOP_P = float(os.environ.get("OURO_TOP_P", "0.9"))
 
 print(f"[ouro] loading {MODEL_ID} (cuda={torch.cuda.is_available()})…", flush=True)
 _tok = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
@@ -49,7 +62,19 @@ if _steps:
         if hasattr(_model.config, attr):
             setattr(_model.config, attr, int(_steps))
 _model.eval()
-print(f"[ouro] ready on :{PORT} as '{MODEL_NAME}'", flush=True)
+
+# Wrap the already-loaded model in the native Σ₀ Q-exit loop (no second load).
+_loop = None
+if NATIVE:
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+    from sigma0.loop_lm import Sigma0LoopLM
+    _bb = _model.get_base_model() if hasattr(_model, "get_base_model") else _model
+    _steps_n = int(getattr(_bb.config, "total_ut_steps", 4) or 4)
+    _loop = Sigma0LoopLM(model=_model, tok=_tok, max_steps=_steps_n)
+    print(f"[ouro] native Sigma0 adaptive Q-exit loop ON (q={NATIVE_Q}, max_steps={_steps_n})", flush=True)
+
+print(f"[ouro] ready on :{PORT} as '{MODEL_NAME}' (native={NATIVE})", flush=True)
 
 
 def _prompt_from_messages(messages):
@@ -60,8 +85,19 @@ def _prompt_from_messages(messages):
 
 
 def _generate(prompt, max_new_tokens=512, stream_cb=None):
+    # Native Σ₀ adaptive loop: one-shot (no token streamer); emit whole text.
+    if _loop is not None:
+        out = _loop.generate(prompt, q=NATIVE_Q, max_new_tokens=min(max_new_tokens, NATIVE_MAX))
+        text = out["text"]
+        if stream_cb is not None and text:
+            stream_cb(text)
+        return text
     ids = _tok(prompt, return_tensors="pt").to(_model.device)
-    kw = dict(max_new_tokens=max_new_tokens, do_sample=False, pad_token_id=_tok.eos_token_id)
+    kw = dict(max_new_tokens=max_new_tokens, pad_token_id=_tok.eos_token_id,
+              repetition_penalty=REP_PENALTY, no_repeat_ngram_size=NO_REPEAT_NGRAM,
+              do_sample=DO_SAMPLE)
+    if DO_SAMPLE:
+        kw.update(temperature=TEMPERATURE, top_p=TOP_P)
     if stream_cb is None:
         with torch.no_grad():
             out = _model.generate(**ids, **kw)
