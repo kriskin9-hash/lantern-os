@@ -466,6 +466,7 @@ npm run dev --prefix apps/lantern-garage
 ### For Architects
 
 - **[docs/CONVERGANCE-SIGMA0-BRIEFING.md](docs/CONVERGANCE-SIGMA0-BRIEFING.md)** — **START HERE** — Σ₀ framework, immutable North Star
+- **[docs/ANTI-COLLAPSE-HARDENING.md](docs/ANTI-COLLAPSE-HARDENING.md)** — CSF-native defense-in-depth: how the loop resists collapse (proven vs heuristic), the hardening plan, red-team gaps (epic #764)
 - **[docs/RESEARCH-CANON.md](docs/RESEARCH-CANON.md)** — Living references for Convergence 12 components
 - **[docs/convergence-core-mapping.md](docs/convergence-core-mapping.md)** — How code aligns with architecture
 - **[docs/TESSERACT-CONVERGENCE-LOOP.md](docs/TESSERACT-CONVERGENCE-LOOP.md)** — 20-step convergence with 4D status cube

@@ -95,6 +95,8 @@ status cannot silently drift.
 - [#657] — **§4 residual CLOSED.** The engine no longer self-observes; `forward_step` runs a Kalman predict/update cycle with process noise `Q=(g·dilation)²·dt`, so smooth exploration stays consistent (NIS≈m, silent) while the collapse snap / Σ₀⁻¹ kick spikes NIS — the canary fires under collapse. `test_surprise_monitor_integration` flipped `xfail` → hard pass (30 passed). *This was the last open technical gap in the Σ₀ machinery.*
 - [#659] — **§4 decision CLOSED (RETIRED).** `p_gate`/`p_unbounded` formally retired, superseded by the `surprise.py` NIS canary; never implemented in `collapse.py` and will not be.
 
+**Planned — anti-collapse hardening (epic [#764]):** the full CSF-grounded defense-in-depth plan lives in [ANTI-COLLAPSE-HARDENING.md](ANTI-COLLAPSE-HARDENING.md). Code-verified bugs queued: [#765] (PCSF circuit-breaker `AttributeError`), [#766] (close the instrument→actuator loop — `loop_lm.generate()` is decoupled from the canary), [#767] (memory confidence laundering + hash-chain ledgers). Proven-region wideners for non-normal `A`: [#768] (Lyapunov-SDP + pseudospectral abscissa gates) — these extend the proven region of §1, they do not make the system globally uncollapsible.
+
 **Resolved (landed 2026-06-17):**
 - [#661] — **§2 / Appendix A defect.** `_collapse_state`'s "log-barrier" was a misnamed multiplicative shrink that flipped sign for `strength > 0.217`. **Fixed:** the term is dropped; collapse is now the clean orthogonal projection `x* = P x` (non-expansive, smooth). The `log_barrier_strength` parameter was removed. Regression: `test_collapse_is_nonexpansive_projection`. *Flagged in external review 2026-06-16.*
 
@@ -113,6 +115,11 @@ status cannot silently drift.
 [#659]: https://github.com/alex-place/lantern-os/issues/659
 [#660]: https://github.com/alex-place/lantern-os/issues/660
 [#661]: https://github.com/alex-place/lantern-os/issues/661
+[#764]: https://github.com/alex-place/lantern-os/issues/764
+[#765]: https://github.com/alex-place/lantern-os/issues/765
+[#766]: https://github.com/alex-place/lantern-os/issues/766
+[#767]: https://github.com/alex-place/lantern-os/issues/767
+[#768]: https://github.com/alex-place/lantern-os/issues/768
 
 ---
 
