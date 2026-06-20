@@ -139,10 +139,16 @@ class Sigma0LoopLM:
 
     # ── generation with per-token adaptive depth ─────────────────────────────
     def generate(self, prompt: str, q: float = 0.5, max_new_tokens: int = 200, messages=None,
-                 rep_penalty: float = 1.3, mode: str = "qexit", eps: float = 0.05):
+                 rep_penalty: float = 1.3, mode: str = "qexit", eps: float = 0.05,
+                 canary: bool = True, adapt: bool = False):
         """mode='qexit' (baseline, exit on confidence) or 'converge' (exit on
         latent fixed point). 'converge' also returns the mean contraction delta
-        so the spiral hypothesis (E2) is falsifiable from real trajectories."""
+        so the spiral hypothesis (E2) is falsifiable from real trajectories.
+
+        canary=True wires the decode stream into the Σ₀ SurpriseMonitor (#766): per-token
+        self-repeat/echo/argmax-margin feed sigma0_proximity, surfaced as `canary_*` in the
+        result — observe-only, it does NOT change the tokens. adapt=True additionally GATES
+        rep_penalty/q on that proximity (suppress repeats + exit sooner as collapse nears)."""
         torch, *_ = _lazy()
         if messages is not None:
             ids = self.tok.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
@@ -158,7 +164,7 @@ class Sigma0LoopLM:
         eos = self.tok.eos_token_id
         bb = self._backbone()
         lm_head = self.model.lm_head if hasattr(self.model, "lm_head") else bb.lm_head
-        # G10 collapse canary: track per-token softmax entropy EMA.
+        # G10 collapse canary (#793): track per-token softmax entropy EMA.
         # Greedy argmax → collapse attractor manifests as entropy suddenly DROPPING
         # (model becomes very confident = near-zero entropy). A two-sided alarm flags
         # the token index so callers can detect/react. Seeded at first token.
@@ -167,6 +173,16 @@ class Sigma0LoopLM:
         _canary_thresh = 2.5    # z-score threshold for spook
         _canary_var = None      # running variance EMA (for z-score)
         _collapse_events = []   # list of (token_idx, entropy, z_score) at alarm points
+        # Σ₀ DecodeCanary (#766/#800): independent proximity/spook collapse detector.
+        dc = None
+        if canary:
+            try:
+                from sigma0.decode_canary import DecodeCanary
+                dc = DecodeCanary()
+            except Exception:
+                dc = None  # canary is best-effort; never break generation
+        q_cur, rep_cur = q, rep_penalty
+        canary_max_prox, canary_spooks, canary_signal = 0.0, 0, "none"
         with torch.no_grad():
             for _tok_idx in range(max_new_tokens):
                 # OuroModel.forward returns (outputs, hidden_states_list, gate_list)
@@ -180,17 +196,17 @@ class Sigma0LoopLM:
                 else:
                     # last-token gate per step → Q-exit
                     gate_steps = [g[0, -1, 0].item() for g in gate_list]
-                    step, conf, reason = self.qexit_step(gate_steps, q, self.max_steps)
+                    step, conf, reason = self.qexit_step(gate_steps, q_cur, self.max_steps)
                 depths.append(step)
                 hidden = hidden_states_list[step - 1][:, -1:, :]   # hidden at exit depth, last token
                 exit_hiddens.append(hidden[0, 0].detach().float().cpu())
                 logits = lm_head(hidden)[0, -1]
-                if rep_penalty and rep_penalty != 1.0 and depths:
+                if rep_cur and rep_cur != 1.0 and depths:
                     # CTRL-style repetition penalty over tokens already generated this turn
                     for tid in set(ids[0, -len(depths):].tolist()):
                         v = logits[tid]
-                        logits[tid] = v / rep_penalty if v > 0 else v * rep_penalty
-                # G10: feed decoded logits into canary (before argmax so softmax is unaffected)
+                        logits[tid] = v / rep_cur if v > 0 else v * rep_cur
+                # G10 (#793): feed decoded logits into the entropy canary (before argmax so softmax is unaffected)
                 probs = torch.softmax(logits.float(), dim=-1)
                 entropy = float(-(probs * (probs + 1e-10).log()).sum().item())
                 if _canary_ema is None:
@@ -206,6 +222,19 @@ class Sigma0LoopLM:
                         _collapse_events.append({"token": _tok_idx, "entropy": round(entropy, 3),
                                                  "z": round(float(z), 2)})
                 nxt = int(torch.argmax(logits))
+                if dc is not None:
+                    # argmax margin (top1−top2 prob): low margin = uncertain/degenerate decode
+                    probs = torch.softmax(logits, dim=-1)
+                    top2 = torch.topk(probs, 2).values
+                    margin = float((top2[0] - top2[1]).item())
+                    obs = dc.observe(nxt, margin=margin, exit_depth=step, max_steps=self.max_steps)
+                    canary_max_prox = max(canary_max_prox, obs["proximity"])
+                    canary_spooks += int(obs["spook"])
+                    if obs["signal"] != "none":
+                        canary_signal = obs["signal"]
+                    if adapt:  # actuator: gate knobs on Σ₀ proximity (opt-in; changes tokens)
+                        k = dc.knobs(q, rep_penalty)
+                        q_cur, rep_cur = k["q"], k["rep_penalty"]
                 ids = torch.cat([ids, torch.tensor([[nxt]], device=ids.device)], dim=1)
                 if nxt == eos:
                     break
@@ -245,6 +274,11 @@ class Sigma0LoopLM:
             # None = not enough tokens to estimate; proven_contracting=True = gate passed.
             "stability_gates": stability_cert,
         }
+        if dc is not None:   # Σ₀ decode canary telemetry (#766)
+            out["canary_max_proximity"] = round(canary_max_prox, 4)
+            out["canary_spooks"] = canary_spooks
+            out["canary_signal"] = canary_signal
+            out["adapt"] = adapt
         if mode == "converge":
             # mean contraction delta across tokens: < eps ⇒ loop genuinely converges (E2)
             out["eps"] = eps

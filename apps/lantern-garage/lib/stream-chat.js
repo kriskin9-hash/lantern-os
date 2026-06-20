@@ -42,6 +42,20 @@ const repoRoot = path.resolve(__dirname, "../../../");
 
 const maxConversationTextLength = 4000;
 
+// Per-request grounding (web search + live GitHub project context) is best-effort
+// enrichment that runs BEFORE the model is called. If the network or the `gh` CLI
+// is slow/hung, an unbounded await there stalls the ENTIRE chat reply (no tokens,
+// no error) - observed in degraded environments. Bound each grounding call so it
+// can never hang the response: on timeout, resolve to a fallback and proceed; the
+// underlying call finishes (and self-times-out) in the background.
+const GROUNDING_TIMEOUT_MS = parseInt(process.env.GROUNDING_TIMEOUT_MS, 10) || 4000;
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([
+    Promise.resolve(promise).catch(() => fallback),
+    new Promise((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
+
 // Fallback doors when AI omits the marker or provider fails
 const FALLBACK_DOORS = ["Tell me more about that", "What happened next?", "How are you feeling about it?"];
 
@@ -782,7 +796,7 @@ async function handleStreamChat(req, url, res) {
     const searchQuery = extractSearchQuery(message);
     if (searchQuery) {
       try {
-        const searchResult = await webSearchMcp(searchQuery, gpol.maxResults);
+        const searchResult = await withTimeout(webSearchMcp(searchQuery, gpol.maxResults), GROUNDING_TIMEOUT_MS, { success: false });
         if (searchResult.success && searchResult.results) {
           groundingContext = formatGroundingContext(searchResult.results, searchQuery);
         }
@@ -829,7 +843,7 @@ async function handleStreamChat(req, url, res) {
   if (!isKeystoneDebug && surfaceMode !== "three-doors" && message && process.env.KEYSTONE_MCP !== "0") {
     try {
       const { gatherProjectContext } = require("./keystone-context");
-      const proj = await gatherProjectContext({ maxItems: 8 });
+      const proj = await withTimeout(gatherProjectContext({ maxItems: 8 }), GROUNDING_TIMEOUT_MS, null);
       if (proj) groundingContext = groundingContext ? `${groundingContext}\n\n${proj}` : proj;
     } catch (e) {
       console.error("[keystone-context] failed (non-fatal):", e.message);
