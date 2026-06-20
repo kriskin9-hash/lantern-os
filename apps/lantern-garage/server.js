@@ -172,6 +172,7 @@ const routes = [
   require("./routes/personal-cube"),
   require("./routes/pr-review"),
   require("./routes/auto-merge"),
+  require("./routes/creators"),        // creator profiles + intake form
   require("./routes/surfaces"),        // static file catch-all — MUST stay last (returns true for any path)
 ];
 
@@ -385,12 +386,15 @@ if (enableCloudflare) {
     cwd: repoRoot,
     env: { ...process.env },
   });
+  let _tunnelFailed = false;
   cloudflaredProcess.on("error", (err) => {
+    _tunnelFailed = true;
     console.error(`[Cloudflare Tunnel] Failed to start: ${err.message}`);
     console.log("[Cloudflare Tunnel] Install with: choco install cloudflare-warp");
     setTunnelState({ status: "error", lastError: err.message, exitedAt: new Date().toISOString() });
   });
   cloudflaredProcess.on("exit", (code) => {
+    _tunnelFailed = true;
     setTunnelState({ status: "exited", exitCode: code, exitedAt: new Date().toISOString() });
     if (code && code !== 0) {
       // Non-zero exit: public access is down but the local server keeps running.
@@ -409,9 +413,9 @@ if (enableCloudflare) {
       console.log(`[Cloudflare Tunnel] exited cleanly (code ${code}).`);
     }
   });
-  // Brief delay to let cloudflared handshake; set running state optimistically
+  // Brief delay to let cloudflared handshake; only set running if no error/exit fired first
   setTimeout(() => {
-    if (cloudflaredProcess && !cloudflaredProcess.killed) {
+    if (!_tunnelFailed && cloudflaredProcess && !cloudflaredProcess.killed) {
       setTunnelState({ status: "running" });
     }
   }, 3000);
