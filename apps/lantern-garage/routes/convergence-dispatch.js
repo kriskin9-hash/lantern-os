@@ -766,6 +766,41 @@ module.exports = async (req, res, url, deps) => {
     return true;
   }
 
+  // POST /api/convergence/keystone-test — Σ₀ 6-stage code generation chain (#631)
+  if (pathname === "/api/convergence/keystone-test" && req.method === "POST") {
+    let body = "";
+    req.on("data", chunk => body += chunk);
+    req.on("end", async () => {
+      try {
+        const { requirement } = JSON.parse(body || "{}");
+        if (!requirement || typeof requirement !== "string" || requirement.trim().length < 5) {
+          sendJson(res, { error: "requirement string required (min 5 chars)" }, 400);
+          return;
+        }
+        const keystoneTestEngine = require("../lib/keystone-test-engine");
+        const result = await keystoneTestEngine.runChain(requirement.trim());
+        sendJson(res, { success: true, ...result }, result.accepted ? 200 : 422);
+      } catch (err) {
+        sendJson(res, { error: err.message }, 500);
+      }
+    });
+    return true;
+  }
+
+  // GET /api/convergence/keystone-test/runs — Recent test run history
+  if (pathname === "/api/convergence/keystone-test/runs" && req.method === "GET") {
+    try {
+      const runsPath = require("path").join(require("path").resolve(__dirname, "../../.."), "data", "keystone-test-runs.jsonl");
+      const runs = require("fs").existsSync(runsPath)
+        ? require("fs").readFileSync(runsPath, "utf8").trim().split("\n").filter(Boolean).slice(-20).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean)
+        : [];
+      sendJson(res, { runs, count: runs.length }, 200);
+    } catch (err) {
+      sendJson(res, { error: err.message }, 500);
+    }
+    return true;
+  }
+
   // GET /api/convergence/health — Health check
   if (pathname === "/api/convergence/health" && req.method === "GET") {
     const stats = router.getStats();

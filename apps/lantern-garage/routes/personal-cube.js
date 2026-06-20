@@ -13,8 +13,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-module.exports = async function(req, res, deps) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+module.exports = async function(req, res, url, deps) {
   const pathname = url.pathname;
 
   if (pathname === '/api/cubes/alex/personal' && req.method === 'GET') {
@@ -27,13 +26,15 @@ module.exports = async function(req, res, deps) {
         metrics: await getPersonalMetrics(),
         timestamp: new Date().toISOString()
       };
-      
       deps.sendJson(res, cubeData);
     } catch (error) {
       console.error('[personal-cube] Error fetching personal data:', error);
       deps.sendJson(res, { error: 'Failed to fetch personal cube data' }, 500);
     }
+    return true;
   }
+
+  return false;
 };
 
 /**
