@@ -304,3 +304,9 @@ data/rag-intake/tesseract-trace/trace.jsonl
 # server worktrees and blocks autowork branch switches — see #781 autowork failure).
 apps/data/agent-performance.jsonl
 data/pcsf/settings.pcsf.json
+
+# Autonomous convergence loop (#592) — rolling runtime byproducts.
+# The work log + benchmark are committed as the demonstration evidence trail;
+# the kernel memory log and per-run act scratch regenerate on every run.
+data/convergence-autonomous-memory.jsonl
+data/autonomous-acts/
