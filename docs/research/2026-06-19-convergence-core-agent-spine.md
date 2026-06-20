@@ -116,6 +116,8 @@ This is the highest-value gap, and the first draft got it exactly backwards. The
 
 **The first genuinely-closed slice:** `kalshi-suggest` emits a record on entry → on trade resolution call `verify_with_test()` (or `Kernel.verify()`) → confidence is graded by the real outcome → `extract_patterns()` compiles the survivors. That single slice turns "coded but open" into "running and closing."
 
+> **✅ Landed (2026-06-19).** The trigger now exists: [`kalshi-convergence-outcomes.js`](../../apps/lantern-garage/lib/kalshi-convergence-outcomes.js) reads each emitted `kalshi-suggest` record, looks up its market via the live Kalshi `GET /markets/{ticker}`, and writes `{record_id, passed}` to `data/convergence/outcomes.jsonl` once the market settles — which [`convergence_close_loop.py`](../../scripts/convergence_close_loop.py) already folds into confidence + `extract_patterns`. End-to-end demonstrated (unverified 0.90 → verified 0.95 → pattern); 12 unit tests in [`tests/test_kalshi_outcomes.js`](../../tests/test_kalshi_outcomes.js). Fetch is injectable (no keys/network in tests) and the pass is idempotent. **Still open:** scheduling the pass (periodic / on-settlement) and §6 step 5.
+
 ---
 
 ## 5. Sprawl census — naming, not duplication
@@ -139,6 +141,8 @@ The napkin draft feared "several half-built cars." On disk it's milder: **one ru
 ## 6. Build order (re-grounded against verified reality)
 
 Phase 1 of [`convergence-core-mapping.md`](../convergence-core-mapping.md) (the objects) **and** much of Phases 2–4 (orchestrator, verify, pattern extraction) are already landed in Python. Re-scored against §1–§5, the real next steps are about **running** what's written:
+
+> **Status (updated 2026-06-19):** steps **1, 2, 4 landed** in `25101abf` (concrete `RepoStatTool`, `kalshi-suggest` emit, the `convergence_close_loop.py` Converge pass). Step **3 (the Verify trigger) now landed** via `kalshi-convergence-outcomes.js` — the kalshi slice runs **Reason → Verify → Converge end-to-end** (see §4). **Remaining:** step 5 (grounding gate + Σ₀ canary on the live loop) and step 6 (hygiene), plus scheduling the close-loop pass.
 
 1. **Implement one concrete `Tool`** wrapping a real route/MCP tool — gives `Kernel.act()` a body (the `ToolResult` name-shadowing bug in §1 is already fixed). *(Act)*
 2. **Make a reasoner with a *resolvable outcome* emit** — `kalshi-suggest` carries a real conviction score; emit a record on entry, alongside the existing dream-chat emit. *(Reason)*
