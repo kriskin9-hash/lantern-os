@@ -280,3 +280,13 @@ apps/data/crypto/prices.jsonl
 data/kalshi/paper-positions.jsonl
 data/kalshi/cio-train-report.json
 data/agent_hook_audit.jsonl
+
+# ─── Runtime churn logs (#767/#777) ──────────────────────────────────────────
+# Append-only runtime logs/metrics, not curated data. They are rewritten on every
+# chat / cube / csf op, so when tracked they chronically dirty the tree and the
+# branch-switch guard refuses to switch ("git_tree_dirty … would be clobbered").
+# Local-only; untracked via `git rm --cached` in the same commit that ignores them.
+apps/data/csf-query-metrics.jsonl
+data/convergence/chat-responses.jsonl
+data/cubes/*/deltas/*.jsonl
+data/proposals.jsonl
