@@ -6,6 +6,8 @@
 
 Evidence tags: **[measured]** = number in a repo artifact · **[tested]** = has a passing test · **[built]** = code exists & runs · **[coded]** = code exists, not exercised end-to-end · **[design]** = not implemented.
 
+> **⏱ Real-time status (updated 2026-06-19).** Since this spec was frozen: **Gate A is done** (65-prompt golden set; 34% measured cold baseline — see §3). Separately, the **Convergence loop's first slice now closes end-to-end** (Kalshi: Reason→Verify→Converge, `8608e5e7`) and **token-budgeted Memory context shipped** (#772, `66ad7024`). The kernel's own blocker (component 6, the state-ABI shim) remains open. Executive summary: [`docs/KEYSTONE-PROGRESS-REPORT-2026-06-19.md`](KEYSTONE-PROGRESS-REPORT-2026-06-19.md).
+
 ## 0. The honest headline (read first)
 
 This kernel is **buildable now**, but it is **not** a strong model. The local model is a **1.4B** that scores **pass@1 = 0.1 on HumanEval at ~284 s/problem** ([`data/eval/leaderboard.jsonl`](../data/eval/leaderboard.jsonl), label `ouro-he10`) **[measured]**. The widely-cited "80% (8/10)" is on a **10-prompt trivia set** scored by keyword coverage ([`data/eval/sigma0-prompts.jsonl`](../data/eval/sigma0-prompts.jsonl)) **[measured, but not a capability metric]**.
