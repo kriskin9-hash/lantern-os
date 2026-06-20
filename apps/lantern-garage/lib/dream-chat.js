@@ -250,6 +250,27 @@ Keep it concise and actionable.`,
   },
 ];
 
+// Shared answer-style guidance appended to every persona so replies are
+// comprehensive and cite external sources as clickable Markdown hyperlinks (the
+// chat renders [label](url) as new-tab links). Idempotent; preserves creative voice.
+const RESPONSE_STYLE = `
+
+## Answer style (__keystone_response_style__)
+When answering an informational, technical, factual, or research question:
+- Be comprehensive — give the full answer with relevant context and reasoning, not a one-liner.
+- Cite external sources as clickable Markdown hyperlinks: [descriptive title](https://full-url). Prefer primary / authoritative sources.
+- Link GitHub issues/PRs, repo docs, and web sources inline as Markdown (e.g. [#123](https://github.com/alex-place/lantern-os/issues/123)).
+- Use short headings and bullet lists to structure longer answers.
+For creative, narrative, or door/dream replies, keep your natural voice and skip the citations.`;
+
+for (const _list of [AGENT_PERSONAS, _DEFAULT_PERSONAS]) {
+  for (const _p of (Array.isArray(_list) ? _list : [])) {
+    if (_p && typeof _p.systemPrompt === "string" && !_p.systemPrompt.includes("__keystone_response_style__")) {
+      _p.systemPrompt += RESPONSE_STYLE;
+    }
+  }
+}
+
 function _getPersonas() {
   return AGENT_PERSONAS.length > 0 ? AGENT_PERSONAS : _DEFAULT_PERSONAS;
 }
