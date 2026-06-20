@@ -268,3 +268,15 @@ research/corpus.db
 
 # Facecam V3 debug overlay (generated)
 facecam-debug.png
+
+# ─── Runtime / collector churn (local only) ───────────────────────────────────
+# These are written continuously by running servers/collectors, so tracking them
+# left the working tree permanently dirty and blocked branch-switch automation
+# ("git_tree_dirty: refusing to switch branches"). Same policy as the other
+# runtime data above (data/csf/, data/pcsf/, data/training/ …).
+data/csf_cache/
+data/*.out
+apps/data/crypto/prices.jsonl
+data/kalshi/paper-positions.jsonl
+data/kalshi/cio-train-report.json
+data/agent_hook_audit.jsonl
