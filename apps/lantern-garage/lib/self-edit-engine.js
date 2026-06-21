@@ -140,47 +140,67 @@ function validateDiff(diffText, repoRoot) {
 
 // ── Diff application ────────────────────────────────────────────────────
 
-function applyHunk(lines, hunk) {
-  const result = [...lines];
-  const insertIndex = hunk.oldStart - 1;
-  let contextCount = 0;
-  let removeCount = 0;
-  let addCount = 0;
-  for (const l of hunk.lines) {
-    if (l.startsWith("-")) removeCount++;
-    else if (l.startsWith("+")) addCount++;
-    else if (l.startsWith(" ")) contextCount++;
-  }
-  if (contextCount + removeCount !== hunk.oldCount) {
-    throw new Error(`hunk_old_count_mismatch: expected ${hunk.oldCount}, got ${contextCount + removeCount}`);
-  }
-  if (contextCount + addCount !== hunk.newCount) {
-    throw new Error(`hunk_new_count_mismatch: expected ${hunk.newCount}, got ${contextCount + addCount}`);
-  }
+// Fuzzy hunk application (#854). LLM-generated unified diffs almost always carry
+// wrong `@@` line-counts and minor context/line-number drift, which an exact-match
+// applier rejects outright. Instead of trusting the `@@` header, we derive the
+// before/after from the hunk body and LOCATE the change by content search,
+// preferring a position near `oldStart` and falling back to whitespace-normalized
+// matching. Context lines are taken from the FILE (not the diff), so the file's own
+// whitespace/indentation is preserved through the edit.
+const _normTrail = (s) => String(s).replace(/[ \t]+$/, "");        // ignore trailing-space drift
+const _normWs    = (s) => String(s).replace(/\s+/g, " ").trim();   // ignore indent/internal-ws drift
 
-  // Remove old lines
-  let removed = 0;
-  for (const l of hunk.lines) {
-    if (l.startsWith("-")) {
-      const expected = l.slice(1);
-      const actual = result[insertIndex + removed];
-      if (actual !== expected) {
-        throw new Error(`hunk_content_mismatch at line ${insertIndex + removed + 1}: expected "${expected}", got "${actual}"`);
-      }
-      result.splice(insertIndex + removed, 1);
-    } else if (l.startsWith("+")) {
-      result.splice(insertIndex + removed, 0, l.slice(1));
-      removed++;
-    } else if (l.startsWith(" ")) {
-      const expected = l.slice(1);
-      const actual = result[insertIndex + removed];
-      if (actual !== expected) {
-        throw new Error(`hunk_context_mismatch at line ${insertIndex + removed + 1}: expected "${expected}", got "${actual}"`);
-      }
-      removed++;
-    }
+function _blockMatchesAt(lines, block, start, norm) {
+  if (start < 0 || start + block.length > lines.length) return false;
+  for (let i = 0; i < block.length; i++) {
+    if (norm(lines[start + i]) !== norm(block[i])) return false;
   }
-  return result;
+  return true;
+}
+
+// Index where `block` first occurs in `lines`, nearest to `hint`. Tries exact, then
+// trailing-trimmed, then whitespace-collapsed equality. Empty block → clamped hint.
+function _locateBlock(lines, block, hint) {
+  if (block.length === 0) return Math.max(0, Math.min(hint, lines.length));
+  for (const norm of [(s) => s, _normTrail, _normWs]) {
+    let best = -1, bestDist = Infinity;
+    for (let s = 0; s + block.length <= lines.length; s++) {
+      if (_blockMatchesAt(lines, block, s, norm)) {
+        const dist = Math.abs(s - hint);
+        if (dist < bestDist) { best = s; bestDist = dist; }
+      }
+    }
+    if (best !== -1) return best;
+  }
+  return -1;
+}
+
+function applyHunk(lines, hunk) {
+  // ops preserve order; oldBlock = the context+removed lines we must locate.
+  const ops = [];
+  const oldBlock = [];
+  for (const l of hunk.lines) {
+    const tag = l[0];
+    if (tag === "-")      { oldBlock.push(l.slice(1)); ops.push(["-", l.slice(1)]); }
+    else if (tag === "+") {                            ops.push(["+", l.slice(1)]); }
+    else if (tag === " ") { oldBlock.push(l.slice(1)); ops.push([" ", l.slice(1)]); }
+    // ignore "\ No newline at end of file" and any stray non-content lines
+  }
+  const hint = Math.max(0, (hunk.oldStart || 1) - 1);
+  const at = _locateBlock(lines, oldBlock, hint);
+  if (at === -1) {
+    throw new Error(`hunk_not_located: could not find the ${oldBlock.length}-line context near line ${hunk.oldStart}`);
+  }
+  const head = lines.slice(0, at);
+  const tail = lines.slice(at + oldBlock.length);
+  const middle = [];
+  let fileIdx = at;
+  for (const [tag, content] of ops) {
+    if (tag === " ")      { middle.push(lines[fileIdx]); fileIdx++; } // keep the file's own context line
+    else if (tag === "-") { fileIdx++; }                             // drop the removed line
+    else if (tag === "+") { middle.push(content); }                  // insert the added line
+  }
+  return head.concat(middle, tail);
 }
 
 // Targets of a parsed diff, as repo-relative paths, tagged created vs changed.
@@ -203,15 +223,22 @@ function applyPatchStrict(repoRoot, files) {
     if (!target || target === "/dev/null") continue;
     target = target.replace(/^(a|b)\//, "");
     const fullPath = path.join(repoRoot, target);
+    const existed = fs.existsSync(fullPath);
     let lines = [];
-    if (fs.existsSync(fullPath)) lines = fs.readFileSync(fullPath, "utf8").split(/\r?\n/);
+    let eol = "\n"; // preserve the file's dominant line ending (#854: don't normalize CRLF→LF)
+    if (existed) {
+      const raw = fs.readFileSync(fullPath, "utf8");
+      eol = raw.includes("\r\n") ? "\r\n" : "\n";
+      lines = raw.split(/\r?\n/);
+    }
     try {
       let working = lines;
+      // High-line-first so an earlier hunk's location isn't shifted by a later edit.
       for (let hi = f.hunks.length - 1; hi >= 0; hi--) working = applyHunk(working, f.hunks[hi]);
       const dir = path.dirname(fullPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fullPath, working.join("\n"), "utf8");
-      if (lines.length === 0 && f.hunks.length > 0) stats.created.push(target);
+      fs.writeFileSync(fullPath, working.join(eol), "utf8");
+      if (!existed && f.hunks.length > 0) stats.created.push(target);
       else stats.changed.push(target);
     } catch (err) {
       stats.errors.push({ file: target, error: err.message });
@@ -827,6 +854,8 @@ module.exports = {
   parseUnifiedDiff,
   validateDiff,
   applyPatch,
+  applyPatchStrict,
+  applyHunk,
   gitCreateBranch,
   gitEnsureClean,
   gitCommit,
