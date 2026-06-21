@@ -14,6 +14,7 @@ const {
   applyPatch,
   isAllowedTest,
   requireSafePaths,
+  extractJson,
 } = require("../apps/lantern-garage/lib/self-edit-engine");
 
 const repoRoot = path.resolve(__dirname, "..");
@@ -175,6 +176,57 @@ function run() {
     assert.strictEqual(isAllowedTest("rm -rf /"), false);
     assert.strictEqual(isAllowedTest("node evil.js"), false);
     assert.strictEqual(isAllowedTest("curl http://bad.com"), false);
+  });
+
+  // ── Plan JSON extraction (autowork plan_parse_failed hardening) ────────
+  console.log("Plan JSON extraction");
+
+  test("parses a bare JSON object", () => {
+    assert.deepStrictEqual(extractJson('{"summary":"x","steps":[]}'), { summary: "x", steps: [] });
+  });
+
+  test("parses ```json fenced JSON", () => {
+    const raw = '```json\n{"summary":"fenced","affectedFiles":["a.js"]}\n```';
+    assert.deepStrictEqual(extractJson(raw).affectedFiles, ["a.js"]);
+  });
+
+  test("parses a lone opening fence with no closing fence", () => {
+    const raw = '```json\n{"summary":"no-close","riskLevel":"low"}';
+    assert.strictEqual(extractJson(raw).riskLevel, "low");
+  });
+
+  test("parses JSON with preamble/commentary around it", () => {
+    const raw = 'Here is the plan you asked for:\n{"summary":"pre"}\nHope that helps!';
+    assert.strictEqual(extractJson(raw).summary, "pre");
+  });
+
+  test("tolerates trailing commas", () => {
+    assert.strictEqual(extractJson('{"summary":"tc","steps":[1,2,],}').summary, "tc");
+  });
+
+  test("tolerates // and /* */ comments", () => {
+    const raw = '{\n  // the plan\n  "summary":"cm" /* inline */\n}';
+    assert.strictEqual(extractJson(raw).summary, "cm");
+  });
+
+  test("repairs a TRUNCATED fenced object (the #873 failure)", () => {
+    // Model got cut off mid-array: no closing ], no closing }, no closing fence.
+    const raw = '```json\n{\n  "summary": "fix injection",\n  "affectedFiles": [\n    "apps/lantern-garage/lib/self-edit-engine.js",\n    "apps/lantern-garage/routes/keystone.js"';
+    const plan = extractJson(raw);
+    assert.strictEqual(plan.summary, "fix injection");
+    assert.deepStrictEqual(plan.affectedFiles, [
+      "apps/lantern-garage/lib/self-edit-engine.js",
+      "apps/lantern-garage/routes/keystone.js",
+    ]);
+  });
+
+  test("parses a top-level JSON array", () => {
+    assert.deepStrictEqual(extractJson('[{"a":1},{"b":2}]'), [{ a: 1 }, { b: 2 }]);
+  });
+
+  test("throws on genuinely empty / non-JSON input", () => {
+    assert.throws(() => extractJson(""), /empty response/);
+    assert.throws(() => extractJson("the model refused to answer"), /no valid JSON/);
   });
 
   // ── Summary ───────────────────────────────────────────────────────────

@@ -711,26 +711,82 @@ function callOllama(messages) {
 
 // ── JSON extraction (resilient against markdown fences + preamble) ───────
 
+// Parse JSON, tolerating the usual LLM-JSON sins (// and /* */ comments,
+// trailing commas). Returns undefined on failure (JSON.parse never yields
+// undefined, so it is a safe "no result" sentinel).
+function tryParseLoose(text) {
+  if (!text || typeof text !== "string") return undefined;
+  const t = text.trim();
+  if (!t) return undefined;
+  try { return JSON.parse(t); } catch {}
+  const cleaned = t
+    .replace(/\/\*[\s\S]*?\*\//g, "")            // /* block comments */
+    .replace(/(^|[^:"'\\])\/\/[^\n\r]*/g, "$1")  // // line comments (not http://)
+    .replace(/,(\s*[}\]])/g, "$1");              // trailing commas
+  try { return JSON.parse(cleaned); } catch {}
+  return undefined;
+}
+
+// Best-effort repair of a truncated / imbalanced object or array: close an
+// unterminated string, drop a dangling comma, and balance the open {/[ that
+// the model never closed (it got cut off mid-JSON).
+function repairJson(text) {
+  let t = String(text)
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/,(\s*[}\]])/g, "$1");
+  const stack = [];
+  let inStr = false, esc = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === "\\") esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === "{" || ch === "[") stack.push(ch);
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+  if (inStr) t += '"';
+  t = t.replace(/,\s*$/, "");
+  for (let i = stack.length - 1; i >= 0; i--) t += stack[i] === "{" ? "}" : "]";
+  return t;
+}
+
+// Resilient against markdown fences (with or without a closing fence),
+// preamble/commentary, comments, trailing commas, and truncated output.
 function extractJson(raw) {
   if (!raw || typeof raw !== "string") throw new Error("empty response");
-  // 1. Try direct parse first
   const trimmed = raw.trim();
-  try { return JSON.parse(trimmed); } catch {}
-  // 2. Strip ```json ... ``` or ``` ... ``` fences
-  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch) { try { return JSON.parse(fenceMatch[1].trim()); } catch {} }
-  // 3. Find first { and last } to extract embedded JSON object
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start !== -1 && end > start) {
-    try { return JSON.parse(trimmed.slice(start, end + 1)); } catch {}
+
+  const candidates = [trimmed];
+  // ```json … ``` (or ``` … ```) with a closing fence
+  const fenceMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
+  if (fenceMatch) candidates.push(fenceMatch[1]);
+  // a LONE opening fence with no closing one (truncated / sloppy models)
+  if (/^```/.test(trimmed)) {
+    candidates.push(trimmed.replace(/^```(?:json)?[^\n]*\n?/i, "").replace(/```\s*$/i, ""));
   }
-  // 4. Find first [ and last ] for array responses
-  const aStart = trimmed.indexOf("[");
-  const aEnd = trimmed.lastIndexOf("]");
-  if (aStart !== -1 && aEnd > aStart) {
-    try { return JSON.parse(trimmed.slice(aStart, aEnd + 1)); } catch {}
+  // first { … last }  and  first [ … last ]
+  const oStart = trimmed.indexOf("{"), oEnd = trimmed.lastIndexOf("}");
+  if (oStart !== -1 && oEnd > oStart) candidates.push(trimmed.slice(oStart, oEnd + 1));
+  const aStart = trimmed.indexOf("["), aEnd = trimmed.lastIndexOf("]");
+  if (aStart !== -1 && aEnd > aStart) candidates.push(trimmed.slice(aStart, aEnd + 1));
+
+  for (const c of candidates) {
+    const parsed = tryParseLoose(c);
+    if (parsed !== undefined) return parsed;
   }
+
+  // Last resort: repair a truncated object/array from its first opener.
+  const opener = oStart !== -1 ? oStart : aStart;
+  if (opener !== -1) {
+    const body = trimmed.slice(opener).replace(/```\s*$/i, "");
+    const parsed = tryParseLoose(repairJson(body));
+    if (parsed !== undefined) return parsed;
+  }
+
   throw new Error("no valid JSON found in model response");
 }
 
@@ -769,12 +825,20 @@ async function generatePlan(repoRoot, userRequest, scopeFiles, history) {
 
   const userPrompt = `${historyContext}User request: ${userRequest}\n\nRelevant files:\n${fileContext || "(none specified — infer from request)"}\n\nProduce the JSON plan.`;
 
-  const raw = await callLlm(PLAN_SYSTEM_PROMPT, userPrompt, "auto");
-  let plan;
-  try {
-    plan = extractJson(raw);
-  } catch (e) {
-    throw new Error("plan_parse_failed: " + e.message + " | raw=" + raw.slice(0, 300));
+  // Generate + parse with one retry: models intermittently wrap the JSON in a
+  // code fence, add a trailing comma, or get cut off. extractJson recovers most
+  // of that; the retry re-asks with a stricter reminder for the rest.
+  let plan, raw = "", lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const sys = attempt === 1
+      ? PLAN_SYSTEM_PROMPT
+      : PLAN_SYSTEM_PROMPT + "\n\nIMPORTANT: your previous reply could not be parsed as JSON. " +
+        "Reply with ONLY the raw JSON object — no code fences, no comments, no trailing commas — and make sure it is complete.";
+    raw = await callLlm(sys, userPrompt, "auto");
+    try { plan = extractJson(raw); break; } catch (e) { lastErr = e; }
+  }
+  if (!plan) {
+    throw new Error("plan_parse_failed: " + (lastErr ? lastErr.message : "unknown") + " | raw=" + raw.slice(0, 300));
   }
 
   // Validate plan structure
@@ -868,6 +932,7 @@ module.exports = {
   openDraftPr,
   runTests,
   generatePlan,
+  extractJson,
   generatePatch,
   callLlm,
   isAllowedTest,
