@@ -543,3 +543,51 @@ def test_l2_anisotropy_lift():
         checked += 1
     assert checked > 100, f"too few near-isotropic cases sampled ({checked})"
     assert counterexamples == 0, f"L2 violated in {counterexamples}/{checked} cases"
+
+
+# ── Σ₀-K1 component 8: collapse certificate + NIS canary, end-to-end (#852) ──
+
+def test_collapse_certificate_and_nis_canary_on_live_trajectory():
+    """Both Σ₀ canaries fire on ONE live rollout — moving component 8 [coded]→[tested].
+
+    (1) the surprise NIS χ² canary fires during the collapse approach (the #657
+    wiring), and (2) the collapse certificate is GUARANTEED on the live per-step
+    drift Jacobian pulled from the same trajectory.
+    """
+    from src.cio_sde.engine import drift_jacobian
+
+    m = _model()
+    for p in m.graph.active.drift_net.parameters():
+        torch.nn.init.zeros_(p)
+    m.surprise_monitor = SurpriseMonitor(spook_sigmas=3.0, anti_collapse_trigger=True)
+    m.anti_collapse_op = AntiCollapseOperator(strength=0.5)
+    m.collapse_op = SemanticCollapseOperator()
+
+    x0, s0 = _init_state(scale=0.01)
+    xf, sf, tr = rollout(m, x0, s0, steps=30, base_seed=1)
+
+    # (1) NIS canary fired on the live trajectory.
+    spook_steps = [s["step"] for s in tr.steps if s.get("surprise_spook", False)]
+    assert len(spook_steps) > 0, "surprise NIS canary should fire during collapse approach"
+
+    # (2) Collapse certificate is guaranteed on the live drift Jacobian.
+    u = m.pcsf(xf, s0)
+    A = drift_jacobian(m.graph.active, xf.detach(), u.detach())
+    cert = collapse_certificate(A)
+    assert cert.guaranteed, f"collapse certificate not guaranteed on live Jacobian: {cert}"
+
+
+def test_collapse_certificate_contraction_rate_on_negdef_node():
+    """A neg-definite execution node yields a guaranteed certificate with the expected
+    contraction rate, read off a live rollout's drift Jacobian."""
+    from src.cio_sde.engine import drift_jacobian
+
+    m = _model()
+    m.graph.active = LinearDynamics(-0.8 * torch.eye(4), B=torch.zeros(4, 2))
+    x0, s0 = _init_state(scale=0.5)
+    xf, sf, tr = rollout(m, x0, s0, steps=10, base_seed=2)
+    u = m.pcsf(xf, s0)
+    A = drift_jacobian(m.graph.active, xf.detach(), u.detach())
+    cert = collapse_certificate(A)
+    assert cert.guaranteed
+    assert cert.contraction_rate == pytest.approx(0.8, abs=1e-3)

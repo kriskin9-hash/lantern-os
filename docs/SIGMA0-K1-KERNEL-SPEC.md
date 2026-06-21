@@ -18,7 +18,7 @@ This kernel is **buildable now**, but it is **not** a strong model. The local mo
 
 | # | Component | Concrete choice | Status |
 |---|---|---|---|
-| 1 | **Kernel model** | `ByteDance/Ouro-1.4B` + Σ₀ QLoRA adapter, served by [`ouro_serve.py`](../scripts/ouro_serve.py) on Ollama `/api/chat` (`ouro:latest`) | [built] |
+| 1 | **Kernel model** | `ByteDance/Ouro-1.4B` + Σ₀ QLoRA adapter, served by [`ouro_serve.py`](../scripts/ouro_serve.py) on `:11434` via an **Ollama-compatible** `/api/chat` (`ouro:latest`). The Ollama binary itself is **sunset** (#811/#823) — `ouro_serve.py` runs the Ouro LoopLM in-process and only emulates the Ollama wire protocol, so existing surfaces work unchanged. | [built] |
 | 2 | **Reasoning loop** | Ouro adaptive-depth latent loop, Q-exit `CDF(t)≥q` ([`loop_lm.py`](../src/sigma0/loop_lm.py)); L1–L4 = recurrent steps | [coded] |
 | 3 | **State VM** | `CIO_SDE(dim=d, ctrl_dim=m)`: x∈Rᵈ, Σ∈Rᵈˣᵈ; `forward_step` = PCSF control + Euler-Maruyama + Riccati ([`engine.py`](../src/cio_sde/engine.py)) | [tested] |
 | 4 | **Hot-swap** | `rollout(…, swap_schedule={t: node})` swaps the active `Dynamics` node **at step t**, gated by `GraphController.hot_swap` drift-equivalence (`‖f_old−f_new‖/‖f_old‖ < 0.25`) | [tested] |
@@ -40,7 +40,7 @@ This kernel is **buildable now**, but it is **not** a strong model. The local mo
 
 | Gate | Metric | Bar | Today |
 |---|---|---|---|
-| **A. Golden set is real** | replace 10 trivia prompts with a graded, repo-grounded set | ≥50 prompts, rubric-scored | **DONE [built]** — 65 prompts (55 repo-grounded across 11 categories, 5 smoke, 5 reasoning), each traceable to a `source`; scorer extended with `\|`-alternatives; locked by [`tests/test_eval_keystone_score.py`](../tests/test_eval_keystone_score.py). **Not yet run against a live kernel** (needs Ouro/Ollama up). |
+| **A. Golden set is real** | replace 10 trivia prompts with a graded, repo-grounded set | ≥50 prompts, rubric-scored | **DONE [built]** — 65 prompts (55 repo-grounded across 11 categories, 5 smoke, 5 reasoning), each traceable to a `source`; scorer extended with `\|`-alternatives; locked by [`tests/test_eval_keystone_score.py`](../tests/test_eval_keystone_score.py). **Not yet run against a live kernel** (needs `ouro_serve.py` up). |
 | **B. Continuation acc.** | `eval_keystone.py` accuracy on A | beat kernel-alone baseline | **baseline set [measured]: 34% (22/65) cold `lantern-sigma0-coder-v2`, no grounding injected** — gradient 100/50/29/13% (smoke/easy/med/hard). Grounded serving must beat 34%. |
 | **C. Kernel floor** | HumanEval pass@1 (when cloud carries) | track, not gate | **0.1 [measured]** |
 | **D. Replay determinism** | same `base_seed` → identical `Trace` | exact | `test_rollout_is_replayable` **[tested]** |
