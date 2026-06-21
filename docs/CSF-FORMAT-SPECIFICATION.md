@@ -10,9 +10,20 @@ updated: 2026-06-20
 family for memory, symbolic data, and (as of v0.8) **arbitrary files**.
 
 This is the single canonical spec. It consolidates the previously-scattered CSF
-documentation (whitepaper, backend notes, CADD, code docstrings) and supersedes
-the dead `CSF-FORMAT-SPECIFICATION.md` reference that `header.py` and the
-Knowledge Center pointed at.
+documentation (whitepaper, backend notes, CADD, code docstrings).
+
+> **v2 consolidation (2026-06).** CSF is now **one lossless, zstd-backed format**.
+> The duplicate/legacy *writers* were deleted so they can't be called by mistake:
+> the segmented `CsfArchive` v1 (+ `header/dictionary/sparse/search.py` and the
+> `csf_compress/decompress/merge/search` CLIs), the root `csf_file.py` v0.3
+> symbolic writer, and the lossy v0.7 symbolic *text* compressors
+> (`csf_symbolic_compressor`, the `ClassicalCompressor` class). The public API is
+> the package root [`csf/__init__.py`](../src/csf/__init__.py) over the engine
+> [`csf/csf_pack.py`](../src/csf/csf_pack.py). Existing on-disk archives still open
+> **read-only** via [`csf/legacy.py`](../src/csf/legacy.py). The 3¹² lattice
+> primitives (`csf/v07/quantum_dust.py`, `qutrit_delta.py`) and the Status-Cube
+> binary container (`csf/v07/csf_file.py`) are **kept** — CSF stores a point on
+> that lattice; it is not the lattice (see §6).
 
 > **Lattice view (singularity).** The symbolic v0.7 engine (`src/csf/v07/`) is the
 > **storage face** of the `3**12` balanced-ternary Convergence Lattice — the same object the
@@ -23,16 +34,18 @@ Knowledge Center pointed at.
 
 ## 1. Version lineage
 
-| Version | Magic | Purpose | Reference code |
+| Version | Magic | Status | Reference code |
 |---|---|---|---|
-| **v0.3** | `CSF\0` | Symbolic memory: world-model anchors + delta stream + dictionary | [`src/csf/csf_file.py`](../src/csf/csf_file.py) |
-| **v0.7** | — | Symbolic compression engine (quantum-dust, base-3, qutrit delta) | [`src/csf/v07/`](../src/csf/v07/) |
-| **v1 (segmented)** | `CSFv1\0\0\0` | Segment-table container (index, converged, encrypted, streaming flags) | [`src/csf/header.py`](../src/csf/header.py) |
-| **v0.8 — CSF-Pack** | `CSF\0` | **General-purpose archive: pack/unpack arbitrary files** | [`src/csf/csf_pack.py`](../src/csf/csf_pack.py) |
+| **v0.8 — CSF-Pack (canonical)** | `CSF\0` | **Active. The one format.** Lossless arbitrary-file/blob container; zstd-19+LDM default | [`csf/csf_pack.py`](../src/csf/csf_pack.py) · API [`csf/__init__.py`](../src/csf/__init__.py) |
+| v0.3 symbolic | `CSF\0` | **Removed (writer)** — read-only via `csf.legacy` | _retired_ |
+| v1 segmented | `CSFv1\0\0\0` | **Removed (writer + CLIs)** — read-only via `csf.legacy` | _retired_ |
+| v0.7 symbolic *text* compressors | — | **Removed** (lossy, non-invertible) | _retired_ |
+| v0.7 lattice primitives | — | **Kept** — Tesseract storage face (§6) | [`csf/v07/`](../src/csf/v07/) |
 
-> The symbolic formats (v0.3 / v0.7) encode Lantern's memory model. **CSF-Pack
-> (v0.8) is the new Σ₀ release for wrapping *any* bytes** — code, data, models,
-> exports — with hashing, optional compression, and an integrity footer.
+> **Use the canonical core for everything.** `import csf; csf.pack(...)` /
+> `csf.compress(...)`. The removed symbolic "compressors" were lossy and had no
+> decoder — never a real format. Legacy on-disk archives open read-only through
+> [`csf.legacy`](../src/csf/legacy.py).
 
 ---
 
@@ -75,11 +88,22 @@ Knowledge Center pointed at.
 ### 2.4 API
 
 ```python
-from csf import csf_pack
-csf_pack.pack(["mydir", "file.bin"], "out.csf", compress=True)   # -> manifest
-csf_pack.list_archive("out.csf")                                  # -> manifest (no extract)
-csf_pack.unpack("out.csf", "dest_dir")                            # -> [written paths]
+import csf
+
+# archive (files or in-memory blobs); per-file SHA-256 + footer integrity
+csf.pack(["mydir", "file.bin"], "out.csf")          # default codec = zstd-19+LDM
+csf.pack(["mydir"], "out.csf", codec="zstd", use_dict=True)  # shared dict, keeps random access
+csf.list_archive("out.csf")                          # manifest (no extract)
+csf.unpack("out.csf", "dest_dir")                    # -> [written paths]
+data = csf.read_file("out.csf", "file.bin")          # verified single member
+
+# lightweight single-blob stream (1-byte codec header, no manifest)
+blob = csf.compress(b"...")                           # -> bytes
+raw  = csf.decompress(blob)
 ```
+
+Codec is per-file and self-describing (`zstd` | `zlib` | `store`); a missing
+codec reads as `zlib`, so pre-codec archives still extract byte-for-byte.
 
 ### 2.5 CLI
 
@@ -160,21 +184,27 @@ Rebuild the KB index after editing core docs: `python scripts/build_knowledge_in
 
 ---
 
-## 3. Legacy / symbolic formats (brief)
+## 3. Retired formats & the read-only bridge
 
-### 3.1 v0.3 symbolic (`csf_file.py`)
-`[Magic CSF\0][Version 2][Flags 2][Baseline][Dictionary][Delta stream][Footer]`.
-Encodes world-model anchors (Garden, Lantern, Convergence…) via a
-`SymbolicDictionary` + `DeltaStream`. Used for memory exports.
+The v2 consolidation removed every legacy *writer*. Nothing in the codebase
+produces these formats anymore; existing archives open **read-only** through
+[`csf.legacy`](../src/csf/legacy.py).
 
-### 3.2 v1 segmented (`header.py`)
-72-byte header (`CSFv1\0\0\0`, version, flags, segment_count, sizes, checksum) +
-segment table + `ENDCSF`+CRC-32C footer. Flags: `HAS_INDEX`, `CONVERGED`,
-`ENCRYPTED`, `STREAMING`.
+| Retired format | Was | Why removed | Reading it now |
+|---|---|---|---|
+| v0.3 symbolic (`csf_file.py`) | `CSF\0` baseline+dict+delta writer | superseded by the lossless core | `csf.legacy` (no on-disk files existed) |
+| v1 segmented (`header.py` + `dictionary/sparse/search.py` + 4 CLIs) | `CSFv1\0\0\0` segment container | duplicate archive format | `csf.legacy` (no on-disk files existed) |
+| v0.7 symbolic text (`csf_symbolic_compressor`, `ClassicalCompressor`) | lossy "ratio" projection | **lossy + no decoder** — never reversible | n/a (was never a real archive) |
+| raw DEFLATE blobs (dream-journal previews, `archive-commons/*.csf`) | bare zlib streams | — (kept) | `csf.legacy.decode_bytes` (inflate) |
 
-### 3.3 v0.7 engine (`v07/`)
-Symbolic compression research: `quantum_dust`, `base3_positions`,
-`qutrit_delta`, `csf_symbolic_compressor`, `convergence_engine`.
+`csf.legacy.open(path)` sniffs and dispatches: modern `CSF\0` → core; zlib blob
+→ inflate; anything else → `CsfLegacyError`.
+
+### 3.1 Still-live v0.7 lattice (`v07/`) — kept
+`quantum_dust`, `qutrit_delta`, `convergence_engine`, plus the binary container
+`csf_file.py` (used by the Status-Cube store) and the lossless primitives in
+`classical_compressor.py` (`SymbolicDictionary`, sparse CSR). These are the
+**storage face of the 3¹² lattice** (§6), not a compression format.
 
 ---
 
@@ -182,10 +212,11 @@ Symbolic compression research: `quantum_dust`, `base3_positions`,
 
 | Path | Role |
 |---|---|
-| `src/csf/csf_pack.py` | **v0.8 arbitrary-file pack/unpack (new)** |
-| `src/csf/csf_file.py` | v0.3 symbolic writer/reader |
-| `src/csf/header.py` | v1 segmented header/segment table |
-| `src/csf/v07/` | v0.7 symbolic compression engine |
+| `src/csf/__init__.py` | **Canonical public API** (facade over the engine) |
+| `src/csf/csf_pack.py` | **The format engine** — pack/unpack/read_file + codec layer |
+| `src/csf/legacy.py` | **Read-only** decoders for retired/legacy on-disk archives |
+| `src/csf/profile_pack.py` | per-user profile archive (over the core) |
+| `src/csf/v07/` | 3¹² lattice primitives (Tesseract storage face) + Status-Cube container |
 | `src/csf/status_cube.py` | StatusCube (player ImagniVerse) |
 | `src/csf/memory_engine.py` | memory archive over CSF |
 | `caad/README.md` | CADD (Context Archive for Dream Data) — built on CSF |

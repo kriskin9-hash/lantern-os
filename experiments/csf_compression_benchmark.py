@@ -176,30 +176,6 @@ def bench_csf_pack(per_file):
     return raw_total, size
 
 
-def bench_csf_symbolic(text_blob: bytes):
-    """CSF v0.7 SymbolicCompressor.compress_text vs zstd-19 on identical text."""
-    try:
-        from csf.v07.csf_symbolic_compressor import SymbolicCompressor
-    except Exception as e:
-        print(f"\n### CSF v0.7 symbolic — unavailable: {e}")
-        return
-    text = text_blob.decode("utf-8", errors="ignore")
-    sc = SymbolicCompressor()
-    t = time.perf_counter()
-    comp, res = sc.compress_text(text)
-    dt = time.perf_counter() - t
-    raw = len(text.encode("utf-8"))
-    csf_ratio = raw / len(comp) if comp else 0.0
-    z = zstd.ZstdCompressor(level=19).compress(text.encode("utf-8")) if zstd else b""
-    z_ratio = raw / len(z) if z else 0.0
-    print(f"\n### CSF v0.7 SymbolicCompressor.compress_text (dict+sparse+zlib-3)")
-    print(f"  raw={raw:,}B  CSF={len(comp):,}B ({csf_ratio:.2f}x)  "
-          f"zstd-19={len(z):,}B ({z_ratio:.2f}x)  "
-          f"-> CSF is {z_ratio/csf_ratio:.1f}x WORSE than plain zstd"
-          if csf_ratio else "")
-    print(f"  NOTE: compress_text has no decode path shipped — round-trip UNVERIFIED.")
-
-
 def main():
     print("=" * 95)
     print("CSF COMPRESSION BENCHMARK  —  lossless-verified, ratios vs raw bytes")
@@ -211,7 +187,6 @@ def main():
     if text_blob:
         bench_blob("A. text+code (solid stream)", text_blob)
         bench_csf_pack(per_file)
-        bench_csf_symbolic(text_blob)
 
     jsonl = corpus_jsonl_mem()
     if jsonl:

@@ -38,14 +38,6 @@ sys.path.insert(0, str(REPO / "apps"))
 sys.path.insert(0, str(REPO / "src"))
 
 try:
-    from csf.csf_file import CSFWriter, CSFReader, SymbolicDictionary
-    from csf.delta_stream import DeltaType
-    _CSF_NATIVE = True
-except Exception as e:
-    _CSF_NATIVE = False
-    print(f"[warn] Native CSF not available ({e}), using fallback format", flush=True)
-
-try:
     import fitz  # PyMuPDF
     _FITZ = True
 except ImportError:
@@ -148,8 +140,8 @@ def pack():
         records.append(record)
         print(f"[pack] {i+1}/{len(pdfs)} {meta['filename']} ({meta['size']} B, {len(text)} chars)", flush=True)
 
-    # Native CSF delta writer uses a single-byte length field (max 255 B payload).
-    # Text extraction payloads are always larger — use fallback container format.
+    # Self-contained CSF\x00 container (gzip-per-record); the JS side indexes via
+    # manifest.json, so this pool format stays local to this script.
     _pack_csf_fallback(records)
 
     # Always write the manifest for fast JS queries
@@ -166,38 +158,6 @@ def pack():
     print(f"[pack] Manifest written: {MANIFEST_OUT}", flush=True)
     print(f"[pack] Tesseract: {CSF_OUT} ({CSF_OUT.stat().st_size} B)", flush=True)
     print(f"[pack] Done. {len(records)} documents packed.", flush=True)
-
-
-def _pack_csf_native(records: list[dict]):
-    """Use the Lantern CSF writer to produce a proper CSF archive."""
-    writer = CSFWriter()
-
-    # Baseline = collection stats as a sparse scalar map (index → doc count)
-    writer.set_baseline({0: len(records), 1: sum(r["size"] for r in records)})
-
-    # Register each PDF name in the symbolic dictionary
-    for r in records:
-        writer.dictionary.encode_name(r["name"])
-
-    # One ANCHOR_ACTIVATION delta per document
-    for i, r in enumerate(records):
-        payload_obj = {
-            "filename": r["filename"],
-            "folder": r["folder"],
-            "size": r["size"],
-            "sha256": r["sha256"],
-            "modifiedAt": r["modifiedAt"],
-            "textLength": r["textLength"],
-            "text": r["text"],
-        }
-        payload_bytes = gzip.compress(json.dumps(payload_obj, separators=(",", ":")).encode())
-        # position = (doc_index, 0, 0, ...) in 12-dim space
-        position = tuple([i % 3] * 12)
-        writer.add_delta(level=4, dtype=DeltaType.ANCHOR_ACTIVATION,
-                         position=position, payload=payload_bytes)
-
-    meta = writer.write(CSF_OUT)
-    print(f"[pack] CSF native: {meta.delta_count} deltas, {meta.total_bytes} B", flush=True)
 
 
 def _pack_csf_fallback(records: list[dict]):

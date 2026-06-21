@@ -71,6 +71,38 @@ matching `## [X.X.X] - YYYY-MM-DD` entry below before it can be pushed. See
 
 ---
 
+## [1.5.0] - 2026-06-20
+
+### Changed
+- **CSF consolidated to ONE canonical, lossless, zstd-backed format (v2)** (landed in `5a252b5b`). The public API is now the package root `csf` (`import csf; csf.pack/unpack/read_file/list_archive` for file/blob archives, `csf.compress/decompress` for single byte strings), a thin facade over the engine `csf/csf_pack.py`. Added single-blob stream helpers `compress_bytes`/`decompress_bytes`.
+- Existing on-disk archives still open **read-only** via the new `csf/legacy.py` (modern `CSF\0` → core; raw DEFLATE dream-preview blobs → inflate; unknown → clear error). No data loss: every `.csf` present in the repo is read by a kept module.
+
+### Removed
+- Deleted the duplicate/legacy CSF **writers** so they can't be called by mistake: the segmented `CsfArchive` v1 (`csf/__init__.py` class, `csf/header.py`, `csf/dictionary.py`, `csf/sparse.py`, `csf/search.py`) and its CLIs (`csf_compress.py`, `csf_decompress.py`, `csf_merge.py`, `csf_search.py`); the root `csf/csf_file.py` v0.3 symbolic writer; and the **lossy, non-invertible** v0.7 symbolic text compressors (`csf/v07/csf_symbolic_compressor.py` and the `ClassicalCompressor` class — kept its `SymbolicDictionary`/sparse primitives).
+- Deleted dead modules with no importers: `csf/trading_cube.py`, `csf/convergence.py`, `csf/dream_compressor.py`. Removed `scripts/Test-CsfSymbolicCompression.py`.
+
+### Kept
+- The 3¹² lattice "storage face" primitives (`csf/v07/quantum_dust.py`, `qutrit_delta.py`, `convergence_engine.py`), the Status-Cube binary container (`csf/v07/csf_file.py`), and the data models (`status_cube.py`, `memory_engine.py`, `trading_memory.py`). CSF stores a *point* on the lattice; it is not the lattice (see `docs/TESSERACT-CSF-SINGULARITY.md`).
+
+### Fixed / rewired
+- Rewired live callers to the canonical core: `scripts/consolidate_md_to_csf.py` (now **bit-perfect** lossless, was a lossy round-trip), `src/dream_journal/orchestrator.py` `export_csf`, and `scripts/csf_research_tesseract.py` (dropped dead native-CSF path). Updated `scripts/csf_pack_benchmark.py`, `experiments/csf_compression_benchmark.py`, and `tests/test_csf.py` (now exercises the core + legacy decoder). 129 CSF tests pass.
+- Documented the consolidation in `docs/CSF-FORMAT-SPECIFICATION.md` (canonical v2 + retired-format table + read-only bridge) and `CLAUDE.md`.
+
+---
+
+## [1.4.16] - 2026-06-20
+
+### Added
+- **`patreon_auth` feature flag — an admin kill-switch for the Patreon login gate.** When the flag is OFF, unauthenticated visitors are treated as guests instead of being bounced to `/auth.html`, so the site stays usable when Patreon OAuth isn't configured. The gate is enforced in `requireAuth` / `requireRole` / `requireEntitlement` (`apps/lantern-garage/lib/auth-middleware.js`); with the gate off, privileged surfaces stay protected — `requireRole('admin')` and `requireEntitlement('trade')` return **403** (not a redirect) rather than exposing the admin page or the trade/money API. The `/api/auth/session` response now carries `authRequired` so `auth-gate.js` skips the client-side redirect too. Defaults **ON** when the flag was never created (via new `feature-flags.isFlagEnabledOr`), so the gate never silently drops open on a fresh install. Toggle it from the admin flags surface (`PUT /api/admin/flags { key:"patreon_auth", enabled:false }`).
+- `tests/test_patreon_auth_flag.js` — covers the on/off matrix and proves admin/trade stay gated when the flag is off.
+
+## [1.4.15] - 2026-06-20
+
+### Fixed
+- **Autowork can now land its patches.** The autonomous-work loop (`!work #N` in dream-chat → `/api/convergence/autonomous-work/stream`) correctly diagnosed and patched issues but aborted at `apply` with `patch_did_not_apply` — `git apply` can't fuzzy-match context (and `--3way` is useless on LLM diffs with no `index` line), and the in-process fallback was exact-match: it threw on `hunk_old_count_mismatch` (LLM `@@` headers are routinely off-by-one) before even trying to locate the change. Rewrote the fallback applier in `self-edit-engine.js` to be **fuzzy**: it ignores the `@@` header counts, locates each hunk by content (exact pass, then whitespace-normalized), applies hunks high-line-first, and preserves the file's EOL. Verified against the exact diff that previously failed (#854, surfaced while autoworking #836) plus a regression suite (`tests/test_self_edit_fuzzy_apply.js`) covering wrong header counts, line drift, whitespace fuzz, CRLF, and absent-context safety.
+
+---
+
 ## [1.4.14] - 2026-06-20
 
 ### Security

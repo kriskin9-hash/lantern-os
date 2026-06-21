@@ -140,67 +140,67 @@ function validateDiff(diffText, repoRoot) {
 
 // ── Diff application ────────────────────────────────────────────────────
 
-// Fuzzy hunk application (#854). LLM-generated unified diffs almost always carry
-// wrong `@@` line-counts and minor context/line-number drift, which an exact-match
-// applier rejects outright. Instead of trusting the `@@` header, we derive the
-// before/after from the hunk body and LOCATE the change by content search,
-// preferring a position near `oldStart` and falling back to whitespace-normalized
-// matching. Context lines are taken from the FILE (not the diff), so the file's own
-// whitespace/indentation is preserved through the edit.
-const _normTrail = (s) => String(s).replace(/[ \t]+$/, "");        // ignore trailing-space drift
-const _normWs    = (s) => String(s).replace(/\s+/g, " ").trim();   // ignore indent/internal-ws drift
-
-function _blockMatchesAt(lines, block, start, norm) {
-  if (start < 0 || start + block.length > lines.length) return false;
-  for (let i = 0; i < block.length; i++) {
-    if (norm(lines[start + i]) !== norm(block[i])) return false;
+// Split a hunk into its "before" (context + removed) and "after" (context +
+// added) line arrays, ignoring the @@ header counts — LLM diffs routinely get
+// them wrong — and "\ No newline at end of file" markers.
+function hunkBlocks(hunk) {
+  const before = [];
+  const after = [];
+  // Drop trailing blank lines: a diff that ends with a newline parses into a
+  // spurious "" hunk line that is not real content (an interior blank context
+  // line arrives as " " or, from some generators, as a bare "").
+  let end = hunk.lines.length;
+  while (end > 0 && hunk.lines[end - 1] === "") end--;
+  for (let i = 0; i < end; i++) {
+    const l = hunk.lines[i];
+    const tag = l[0];
+    if (tag === "+") after.push(l.slice(1));
+    else if (tag === "-") before.push(l.slice(1));
+    else if (tag === "\\") continue; // "\ No newline at end of file"
+    else {
+      // context line (" foo"), or a bare blank line some generators emit as ""
+      const text = l.startsWith(" ") ? l.slice(1) : l;
+      before.push(text);
+      after.push(text);
+    }
   }
-  return true;
+  return { before, after };
 }
 
-// Index where `block` first occurs in `lines`, nearest to `hint`. Tries exact, then
-// trailing-trimmed, then whitespace-collapsed equality. Empty block → clamped hint.
-function _locateBlock(lines, block, hint) {
-  if (block.length === 0) return Math.max(0, Math.min(hint, lines.length));
-  for (const norm of [(s) => s, _normTrail, _normWs]) {
-    let best = -1, bestDist = Infinity;
-    for (let s = 0; s + block.length <= lines.length; s++) {
-      if (_blockMatchesAt(lines, block, s, norm)) {
-        const dist = Math.abs(s - hint);
-        if (dist < bestDist) { best = s; bestDist = dist; }
-      }
-    }
-    if (best !== -1) return best;
-  }
+// Find where the `before` block sits in `lines`, preferring the position
+// closest to `hint`. Exact pass first, then a whitespace-normalized pass so
+// indentation / trailing-space drift still lands. Returns start index, or -1.
+function locateBlock(lines, before, hint) {
+  const n = lines.length;
+  const m = before.length;
+  if (m === 0) return Math.min(Math.max(hint, 0), n); // pure insertion
+  if (m > n) return -1;
+  const starts = [];
+  for (let i = 0; i + m <= n; i++) starts.push(i);
+  starts.sort((a, b) => Math.abs(a - hint) - Math.abs(b - hint) || a - b);
+  const matches = (start, eq) => {
+    for (let j = 0; j < m; j++) if (!eq(lines[start + j], before[j])) return false;
+    return true;
+  };
+  for (const s of starts) if (matches(s, (a, b) => a === b)) return s;
+  for (const s of starts) if (matches(s, (a, b) => a.trim() === b.trim())) return s;
   return -1;
 }
 
-function applyHunk(lines, hunk) {
-  // ops preserve order; oldBlock = the context+removed lines we must locate.
-  const ops = [];
-  const oldBlock = [];
-  for (const l of hunk.lines) {
-    const tag = l[0];
-    if (tag === "-")      { oldBlock.push(l.slice(1)); ops.push(["-", l.slice(1)]); }
-    else if (tag === "+") {                            ops.push(["+", l.slice(1)]); }
-    else if (tag === " ") { oldBlock.push(l.slice(1)); ops.push([" ", l.slice(1)]); }
-    // ignore "\ No newline at end of file" and any stray non-content lines
+// Apply one hunk by locating its context in the file rather than trusting the
+// (often-wrong) @@ line numbers. Fuzzy: tolerant of header-count drift, line
+// drift, and whitespace differences — the failure modes of LLM-authored diffs.
+function applyHunkFuzzy(lines, hunk) {
+  const { before, after } = hunkBlocks(hunk);
+  if (before.length === 0) {
+    const at = Math.min(Math.max(hunk.oldStart - 1, 0), lines.length);
+    return [...lines.slice(0, at), ...after, ...lines.slice(at)];
   }
-  const hint = Math.max(0, (hunk.oldStart || 1) - 1);
-  const at = _locateBlock(lines, oldBlock, hint);
-  if (at === -1) {
-    throw new Error(`hunk_not_located: could not find the ${oldBlock.length}-line context near line ${hunk.oldStart}`);
+  const pos = locateBlock(lines, before, hunk.oldStart - 1);
+  if (pos < 0) {
+    throw new Error(`hunk_not_located: ${before.length}-line context near line ${hunk.oldStart} not found`);
   }
-  const head = lines.slice(0, at);
-  const tail = lines.slice(at + oldBlock.length);
-  const middle = [];
-  let fileIdx = at;
-  for (const [tag, content] of ops) {
-    if (tag === " ")      { middle.push(lines[fileIdx]); fileIdx++; } // keep the file's own context line
-    else if (tag === "-") { fileIdx++; }                             // drop the removed line
-    else if (tag === "+") { middle.push(content); }                  // insert the added line
-  }
-  return head.concat(middle, tail);
+  return [...lines.slice(0, pos), ...after, ...lines.slice(pos + before.length)];
 }
 
 // Targets of a parsed diff, as repo-relative paths, tagged created vs changed.
@@ -215,7 +215,11 @@ function diffTargets(files) {
   return out;
 }
 
-// Strict, dependency-free applier (exact context match). Used as a fallback.
+// In-process, dependency-free fallback applier. Fuzzy: it locates each hunk by
+// content (whitespace-tolerant) instead of trusting the diff's line numbers, so
+// it lands LLM-authored diffs that git apply and an exact-match applier reject.
+// Hunks apply high-line-first so a later hunk can't shift an earlier one's index;
+// the file's EOL and trailing newline are preserved.
 function applyPatchStrict(repoRoot, files) {
   const stats = { changed: [], created: [], errors: [] };
   for (const f of files) {
@@ -224,20 +228,18 @@ function applyPatchStrict(repoRoot, files) {
     target = target.replace(/^(a|b)\//, "");
     const fullPath = path.join(repoRoot, target);
     const existed = fs.existsSync(fullPath);
-    let lines = [];
-    let eol = "\n"; // preserve the file's dominant line ending (#854: don't normalize CRLF→LF)
-    if (existed) {
-      const raw = fs.readFileSync(fullPath, "utf8");
-      eol = raw.includes("\r\n") ? "\r\n" : "\n";
-      lines = raw.split(/\r?\n/);
-    }
+    const raw = existed ? fs.readFileSync(fullPath, "utf8") : "";
+    const eol = /\r\n/.test(raw) ? "\r\n" : "\n";
+    const trailingNewline = /\n$/.test(raw);
+    let lines = raw.length ? raw.split(/\r?\n/) : [];
+    if (trailingNewline && lines[lines.length - 1] === "") lines.pop();
     try {
       let working = lines;
-      // High-line-first so an earlier hunk's location isn't shifted by a later edit.
-      for (let hi = f.hunks.length - 1; hi >= 0; hi--) working = applyHunk(working, f.hunks[hi]);
+      const hunks = [...f.hunks].sort((a, b) => b.oldStart - a.oldStart);
+      for (const h of hunks) working = applyHunkFuzzy(working, h);
       const dir = path.dirname(fullPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fullPath, working.join(eol), "utf8");
+      fs.writeFileSync(fullPath, working.join(eol) + (trailingNewline || !existed ? eol : ""), "utf8");
       if (!existed && f.hunks.length > 0) stats.created.push(target);
       else stats.changed.push(target);
     } catch (err) {
@@ -293,11 +295,11 @@ function resolveDiffPaths(repoRoot, diffText, files) {
 }
 
 // Apply a unified diff. LLM-generated diffs almost always have line-number drift
-// and minor context fuzz, which a strict exact-match applier rejects (→ the patch
-// never lands → autowork can't actually complete issues). We use git's robust
-// applier first (with recount/fuzz/3way), and fall back to the strict applier
-// only if git is unavailable. validateDiff still gates format + path safety, and
-// the caller's anti-fraud gate still rejects empty/errored results.
+// and minor context fuzz. We try git's robust applier first (recount/fuzz/3way),
+// and fall back to an in-process *fuzzy* applier (content-located, whitespace-
+// tolerant) that lands diffs git apply rejects — without it the patch never
+// lands and autowork can't complete issues. validateDiff still gates format +
+// path safety, and the caller's anti-fraud gate still rejects empty/errored results.
 function applyPatch(repoRoot, diffText) {
   let files = validateDiff(diffText, repoRoot);
   // Repair dropped-prefix paths (e.g. ouro_serve.py -> scripts/ouro_serve.py) so the
@@ -341,7 +343,7 @@ function applyPatch(repoRoot, diffText) {
     };
   }
 
-  // git apply rejected the diff — fall back to the strict applier (exact match).
+  // git apply rejected the diff — fall back to the in-process fuzzy applier.
   const strict = applyPatchStrict(repoRoot, files);
   strict.applier = "strict";
   strict.pathRewrites = pathRewrites;
@@ -855,7 +857,6 @@ module.exports = {
   validateDiff,
   applyPatch,
   applyPatchStrict,
-  applyHunk,
   gitCreateBranch,
   gitEnsureClean,
   gitCommit,
