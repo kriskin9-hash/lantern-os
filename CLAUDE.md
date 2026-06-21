@@ -117,12 +117,10 @@ npm run dev --prefix apps/lantern-garage
 # Install dependencies
 python -m pip install -r requirements.txt
 
-# Run all tests (safe subset — excludes known-broken/integration tests)
-python -m pytest tests/ -q --tb=short \
-  --ignore=tests/test_anti_entropy_memory.py \
-  --ignore=tests/test_audit_chain.py \
-  --ignore=tests/test_discord_bot.py \
-  --ignore=tests/test_discord_voice_gate.py
+# Run all tests. The anti-entropy + audit-chain suites pass and are no longer
+# excluded; the discord suites self-skip via importorskip when discord/dpytest are
+# absent, so the full run is clean without --ignore flags (#862).
+python -m pytest tests/ -q --tb=short
 
 # Run a single test file
 python -m pytest tests/test_dream_journal.py -q --tb=short
@@ -220,7 +218,22 @@ CIO accuracy tracking: `python experiments/kalshi_tightband_analysis.py` appends
 
 ### CSF (Convergence-Fitted Searchable Format)
 
-`src/csf/` and `csf/` contain a custom binary archive format used for memory exports and symbolic data compression. See `caad/README.md` for the CADD (Context Archive for Dream Data) spec built on top of CSF.
+CSF is **one** lossless, zstd-backed binary archive. Use the package root:
+`import csf; csf.pack(...)` / `csf.unpack(...)` / `csf.read_file(...)` for
+file/blob archives (per-file SHA-256 + footer integrity), or `csf.compress(...)`
+/ `csf.decompress(...)` for single byte strings. The engine is
+[`src/csf/csf_pack.py`](src/csf/csf_pack.py); the public facade is
+[`src/csf/__init__.py`](src/csf/__init__.py). Full spec:
+**[docs/CSF-FORMAT-SPECIFICATION.md](docs/CSF-FORMAT-SPECIFICATION.md)**.
+
+The v2 consolidation (2026-06) **deleted** the duplicate/legacy *writers*
+(segmented `CsfArchive` v1 + its `csf_compress/decompress/merge/search` CLIs, the
+v0.3 `csf_file` writer, and the lossy v0.7 symbolic *text* compressors) so they
+can't be called by mistake. Existing on-disk archives still open **read-only**
+via [`src/csf/legacy.py`](src/csf/legacy.py). The `src/csf/v07/` lattice
+primitives (the Tesseract "storage face" — `quantum_dust`, `qutrit_delta`) and
+the Status-Cube container are kept. See `caad/README.md` for the CADD layer built
+on top of CSF.
 
 ### Cloud vs local
 

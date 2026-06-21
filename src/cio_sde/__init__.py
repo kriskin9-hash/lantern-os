@@ -46,10 +46,13 @@ from .collapse import (
     ReconstructionOperator,
 )
 from .surprise import SurpriseMonitor, kalman_predict
+from .providers import ProviderDynamics, route_provider_nodes
 
 __all__ = [
     "Dynamics",
     "LinearDynamics",
+    "ProviderDynamics",
+    "route_provider_nodes",
     "PCSFController",
     "CovarianceField",
     "GraphController",

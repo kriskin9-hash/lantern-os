@@ -71,6 +71,78 @@ matching `## [X.X.X] - YYYY-MM-DD` entry below before it can be pushed. See
 
 ---
 
+## [1.5.4] - 2026-06-20
+
+### Added
+- **v10 video-scoring modules** (`lib/feature-extractor-v10.js`, `lib/sigma0-v10-scoring.js`, `lib/analyzer-v10.js`, + offline Python trainers `lib/v10_feature_extractor.py`, `models/train_xgboost_v10.py`) — a data-driven, stability-aware engagement-scoring pipeline (Σ₀ collapse-aware) for the Creator Dashboard. **Cherry-picked from #875** and verified to import cleanly (`tests/test_v10_loads.js`). Currently **dormant** — not yet wired into the live highlight pipeline; wiring it (and whether to replace the existing detection) is a follow-up decision.
+
+### Fixed
+- **`creator-theme.css` was missing** even though `apps/lantern-garage/public/calibration.html` links it (a broken stylesheet reference on master) — added the stylesheet (cherry-picked from #875).
+
+### Notes
+- #875 (external fork "missing work") reviewed in depth; the rest excluded as regressive or junk: a **Keystone->Lantern brand reversion** in `dream-chat.js`, a facecam-rejection reversion in `render-pipeline-v2.js`, a README rewrite, and ~5,500 lines of data/report dumps. Recommend closing #875.
+
+## [1.5.3] - 2026-06-20
+
+### Fixed
+- **Autowork `plan_parse_failed` — robust plan JSON extraction.** The autonomous-work "Generate plan" step (`self-edit-engine.js` `generatePlan`/`extractJson`) aborted with `plan_parse_failed: no valid JSON found` whenever the model wrapped its plan in a lone ```json fence with no closing fence, added a trailing comma or `//`/`/* */` comment, or got cut off mid-JSON (surfaced auto-working #873). `extractJson` now cascades fence → first`{`..last`}` → first`[`..last`]` → repair, tolerates comments/trailing commas, and best-effort-repairs truncated output by closing open strings and unbalanced `{`/`[`. `generatePlan` also retries once with a stricter "raw JSON only" reminder. Added 9 unit tests (`tests/test_self_edit_engine.js`) incl. the exact truncated-fence case; 24/24 pass.
+
+---
+
+## [1.5.2] - 2026-06-20
+
+### Changed
+- **Local Σ₀ coder default flipped to the Ouro model.** `lib/model-registry.js` (`text.coder`) and `lib/model-leaderboard.js` (`preferredLocalModel()`) now default to `ouro:latest` — the Σ₀ Ouro looped coder served by `scripts/ouro_serve.py` on :11434 — instead of the legacy `lantern-sigma0-coder-v2`. `ouro_serve.py` keeps a back-compat allowlist that still serves Ouro for the old name, so the flip is non-breaking. `text.coderLoop.adapterPath` now defaults to the on-disk `D:/lantern-train/ouro-sigma0-adapters/final` (the `/v2` promotion target is not trained yet); removed the dead `adapterPathFallback` field.
+
+### Deprecated
+- **`lantern-sigma0-coder` (Qwen2.5-Coder-3B QLoRA) is deprecated**, superseded by the Σ₀ Ouro Coder. Its Qwen training outputs and Ollama deployment were removed (verified: `lantern-sigma0-coder-v2` no longer appears in Ollama manifests; only the base `qwen2.5-coder` blob remains). `docs/LANTERN-SIGMA0-CODER.md` now carries a deprecation banner and the Knowledge Center card is marked **Legacy**.
+
+### Added
+- Knowledge Center: **Σ₀-K1 Kernel Spec** research card + grounding link (`docs/SIGMA0-K1-KERNEL-SPEC.md`).
+- **Agent rule + Stop hook — "no uncommitted code":** `AGENTS.md` Workspace Hygiene gains a Commit-discipline rule, backed by `scripts/hooks/stop-warn-uncommitted.sh` (wired locally via `.claude/settings.json`) which nudges at end-of-turn when tracked code is left uncommitted.
+
+## [1.5.1] - 2026-06-20
+
+### Changed
+- **Wide-screen "newspaper" reading layout.** The doc reading view (`lib/markdown-render.js` `.md-page`), the Knowledge Center hub (`knowledgecenter.html` `.kc-page`), and the shared `.page` container now use the full width of large displays and flow long-form reading into balanced multi-column text instead of one dense ~820/920px ribbon. Responsive tiers (verified via preview computed styles): `<1100px` single column / 820px (unchanged); `~1080p` ~1640px, 3 columns; ultrawide ~2200px, 4 columns (a long article's height drops from ~8000px to ~1500px). Section headings and wide blocks (code, tables, quotes, rules) span the full width so each section's columns stay short and readable; narrow/mobile screens are unaffected.
+
+### Docs
+- **Refreshed the 32 oldest docs** (first commit ≤ 2026-06-11) that the Knowledge-Center attribution pass (#842) skipped: added `author` / `created` (first-commit date) / `updated` YAML frontmatter — which renders as a byline — and renamed the dead **"Lantern OS" → "Keystone OS"** brand in prose. Code identifiers (`lantern-os`, `lantern-garage`), the README's intentional "formerly Lantern OS" note, and external boilerplate (`CODE_OF_CONDUCT.md`) are preserved.
+
+---
+
+## [1.5.0] - 2026-06-20
+
+### Changed
+- **CSF consolidated to ONE canonical, lossless, zstd-backed format (v2)** (landed in `5a252b5b`). The public API is now the package root `csf` (`import csf; csf.pack/unpack/read_file/list_archive` for file/blob archives, `csf.compress/decompress` for single byte strings), a thin facade over the engine `csf/csf_pack.py`. Added single-blob stream helpers `compress_bytes`/`decompress_bytes`.
+- Existing on-disk archives still open **read-only** via the new `csf/legacy.py` (modern `CSF\0` → core; raw DEFLATE dream-preview blobs → inflate; unknown → clear error). No data loss: every `.csf` present in the repo is read by a kept module.
+
+### Removed
+- Deleted the duplicate/legacy CSF **writers** so they can't be called by mistake: the segmented `CsfArchive` v1 (`csf/__init__.py` class, `csf/header.py`, `csf/dictionary.py`, `csf/sparse.py`, `csf/search.py`) and its CLIs (`csf_compress.py`, `csf_decompress.py`, `csf_merge.py`, `csf_search.py`); the root `csf/csf_file.py` v0.3 symbolic writer; and the **lossy, non-invertible** v0.7 symbolic text compressors (`csf/v07/csf_symbolic_compressor.py` and the `ClassicalCompressor` class — kept its `SymbolicDictionary`/sparse primitives).
+- Deleted dead modules with no importers: `csf/trading_cube.py`, `csf/convergence.py`, `csf/dream_compressor.py`. Removed `scripts/Test-CsfSymbolicCompression.py`.
+
+### Kept
+- The 3¹² lattice "storage face" primitives (`csf/v07/quantum_dust.py`, `qutrit_delta.py`, `convergence_engine.py`), the Status-Cube binary container (`csf/v07/csf_file.py`), and the data models (`status_cube.py`, `memory_engine.py`, `trading_memory.py`). CSF stores a *point* on the lattice; it is not the lattice (see `docs/TESSERACT-CSF-SINGULARITY.md`).
+
+### Fixed / rewired
+- Rewired live callers to the canonical core: `scripts/consolidate_md_to_csf.py` (now **bit-perfect** lossless, was a lossy round-trip), `src/dream_journal/orchestrator.py` `export_csf`, and `scripts/csf_research_tesseract.py` (dropped dead native-CSF path). Updated `scripts/csf_pack_benchmark.py`, `experiments/csf_compression_benchmark.py`, and `tests/test_csf.py` (now exercises the core + legacy decoder). 129 CSF tests pass.
+- Documented the consolidation in `docs/CSF-FORMAT-SPECIFICATION.md` (canonical v2 + retired-format table + read-only bridge) and `CLAUDE.md`.
+
+---
+
+## [1.4.16] - 2026-06-20
+
+### Added
+- **`patreon_auth` feature flag — an admin kill-switch for the Patreon login gate.** When the flag is OFF, unauthenticated visitors are treated as guests instead of being bounced to `/auth.html`, so the site stays usable when Patreon OAuth isn't configured. The gate is enforced in `requireAuth` / `requireRole` / `requireEntitlement` (`apps/lantern-garage/lib/auth-middleware.js`); with the gate off, privileged surfaces stay protected — `requireRole('admin')` and `requireEntitlement('trade')` return **403** (not a redirect) rather than exposing the admin page or the trade/money API. The `/api/auth/session` response now carries `authRequired` so `auth-gate.js` skips the client-side redirect too. Defaults **ON** when the flag was never created (via new `feature-flags.isFlagEnabledOr`), so the gate never silently drops open on a fresh install. Toggle it from the admin flags surface (`PUT /api/admin/flags { key:"patreon_auth", enabled:false }`).
+- `tests/test_patreon_auth_flag.js` — covers the on/off matrix and proves admin/trade stay gated when the flag is off.
+
+## [1.4.15] - 2026-06-20
+
+### Fixed
+- **Autowork can now land its patches.** The autonomous-work loop (`!work #N` in dream-chat → `/api/convergence/autonomous-work/stream`) correctly diagnosed and patched issues but aborted at `apply` with `patch_did_not_apply` — `git apply` can't fuzzy-match context (and `--3way` is useless on LLM diffs with no `index` line), and the in-process fallback was exact-match: it threw on `hunk_old_count_mismatch` (LLM `@@` headers are routinely off-by-one) before even trying to locate the change. Rewrote the fallback applier in `self-edit-engine.js` to be **fuzzy**: it ignores the `@@` header counts, locates each hunk by content (exact pass, then whitespace-normalized), applies hunks high-line-first, and preserves the file's EOL. Verified against the exact diff that previously failed (#854, surfaced while autoworking #836) plus a regression suite (`tests/test_self_edit_fuzzy_apply.js`) covering wrong header counts, line drift, whitespace fuzz, CRLF, and absent-context safety.
+
+---
+
 ## [1.4.14] - 2026-06-20
 
 ### Security

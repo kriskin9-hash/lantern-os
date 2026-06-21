@@ -82,15 +82,6 @@ def main():
         dt = time.perf_counter() - t
         results["tar.gz"] = (out.stat().st_size, dt, True, "no per-file checksum")
 
-    # legacy symbolic CSF writer — can it even store the bytes?
-    legacy_note = ""
-    try:
-        from csf.csf_file import CSFWriter  # noqa
-        legacy_note = "exists but payload capped at 255 B/record — cannot store arbitrary files"
-        results["legacy symbolic CSF"] = (None, None, False, legacy_note)
-    except Exception as e:  # pragma: no cover
-        results["legacy symbolic CSF"] = (None, None, False, f"unavailable: {e}")
-
     print(f"{'Format':<22}{'Size':>10}{'Ratio':>8}{'Time':>8}   Integrity / notes")
     print("-" * 92)
     for name, (size, dt, ok, note) in results.items():

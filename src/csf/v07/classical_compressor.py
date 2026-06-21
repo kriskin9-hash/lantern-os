@@ -1,16 +1,16 @@
-"""Classical Compressor v0.7 — hybrid pipeline optimized for 3^12 symbolic data.
+"""CSF v0.7 symbolic *primitives* (post-v2 consolidation).
 
-Combines the best classical techniques:
-  1. Dictionary encoding for recurring symbols/anchors.
-  2. Sparse CSR for mostly-static regions.
-  3. Delta encoding for sequential observations.
-  4. Low-rank baseline approximation (SVD-style on coarse grid).
-  5. Multi-level convergence for aggressive baseline collapse.
-  6. zlib/DEFLATE (level 3) final byte-level pass.
+This module once held a lossy ``ClassicalCompressor`` (a non-invertible
+"symbolic" text/field compressor). That lossy compressor was **removed** in the
+v2 CSF consolidation (2026-06) — use :mod:`csf` (zstd-backed, lossless) for real
+compression. What remains here are the reusable, lossless primitives still
+needed by the kept v0.7 binary container (:mod:`csf.v07.csf_file`) and the
+Status-Cube store (:mod:`csf.status_cube`):
 
-This is the classical-computer-optimized heart of CSF v0.7.
-NOTE: the final pass is zlib, not zstd (earlier docs misstated this). For
-strong, reversible byte-level compression use `csf.csf_pack` (zstd-19).
+  * ``SymbolicDictionary`` — token ↔ id table (serialisable).
+  * ``encode_sparse`` / ``decode_sparse`` — CSR-style sparse block coding.
+
+No lossy or "ratio"-reporting code lives here anymore.
 """
 
 from __future__ import annotations
@@ -20,10 +20,7 @@ import struct
 import zlib
 from collections import Counter
 from dataclasses import dataclass
-from typing import BinaryIO, Dict, List, Optional, Tuple
-
-from .qutrit_delta import NUM_DIMENSIONS, QutritDelta, QutritState
-from .quantum_dust import QuantumDustField
+from typing import Dict, List, Tuple
 
 
 # ------------------------------------------------------------------
@@ -139,242 +136,3 @@ def decode_sparse(meta: bytes, compressed: bytes) -> bytes:
         output[start:end] = block_data[:end - start]
 
     return bytes(output)
-
-
-# ------------------------------------------------------------------
-# Low-Rank Baseline Approximation (L3)
-# ------------------------------------------------------------------
-
-@dataclass
-class LowRankBaseline:
-    """Approximate baseline as a low-rank matrix for coarse-grid positions.
-
-    For classical computers, we approximate the 3^12 space by sampling
-    a coarse grid (e.g., every N positions) and storing only the non-default
-    samples. This is effectively a manual low-rank approximation.
-    """
-    grid_step: int  # Sample every N positions
-    default_state: List[QutritState]
-    samples: Dict[int, List[QutritState]]  # Sparse samples
-
-
-def build_low_rank_baseline(
-    field: QuantumDustField,
-    grid_step: int = 27,  # 3^3, coarse but meaningful
-) -> LowRankBaseline:
-    """Sample the baseline at coarse grid points."""
-    default = [QutritState(0, 0) for _ in range(NUM_DIMENSIONS)]
-    samples: Dict[int, List[QutritState]] = {}
-
-    for pos in sorted(field.baseline.keys()):
-        if pos % grid_step == 0:
-            samples[pos] = field.baseline[pos]
-
-    return LowRankBaseline(
-        grid_step=grid_step,
-        default_state=default,
-        samples=samples,
-    )
-
-
-# ------------------------------------------------------------------
-# Full Hybrid Pipeline
-# ------------------------------------------------------------------
-
-@dataclass
-class CompressionResult:
-    original_bytes: int
-    compressed_bytes: int
-    ratio: float
-    dictionary_size: int
-    baseline_positions: int
-    active_deltas: int
-    dust_percentage: float
-    # v0.7: convergence metadata
-    convergence_levels: int = 0
-    positions_collapsed: int = 0
-    clusters_promoted: int = 0
-    threshold_final: float = 0.0
-
-
-class ClassicalCompressor:
-    """End-to-end classical compression for symbolic data."""
-
-    def __init__(self, block_size: int = 512):
-        self.block_size = block_size
-        self.dictionary = SymbolicDictionary()
-
-    def compress_text(self, text: str) -> Tuple[bytes, CompressionResult]:
-        """Compress plain text using hybrid classical pipeline.
-
-        ⚠️  LOSSY / NON-INVERTIBLE — analysis only, no decoder (see the
-        sibling `csf_symbolic_compressor` module header). The tokenizer drops
-        digits/whitespace/most punctuation, so the original cannot be rebuilt;
-        the returned ratio is not a real compression ratio.
-
-        Strategy for normal text (where CSF is not expected to beat ZIP):
-          1. Tokenize into words + punctuation.
-          2. Dictionary-encode frequent tokens.
-          3. Represent as token-ID stream.
-          4. Sparse-encode the token stream (many repeats = sparse).
-          5. zlib/DEFLATE (level 3) final pass.  [NOT zstd]
-
-        For symbolic text with anchors, the dictionary step captures
-        recurring concepts and the sparse step handles the static structure.
-        """
-        # Step 1: Simple tokenization
-        tokens = _tokenize(text)
-
-        # Step 2: Build dictionary
-        self.dictionary.train(tokens)
-
-        # Step 3: Encode to token IDs
-        ids = [self.dictionary.encode(t) for t in tokens]
-        id_bytes = _pack_varints(ids)
-
-        # Step 4: Sparse encoding (text often has repeated/default patterns)
-        meta, sparse_compressed = encode_sparse(
-            id_bytes, default_value=0, block_size=self.block_size
-        )
-
-        # Step 5: Assemble and final zstd
-        dict_bytes = self.dictionary.to_bytes()
-        body = io.BytesIO()
-        body.write(struct.pack(">I", len(dict_bytes)))
-        body.write(dict_bytes)
-        body.write(meta)
-        body.write(sparse_compressed)
-
-        final = zlib.compress(body.getvalue(), level=3)
-
-        original = len(text.encode("utf-8"))
-        compressed = len(final)
-        ratio = 1.0 - (compressed / original) if original else 0.0
-
-        result = CompressionResult(
-            original_bytes=original,
-            compressed_bytes=compressed,
-            ratio=ratio,
-            dictionary_size=len(self.dictionary._token_to_id),
-            baseline_positions=0,
-            active_deltas=len(tokens),
-            dust_percentage=0.0,
-        )
-        return final, result
-
-    def compress_field(self, field: QuantumDustField) -> Tuple[bytes, CompressionResult]:
-        """Compress a QuantumDustField using the full v0.7 pipeline.
-
-        v0.7: Uses multi-level convergence with cluster promotion for
-        aggressive baseline collapse before encoding.
-        """
-        from .convergence_engine import multi_level_convergence
-
-        # Step 1: Multi-level convergence (coarse → fine)
-        # v0.7: run convergence on the field directly, leveraging the
-        # built-in delta deduplication and cached get_state.
-        convergence_results = multi_level_convergence(
-            field,
-            levels=[0.24, 0.14, 0.08, 0.05],
-            promote_clusters=True,
-        )
-        total_collapsed = sum(r.collapsed for r in convergence_results)
-        total_promoted = sum(r.clusters_promoted for r in convergence_results)
-        final_threshold = (
-            convergence_results[-1].threshold_used
-            if convergence_results else field.convergence_threshold
-        )
-
-        # Step 2: Compact any zero deltas left after convergence
-        field.compact()
-
-        # Step 3: Baseline as low-rank approximation
-        low_rank = build_low_rank_baseline(field)
-
-        # Step 4: Encode active deltas
-        delta_buf = io.BytesIO()
-        delta_buf.write(struct.pack(">I", len(field.active_deltas)))
-        for pos, deltas in sorted(field.active_deltas.items()):
-            from .qutrit_delta import pack_delta_list
-            delta_buf.write(struct.pack(">I", pos))
-            delta_buf.write(pack_delta_list(deltas))
-
-        # Step 5: Encode low-rank baseline samples
-        base_buf = io.BytesIO()
-        base_buf.write(struct.pack(">I", low_rank.grid_step))
-        base_buf.write(struct.pack(">I", len(low_rank.samples)))
-        for pos, states in sorted(low_rank.samples.items()):
-            base_buf.write(struct.pack(">I", pos))
-            for s in states:
-                base_buf.write(struct.pack(">BB", s.amplitude, s.phase))
-
-        # Step 6: Sparse + Zstd
-        meta, sparse_data = encode_sparse(
-            delta_buf.getvalue(), default_value=0, block_size=self.block_size
-        )
-
-        body = io.BytesIO()
-        body.write(base_buf.getvalue())
-        body.write(meta)
-        body.write(sparse_data)
-
-        final = zlib.compress(body.getvalue(), level=3)
-
-        original = field.total_positions * NUM_DIMENSIONS * 2  # Rough: 2 bytes per qutrit
-        compressed = len(final)
-        ratio = 1.0 - (compressed / original) if original else 0.0
-
-        result = CompressionResult(
-            original_bytes=original,
-            compressed_bytes=compressed,
-            ratio=ratio,
-            dictionary_size=0,
-            baseline_positions=len(field.baseline),
-            active_deltas=sum(len(d) for d in field.active_deltas.values()),
-            dust_percentage=field.dust_percentage,
-            # v0.7 metadata
-            convergence_levels=len(convergence_results),
-            positions_collapsed=total_collapsed,
-            clusters_promoted=total_promoted,
-            threshold_final=final_threshold,
-        )
-        return final, result
-
-
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-def _tokenize(text: str) -> List[str]:
-    """Simple whitespace + punctuation tokenizer."""
-    import re
-    return re.findall(r"[\w']+|[.,;!?—\-]", text)
-
-
-def _pack_varints(values: List[int]) -> bytes:
-    """Pack a list of non-negative ints as LEB128 varints."""
-    buf = bytearray()
-    for v in values:
-        while v >= 128:
-            buf.append((v & 0x7F) | 0x80)
-            v >>= 7
-        buf.append(v)
-    return bytes(buf)
-
-
-def _unpack_varints(data: bytes) -> List[int]:
-    """Unpack LEB128 varints."""
-    values = []
-    i = 0
-    while i < len(data):
-        v = 0
-        shift = 0
-        while True:
-            b = data[i]
-            i += 1
-            v |= (b & 0x7F) << shift
-            if not (b & 0x80):
-                break
-            shift += 7
-        values.append(v)
-    return values

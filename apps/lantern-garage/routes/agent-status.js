@@ -53,14 +53,20 @@ async function buildStatusPayload() {
     return `${Math.round(ms / 3600_000)}h`;
   }
 
+  // Resolve a slot's lane from whichever field the config actually provides.
+  // agent-slots.json defines slots with `prefix`/`id` and no `lane`, so reading
+  // `s.lane` directly throws "Cannot read properties of undefined (reading 'replace')"
+  // the moment any slot is enabled+working (#836).
+  const laneOf = (s) => String(s.lane || s.prefix || s.id || "").replace(/\/$/, "");
+
   const laneLines = slots.map(s => {
     const working = assigned.find(e => e.assignedTo === s.id);
     if (s.status === "working" && working) {
       const age = Date.now() - new Date(working.assignedAt).getTime();
-      return `${s.lane.replace(/\/$/, "")} lane: Issue #${working.issueNumber} — working ${fmt(age)}`;
+      return `${laneOf(s)} lane: Issue #${working.issueNumber} — working ${fmt(age)}`;
     }
-    if (!s.enabled) return `${s.lane.replace(/\/$/, "")} lane: Disabled`;
-    return `${s.lane.replace(/\/$/, "")} lane: Ready`;
+    if (!s.enabled) return `${laneOf(s)} lane: Disabled`;
+    return `${laneOf(s)} lane: Ready`;
   });
 
   const stats = asm.getStats();
@@ -75,7 +81,7 @@ async function buildStatusPayload() {
 
   return {
     text,
-    slots: slots.map(s => ({ id: s.id, lane: s.lane, status: s.status, enabled: s.enabled })),
+    slots: slots.map(s => ({ id: s.id, lane: laneOf(s), status: s.status, enabled: s.enabled })),
     queue: {
       pending: pendingCount,
       working: workingCount,

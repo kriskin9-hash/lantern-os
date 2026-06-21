@@ -23,15 +23,15 @@ const ALLOWED = [
   { match: /^git log$/, cmd: "git log -n 20" },
   { match: /^git log --oneline$/, cmd: "git log --oneline -n 20" },
   { match: /^git log --oneline -\d+$/, cmd: null }, // pass through
-  { match: /^git add (.+)$/, cmd: null },
-  { match: /^git commit -m "(.+)"$/, cmd: null },
+  { match: /^git add [\w./-]+$/, cmd: null },
+  { match: /^git commit -m "[^"$`;|&<>\n]+"$/, cmd: null },
   { match: /^git push(.*)$/, cmd: null },
   { match: /^git fetch (.+)$/, cmd: null },
   { match: /^git merge (.+) --no-edit$/, cmd: null },
   { match: /^git branch$/, cmd: "git branch" },
   { match: /^git branch -a$/, cmd: "git branch -a" },
   { match: /^git stash list$/, cmd: "git stash list" },
-  { match: /^git stash push -m "(.+)"$/, cmd: null },
+  { match: /^git stash push -m "[^"$`;|&<>\n]+"$/, cmd: null },
   { match: /^git stash pop$/, cmd: "git stash pop" },
   { match: /^git pull(.*)$/, cmd: null },
   // Tests
@@ -40,14 +40,14 @@ const ALLOWED = [
   { match: /^node tests\/test_dream_journal_chat\.js$/, cmd: null },
   { match: /^node tests\/test_dream_chat_multiturns\.js$/, cmd: null },
   { match: /^node tests\/test_dream_journal_keystone\.js$/, cmd: null },
-  { match: /^python -m pytest (.+)$/, cmd: null },
-  { match: /^npm run (.+)$/, cmd: null },
-  { match: /^node --check (.+)$/, cmd: null },
+  { match: /^python -m pytest tests\/[\w./-]+\.py$/, cmd: null },
+  { match: /^npm run [\w:-]+$/, cmd: null },
+  { match: /^node --check [\w./-]+\.js$/, cmd: null },
   // Orchestrator
   { match: /^python src\/convergence_io_engine\.py (health|inspect|loop)$/, cmd: null },
   // File reads (read-only)
-  { match: /^cat (.+\.json|.+\.md|.+\.js|.+\.py|.+\.txt)$/, cmd: null },
-  { match: /^head -\d+ (.+)$/, cmd: null },
+  { match: /^cat [\w./-]+\.(json|md|js|py|txt)$/, cmd: null },
+  { match: /^head -\d+ [\w./-]+$/, cmd: null },
   // GitHub CLI
   { match: /^gh pr list.*$/, cmd: null },
   { match: /^gh pr create.*$/, cmd: null },

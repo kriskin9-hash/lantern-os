@@ -117,6 +117,37 @@ def _file_codec(fe: dict) -> str:
     return "zlib" if fe.get("compressed") else "store"
 
 
+# ---------------------------------------------------------------------------
+# Single-blob stream helpers (lightweight; 1-byte codec header, no integrity)
+# ---------------------------------------------------------------------------
+
+_CODEC_IDS = {"store": 0, "zlib": 1, "zstd": 2}
+_CODEC_BY_ID = {v: k for k, v in _CODEC_IDS.items()}
+
+
+def compress_bytes(data: bytes, codec: str | None = None) -> bytes:
+    """Compress one byte string: 1-byte codec header + payload.
+
+    Lightweight stream form (no manifest / per-file hashing). For multi-file
+    archives with integrity use pack()/pack_blobs()/unpack().
+    """
+    if codec is None:
+        codec = DEFAULT_CODEC
+    if codec not in _CODEC_IDS:
+        raise ValueError(f"unknown codec: {codec!r}")
+    return bytes([_CODEC_IDS[codec]]) + _compress_blob(data, codec)
+
+
+def decompress_bytes(blob: bytes) -> bytes:
+    """Inverse of compress_bytes()."""
+    if not blob:
+        return b""
+    codec = _CODEC_BY_ID.get(blob[0])
+    if codec is None:
+        raise ValueError(f"unknown codec id {blob[0]}")
+    return _decompress_blob(blob[1:], codec)
+
+
 def _train_dict(raws: list[bytes]) -> "object | None":
     """Train a zstd dictionary over file contents. Returns dict or None if not viable."""
     if _zstd is None:

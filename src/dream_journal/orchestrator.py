@@ -104,9 +104,7 @@ class KeystoneBot(DreamBot):
 try:
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from csf.csf_file import CSFWriter, SymbolicDictionary
-    from csf.delta_stream import DeltaType
-    from csf.base3 import _to_scalar
+    import csf  # canonical lossless CSF core
     _CSF_AVAILABLE = True
 except Exception:
     _CSF_AVAILABLE = False
@@ -338,31 +336,14 @@ class DreamJournalOrchestrator:
 
     def export_csf(self, path: str | Path) -> Dict[str, Any]:
         """
-        Export current dream memory to a CSF v0.3 compressed symbolic archive.
-        Embeds Convergence IO provenance and DCF classifications.
-        Returns metadata about the written archive.
+        Export current dream memory to a CSF archive (canonical lossless core).
+        One verified JSON member per dream, embedding Convergence IO provenance
+        and DCF classifications. Returns metadata about the written archive.
         """
         if not _CSF_AVAILABLE:
             return {"ok": False, "error": "CSF module not available", "path": str(path)}
         try:
-            writer = CSFWriter()
-            # Encode symbolic tags into dictionary
-            for entry in self.memory:
-                for tag in entry.symbolic_tags:
-                    writer.dictionary.encode_name(tag)
-                for emo in entry.emotion_tags:
-                    writer.dictionary.encode_name(emo)
-                # Encode responder bot
-                if entry.responder:
-                    writer.dictionary.encode_name(entry.responder)
-                # Encode DCF labels if present
-                dcf = getattr(entry, "_dcf", None)
-                if dcf:
-                    for label in dcf.get("labels", []):
-                        writer.dictionary.encode_name(label)
-            # Write lightweight baseline (empty for now; deltas carry content)
-            writer.set_baseline({})
-            # Add each dream as a delta record
+            blobs: Dict[str, bytes] = {}
             for idx, entry in enumerate(self.memory):
                 dream_payload = {
                     "id": entry.id,
@@ -385,22 +366,22 @@ class DreamJournalOrchestrator:
                         }
                     except Exception:
                         pass
-                payload = json.dumps(dream_payload, ensure_ascii=False).encode("utf-8")
-                writer.add_delta(
-                    level=1,
-                    dtype=DeltaType.CONVERGENCE_EVENT,
-                    position=(idx % 3, (idx // 3) % 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-                    payload=payload,
-                )
-            meta = writer.write(path)
+                blobs[f"dreams/{idx:04d}-{entry.id}.json"] = json.dumps(
+                    dream_payload, ensure_ascii=False
+                ).encode("utf-8")
+            manifest = csf.pack_blobs(
+                blobs, str(path),
+                extra_meta={"kind": "dream-journal", "tier": self.tier,
+                            "dream_count": len(blobs)},
+            )
             return {
                 "ok": True,
                 "path": str(path),
-                "version": f"{meta.version[0]}.{meta.version[1]}",
-                "delta_count": meta.delta_count,
-                "dictionary_size": meta.dictionary_size,
-                "total_bytes": meta.total_bytes,
-                "convergence_io": {"tier": self.tier, "embedded": True},
+                "format": f"csf-pack/{manifest['version']}",
+                "codec": manifest.get("codec"),
+                "dream_count": len(blobs),
+                "total_bytes": Path(path).stat().st_size,
+                "convergence_io": {"tier": self.tier, "embedded": self.cio is not None},
             }
         except Exception as exc:
             return {"ok": False, "error": str(exc), "path": str(path)}

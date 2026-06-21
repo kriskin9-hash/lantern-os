@@ -47,6 +47,22 @@ def score(expected: str, reply: str) -> bool:
     return all(key_ok(k) for k in keys)
 
 
+def verbosity(replies, n_correct):
+    """Bytes/words spent per CORRECT continuation (Gate F, #851). Lower is better —
+    it rewards a kernel that is both correct AND concise, the cost the accuracy
+    column can't see. ``*_per_correct`` is None when nothing passed. Mirrors
+    eval_coding_ouro.verbosity so the leaderboard column means the same everywhere."""
+    n = len(replies)
+    total_bytes = sum(len(r.encode("utf-8")) for r in replies)
+    total_words = sum(len(r.split()) for r in replies)
+    return {
+        "total_reply_bytes": total_bytes,
+        "avg_reply_bytes": round(total_bytes / n, 1) if n else 0.0,
+        "bytes_per_correct": round(total_bytes / n_correct, 1) if n_correct else None,
+        "words_per_correct": round(total_words / n_correct, 1) if n_correct else None,
+    }
+
+
 def ask(base: str, model: str, prompt: str, num_predict: int, timeout: float):
     payload = json.dumps({
         "model": model, "stream": False,
@@ -156,6 +172,8 @@ def main():
         "pass@1": round(n_ok / n, 3) if n else 0.0,  # alias for cross-benchmark summary
         "avg_latency_s": round(total_dt / n, 2) if n else 0.0,
         "tok_per_s": round(approx_tokens / total_dt, 1) if total_dt else 0.0,
+        # Gate F (#851): served cost per CORRECT continuation — track it down vs baseline.
+        **verbosity([d["reply"] for d in detail], n_ok),
         # E1: realized latent depth; E2: did the loop contract?
         "mean_depth": round(sum(depths) / len(depths), 2) if depths else None,
         "mean_contraction": round(sum(contractions) / len(contractions), 4) if contractions else None,
