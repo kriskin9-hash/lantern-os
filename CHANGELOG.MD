@@ -15,6 +15,13 @@ matching `## [X.X.X] - YYYY-MM-DD` entry below before it can be pushed. See
 
 ---
 
+## [1.6.0] - 2026-06-21
+
+### Added
+- **CSF-Omni codec — deterministic best-fit compression (`codec="omni"`).** New [`src/csf/omni.py`](src/csf/omni.py): runs the whole codec panel (store/zlib/bz2/lzma/zstd/brotli + a byte-delta transform) per blob, round-trip-verifies each candidate, and emits the smallest behind a 7-byte self-describing, **CRC-32** header. Wired into `csf_pack` as a 4th codec alongside `zstd`/`zlib`/`store` (backward-compatible — v0.8 zstd/zlib/store archives still read byte-for-byte). It is the **upper envelope**: on three real corpora it beats every other codec (zlib/zstd/lzma/bz2) on every single stream and *ties* the brotli frontier within its header — it does **not** beat brotli's raw bytes (no PPMd/paq available). Honest result vs the shipped zstd-19: per-stream **+2.8 % / +16.3 % / +6.5 %**; on the multi-file archive only **+2 %** over `zstd`+shared-dict (`use_dict=True`) at ~7× the encode, so **zstd stays the default** and omni is the opt-in max-ratio tier for single-stream cold/archival blobs. The CRC catches corruption a raw zstd/brotli frame returns silently; `portable=True` restricts to stdlib codecs. Verified by a round-trip benchmark ([`experiments/csf_compression_benchmark.py`](experiments/csf_compression_benchmark.py)) + a 6-agent adversarial review (2 defects found & fixed: a corrupt brotli payload could decode to silently-wrong bytes → CRC + `ValueError` decode contract; a docstring over-claim → envelope wording). Docs: [`docs/CSF-FORMAT-SPECIFICATION.md`](docs/CSF-FORMAT-SPECIFICATION.md) §2.7.1 + report `/reports/csf-compression-benchmark.pdf`. Tests: [`tests/test_csf_pack.py`](tests/test_csf_pack.py) (omni round-trip, CRC integrity, payload-envelope).
+
+---
+
 ## [1.5.10] - 2026-06-21
 
 ### Added
@@ -24,6 +31,7 @@ matching `## [X.X.X] - YYYY-MM-DD` entry below before it can be pushed. See
   - **♥ Support** — Patreon tier cards grounded in the real campaign tier map (Wanderer $5 / Deep Dreamer $20 / Synthesasia Guild $200), replacing the bare support link.
 - Both new routes follow the existing `routes/youtube.js` discipline (in-memory cache + verified baked fallback) and are registered in `server.js` before the static catch-all.
 - **Explore embeds surfaced in Keystone chat.** `dream-chat-ui.js` `sendMessage()` now detects an embed-intent (bang commands `!videos` / `!discover` / `!build` / `!support` / `!embeds`, or a natural-language "show/what/latest" framing) and renders the matching embed inline — reusing the same cached `/api/{youtube,feeds,github}` routes. Deterministic, no LLM cost; mirrors the existing `!convergence` / `WORK_INTENT` intercept pattern. Negatives (dream journaling, work queries, "I need support today") deliberately do not trigger.
+>>>>>>> origin/master
 
 ## [1.5.9] - 2026-06-21
 
