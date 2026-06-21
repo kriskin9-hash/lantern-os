@@ -13,6 +13,16 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List
 
 from .objects import ConvergenceRecord
+from .grounding import GroundingEnvelope, grounding_precision as _grounding_precision
+
+
+def grounding_precision_over_records(records: Iterable[ConvergenceRecord], *,
+                                     threshold: float = 0.7) -> float:
+    """Grounding-precision (#849) over ConvergenceRecords — each mapped to its 4-field
+    envelope: of the high-confidence records, the fraction that cite evidence."""
+    return _grounding_precision(
+        (GroundingEnvelope.from_record(r) for r in records), threshold=threshold
+    )
 
 
 def snapshot_metrics(records: Iterable[ConvergenceRecord]) -> Dict[str, Any]:
