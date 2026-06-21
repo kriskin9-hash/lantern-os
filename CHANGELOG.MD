@@ -71,6 +71,13 @@ matching `## [X.X.X] - YYYY-MM-DD` entry below before it can be pushed. See
 
 ---
 
+## [1.5.6] - 2026-06-20
+
+### Security
+- **Closed issue-driven command injection in autowork + the Keystone console (#873).** The self-edit test runner (`self-edit-engine.runTests`) and `/api/keystone/exec` ran allowlisted command *strings* through `execSync` (a shell), so a porous capture group (`pytest tests/(.+).py`, `git commit -m "(.+)"`) could smuggle `;`, `$(…)`, backticks, `|`, `>` and execute arbitrary commands; `gitCommit` was likewise injectable (`git commit -m "${msg}"` only stripped `"`, not `$(…)`). New shared `apps/lantern-garage/lib/safe-exec.js` runs everything **shell-free**: `tokenizeCommand()` splits to argv and rejects shell metacharacters/unbalanced quotes, and `safeExec()` uses `execFileSync({ shell:false })` (running npm/npx/yarn/pnpm `.cmd` shims via `cmd.exe /c <argv>` on Windows so going shell-free doesn't break `npm`). All `execSync` in `self-edit-engine.js` and `routes/keystone.js` is replaced; allowlist capture groups are charset-restricted. Legit commands are unchanged; injection-shaped input is denied at the allowlist and again at tokenize. Tests: `tests/test_safe_exec.js` (16, incl. the `$(whoami)` and pytest-wildcard cases + a no-shell proof). Supersedes the partial autowork PR #882.
+
+---
+
 ## [1.5.5] - 2026-06-20
 
 ### Added
