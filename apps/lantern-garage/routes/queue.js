@@ -471,6 +471,127 @@ module.exports = async function queueRoutes(req, res, url, deps) {
     return true;
   }
 
+  // ── POST /api/queue/assign ──
+  // Assign the highest-priority pending issue to the best-fit idle agent slot.
+  // Body (optional): { issueNumber } — pin a specific issue; omit to pick top of queue.
+  // Writes an assignment record to data/agent-work-queue/assigned/issue-<N>.json
+  // and invalidates the open-issues cache so the item is excluded from pending.
+  if (url.pathname === "/api/queue/assign" && req.method === "POST") {
+    try {
+      const raw = await collectRequestBody(req);
+      const body = raw ? JSON.parse(raw) : {};
+
+      const open = loadOpenIssues(repoRoot);
+      if (open.error) {
+        sendJson(res, { ok: false, error: open.error, message: open.message }, 503);
+        return true;
+      }
+
+      let issue = null;
+      if (body.issueNumber) {
+        issue = (open.items || []).find((i) => i.issueNumber === body.issueNumber) || null;
+        if (!issue) {
+          sendJson(res, { ok: false, error: `issue #${body.issueNumber} not found in pending queue` }, 404);
+          return true;
+        }
+      } else {
+        issue = (open.items || [])[0] || null;
+      }
+
+      if (!issue) {
+        sendJson(res, { ok: false, error: "no_pending_issues", message: "Queue is empty" });
+        return true;
+      }
+
+      const { slots } = loadAgentSlots(repoRoot);
+      const slot = pickBestFitSlot(issue, slots);
+
+      if (!slot) {
+        sendJson(res, { ok: false, error: "no_idle_agents", message: "All agent slots are busy" });
+        return true;
+      }
+
+      // Write assignment record.
+      const assignedDir = path.join(repoRoot, "data", "agent-work-queue", "assigned");
+      if (!fs.existsSync(assignedDir)) fs.mkdirSync(assignedDir, { recursive: true });
+
+      const assignment = {
+        ...issue,
+        status: "assigned",
+        assignedTo: slot.id,
+        assignedAgent: slot.agent,
+        assignedAt: new Date().toISOString(),
+        fitScore: scoreFitness(issue.labels || [], slot.responsibilities || []),
+      };
+
+      fs.writeFileSync(
+        path.join(assignedDir, `issue-${issue.issueNumber}.json`),
+        JSON.stringify(assignment, null, 2)
+      );
+
+      // Bust cache so the next pending-queue fetch reflects the new assignment.
+      _openIssuesCache = null;
+
+      console.log(`[Queue] Assigned #${issue.issueNumber} → ${slot.id} (fit=${assignment.fitScore})`);
+      sendJson(res, { ok: true, assignment });
+      return true;
+    } catch (err) {
+      console.error("[Queue] Assign error:", err);
+      sendJson(res, { error: err.message }, 500);
+      return true;
+    }
+  }
+
+  // ── POST /api/queue/dispatch-all ──
+  // Greedily assign pending issues to all idle agents until queue or slots are exhausted.
+  // Returns a list of all assignments made in this run.
+  if (url.pathname === "/api/queue/dispatch-all" && req.method === "POST") {
+    try {
+      const assignedDir = path.join(repoRoot, "data", "agent-work-queue", "assigned");
+      if (!fs.existsSync(assignedDir)) fs.mkdirSync(assignedDir, { recursive: true });
+
+      const assignments = [];
+      let iterations = 0;
+      const MAX_ITERATIONS = 50;
+
+      while (iterations++ < MAX_ITERATIONS) {
+        // Re-read queue + slots each iteration (assignments from prior loop bust caches).
+        const open = loadOpenIssues(repoRoot);
+        if (open.error || !(open.items || []).length) break;
+
+        const { slots } = loadAgentSlots(repoRoot);
+        const issue = open.items[0];
+        const slot = pickBestFitSlot(issue, slots);
+        if (!slot) break; // no more idle slots
+
+        const assignment = {
+          ...issue,
+          status: "assigned",
+          assignedTo: slot.id,
+          assignedAgent: slot.agent,
+          assignedAt: new Date().toISOString(),
+          fitScore: scoreFitness(issue.labels || [], slot.responsibilities || []),
+        };
+
+        fs.writeFileSync(
+          path.join(assignedDir, `issue-${issue.issueNumber}.json`),
+          JSON.stringify(assignment, null, 2)
+        );
+
+        _openIssuesCache = null; // bust so next iteration sees updated claimed set
+        assignments.push({ issueNumber: issue.issueNumber, title: issue.title, slot: slot.id, fitScore: assignment.fitScore });
+        console.log(`[Queue] dispatch-all: #${issue.issueNumber} → ${slot.id} (fit=${assignment.fitScore})`);
+      }
+
+      sendJson(res, { ok: true, dispatched: assignments.length, assignments });
+      return true;
+    } catch (err) {
+      console.error("[Queue] Dispatch-all error:", err);
+      sendJson(res, { error: err.message }, 500);
+      return true;
+    }
+  }
+
   return false;
 };
 
