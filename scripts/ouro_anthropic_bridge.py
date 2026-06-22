@@ -90,8 +90,23 @@ def _render_tools(tools):
         lines.append(f"Description: {desc}")
         lines.append(f"Input (JSON schema): {schema}")
         lines.append(f"Example: <tool_call>{ex}</tool_call>")
+    # Forced-positive few-shot: one call example + one no-call example.
+    # These two concrete patterns are the highest-leverage prompt fix for a model
+    # that knows the format but has trouble triggering it without tool_choice.
     lines.append("")
-    lines.append("Remember: plain text OR exactly one single-line <tool_call>...</tool_call>. Never both.")
+    lines.append("HOW TO RESPOND — copy the exact format from these examples:")
+    if tools:
+        ft = tools[0]
+        fname = ft.get("name", "tool")
+        req_keys = (ft.get("input_schema", {}) or {}).get("required", [])
+        fex_input = {k: "value" for k in req_keys[:2]} if req_keys else {}
+        fex = json.dumps({"name": fname, "input": fex_input})
+        lines.append(f"  CALL EXAMPLE — when the user needs {fname}:")
+        lines.append(f"  <tool_call>{fex}</tool_call>")
+    lines.append("  NO-CALL EXAMPLE — when no tool is needed (e.g. 'What is 2+2?'):")
+    lines.append("  4")
+    lines.append("")
+    lines.append("NEVER output any text before <tool_call>. NEVER explain the call. Just emit it.")
     return "\n".join(lines)
 
 
@@ -460,6 +475,20 @@ class H(BaseHTTPRequestHandler):
         self._sse("message_stop", {"type": "message_stop"})
 
 
+def _check_upstream():
+    """Probe the upstream model server. Warn if unreachable; remind about OURO_NO_STOP=1."""
+    try:
+        req = urllib.request.Request(f"{OLLAMA}/api/tags",
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3):
+            pass
+        log(f"upstream OK ({OLLAMA}) — ensure OURO_NO_STOP=1 is set on ouro_serve for tool-calling")
+    except Exception:
+        log(f"WARNING: upstream not reachable at {OLLAMA} — "
+            "start ouro_serve.py with OURO_NO_STOP=1 before using the bridge")
+
+
 if __name__ == "__main__":
     log(f"Anthropic /v1/messages (+tools) -> {OLLAMA} (model {MODEL_NAME}) on :{PORT}")
+    _check_upstream()
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
