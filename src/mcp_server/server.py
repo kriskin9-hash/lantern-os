@@ -940,6 +940,16 @@ except Exception as _lr_exc:  # pragma: no cover - optional module
     _LOCAL_INT_PARAMS = set()
     logger.warning("Local runner not loaded: %s", _lr_exc)
 
+# ── Local git workflow + service tools — step-by-step git ops + health ──
+# status, create_branch, stage_files, commit, push, open_pr (all dry_run=true by default).
+# Also: local_server_status, get_tunnel_canary, get_recent_task_failures.
+try:
+    import local_git_tools
+    _lgt_added = local_git_tools.register(TOOLS_REGISTRY)
+    logger.info("Local git tools registered (%d)", len(_lgt_added))
+except Exception as _lgt_exc:  # pragma: no cover - optional module
+    logger.warning("Local git tools not loaded: %s", _lgt_exc)
+
 # ── Convergence / workflow tools — the !convergance + PR-work backbone ──
 # convergence_run, github_triage_prs, github_pr_status, worker_tick, lantern_command.
 # Wired with the live queue + task_run so worker_tick proves pickup.
