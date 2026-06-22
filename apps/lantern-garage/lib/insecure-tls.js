@@ -19,7 +19,7 @@ const INSECURE_TLS =
   process.env.LANTERN_INSECURE_TLS === "1" ||
   (process.platform === "win32" && process.env.LANTERN_INSECURE_TLS !== "0");
 
-// `undefined` => Node uses its default global agent (TLS verification ON).
-const llmAgent = INSECURE_TLS ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+// Always use Node's default global agent (TLS verification ON).
+const llmAgent = undefined;
 
 module.exports = { INSECURE_TLS, llmAgent };

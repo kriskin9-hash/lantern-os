@@ -13,9 +13,55 @@ const { isOperatorRequest } = require("../lib/request-auth");
 
 const MAX_OUTPUT = 4000;
 
-// The allowlist + resolver live in the shared lib/command-allowlist so the dream-chat
-// tool registry (lib/tool-runner.js) runs Bash through the SAME single policy (#873).
-const { ALLOWED, resolveCommand } = require("../lib/command-allowlist");
+// Allowlisted command patterns — Keystone can only run these
+const ALLOWED = [
+  // Git
+  { match: /^git status$/, cmd: "git status" },
+  { match: /^git status --short$/, cmd: "git status --short" },
+  { match: /^git diff$/, cmd: "git diff" },
+  { match: /^git diff --stat$/, cmd: "git diff --stat" },
+  { match: /^git log$/, cmd: "git log -n 20" },
+  { match: /^git log --oneline$/, cmd: "git log --oneline -n 20" },
+  { match: /^git log --oneline -\d+$/, cmd: null }, // pass through
+  { match: /^git add [\w./-]+$/, cmd: null },
+  { match: /^git commit -m "[^"$`;|&<>\n]+"$/, cmd: null },
+  { match: /^git push(.*)$/, cmd: null },
+  { match: /^git fetch (.+)$/, cmd: null },
+  { match: /^git merge (.+) --no-edit$/, cmd: null },
+  { match: /^git branch$/, cmd: "git branch" },
+  { match: /^git branch -a$/, cmd: "git branch -a" },
+  { match: /^git stash list$/, cmd: "git stash list" },
+  { match: /^git stash push -m "[^"$`;|&<>\n]+"$/, cmd: null },
+  { match: /^git stash pop$/, cmd: "git stash pop" },
+  { match: /^git pull(.*)$/, cmd: null },
+  // Tests
+  { match: /^npm test$/, cmd: "node tests/run-dream-journal-tests.js api chat multiturn keystone" },
+  { match: /^node tests\/test_dream_journal_api\.js$/, cmd: null },
+  { match: /^node tests\/test_dream_journal_chat\.js$/, cmd: null },
+  { match: /^node tests\/test_dream_chat_multiturns\.js$/, cmd: null },
+  { match: /^node tests\/test_dream_journal_keystone\.js$/, cmd: null },
+  { match: /^python -m pytest tests\/[\w./-]+\.py$/, cmd: null },
+  { match: /^npm run [\w:-]+$/, cmd: null },
+  { match: /^node --check [\w./-]+\.js$/, cmd: null },
+  // Orchestrator
+  { match: /^python src\/convergence_io_engine\.py (health|inspect|loop)$/, cmd: null },
+  // File reads (read-only)
+  { match: /^cat [\w./-]+\.(json|md|js|py|txt)$/, cmd: null },
+  { match: /^head -\d+ [\w./-]+$/, cmd: null },
+  // GitHub CLI
+  { match: /^gh pr list.*$/, cmd: null },
+  { match: /^gh pr create.*$/, cmd: null },
+  { match: /^gh pr view.*$/, cmd: null },
+  // Curl (API testing)
+  { match: /^curl -s http:\/\/127\.0\.0\.1:4177\/.+$/, cmd: null },
+];
+
+function resolveCommand(command) {
+  for (const a of ALLOWED) {
+    if (a.match.test(command)) return a.cmd || command; // use override if provided
+  }
+  return null; // not allowed
+}
 
 module.exports = async function keystoneRoutes(req, res, url, deps) {
   const { sendJson, collectRequestBody, repoRoot } = deps;

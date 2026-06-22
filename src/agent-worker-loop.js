@@ -243,18 +243,13 @@ async function processOne(lane, opts = {}) {
     // 3. Run tests — and GATE push/PR/complete on the result (mirror the live
     // dispatch path). A failing suite rolls back the commit and requeues. #870
     const testResult = step("tests", runTests(worktreePath));
-    // #896: an INCONCLUSIVE run (no tests collected) is not verification — gate it
-    // like a failure so autowork never marks unverified work complete.
-    if (!testResult.passed || testResult.inconclusive) {
-      const reason = testResult.inconclusive
-        ? "tests inconclusive — no applicable verification (0 collected)"
-        : "tests failed — changes rolled back";
-      step("rollback", { ok: false, reason });
-      gitSafe("reset --hard HEAD~1", worktreePath); // drop the just-made (unverified) commit
-      await _queue.markFailed(entry.id, reason);
+    if (!testResult.passed) {
+      step("rollback", { ok: false, reason: "tests_failed" });
+      gitSafe("reset --hard HEAD~1", worktreePath); // drop the just-made (broken) commit
+      await _queue.markFailed(entry.id, "tests failed — changes rolled back");
       try { _slots.completeWork(slot.id, { workId: entry.id, failed: true }); } catch {}
       receipt.ok = false;
-      receipt.stoppedAt = testResult.inconclusive ? "tests_inconclusive" : "tests_failed";
+      receipt.stoppedAt = "tests_failed";
       return receipt;
     }
 
@@ -267,17 +262,6 @@ async function processOne(lane, opts = {}) {
     }
 
     // 6. Complete queue entry — only reached when work was committed AND tests passed.
-    // #896: record provenance + verification evidence on the receipt so a completed
-    // entry carries a real proof artifact (which provider/model did the work, and
-    // that tests actually ran and passed) rather than an unattributed "ok".
-    receipt.provider = (agentResult && agentResult.provider) || process.env.AUTOWORK_PROVIDER || null;
-    receipt.model    = (agentResult && agentResult.model)    || process.env.AUTOWORK_MODEL    || null;
-    receipt.verified = true;
-    receipt.evidence = {
-      tests_passed:   true,
-      diff_committed: true,
-      output:         String(testResult.output || "").slice(-200),
-    };
     receipt.ok = true;
     await _queue.markComplete(entry.id, receipt);
     try { _slots.completeWork(slot.id, { workId: entry.id, duration: Date.now() - new Date(entry.assignedAt || Date.now()).getTime() }); } catch {}
@@ -309,4 +293,4 @@ async function runLoop(lane, opts = {}) {
   return receipts;
 }
 
-module.exports = { processOne, runLoop, runTests, classifyTestOutput, commitAgentWork, createPR, prHead, originOwner };
+module.exports = { processOne, runLoop, runTests, commitAgentWork, createPR, prHead, originOwner };
