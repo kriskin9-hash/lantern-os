@@ -310,3 +310,6 @@ data/pcsf/settings.pcsf.json
 # the kernel memory log and per-run act scratch regenerate on every run.
 data/convergence-autonomous-memory.jsonl
 data/autonomous-acts/
+
+# Sigma0 Ouro tool-call traces (verbatim session content - privacy + size)
+models/lantern-sigma0-coder/tool-call-traces.jsonl

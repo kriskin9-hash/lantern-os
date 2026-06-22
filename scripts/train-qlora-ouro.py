@@ -26,6 +26,8 @@ def main():
     ap.add_argument("--epochs", type=int, default=3)
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--seq", type=int, default=1024)
+    ap.add_argument("--batch", type=int, default=1, help="per-device train batch size")
+    ap.add_argument("--grad-accum", type=int, default=8, help="gradient accumulation steps")
     a = ap.parse_args()
 
     import torch
@@ -90,8 +92,8 @@ def main():
         model=model, train_dataset=ds,
         data_collator=DataCollatorForLanguageModeling(tok, mlm=False),
         args=TrainingArguments(
-            output_dir=a.out, num_train_epochs=a.epochs, per_device_train_batch_size=1,
-            gradient_accumulation_steps=8, learning_rate=a.lr,
+            output_dir=a.out, num_train_epochs=a.epochs, per_device_train_batch_size=a.batch,
+            gradient_accumulation_steps=a.grad_accum, learning_rate=a.lr,
             bf16=use_bf16, fp16=not use_bf16, max_grad_norm=1.0, warmup_ratio=0.03,
             logging_steps=5, save_strategy="epoch", optim="paged_adamw_8bit",
             gradient_checkpointing=True, report_to="none"))
