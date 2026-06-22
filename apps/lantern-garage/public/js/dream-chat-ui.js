@@ -450,11 +450,135 @@ async function runAutowork(issue, btn, base) {
   }
 }
 
+// ── Image requests ─────────────────────────────────────────────────────────────
+// Detect when the user is asking for a picture and return the subject prompt, else
+// null. Two forms: explicit (!image / /image <prompt>) and natural language
+// ("draw me a picture of X", "show me an image of X"). The natural form requires an
+// image noun (picture/image/photo/…) so ordinary requests ("show me the status")
+// don't trigger it.
+function parseImageRequest(text) {
+  const explicit = text.match(/^[!/]image\s+(.+)/i);
+  if (explicit) return explicit[1].trim();
+  const nl = text.match(/\b(?:draw|paint|sketch|generate|create|make|render|show)\b[^.?!]*?\b(?:image|picture|photo|drawing|illustration|art|painting)\b\s*(?:of|showing|with|featuring|:)?\s*(.+)/i);
+  if (nl && nl[1] && nl[1].trim().length >= 2) return nl[1].trim().replace(/[.?!]+$/, '');
+  return null;
+}
+
+// Render a real image from the web for `prompt`. Keyless text-to-image (Pollinations)
+// with a real-photo fallback (LoremFlickr); each source has a load timeout so a slow
+// or down service falls through instead of hanging. The browser loads the external
+// image directly (no server round-trip), so it works despite local TLS interception.
+function renderWebImage(prompt) {
+  const messages = document.getElementById('messages');
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Finding an image of <b>${esc(prompt)}</b>…</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+  const bubble = row.querySelector('.bubble');
+
+  const seed = Math.floor(Math.random() * 1e6);
+  const keywords = encodeURIComponent(prompt.split(/\s+/).slice(0, 3).join(','));
+  const sources = [
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=512&nologo=true&seed=${seed}`,
+    `https://loremflickr.com/768/512/${keywords}?lock=${seed}`,
+  ];
+
+  let i = 0;
+  (function tryNext() {
+    if (i >= sources.length) {
+      bubble.innerHTML = `Sorry — couldn't reach an image service for <b>${esc(prompt)}</b> right now. Please try again.`;
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+      return;
+    }
+    const url = sources[i++];
+    const img = new Image();
+    let settled = false;
+    const to = setTimeout(() => { if (!settled) { settled = true; img.onload = img.onerror = null; tryNext(); } }, 15000);
+    img.onload = () => {
+      if (settled) return;
+      settled = true; clearTimeout(to);
+      bubble.innerHTML = `Here's an image of <b>${esc(prompt)}</b>:`;
+      img.style.cssText = 'max-width:100%;border-radius:8px;margin:6px 0;display:block';
+      img.alt = prompt;
+      bubble.appendChild(img);
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+    };
+    img.onerror = () => { if (!settled) { settled = true; clearTimeout(to); tryNext(); } };
+    img.referrerPolicy = 'no-referrer';
+    img.src = url;
+  })();
+}
+
+// ── Video requests ──────────────────────────────────────────────────────────────
+// Detect a request to see a video and return the search query, else null. Forms:
+// explicit (!video / /video <query>) and natural language ("show me a youtube video
+// of X", "play a video of X"). Requires a video noun so it doesn't catch image asks.
+function parseVideoRequest(text) {
+  const explicit = text.match(/^[!/]video\s+(.+)/i);
+  if (explicit) return explicit[1].trim();
+  const nl = text.match(/\b(?:show|find|play|watch|get)\b[^.?!]*?\b(?:video|youtube|clip|footage)\b\s*(?:of|about|showing|for|on|:)?\s*(.+)/i);
+  if (nl && nl[1] && nl[1].trim().length >= 2) {
+    // Strip leftover leading filler when nouns stack ("youtube video of a flamingo").
+    const q = nl[1].trim().replace(/[.?!]+$/, '')
+      .replace(/^(?:(?:youtube|video|clip|footage|of|for|about|a|an|the|me|us|some)\s+)+/i, '')
+      .trim();
+    if (q.length >= 2) return q;
+  }
+  return null;
+}
+
+// Render a YouTube result for `query`. The browser embeds via an <iframe> (no CORS),
+// using YouTube's keyless search embed; a guaranteed "Open on YouTube" link is always
+// shown as a fallback in case the inline player is unavailable.
+function renderYoutube(query) {
+  const messages = document.getElementById('messages');
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const q = encodeURIComponent(query);
+  const embed = `https://www.youtube-nocookie.com/embed?listType=search&list=${q}`;
+  const searchUrl = `https://www.youtube.com/results?search_query=${q}`;
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML =
+    `<div class="msg-label">Keystone</div>` +
+    `<div class="bubble" style="font-size:13px">Here are videos for <b>${esc(query)}</b>:` +
+    `<iframe src="${embed}" width="100%" height="240" style="border:0;border-radius:8px;margin:6px 0;max-width:480px;display:block" ` +
+    `allow="encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+    `<a href="${searchUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a></div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+}
+
 // ── Main send ─────────────────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById('input');
   const text = input.value.trim();
   if (!text || isSending) return;
+
+  // Image request → return a visible image from the web (deterministic, no LLM —
+  // the desk model can't draw and just declines). Handles "draw me a picture of X"
+  // and the explicit !image / /image <prompt> commands.
+  const imagePrompt = parseImageRequest(text);
+  if (imagePrompt) {
+    input.value = '';
+    input.style.height = 'auto';
+    addUserBubble(text);
+    renderWebImage(imagePrompt);
+    return;
+  }
+
+  // Video request → embed a YouTube search result + guaranteed link (deterministic,
+  // no LLM — the desk model can't fetch external streams and just declines). Handles
+  // "show me a youtube video of X" and the explicit !video / /video <query> commands.
+  const videoQuery = parseVideoRequest(text);
+  if (videoQuery) {
+    input.value = '';
+    input.style.height = 'auto';
+    addUserBubble(text);
+    renderYoutube(videoQuery);
+    return;
+  }
 
   // Three-doors game lives on its own page now — Keystone guides there, not in chat
   const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts|explore)\b/i);
