@@ -20,7 +20,7 @@ const GPU_PCSF = path.join(REPO_ROOT, "data", "pcsf", "gpu-training.pcsf.json");
 const GPU_KEY_ALLOWLIST = [
   "HF_TOKEN", "HF_TRAINING_REPO",
   "KAGGLE_API_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY",
-  "LIGHTNING_USER_ID", "LIGHTNING_API_KEY",
+  "LIGHTNING_USER_ID", "LIGHTNING_API_KEY", "LIGHTNING_PYTHON",
   "MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET",
   "VAST_AI_API_KEY", "RUNPOD_API_KEY", "PAPERSPACE_API_KEY",
 ];
@@ -128,6 +128,22 @@ function ensureDir(p) { fs.mkdirSync(path.dirname(p), { recursive: true }); }
 
 function loadGpuPcsf() {
   try { return JSON.parse(fs.readFileSync(GPU_PCSF, "utf8")); } catch { return null; }
+}
+
+// Write updated provider state back to the PCSF JSON file.
+// state: "available" | "dispatched" | "verified" | "degraded" | "exhausted"
+// meta: { last_dispatch_at?, error?, error_count? }
+function updateProviderState(providerId, newState, meta = {}) {
+  let pcsf;
+  try { pcsf = JSON.parse(fs.readFileSync(GPU_PCSF, "utf8")); } catch { return; }
+  const providers = pcsf.providers || [];
+  const p = providers.find(x => x.provider_id === providerId);
+  if (!p) return;
+  p.state = newState;
+  p.last_dispatch_at = meta.last_dispatch_at || isoNow();
+  if (meta.error !== undefined) p.last_error = meta.error;
+  if (meta.error_count !== undefined) p.error_count = meta.error_count;
+  try { fs.writeFileSync(GPU_PCSF, JSON.stringify(pcsf, null, 2), "utf8"); } catch { /* best-effort */ }
 }
 
 function readJobsLog() {
@@ -684,8 +700,9 @@ function _runLightningScript(subcommand, extraArgs = []) {
     HF_TRAINING_REPO:         process.env.HF_TRAINING_REPO         || "ouro-checkpoints",
   };
   try {
-    const raw = execFileSync("python", [script, subcommand, ...extraArgs],
-      { encoding: "utf8", timeout: 60_000, env, stdio: ["pipe", "pipe", "pipe"] });
+    const pythonExe = process.env.LIGHTNING_PYTHON || "python";
+    const raw = execFileSync(pythonExe, [script, subcommand, ...extraArgs],
+      { encoding: "utf8", timeout: 120_000, env, stdio: ["pipe", "pipe", "pipe"] });
     return JSON.parse(raw.trim());
   } catch (err) {
     if (err.code === "ETIMEDOUT") {
@@ -829,21 +846,76 @@ function rotateProvider(current) {
     used[j.provider] = (used[j.provider] || 0) + (j.hoursEstimated || 0);
   }
 
-  // Return next provider after current with quota remaining
+  // Return next provider after current with quota remaining, skipping degraded
   const startIdx = Math.max(0, order.indexOf(current));
   const candidates = [...order.slice(startIdx + 1), ...order.slice(0, startIdx + 1)];
   for (const p of candidates) {
     const cfg = (pcsf?.providers || []).find(x => x.provider_id === p);
+    if (cfg?.state === "degraded") continue;
     const quota = cfg?.quota_hours_per_week || 0;
     if ((used[p] || 0) < quota) return p;
   }
   return null;
 }
 
+// Fan out to ALL automatable providers with quota remaining, in parallel.
+// Updates PCSF state per provider from outcomes — "dispatched" on success, "degraded" on error.
+// Returns { dispatched: Array<{provider, ...result|error}> }
+async function dispatchAllAutomatable(checkpointUri, steps) {
+  _syncUserEnvKeys();
+  const pcsf = loadGpuPcsf();
+  if (!pcsf) return { error: "no_pcsf", dispatched: [] };
+
+  const weekStart = _weekStartMs();
+  const used = {};
+  for (const j of readJobsLog()) {
+    if (j.type !== "training_dispatch" || j.status === "manual_required") continue;
+    if (!j.dispatchedAt || new Date(j.dispatchedAt).getTime() < weekStart) continue;
+    used[j.provider] = (used[j.provider] || 0) + (j.hoursEstimated || 0);
+  }
+
+  const candidates = (pcsf.providers || []).filter(p =>
+    p.automatable &&
+    p.state !== "degraded" &&
+    (p.quota_hours_per_week || 0) > 0 &&
+    (used[p.provider_id] || 0) < (p.quota_hours_per_week || 0)
+  );
+
+  if (candidates.length === 0) {
+    return { error: "no_automatable_providers_with_quota", dispatched: [] };
+  }
+
+  const results = await Promise.allSettled(
+    candidates.map(p => dispatchTrainingJob(p.provider_id, checkpointUri, steps))
+  );
+
+  const dispatched = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const p = candidates[i];
+    const r = results[i];
+    if (r.status === "fulfilled" && !r.value?.error) {
+      updateProviderState(p.provider_id, "dispatched", { last_dispatch_at: isoNow() });
+      dispatched.push({ provider: p.provider_id, ...r.value });
+    } else {
+      const errMsg = r.status === "rejected" ? (r.reason?.message || "rejected") : r.value?.error;
+      updateProviderState(p.provider_id, "degraded", {
+        error: errMsg,
+        last_dispatch_at: isoNow(),
+        error_count: (p.error_count || 0) + 1,
+      });
+      dispatched.push({ provider: p.provider_id, error: errMsg });
+    }
+  }
+
+  return { dispatched };
+}
+
 module.exports = {
   packAndUploadCheckpoint,
   dispatchTrainingJob,
+  dispatchAllAutomatable,
   pollJobStatus,
   rotateProvider,
   loadGpuPcsf,
+  updateProviderState,
 };
