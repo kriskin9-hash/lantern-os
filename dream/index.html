@@ -18,6 +18,21 @@
       }
     })();
 
+    /* SW cleanup — unregister any cached service worker and reload once.
+       Runs synchronously before any deferred scripts or fetches so the SW
+       cannot intercept resources on this load. A sessionStorage flag prevents
+       reload loops if the SW somehow re-registers itself. */
+    (function() {
+      if (!('serviceWorker' in navigator)) return;
+      if (sessionStorage.getItem('sw_cleaned')) return;
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        if (!regs.length) return;
+        sessionStorage.setItem('sw_cleaned', '1');
+        Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
+          window.location.reload();
+        });
+      });
+    })();
   </script>
   <link rel="stylesheet" href="/css/site.css">
   <style>
@@ -37,11 +52,18 @@
       padding: 20px;
       overflow: hidden;
     }
-    /* Hero with the large, slow Sigma-0 mandala as a background layer */
+    /* Hero with the large Sigma-0 mandala as a background layer */
     .hero { position: relative; text-align: center; padding: 0; }
-    @keyframes hero-spin {
-      from { transform: translate(-50%, -50%) rotate(0deg); }
-      to   { transform: translate(-50%, -50%) rotate(360deg); }
+    /* Full-bleed ambient Σ₀ mandala — a fixed background field behind all
+       content. The SVG has its own internal counter-rotating ring animations
+       (same principle as the nav icon); no CSS wrapper rotation is added so
+       the motion matches the header icon exactly. */
+    .ambient {
+      position: fixed; inset: 0;
+      z-index: 0; overflow: clip;
+      pointer-events: none; user-select: none;
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 80%, transparent 100%);
+              mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 80%, transparent 100%);
     }
     /* Full-bleed ambient Σ₀ mandala — a fixed background field behind all
        content. It is softly masked on every edge so it never hard-cuts against
@@ -94,8 +116,8 @@
     html[data-theme="dark"] .hero h1 { text-shadow: 0 2px 26px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4); }
     html[data-theme="dark"] .hero .tagline { text-shadow: 0 1px 3px rgba(0,0,0,.55); }
     /* ── Secondary experiences — redesigned tiles ── */
-    .home-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    @media (max-width: 680px) { .home-tiles { grid-template-columns: 1fr; } }
+    .home-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+    @media (max-width: 480px) { .home-tiles { grid-template-columns: 1fr; } }
     .home-tiles .panel {
       --tile: var(--accent);
       position: relative;
@@ -182,7 +204,7 @@
   <!-- ── Hero ── -->
   <div class="hero">
     <h1>Observe. Remember. Reason. Act. Verify. Converge.</h1>
-    <p class="tagline" id="hero-tagline">Keystone OS is a local-first convergence engine — a persistent reasoning and coding system that runs entirely on your machine and improves from accumulated evidence, never locked to a single model. Chat, trade, and create on the same grounded core.</p>
+    <p class="tagline" id="hero-tagline">Your AI that actually remembers you — runs on your own machine, works with any model, and never sells your conversations. Just type like you're texting a friend.</p>
     <div class="hero-cta-row">
       <a class="btn-primary" href="/dream-chat.html">✦ Keystone Chat</a>
     </div>
@@ -195,21 +217,21 @@
       <span class="panel-icon" aria-hidden="true">📈</span>
       <span class="panel-label">Markets</span>
       <h2>Trader</h2>
-      <p>Stocks, prediction markets, and live market news.</p>
+      <p>Live markets, prediction trading, and the news that moves them.</p>
       <span class="panel-arrow">Open Trader →</span>
     </a>
     <a class="panel tile-create" href="/create.html">
       <span class="panel-icon" aria-hidden="true">✏️</span>
       <span class="panel-label">Studio</span>
       <h2>Create</h2>
-      <p>Upload, organize, and shape your creative work.</p>
+      <p>Write, upload, and organize your creative projects.</p>
       <span class="panel-arrow">Open Create →</span>
     </a>
     <a class="panel tile-explore" href="/explore.html">
       <span class="panel-icon" aria-hidden="true">🧭</span>
       <span class="panel-label">Convergence</span>
       <h2>Explore</h2>
-      <p>Kingdome of Hearts, agents, archives, and settings.</p>
+      <p>Games, tools, your personal archive, and settings.</p>
       <span class="panel-arrow">Open Explore →</span>
     </a>
   </div>
@@ -291,25 +313,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadState() {
-    const [health, version, git, status, routing, agents, dreamer, search, mesh, workers, thisNode] = await Promise.all([
+    // #878: only these 3 endpoints drive elements that exist on this page
+    // (footer status dot/label, hero edition/commit line, version badges).
+    // The former "full index" dashboard — providers, agents, node mesh,
+    // dreamer, readiness, recent entries — was removed, so its loader and the
+    // 8 endpoints it polled (incl. /api/nodes/mesh, /api/agents/workers and
+    // /api/nodes/this, which 404'd every cycle) are gone with it.
+    const [health, version, git] = await Promise.all([
       fetchJson('/api/health'),
       fetchJson('/version.json'),
       fetchJson('/api/version'),
-      fetchJson('/api/status'),
-      fetchJson('/api/pcsf/routing'),
-      fetchJson('/api/agents'),
-      fetchJson('/api/dreamer?user=dreamer'),
-      fetchJson('/api/dream/search'),
-      fetchJson('/api/nodes/mesh'),
-      fetchJson('/api/agents/workers'),
-      fetchJson('/api/nodes/this'),
     ]);
 
-    // Server + version
+    // Server status (footer dot + label)
     const serverOnline = !!(health && health.ok);
     $('status-dot').className = serverOnline ? 'dot online' : 'dot';
     $('status-label').textContent = serverOnline ? 'server online' : 'server unreachable';
 
+    // Version + git (hero sub-line + clickable version badges)
     const v = version?.version || 'unknown';
     const g = git?.version;
     const branch = g?.branch || 'unknown';
@@ -318,9 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     $('hero-edition').textContent = 'Orion Edition · ' + branch;
     $('hero-git').textContent = shortCommit + (commitDate ? ' · ' + commitDate : '');
-    $('status-right').textContent = 'Keystone OS · ' + branch + ' · ' + v;
 
-    // Version badges
     document.querySelectorAll('[data-version-badge]').forEach(el => {
       const prefix = el.dataset.versionBadge || '';
       el.textContent = prefix + 'v' + v;
@@ -328,110 +347,6 @@ document.addEventListener('DOMContentLoaded', () => {
       el.title = 'View changelog';
       el.onclick = () => window.open('/repo/CHANGELOG.MD', '_blank');
     });
-
-    // Providers
-    const provMap = routing?.providers || [];
-    const provWithKey = provMap.filter(p => p.hasKey);
-    const provNames = provWithKey.map(p => p.id).join(', ');
-    if (provWithKey.length === 0) {
-      $('panel-chat-desc').textContent = 'No AI provider keys configured. Chat works offline. Add a key in Settings to stream responses.';
-      $('pill-ai-chat').className = 'pill held';
-      $('pill-ai-chat').textContent = 'Offline';
-      $('note-ai-chat').textContent = 'No provider keys found. Chat works locally. Add GEMINI_API_KEY, OPENAI_API_KEY, etc. in Settings.';
-    } else {
-      $('panel-chat-desc').textContent = 'Streaming via ' + provNames + '. Fails fast if a provider is down.';
-      $('pill-ai-chat').className = 'pill live';
-      $('pill-ai-chat').textContent = 'Live';
-      $('note-ai-chat').textContent = 'Configured: ' + provNames + '. Streams when a provider key is set.';
-    }
-    $('stat-providers').textContent = provWithKey.length + ' of ' + provMap.length + ' providers configured';
-
-    // Agents
-    const agentList = agents?.agents || [];
-    const agentNames = agentList.map(a => a.name).join(', ') || 'none';
-    $('stat-agents').textContent = agentList.length + ' agent' + (agentList.length === 1 ? '' : 's') + ' available: ' + agentNames;
-
-    // Node Mesh & Workers
-    const nodeCount = mesh?.nodeCount || 0;
-    const aliveCount = mesh?.aliveCount || 0;
-    const nodeList = mesh?.nodes || [];
-    const workersList = workers?.agents || [];
-    const totalWorkers = workers?.totalWorkers || 0;
-
-    if (nodeCount > 0) {
-      $('nodes-status').textContent = aliveCount + ' of ' + nodeCount + ' node' + (nodeCount === 1 ? '' : 's') + ' online';
-      const nodeHTML = nodeList.slice(0, 5).map(n => {
-        const alive = n.isAlive ? '🟢' : '🔴';
-        return `${alive} ${n.nodeName} (${n.agents ? n.agents.length : 0} agents, ${n.workerCount || 0} worker${n.workerCount === 1 ? '' : 's'}) — ${n.lastSeenAgo}`;
-      }).join('<br>');
-      $('nodes-list').innerHTML = nodeHTML;
-    } else {
-      $('nodes-status').textContent = 'No nodes registered yet. Machines running Keystone OS will appear here.';
-      $('nodes-list').innerHTML = '';
-    }
-
-    if (workersList.length > 0) {
-      const topWorkers = workersList.slice(0, 3).map(w => `${w.agent} (${w.totalWorkers})`).join(', ');
-      $('workers-summary').textContent = 'Total workers: ' + totalWorkers + ' across ' + workersList.length + ' agent' + (workersList.length === 1 ? '' : 's') + '. Top: ' + topWorkers;
-    } else if (totalWorkers === 0 && nodeCount === 0) {
-      $('workers-summary').textContent = 'Register nodes to see active workers and collaborators.';
-    }
-
-    // Dreamer / notebook
-    const entries = dreamer?.entries || [];
-    const entryCount = entries.length;
-    if (entryCount > 0) {
-      const latest = entries[entries.length - 1];
-      const latestDate = latest?.recordedAt ? fmtDate(latest.recordedAt) : '';
-      $('panel-journal-desc').textContent = entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') + ' recorded' + (latestDate ? '. Latest: ' + latestDate : '') + '.';
-      $('stat-capture').textContent = entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') + ' saved. JSONL export available.';
-    } else {
-      $('panel-journal-desc').textContent = 'No entries yet. Start capturing dreams, notes, and symbols.';
-      $('stat-capture').textContent = 'No entries yet. Dream, note, symbol, lore, mirror, and place entries supported.';
-    }
-
-    // Readiness / arc reactor
-    const readiness = status?.readiness || {};
-    const arc = status?.arc || {};
-    const readinessScore = readiness.pass ?? '—';
-    const readinessWarn = readiness.warn ?? 0;
-    const readinessFail = readiness.fail ?? 0;
-    let readinessText = 'Ready: ' + readinessScore;
-    if (readinessFail > 0) readinessText += ' · ' + readinessFail + ' failed';
-    if (readinessWarn > 0) readinessText += ' · ' + readinessWarn + ' warnings';
-    $('stat-readiness').textContent = readinessText;
-
-    $('benchmark-subtitle').textContent = 'Real-time feature status from this instance.';
-
-    // Server stat
-    $('stat-server').textContent = serverOnline ? 'Node.js running on port ' + (health?.port || '4177') : 'Server not responding';
-
-    // Recent journal entries (G2 — real backend data)
-    const recentList = $('recent-entries-list');
-    const recentSection = $('recent-entries-section');
-    if (search && search.results && search.results.length > 0 && recentList && recentSection) {
-      recentSection.style.display = '';
-      const entries = search.results.slice(0, 10);
-      recentList.innerHTML = entries.map(e => {
-        const kind = e.kind || 'dream';
-        const ts = e.timestamp ? fmtDate(e.timestamp) : '';
-        const text = (e.text || e.content || '').slice(0, 140);
-        const tags = (e.tags || []).slice(0, 4).map(t => `<span class="pill pill-recent">${t}</span>`).join('');
-        const lucid = typeof e.lucidity === 'number' ? `<span class="recent-lucidity">lucidity ${e.lucidity.toFixed(1)}</span>` : '';
-        return `<div class="recent-entry">
-          <div class="recent-entry-header">
-            <span class="recent-entry-kind">${kind}</span>
-            <span class="recent-entry-ts">${ts}</span>
-            ${lucid}
-          </div>
-          <div class="recent-entry-text">${text}${text.length >= 140 ? '…' : ''}</div>
-          <div class="recent-entry-tags">${tags}</div>
-        </div>`;
-      }).join('');
-      $('recent-subtitle').textContent = entries.length + ' latest entr' + (entries.length === 1 ? 'y' : 'ies') + ' from this instance.';
-    } else if (recentSection) {
-      recentSection.style.display = 'none';
-    }
   }
 
   loadState();

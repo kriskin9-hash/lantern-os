@@ -3,13 +3,27 @@
  * Works on both local dev server and GitHub Pages static deploys.
  */
 (function () {
-  const POLL_INTERVAL_MS = 60_000;
-  const GITHUB_API = "https://api.github.com/repos/alex-place/lantern-os/commits/master";
-  const LOCAL_API = (typeof serverBase !== "undefined" ? serverBase : "") + "/api/version";
+  // Read the LOCAL, server-cached endpoint — never api.github.com from the browser.
+  // The server makes the (rate-limited) GitHub call at most ~4x/hour and caches it, so
+  // a 5-min client poll of the local endpoint is cheap and leaks nothing externally. #879
+  const POLL_INTERVAL_MS = 5 * 60_000;
+  const UPDATE_API = (typeof serverBase !== "undefined" ? serverBase : "") + "/api/update-status";
 
-  let localCommit = null;
   let remoteCommit = null;
+  let remoteInfo = {};
   let dismissed = sessionStorage.getItem("lantern_update_dismissed");
+
+  function bannerText() {
+    const sha = remoteCommit ? remoteCommit.slice(0, 8) : "";
+    const msg = remoteInfo.remoteMessage || "";
+    const date = remoteInfo.remoteDate
+      ? new Date(remoteInfo.remoteDate).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      : "";
+    let detail = sha ? `<code>${sha}</code>` : "";
+    if (date) detail += ` &middot; ${date}`;
+    if (msg)  detail += ` &middot; ${msg}`;
+    return `Keystone OS update available on <code>master</code>${detail ? " — " + detail : ""}`;
+  }
 
   function createBanner() {
     if (document.getElementById("lantern-update-banner")) return;
@@ -17,8 +31,8 @@
     const banner = document.createElement("div");
     banner.id = "lantern-update-banner";
     banner.innerHTML = `
-      <span class="lantern-update-text">Keystone OS update available on <code>master</code></span>
-      <button class="lantern-update-btn" id="lantern-update-action" title="Update now">Update & Restart</button>
+      <span class="lantern-update-text">${bannerText()}</span>
+      <button class="lantern-update-btn" id="lantern-update-action" title="Update now">Update &amp; Restart</button>
       <button class="lantern-update-dismiss" id="lantern-update-dismiss" title="Dismiss">&times;</button>
     `;
     document.body.prepend(banner);
@@ -73,79 +87,32 @@
     if (banner) banner.remove();
   }
 
-  async function fetchLocalVersion() {
-    try {
-      const r = await fetch(LOCAL_API, { signal: AbortSignal.timeout(5000) });
-      if (!r.ok) return null;
-      const d = await r.json();
-      return d.version?.commit || null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function fetchRemoteVersion() {
-    try {
-      const r = await fetch(GITHUB_API, { signal: AbortSignal.timeout(8000) });
-      if (!r.ok) return null;
-      const d = await r.json();
-      return d.sha || null;
-    } catch {
-      return null;
-    }
-  }
-
-  async function fetchCompare(localCommit) {
-    try {
-      const r = await fetch(`https://api.github.com/repos/alex-place/lantern-os/compare/${localCommit}...master`, { signal: AbortSignal.timeout(8000) });
-      if (!r.ok) return null;
-      const d = await r.json();
-      return { behind: d.behind_by || 0, ahead: d.ahead_by || 0, status: d.status };
-    } catch {
-      return null;
-    }
-  }
-
+  // Read the server's cached update status from the LOCAL endpoint. The server already
+  // resolved local-vs-remote (behind/ahead) against api.github.com on its own slow,
+  // rate-limited, backoff-aware timer — the browser makes ZERO external calls. On a
+  // static deploy with no server (GitHub Pages) the endpoint 404s and we simply do
+  // nothing rather than phoning GitHub from the browser. #879
   async function check() {
-    [localCommit, remoteCommit] = await Promise.all([
-      fetchLocalVersion(),
-      fetchRemoteVersion()
-    ]);
+    let status = null;
+    try {
+      const r = await fetch(UPDATE_API, { signal: AbortSignal.timeout(5000) });
+      if (r.ok) status = await r.json();
+    } catch {
+      status = null;
+    }
 
-    if (!localCommit || !remoteCommit) {
+    if (!status || !status.ok) {
+      // No server / transient error → leave the banner as-is; never call GitHub here.
+      return;
+    }
+
+    remoteCommit = status.remote || null;
+    remoteInfo = { remoteMessage: status.remoteMessage || null, remoteDate: status.remoteDate || null };
+    if (status.updateAvailable && remoteCommit && dismissed !== remoteCommit) {
+      createBanner();
+    } else {
       removeBanner();
-      return;
     }
-
-    if (localCommit === remoteCommit) {
-      removeBanner();
-      return;
-    }
-
-    const compare = await fetchCompare(localCommit);
-    if (!compare) {
-      // Can't determine relationship — hide banner to avoid false positive
-      removeBanner();
-      return;
-    }
-
-    if (compare.ahead > 0) {
-      // Local is ahead of remote (unpushed commits) — no update needed
-      removeBanner();
-      return;
-    }
-
-    if (compare.behind === 0) {
-      // Up to date (diverged but not behind)
-      removeBanner();
-      return;
-    }
-
-    if (dismissed === remoteCommit) {
-      return;
-    }
-
-    createBanner();
   }
 
   // Inject styles once
@@ -161,36 +128,50 @@
         align-items: center;
         justify-content: center;
         gap: 12px;
-        padding: 10px 16px;
-        background: linear-gradient(90deg, var(--surface2), var(--accent-dim) 60%, var(--surface2));
-        border-bottom: 1px solid var(--accent);
+        padding: 0 16px;
+        height: 44px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 1px 0 var(--border);
         color: var(--text);
-        font-family: "Segoe UI", system-ui, sans-serif;
-        font-size: 0.9rem;
-        box-shadow: var(--shadow-hover);
-        animation: lanternBannerSlide 0.35s ease-out;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        font-size: 0.85rem;
+        animation: lanternBannerSlide 0.25s ease-out;
       }
       @keyframes lanternBannerSlide {
         from { transform: translateY(-100%); }
         to   { transform: translateY(0); }
       }
+      #lantern-update-banner .lantern-update-text {
+        flex: 1;
+        text-align: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: var(--muted);
+      }
       #lantern-update-banner .lantern-update-text code {
-        background: rgba(255,66,77,0.12);
-        padding: 2px 6px;
+        background: var(--surface2);
+        padding: 1px 5px;
         border-radius: 4px;
         font-family: monospace;
-        color: var(--gold);
+        font-size: 0.8rem;
+        color: var(--accent);
+        border: 1px solid var(--border);
       }
       #lantern-update-banner .lantern-update-btn {
         background: var(--accent);
         color: #fff;
         border: none;
         border-radius: 6px;
-        padding: 6px 14px;
-        font-size: 0.82rem;
+        padding: 5px 12px;
+        font-size: 0.8rem;
         font-weight: 600;
         cursor: pointer;
         transition: background 0.2s;
+        white-space: nowrap;
+        text-align: center;
+        flex-shrink: 0;
       }
       #lantern-update-banner .lantern-update-btn:hover {
         background: var(--accent-hover);
@@ -199,11 +180,11 @@
         background: transparent;
         color: var(--muted);
         border: none;
-        font-size: 1.3rem;
+        font-size: 1.2rem;
         line-height: 1;
         cursor: pointer;
-        margin-left: 4px;
-        padding: 0 4px;
+        padding: 0 2px;
+        flex-shrink: 0;
       }
       #lantern-update-banner .lantern-update-dismiss:hover {
         color: var(--text);

@@ -201,8 +201,90 @@ async function testWebSearch() {
 const _origOpenSettings = openSettings;
 openSettings = function() { _origOpenSettings(); updateConnectorStatuses(); };
 
+// Broken / hallucinated image URLs used to hide themselves with display:none.
+// When the answer is image-ONLY (model replied with just `![alt](url)`), that
+// left a completely blank bubble — "the answer came through but the chat bubble
+// is hidden". Swap the dead <img> for a visible fallback link so the answer is
+// never invisible: alt text (if any) + a tap-to-open link to the source URL.
+function lanternImgFallback(img) {
+  try {
+    const url = img.getAttribute('src') || '';
+    const alt = (img.getAttribute('alt') || '').trim();
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.style.cssText = 'display:inline-block;color:var(--accent);text-decoration:underline;word-break:break-all;font-size:13px;margin:6px 0';
+    a.textContent = '🖼️ ' + (alt ? alt + ' — ' : '') + 'image (tap to open)';
+    img.replaceWith(a);
+  } catch (e) {
+    img.style.display = 'none';
+  }
+}
+
 // ── Markdown + PR link renderer ───────────────────────────────────────────────
+// #930: scheme allowlist for any URL we interpolate into href/src. The capture
+// regexes below already require an http(s) scheme, so this is defense-in-depth
+// (parity with markdown-render.js's safeUrl from #934) — a future loosening of a
+// regex can't turn into a javascript:/data: sink. Non-allowed schemes neutralize
+// to '#'.
+function safeUrl(url) {
+  const u = String(url || '').trim();
+  if (/^(https?:|mailto:)/i.test(u)) return u;
+  if (/^[#/]/.test(u)) return u;                 // in-page anchor / site-absolute path
+  return '#';
+}
+
+// ── Tool-call rendering ──────────────────────────────────────────────────────
+// The local Σ₀ Ouro coder (FC adapter) answers tool-worthy turns with a
+// <tool_call>{"name","input"}</tool_call> block. Render it as a card instead of
+// leaking raw JSON. A matching `tool` SSE event (server-side execution) fills the
+// result slot; see the stream handler.
+function parseToolCallInner(inner) {
+  try { const o = JSON.parse(inner); if (o && o.name) return o; } catch {}
+  const nameM = inner.match(/"name"\s*:\s*"([^"]+)"/);
+  let input = {};
+  const inputM = inner.match(/"(?:input|arguments)"\s*:\s*(\{[\s\S]*\})/);
+  if (inputM) { try { input = JSON.parse(inputM[1]); } catch {} }
+  return nameM ? { name: nameM[1], input } : null;
+}
+function buildToolCard(inner, partial) {
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const tc = parseToolCallInner(inner);
+  const name = tc && tc.name ? tc.name : 'tool';
+  const args = esc(tc && tc.input ? JSON.stringify(tc.input, null, 2) : inner.trim());
+  const status = partial ? ' <span style="opacity:.6;font-weight:400">…calling</span>' : '';
+  return '<div class="tool-call-card" data-tool="' + esc(name) + '" style="border:1px solid var(--border,#2a2a3a);border-radius:10px;margin:8px 0;overflow:hidden">'
+    + '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(92,200,255,.10);color:var(--accent,#5cc8ff);font-weight:600;font-size:13px">🔧 ' + esc(name) + status + '</div>'
+    + '<pre style="margin:0;padding:8px 10px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--text,#cdd)">' + args + '</pre>'
+    + '<div class="tcc-result" style="display:none;border-top:1px solid var(--border,#2a2a3a);padding:8px 10px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--muted,#9aa)"></div>'
+    + '</div>';
+}
+function fillToolSlot(slot, evt) {
+  if (!slot) return;
+  if (evt.ok) {
+    slot.textContent = '↳ ' + String(evt.result || '');
+    slot.style.color = 'var(--text,#cdd)';
+    slot.style.opacity = '1';
+  } else {
+    const msg = ({
+      disabled: 'tool execution is off (set CHAT_TOOL_EXEC=1)',
+      auth: 'this tool needs operator access',
+      unsafe: 'command not allowlisted',
+      unknown: 'unknown tool',
+    })[evt.reason] || ('tool error: ' + String(evt.result || evt.reason || 'failed'));
+    slot.textContent = '⚠ ' + msg;
+    slot.style.color = 'var(--muted,#9aa)';
+    slot.style.opacity = '0.7';
+  }
+  slot.style.display = 'block';
+}
 function renderMarkdown(text) {
+  // Extract tool-call blocks (closed, then a trailing unclosed one while streaming)
+  // into placeholders that survive HTML-escaping; restore as cards at the very end.
+  const _toolCards = [];
+  text = text.replace(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi, (_, inner) => '\x00T' + (_toolCards.push(buildToolCard(inner, false)) - 1) + '\x00');
+  text = text.replace(/<tool_call>\s*([\s\S]*)$/i, (_, inner) => '\x00T' + (_toolCards.push(buildToolCard(inner, true)) - 1) + '\x00');
   let h = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   h = h.replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>');
   h = h.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
@@ -213,10 +295,12 @@ function renderMarkdown(text) {
   const _stash = [];
   const _put = (html) => `\x00L${_stash.push(html) - 1}\x00`;
 
-  // Images ![alt](url) → <img>. Broken / hallucinated URLs hide themselves (onerror).
-  // Must run before the link rule so ![..](..) isn't read as a text link.
+  // Images ![alt](url) → <img>. Broken / hallucinated URLs fall back to a visible
+  // link (see lanternImgFallback) instead of vanishing — so an image-only answer
+  // never renders as a blank bubble. Must run before the link rule so ![..](..)
+  // isn't read as a text link.
   h = h.replace(/!\[([^\]\n]*)\]\((https?:\/\/[^\s)"]+)\)/g, (_, alt, url) =>
-    _put(`<img src="${url}" alt="${alt.replace(/"/g, '&quot;')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'" style="max-width:100%;border-radius:8px;margin:6px 0;display:block">`));
+    _put(`<img src="${safeUrl(url)}" alt="${alt.replace(/"/g, '&quot;')}" loading="lazy" referrerpolicy="no-referrer" onerror="lanternImgFallback(this)" style="max-width:100%;border-radius:8px;margin:6px 0;display:block">`));
 
   // YouTube links → privacy-friendly inline embed.
   h = h.replace(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})[^\s<>"')\x00]*/g, (_, vid) =>
@@ -224,7 +308,7 @@ function renderMarkdown(text) {
 
   // Markdown links [label](url) → new-tab anchors.
   h = h.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)"]+)\)/g, (_, label, url) =>
-    _put(`<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">${label}</a>`));
+    _put(`<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">${label}</a>`));
 
   h = h.replace(
     /https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/(\d+)/g,
@@ -239,19 +323,47 @@ function renderMarkdown(text) {
   h = h.replace(/(?<!["\/=])(https?:\/\/[^\s<>"')\x00]+)/g, (m, url) => {
     const trail = (url.match(/[.,;:!?]+$/) || [''])[0];
     const clean = trail ? url.slice(0, -trail.length) : url;
-    return `<a href="${clean}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">${clean}</a>${trail}`;
+    return `<a href="${safeUrl(clean)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">${clean}</a>${trail}`;
   });
 
   // Restore the stashed markdown-link anchors.
   h = h.replace(/\x00L(\d+)\x00/g, (_, i) => _stash[+i]);
 
   h = h.replace(/\n/g, '<br>');
+  h = h.replace(/\x00T(\d+)\x00/g, (_, i) => _toolCards[+i]);  // restore tool-call cards last (after <br>) so their <pre> isn't mangled
   return h;
 }
 
 // ── Conversation state ────────────────────────────────────────────────────────
 let isSending = false;
 const history = [];
+
+// #930: a user-facing Stop control. While a stream is in flight we swap the Send
+// button for a Stop button that aborts the fetch; on completion/cancel we swap back.
+function showStopButton(onStop) {
+  const sendBtn = document.getElementById('send-btn');
+  let btn = document.getElementById('stop-btn');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'stop-btn';
+    btn.type = 'button';
+    btn.title = 'Stop generating';
+    btn.setAttribute('aria-label', 'Stop generating');
+    btn.textContent = '■';
+    btn.className = (sendBtn && sendBtn.className ? sendBtn.className + ' ' : '') + 'stop-button';
+    if (sendBtn && sendBtn.parentNode) sendBtn.parentNode.insertBefore(btn, sendBtn.nextSibling);
+    else document.body.appendChild(btn);
+  }
+  btn.onclick = () => { try { onStop(); } catch (_e) {} };
+  btn.style.display = '';
+  if (sendBtn) sendBtn.style.display = 'none';
+}
+function hideStopButton() {
+  const btn = document.getElementById('stop-btn');
+  if (btn) btn.style.display = 'none';
+  const sendBtn = document.getElementById('send-btn');
+  if (sendBtn) sendBtn.style.display = '';
+}
 
 const FALLBACKS = [
   "No AI providers are set up. Add an API key in Settings (⚙) to get started.",
@@ -450,11 +562,276 @@ async function runAutowork(issue, btn, base) {
   }
 }
 
+// ── Image requests ─────────────────────────────────────────────────────────────
+// Detect when the user is asking for a picture and return the subject prompt, else
+// null. Two forms: explicit (!image / /image <prompt>) and natural language
+// ("draw me a picture of X", "show me an image of X"). The natural form requires an
+// image noun (picture/image/photo/…) so ordinary requests ("show me the status")
+// don't trigger it.
+function parseImageRequest(text) {
+  const explicit = text.match(/^[!/]image\s+(.+)/i);
+  if (explicit) return explicit[1].trim();
+  const nl = text.match(/\b(?:draw|paint|sketch|generate|create|make|render|show)\b[^.?!]*?\b(?:image|picture|photo|drawing|illustration|art|painting)\b\s*(?:of|showing|with|featuring|:)?\s*(.+)/i);
+  if (nl && nl[1] && nl[1].trim().length >= 2) return nl[1].trim().replace(/[.?!]+$/, '');
+  return null;
+}
+
+// Render a real image from the web for `prompt`. Keyless text-to-image (Pollinations)
+// with a real-photo fallback (LoremFlickr); each source has a load timeout so a slow
+// or down service falls through instead of hanging. The browser loads the external
+// image directly (no server round-trip), so it works despite local TLS interception.
+function renderWebImage(prompt) {
+  const messages = document.getElementById('messages');
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Finding an image of <b>${esc(prompt)}</b>…</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+  const bubble = row.querySelector('.bubble');
+
+  const seed = Math.floor(Math.random() * 1e6);
+  const keywords = encodeURIComponent(prompt.split(/\s+/).slice(0, 3).join(','));
+  const sources = [
+    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=512&nologo=true&seed=${seed}`,
+    `https://loremflickr.com/768/512/${keywords}?lock=${seed}`,
+  ];
+
+  let i = 0;
+  (function tryNext() {
+    if (i >= sources.length) {
+      bubble.innerHTML = `Sorry — couldn't reach an image service for <b>${esc(prompt)}</b> right now. Please try again.`;
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+      return;
+    }
+    const url = sources[i++];
+    const img = new Image();
+    let settled = false;
+    const to = setTimeout(() => { if (!settled) { settled = true; img.onload = img.onerror = null; tryNext(); } }, 15000);
+    img.onload = () => {
+      if (settled) return;
+      settled = true; clearTimeout(to);
+      bubble.innerHTML = `Here's an image of <b>${esc(prompt)}</b>:`;
+      img.style.cssText = 'max-width:100%;border-radius:8px;margin:6px 0;display:block';
+      img.alt = prompt;
+      bubble.appendChild(img);
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+    };
+    img.onerror = () => { if (!settled) { settled = true; clearTimeout(to); tryNext(); } };
+    img.referrerPolicy = 'no-referrer';
+    img.src = url;
+  })();
+}
+
+// ── Video requests ──────────────────────────────────────────────────────────────
+// Detect a request to see a video and return the search query, else null. Forms:
+// explicit (!video / /video <query>) and natural language ("show me a youtube video
+// of X", "play a video of X"). Requires a video noun so it doesn't catch image asks.
+function parseVideoRequest(text) {
+  const explicit = text.match(/^[!/]video\s+(.+)/i);
+  if (explicit) return explicit[1].trim();
+  const nl = text.match(/\b(?:show|find|play|watch|get)\b[^.?!]*?\b(?:video|youtube|clip|footage)\b\s*(?:of|about|showing|for|on|:)?\s*(.+)/i);
+  if (nl && nl[1] && nl[1].trim().length >= 2) {
+    // Strip leftover leading filler when nouns stack ("youtube video of a flamingo").
+    const q = nl[1].trim().replace(/[.?!]+$/, '')
+      .replace(/^(?:(?:youtube|video|clip|footage|of|for|about|a|an|the|me|us|some)\s+)+/i, '')
+      .trim();
+    if (q.length >= 2) return q;
+  }
+  return null;
+}
+
+// Render a YouTube result for `query`. The browser embeds via an <iframe> (no CORS),
+// using YouTube's keyless search embed; a guaranteed "Open on YouTube" link is always
+// shown as a fallback in case the inline player is unavailable.
+function renderYoutube(query) {
+  const messages = document.getElementById('messages');
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const q = encodeURIComponent(query);
+  const embed = `https://www.youtube-nocookie.com/embed?listType=search&list=${q}`;
+  const searchUrl = `https://www.youtube.com/results?search_query=${q}`;
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML =
+    `<div class="msg-label">Keystone</div>` +
+    `<div class="bubble" style="font-size:13px">Here are videos for <b>${esc(query)}</b>:` +
+    `<iframe src="${embed}" width="100%" height="240" style="border:0;border-radius:8px;margin:6px 0;max-width:480px;display:block" ` +
+    `allow="encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
+    `<a href="${searchUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a></div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+}
+
+// ── Explore embed helpers ─────────────────────────────────────────────────────
+const embedBase = () => window.location.origin;
+function embedEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function embedShortDate(d) {
+  if (!d) return '';
+  const t = Date.parse(d);
+  if (Number.isNaN(t)) return '';
+  try { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; }
+}
+async function embedVideos(base) {
+  const r = await fetch(`${base}/api/youtube/lantern-videos`, { cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  const vids = (d.videos || []).slice(0, 6);
+  const featured = vids.find(v => v.featured || v.id === d.featured) || vids[0];
+  if (!featured) throw new Error('no videos returned');
+  const thumbs = vids.map(v =>
+    `<a href="https://www.youtube.com/watch?v=${embedEsc(v.id)}" target="_blank" rel="noopener noreferrer" style="flex:0 0 auto;width:118px;text-decoration:none;color:inherit">
+       <img src="https://img.youtube.com/vi/${embedEsc(v.id)}/mqdefault.jpg" alt="" loading="lazy" style="width:118px;height:66px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+       <div style="font-size:10.5px;line-height:1.3;margin-top:3px;max-height:27px;overflow:hidden">${embedEsc((v.title || '').slice(0, 42))}</div>
+     </a>`).join('');
+  return `<div style="font-weight:600;margin-bottom:6px">🎬 lanternYT</div>
+    <iframe src="https://www.youtube-nocookie.com/embed/${embedEsc(featured.id)}?rel=0" width="100%" height="220" style="border:0;border-radius:8px;max-width:420px;display:block" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+    <div style="display:flex;gap:8px;overflow-x:auto;padding:8px 0 2px">${thumbs}</div>`;
+}
+async function embedDiscover(base) {
+  const r = await fetch(`${base}/api/feeds/discover`, { cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  const items = (d.items || []).slice(0, 6);
+  if (!items.length) throw new Error('no items returned');
+  const rows = items.map(it => {
+    const ext = /^https?:/i.test(it.link);
+    const meta = [
+      it.source ? `<span style="color:var(--accent);font-weight:600">${embedEsc(it.source)}</span>` : '',
+      embedShortDate(it.date) ? `<span style="opacity:0.6">${embedEsc(embedShortDate(it.date))}</span>` : '',
+    ].filter(Boolean).join(' · ');
+    return `<div style="padding:6px 0;border-top:1px solid var(--border)">
+      <a href="${embedEsc(it.link)}" ${ext ? 'target="_blank" rel="noopener noreferrer"' : ''} style="color:inherit;text-decoration:none;font-weight:600;font-size:12.5px">${embedEsc(it.title)}</a>
+      ${meta ? `<div style="font-size:11px;margin-top:2px">${meta}</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div style="font-weight:600;margin:12px 0 2px">🧭 Discover — fresh reads</div>${rows}`;
+}
+async function embedBuild(base) {
+  const r = await fetch(`${base}/api/github/activity`, { cache: 'no-store' });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  const rel = (d.releases || [])[0];
+  const commits = (d.commits || []).slice(0, 4);
+  const stars = typeof d.stars === 'number' ? `★ ${d.stars}` : '';
+  const tagPill = (txt, href) =>
+    `<a href="${embedEsc(href)}" target="_blank" rel="noopener noreferrer" style="font-family:ui-monospace,monospace;background:var(--bg,#111);border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--accent);text-decoration:none">${embedEsc(txt)}</a>`;
+  const relHtml = rel ? `<div style="margin-top:4px;font-size:12px">${tagPill(rel.tag, rel.url)} ${embedEsc(rel.name || '')}</div>` : '';
+  const comHtml = commits.map(c =>
+    `<div style="padding:4px 0;font-size:12px">${tagPill(c.sha, c.url)} ${embedEsc((c.msg || '').slice(0, 74))}</div>`).join('');
+  const repo = d.repo || 'alex-place/lantern-os';
+  const url = d.url || 'https://github.com/alex-place/lantern-os';
+  return `<div style="font-weight:600;margin:12px 0 2px">🛠️ Build — <a href="${embedEsc(url)}" target="_blank" rel="noopener noreferrer" style="color:inherit">${embedEsc(repo)}</a> <span style="opacity:0.6;font-weight:400">${stars}</span></div>${relHtml}<div style="margin-top:6px">${comHtml}</div>`;
+}
+function embedSupport() {
+  const tiers = [
+    ['Wanderer', '$5', 'Supporter role'],
+    ['Deep Dreamer', '$20', 'Deep Dreamer role'],
+    ['Synthesasia Guild', '$200', 'Guild (admin) role'],
+  ];
+  const cards = tiers.map(([n, p, perk]) =>
+    `<a href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer" style="flex:1 1 110px;text-align:center;padding:10px;border:1px solid var(--border);border-radius:8px;text-decoration:none;color:inherit">
+       <div style="font-weight:700;font-size:12.5px">${n}</div>
+       <div style="font-size:1.2rem;font-weight:800">${p}<span style="font-size:.7rem;opacity:.6">/mo</span></div>
+       <div style="font-size:10.5px;opacity:.65">${perk}</div>
+     </a>`).join('');
+  return `<div style="font-weight:600;margin:12px 0 6px">♥ Support — <a href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer" style="color:inherit">Patreon</a></div><div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
+}
+async function renderExploreEmbed(kind, userText) {
+  addUserBubble(userText);
+  const messages = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = '<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Pulling that up…</div>';
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+  const bubble = row.querySelector('.bubble');
+  const base = embedBase();
+  const want = k => kind === k || kind === 'all';
+  const fail = (label, e) => {
+    const m = (e && e.message) || String(e || 'error');
+    const hint = /HTTP 404/.test(m) ? ' — route not deployed (restart the server / merge the PR)' : '';
+    return `<div style="font-size:12px;opacity:0.65;margin:8px 0">⚠ ${label} unavailable (${embedEsc(m)})${hint}</div>`;
+  };
+  const parts = [];
+  if (want('videos'))   { try { parts.push(await embedVideos(base)); }   catch (e) { parts.push(fail('Videos', e)); } }
+  if (want('discover')) { try { parts.push(await embedDiscover(base)); } catch (e) { parts.push(fail('Discover', e)); } }
+  if (want('build'))    { try { parts.push(await embedBuild(base)); }    catch (e) { parts.push(fail('Build', e)); } }
+  if (want('support'))  { try { parts.push(embedSupport()); }            catch (e) { parts.push(fail('Support', e)); } }
+  parts.push(`<div style="margin-top:10px;font-size:11px;opacity:0.6">See more on <a href="/explore.html" style="color:var(--accent)">Explore →</a></div>`);
+  bubble.innerHTML = parts.filter(Boolean).join('');
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+}
+
+// ── Explore embed intent detection ───────────────────────────────────────────
+function detectEmbedIntent(text) {
+  const s = text.trim();
+  const bang = s.match(/^!(videos?|watch|youtube|discover|news|reads?|feed|build|github|releases?|commits?|support|patreon|tiers?|donate|embeds?)\b/i);
+  if (bang) {
+    const b = bang[1].toLowerCase();
+    if (/^(videos?|watch|youtube)$/.test(b)) return 'videos';
+    if (/^(discover|news|reads?|feed)$/.test(b)) return 'discover';
+    if (/^(build|github|releases?|commits?)$/.test(b)) return 'build';
+    if (/^(support|patreon|tiers?|donate)$/.test(b)) return 'support';
+    if (/^embeds?$/.test(b)) return 'all';
+  }
+  if (s.startsWith('!')) return null;
+  const ask = /\b(show|see|view|give|got|have|where|what'?s?|which|how|latest|recent|any|list|pull up|display|open)\b/i.test(s);
+  if (!ask) return null;
+  if (/\byoutube\b/i.test(s) || /\b(latest|recent|your|the|lantern)\b[^?]*\bvideos?\b/i.test(s)) return 'videos';
+  if (/\b(discover|fresh reads?|news feed|articles?|rss feed|reading list)\b/i.test(s) || /\bwhat'?s? new\b/i.test(s)) return 'discover';
+  if (/\b(github|releases?|recent commits?|repo activity|build (status|activity))\b/i.test(s)) return 'build';
+  if (/\b(patreon|membership|tiers?|how (can i|to) support|support the (project|work))\b/i.test(s)) return 'support';
+  if (/\b(embeds?|explore (page |content |feeds?)|what can you (show|surface))\b/i.test(s)) return 'all';
+  return null;
+}
+
 // ── Main send ─────────────────────────────────────────────────────────────────
 async function sendMessage() {
   const input = document.getElementById('input');
+  // ── Single send entry ── These two checks used to be window.sendMessage WRAPPERS
+  // (gatedSendMessage in dream-chat.html + the !convergance shim in convergance-sync.js);
+  // they're folded in here so there is exactly one sendMessage, no monkey-patching.
+  // Auth gate: block roles without chat access (all current roles allow; the server
+  // enforces real limits — this fails open to that if the role globals aren't present).
+  try {
+    if (typeof LANTERN_ROLES !== "undefined" && typeof lanternSession !== "undefined") {
+      const _role = (typeof normalizeRole === "function") ? normalizeRole(lanternSession.role) : lanternSession.role;
+      if (LANTERN_ROLES[_role] && !LANTERN_ROLES[_role].canChat) {
+        if (typeof loginWithPatreon === "function") loginWithPatreon();
+        return;
+      }
+    }
+  } catch (_) { /* gate is best-effort; the server enforces limits regardless */ }
+  // Normalize the legacy !convergance command → canonical !convergence.
+  if (/^!convergance(?:\s+(?:sync|loop|run))?\s*$/i.test(String(input.value || "").trim())) input.value = "!convergence";
   const text = input.value.trim();
   if (!text || isSending) return;
+
+  // Image request → return a visible image from the web (deterministic, no LLM —
+  // the desk model can't draw and just declines). Handles "draw me a picture of X"
+  // and the explicit !image / /image <prompt> commands.
+  const imagePrompt = parseImageRequest(text);
+  if (imagePrompt) {
+    input.value = '';
+    input.style.height = 'auto';
+    addUserBubble(text);
+    renderWebImage(imagePrompt);
+    return;
+  }
+
+  // Video request → embed a YouTube search result + guaranteed link (deterministic,
+  // no LLM — the desk model can't fetch external streams and just declines). Handles
+  // "show me a youtube video of X" and the explicit !video / /video <query> commands.
+  const videoQuery = parseVideoRequest(text);
+  if (videoQuery) {
+    input.value = '';
+    input.style.height = 'auto';
+    addUserBubble(text);
+    renderYoutube(videoQuery);
+    return;
+  }
 
   // Three-doors game lives on its own page now — Keystone guides there, not in chat
   const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts|explore)\b/i);
@@ -519,59 +896,9 @@ async function sendMessage() {
     return;
   }
 
-  // !ask <question> — deterministic convergence agent (no LLM): answer + actions
-  const askMatch = text.match(/^!ask\s+(.+)/i);
-  if (askMatch) {
-    input.value = '';
-    input.style.height = 'auto';
-    const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
-    const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    addUserBubble(text);
-    const messages = document.getElementById('messages');
-    const sysRow = document.createElement('div');
-    sysRow.className = 'msg-row agent';
-    sysRow.innerHTML = '<div class="msg-label">Convergence</div><div class="bubble" style="font-size:13px">Routing locally…</div>';
-    messages.appendChild(sysRow);
-    if (typeof scrollToBottom === 'function') scrollToBottom();
-    try {
-      const r = await fetch(`${base}/api/convergence/agent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: askMatch[1].trim() }),
-      });
-      const d = await r.json();
-      const bubble = sysRow.querySelector('.bubble');
-      const badge = d.grounded ? '⚡ Instant answer · from live repo data' : '⚡ Instant answer · no AI cost';
-      const meta = `<div style="font-size:11px;opacity:0.55;margin-top:8px">${badge}</div>`;
-      bubble.innerHTML = `<div style="white-space:pre-wrap;line-height:1.5">${esc(d.answer || '(no answer)')}</div>` + meta;
-      const acts = Array.isArray(d.actions) ? d.actions : [];
-      if (acts.length) {
-        const wrap = document.createElement('div');
-        wrap.className = 'starter-chips';
-        wrap.style.marginTop = '10px';
-        acts.forEach(a => {
-          const btn = document.createElement('button');
-          btn.className = 'starter-chip';
-          btn.textContent = a.label;
-          if (a.href) btn.onclick = () => { window.open(a.href, '_blank', 'noopener'); };
-          else if (a.autonomous && a.issue) {
-            btn.onclick = () => {
-              btn.disabled = true;
-              btn.textContent = 'Working…';
-              runAutowork(a.issue, btn, base).catch(e => console.error('[autowork]', e));
-            };
-          }
-          else if (a.command) btn.onclick = () => fillAndSend(a.command);
-          wrap.appendChild(btn);
-        });
-        bubble.appendChild(wrap);
-      }
-      if (typeof scrollToBottom === 'function') scrollToBottom();
-    } catch (e) {
-      sysRow.querySelector('.bubble').textContent = `Convergence agent failed: ${e.message}`;
-    }
-    return;
-  }
+  // (!ask + work/status intents now flow through the single /api/dream/chat/stream
+  // endpoint; the server short-circuits them to the convergence agent and streams the
+  // answer + `actions`, rendered below from the done event. Stage 3 of the unification.)
 
   // !work / !edit <issue#> — observable autonomous workspace (Sigma-0, issue #527)
   const workMatch = text.match(/^!(?:work|edit)\s+#?(\d+)/i);
@@ -585,64 +912,26 @@ async function sendMessage() {
     return;
   }
 
-  // Auto-route work/status queries to convergence agent (no LLM cost, instant)
-  const WORK_INTENT = /\b(what (work|issues?|tasks?|bugs?|tickets?|pr[s']?|pull requests?)|what (needs?|needs to be) (done|fixed|closed|worked on)|what'?s? (open|pending|left|next|the status|blocking)|show (me )?(open |the )?issues?|status (of|update)|list (issues?|tasks?|open)|open issues?|any issues?|what should i (work on|fix|do)|top issues?|priority (issues?|tasks?))\b/i;
-  if (WORK_INTENT.test(text) && !text.startsWith('!')) {
+  // Explore embeds — surface videos / discover feed / GitHub activity / Patreon
+  // tiers inline when asked (bang commands or a "show/what/latest" NL framing).
+  // Deterministic, no LLM cost; same server-cached routes as the Explore page.
+  const embedKind = detectEmbedIntent(text);
+  if (embedKind) {
     input.value = '';
     input.style.height = 'auto';
-    const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
-    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    addUserBubble(text);
-    const messages = document.getElementById('messages');
-    const sysRow = document.createElement('div');
-    sysRow.className = 'msg-row agent';
-    sysRow.innerHTML = '<div class="msg-label">Convergence</div><div class="bubble" style="font-size:13px">Routing locally…</div>';
-    messages.appendChild(sysRow);
-    if (typeof scrollToBottom === 'function') scrollToBottom();
-    try {
-      const r = await fetch(`${base}/api/convergence/agent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
-      });
-      const d = await r.json();
-      const bubble = sysRow.querySelector('.bubble');
-      const badge = d.grounded ? '⚡ Instant answer · from live repo data' : '⚡ Instant answer · no AI cost';
-      const meta = `<div style="font-size:11px;opacity:0.55;margin-top:8px">${badge}</div>`;
-      bubble.innerHTML = `<div style="white-space:pre-wrap;line-height:1.5">${esc(d.answer || '(no answer)')}</div>` + meta;
-      const acts = Array.isArray(d.actions) ? d.actions : [];
-      if (acts.length) {
-        const wrap = document.createElement('div');
-        wrap.className = 'starter-chips';
-        wrap.style.marginTop = '10px';
-        acts.forEach(a => {
-          const btn = document.createElement('button');
-          btn.className = 'starter-chip';
-          btn.textContent = a.label;
-          if (a.href) btn.onclick = () => window.open(a.href, '_blank', 'noopener');
-          else if (a.autonomous && a.issue) {
-            // Use the same observable streaming path as the !ask chips, so a
-            // user who *types* "what should I work on?" gets the live step
-            // panel (plan → patch → tests → commit → push → PR) instead of an
-            // opaque "Working… ✓ Done" button. Σ₀: no hidden agency (#527).
-            btn.onclick = () => {
-              btn.disabled = true; btn.textContent = 'Working…';
-              runAutowork(a.issue, btn, base).catch(e => console.error('[autowork]', e));
-            };
-          } else if (a.command) btn.onclick = () => fillAndSend(a.command);
-          wrap.appendChild(btn);
-        });
-        bubble.appendChild(wrap);
-      }
-    } catch (e) {
-      sysRow.querySelector('.bubble').textContent = `Convergence failed: ${e.message}`;
-    }
-    if (typeof scrollToBottom === 'function') scrollToBottom();
+    renderExploreEmbed(embedKind, text).catch(e => console.error('[embed]', e));
     return;
   }
 
   isSending = true;
   document.getElementById('send-btn').disabled = true;
+
+  // #930: real cancellation — an AbortController the Stop button can trigger, plus a
+  // 90s safety timer for a hung stream (replaces the old fire-and-forget timeout).
+  let userStopped = false;
+  const ac = new AbortController();
+  const abortTimer = setTimeout(() => ac.abort(), 90000);
+  showStopButton(() => { userStopped = true; ac.abort(); });
 
   addUserBubble(text);
   input.value = '';
@@ -658,7 +947,26 @@ async function sendMessage() {
   let didError = false;
   let routeLabel = '';
   let receivedDone = false;
+  let doneActions = null;   // convergence-agent action chips, from the done event (Stage 3)
   let doneProvider = '';
+  // #930: coalesce per-token DOM writes into one render per animation frame instead
+  // of re-parsing+re-rendering the whole bubble on every token.
+  let rafId = 0;
+  let rafPending = false;
+  let streamEnded = false;
+  const scheduleRender = () => {
+    if (rafPending || streamEnded) return;
+    rafPending = true;
+    rafId = requestAnimationFrame(() => {
+      rafPending = false;
+      if (streamEnded) return;
+      cursor.remove();
+      bubble.innerHTML = renderMarkdown(fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd());
+      bubble.appendChild(cursor);
+      container.scrollTop = container.scrollHeight;
+    });
+  };
+  const toolResults = [];  // <tool_call> events arrive mid-stream; re-applied after the final render (which rebuilds the cards empty)
   const requestedProvider = document.getElementById('provider-select')?.value || '';
 
   try {
@@ -677,7 +985,7 @@ async function sendMessage() {
         // without it, turns log untagged and never form a saved session.
         sessionId: localStorage.getItem('lantern_chat_session') || undefined,
       }),
-      signal: AbortSignal.timeout(90000),
+      signal: ac.signal,
     });
 
     if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
@@ -706,28 +1014,44 @@ async function sendMessage() {
           } else if (evt.type === 'token' && evt.text) {
             if (thinking.parentNode) thinking.remove();
             fullText += evt.text;
-            cursor.remove();
-            bubble.innerHTML = renderMarkdown(fullText.replace(/\[DOORS:[^\]]*\]?/i, '').trimEnd());
-            bubble.appendChild(cursor);
-            container.scrollTop = container.scrollHeight;
+            scheduleRender(); // #930: rAF-coalesced, not a full re-render per token
           } else if (evt.type === 'error') {
             didError = true;
             if (evt.text) serverErrorText = evt.text;
             if (!fullText) bubble.style.color = 'var(--muted)';
+          } else if (evt.type === 'tool') {
+            // Server ran (or declined to run) the model's <tool_call>. Fill the result
+            // slot of the last tool-call card so the call + its real output show together.
+            toolResults.push(evt);
+            const cards = bubble.querySelectorAll('.tool-call-card');
+            const card = cards[cards.length - 1];
+            if (card) { fillToolSlot(card.querySelector('.tcc-result'), evt); container.scrollTop = container.scrollHeight; }
           } else if (evt.type === 'sigma0' && evt.corrected) {
             // Response was revised by Σ₀ verify pass — show badge after stream completes
             bubble.dataset.sigma0Corrected = '1';
             bubble.dataset.sigma0Claims = evt.claims || 0;
           } else if (evt.type === 'done') {
             if (evt.cleanText) fullText = evt.cleanText;
-            if (evt.routeLabel) routeLabel = evt.routeLabel;
+            if (evt.routeLabel || evt.label) routeLabel = evt.routeLabel || evt.label;
             doneProvider = evt.source || evt.provider || '';
+            if (Array.isArray(evt.actions) && evt.actions.length) doneActions = evt.actions;
             receivedDone = true;
           }
         } catch { /* skip malformed line */ }
       }
     }
-  } catch (e) { didError = true; }
+  } catch (e) {
+    // #930: a user Stop is a clean cancel — keep whatever already streamed. Any other
+    // abort (the 90s safety timer) or error is a real failure.
+    if (!(e && e.name === 'AbortError' && userStopped)) didError = true;
+  } finally {
+    clearTimeout(abortTimer);
+    hideStopButton();
+    streamEnded = true;            // stop scheduling and neutralize any in-flight rAF
+    if (rafId) cancelAnimationFrame(rafId);
+    isSending = false;
+    document.getElementById('send-btn').disabled = false;
+  }
 
   cursor.remove();
 
@@ -744,6 +1068,21 @@ async function sendMessage() {
   }
 
   bubble.innerHTML = renderMarkdown(fullText);
+
+  // Convergence-agent action chips (Stage 3): the server streamed a deterministic
+  // work/ask answer + actions through the one endpoint — render the chips here.
+  if (doneActions) {
+    renderActionChips(bubble, doneActions, (typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  }
+
+  // Re-apply tool results — the render above rebuilds the cards with empty result slots.
+  if (toolResults.length) {
+    const cards = bubble.querySelectorAll('.tool-call-card');
+    toolResults.forEach((evt, i) => {
+      const card = cards[i] || cards[cards.length - 1];
+      if (card) fillToolSlot(card.querySelector('.tcc-result'), evt);
+    });
+  }
 
   if (looksTruncated) {
     const truncBadge = document.createElement('span');
@@ -818,9 +1157,6 @@ async function sendMessage() {
   }
 
   if (!didError) history.push({ role: 'assistant', text: fullText });
-
-  isSending = false;
-  document.getElementById('send-btn').disabled = false;
 }
 
 // ── Auto-expand textarea ──────────────────────────────────────────────────────
@@ -828,6 +1164,19 @@ document.getElementById('input').addEventListener('input', e => {
   e.target.style.height = 'auto';
   e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
 });
+
+// ── Handoff prefill (?seed=) ──────────────────────────────────────────────────
+// Lets other surfaces (e.g. /orchestration.html) hand a task into Keystone chat.
+// Prefills the composer but never auto-sends — the human reviews/edits first.
+(function applySeedPrompt() {
+  try {
+    const seed = new URLSearchParams(location.search).get('seed');
+    if (seed && typeof fillPrompt === 'function') {
+      hideEmptyState();
+      fillPrompt(seed.slice(0, 2000));
+    }
+  } catch (e) { /* no-op */ }
+})();
 
 // ── Observer side panel ───────────────────────────────────────────────────────
 function toggleObserver() {
