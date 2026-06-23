@@ -33,7 +33,7 @@ def main():
 
     import torch
     from datasets import Dataset
-    from transformers import (AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
+    from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
                               Trainer, TrainingArguments, default_data_collator)
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 
@@ -53,15 +53,24 @@ def main():
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    # Ouro's custom modeling_ouro.py reads config.pad_token_id in __init__, but OuroConfig
+    # doesn't define one -> AttributeError on from_pretrained with newer transformers. Build
+    # the config first and backfill pad_token_id (fall back to eos) before instantiating.
+    cfg = AutoConfig.from_pretrained(a.base, trust_remote_code=True)
+    if getattr(cfg, "pad_token_id", None) is None:
+        cfg.pad_token_id = (getattr(cfg, "eos_token_id", None)
+                            if getattr(cfg, "eos_token_id", None) is not None
+                            else tok.pad_token_id)
+
     bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                              bnb_4bit_compute_dtype=compute_dtype, bnb_4bit_use_double_quant=True)
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            a.base, quantization_config=bnb, device_map="auto", trust_remote_code=True,
+            a.base, config=cfg, quantization_config=bnb, device_map="auto", trust_remote_code=True,
             attn_implementation="sdpa")   # ouro_serve.py has used sdpa since #775; mirror here
     except (ValueError, TypeError):
         model = AutoModelForCausalLM.from_pretrained(
-            a.base, quantization_config=bnb, device_map="auto", trust_remote_code=True)
+            a.base, config=cfg, quantization_config=bnb, device_map="auto", trust_remote_code=True)
     model.config.use_cache = False
     model = prepare_model_for_kbit_training(model)
     # all-linear is robust for a custom (trust_remote_code) architecture whose
