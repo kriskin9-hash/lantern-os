@@ -42,7 +42,18 @@ function saveJson(p, data) {
 }
 
 function envPresent(key) {
-  return !!(process.env[key] && process.env[key].trim().length > 0);
+  if (process.env[key] && process.env[key].trim().length > 0) return true;
+  // On Windows, server process may not inherit User-scope env vars set after boot.
+  // Fall back to reading from HKCU\Environment (the User-scope env store).
+  if (process.platform === "win32") {
+    try {
+      const { execFileSync } = require("child_process");
+      const out = execFileSync("reg", ["query", "HKCU\\Environment", "/v", key], { encoding: "utf8", timeout: 3000 });
+      const m = out.match(/REG_\w+\s+(.+)/);
+      if (m && m[1].trim().length > 0) return true;
+    } catch {}
+  }
+  return false;
 }
 
 function refreshSettingsPcsf(repoRoot) {
@@ -157,12 +168,38 @@ function refreshHealthPcsf(repoRoot) {
   console.log("[PCSF] health.pcsf.json refreshed — entries:", journal.total_entries, "CTF:", journal.entries_with_ctf, changed ? "(changed)" : "(unchanged)");
 }
 
+function refreshGpuTrainingPcsf(repoRoot) {
+  const p = path.join(repoRoot, "data", "pcsf", "gpu-training.pcsf.json");
+  let data;
+  try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch { return; }
+
+  for (const prov of data.providers || []) {
+    // Kaggle accepts either the new Bearer token OR the legacy username+key pair
+    let credOk;
+    if (prov.provider_id === "kaggle") {
+      credOk = envPresent("KAGGLE_API_TOKEN")
+        || (envPresent("KAGGLE_USERNAME") && envPresent("KAGGLE_KEY"));
+    } else {
+      credOk = !prov.auth_env || prov.auth_env.length === 0
+        || prov.auth_env.every(k => envPresent(k));
+    }
+    prov.state = credOk ? "available" : "no_key";
+    prov.last_checked = _now();
+  }
+  data.generated_at = _now();
+  saveJson(p, data);
+
+  const available = (data.providers || []).filter(p => p.state === "available").map(p => p.provider_id);
+  console.error("[PCSF] gpu-training.pcsf.json refreshed — available:", available.join(", ") || "none");
+}
+
 function refreshAllPcsf(repoRoot) {
   console.log("[PCSF] Starting live refresh…");
   refreshSettingsPcsf(repoRoot);
   refreshProviderPcsf(repoRoot);
   refreshHealthPcsf(repoRoot);
+  refreshGpuTrainingPcsf(repoRoot);
   console.log("[PCSF] Live refresh complete.");
 }
 
-module.exports = { refreshAllPcsf };
+module.exports = { refreshAllPcsf, refreshGpuTrainingPcsf };
