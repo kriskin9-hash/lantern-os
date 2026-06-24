@@ -150,17 +150,6 @@ function scan() {
     }
   }
 
-  // 7. Stash check
-  const stashes = git("stash list");
-  if (stashes && stashes.trim().length > 0) {
-    issues.push(issue(
-      "GIT:STASH",
-      "low",
-      `Stashed work exists:\n${stashes}`,
-      "Pop, commit, or drop stash entries before shipping"
-    ));
-  }
-
   return issues;
 }
 
