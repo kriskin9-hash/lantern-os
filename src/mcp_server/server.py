@@ -8,12 +8,17 @@ Endpoints:
   GET /health     — Health check
 
 Tools exposed:
+  Read/LS/Glob/Grep/web_search/web_fetch — canonical Dream Chat read tools
+  Bash/PowerShell/Write/Edit — canonical operator-only Dream Chat tools
   queue_status    — View work queue depth and tasks
   task_intake     — Submit a task to the queue
   dispatch_work   — Dispatch to an orchestrator agent
   boot_check      — Check orchestrator boot status
   list_skills     — List available skills
   get_status      — Overall system status
+
+Queue, task, fleet, GitHub, and convergence tools are MCP-specific operational
+capabilities. Shared user-facing tools are discovered from tool-runner.js.
 """
 
 import os
@@ -916,6 +921,13 @@ TOOLS_REGISTRY = {
     "research_run_next": _tool_research_run_next,
     "research_status": _tool_research_status,
 }
+TOOL_DESCRIPTORS: Dict[str, Dict[str, Any]] = {}
+SHARED_TOOL_MANIFEST: Dict[str, Any] = {
+    "schema_version": 1,
+    "canonical_source": "apps/lantern-garage/lib/tool-runner.js",
+    "tools": [],
+    "execution": {"enabled": False, "reason": "node_bridge_unavailable"},
+}
 
 # ── GitHub tools (gh-CLI backed) — mirrors the high-value core of GitHub's MCP ──
 # Act-stage tooling. Write tools honor GITHUB_WRITE_ENABLED (default on).
@@ -965,6 +977,20 @@ try:
 except Exception as _cv_exc:  # pragma: no cover - optional module
     logger.warning("Convergence tools not loaded: %s", _cv_exc)
 
+# Canonical Dream Chat capabilities. Python dynamically adapts the manifest and
+# delegates execution to Node; it does not maintain a second schema/policy table.
+try:
+    import shared_tool_bridge
+    SHARED_TOOL_MANIFEST = shared_tool_bridge.register(TOOLS_REGISTRY, TOOL_DESCRIPTORS)
+    logger.info(
+        "Canonical shared tools registered (%d): execution_enabled=%s",
+        len(TOOL_DESCRIPTORS),
+        SHARED_TOOL_MANIFEST.get("execution", {}).get("enabled"),
+    )
+except Exception as _shared_exc:  # pragma: no cover - Node may be absent in lean environments
+    SHARED_TOOL_MANIFEST["execution"]["reason"] = str(_shared_exc)
+    logger.warning("Canonical shared tools unavailable: %s", _shared_exc)
+
 
 def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
     """Handle a single JSON-RPC request."""
@@ -993,6 +1019,26 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
     if method == "tools/list":
         tools = []
         for name, fn in TOOLS_REGISTRY.items():
+            descriptor = TOOL_DESCRIPTORS.get(name)
+            if descriptor:
+                tools.append({
+                    "name": name,
+                    "description": descriptor.get("description", ""),
+                    "inputSchema": descriptor.get("input_schema", {"type": "object"}),
+                    "_meta": {
+                        "lantern": {
+                            "kind": "shared_capability",
+                            "canonical_source": SHARED_TOOL_MANIFEST.get("canonical_source"),
+                            "policy": descriptor.get("policy"),
+                            "operator_required": descriptor.get("operator_required", False),
+                            "surface_availability": descriptor.get("surface_availability", {}),
+                            "execution_enabled": descriptor.get("execution_enabled", False),
+                            "execution_disabled_reason": descriptor.get("execution_disabled_reason"),
+                            "receipt_schema_version": descriptor.get("result_receipt_schema_version"),
+                        }
+                    },
+                })
+                continue
             import inspect
             sig = inspect.signature(fn)
             parameters = {
@@ -1022,11 +1068,17 @@ def _handle_jsonrpc(req: Dict[str, Any]) -> Dict[str, Any]:
                 "name": name,
                 "description": (fn.__doc__ or "").strip(),
                 "inputSchema": parameters,
+                "_meta": {
+                    "lantern": {
+                        "kind": "mcp_specific_operational",
+                        "surface_availability": {"dream_chat": False, "mcp": True},
+                    }
+                },
             })
         return {
             "jsonrpc": "2.0",
             "id": req_id,
-            "result": {"tools": tools},
+            "result": {"tools": tools, "sharedToolManifest": SHARED_TOOL_MANIFEST},
         }
 
     if method == "tools/call":
@@ -1286,6 +1338,7 @@ async def mcp_discovery(request: Request):
         "capabilities": {"tools": {}, "logging": {}, "resources": {}},
         "serverInfo": {"name": "Lantern OS MCP Server", "description": "Convergence Core tools for Lantern OS"},
         "tools": list(TOOLS_REGISTRY.keys()),
+        "sharedToolManifest": SHARED_TOOL_MANIFEST,
     })
 
 

@@ -1405,7 +1405,11 @@ async function handleStreamChat(req, url, res) {
             let tc = toolRunner.parseToolCall(fullReply);
             if (tc && !execEnabled) {
               // Execution disabled — still surface the intended call so the UI card fills.
-              sse.writeData(res, { type: "tool", name: tc.name, input: tc.input, ok: false, reason: "disabled" });
+              const disabled = await toolRunner.runTool(tc.name, tc.input, { executionEnabled: false });
+              sse.writeData(res, { type: "tool", name: tc.name, input: tc.input,
+                ok: false, status: disabled.status, reason: disabled.reason_code,
+                reason_code: disabled.reason_code, policy: disabled.policy,
+                receipt: disabled.receipt });
             } else if (tc && execEnabled) {
               const { isOperatorRequest } = require("./request-auth");
               const operator = isOperatorRequest(req);
@@ -1433,7 +1437,9 @@ async function handleStreamChat(req, url, res) {
                 const result = await toolRunner.runTool(tc.name, tc.input, { operator });
                 const out = result.ok ? result.result : (result.error || `ERROR(${result.reason || "error"})`);
                 sse.writeData(res, { type: "tool", name: tc.name, input: tc.input,
-                  ok: result.ok, reason: result.reason || null, policy: result.policy || null,
+                  ok: result.ok, status: result.status, reason: result.reason_code || null,
+                  reason_code: result.reason_code || null, policy: result.policy || null,
+                  receipt: result.receipt,
                   result: result.ok ? result.result : (result.error || null) });
                 convo.push({ role: "assistant", content: lastTurn });
                 convo.push({ role: "user", content: `The ${tc.name} tool returned:\n${String(out).slice(0, 1500)}\n\nIf you need another tool, reply with exactly one <tool_call>…</tool_call>. Otherwise answer my original request in plain text.` });
@@ -1558,7 +1564,9 @@ async function handleStreamChat(req, url, res) {
               sse.writeData(res, { type: "tool", phase: "call", name: fc.name, input });
               const r = await toolRunner.runTool(fc.name, input, { operator });
               const out = r.ok ? r.result : `ERROR(${r.reason || "error"}): ${r.error}`;
-              sse.writeData(res, { type: "tool", phase: "result", name: fc.name, ok: !!r.ok, preview: String(out).slice(0, 240) });
+              sse.writeData(res, { type: "tool", phase: "result", name: fc.name,
+                ok: !!r.ok, status: r.status, reason_code: r.reason_code,
+                receipt: r.receipt, preview: String(out).slice(0, 240) });
               responseParts.push({ functionResponse: { name: fc.name, response: { result: String(out).slice(0, 6000) } } });
             }
             contents.push({ role: "user", parts: responseParts });
@@ -1733,7 +1741,9 @@ async function handleStreamChat(req, url, res) {
                 sse.writeData(res, { type: "tool", phase: "call", name: tu.name, input: tu.input });
                 const r = await toolRunner.runTool(tu.name, tu.input, { operator });
                 const out = r.ok ? r.result : `ERROR(${r.reason || "error"}): ${r.error}`;
-                sse.writeData(res, { type: "tool", phase: "result", name: tu.name, ok: !!r.ok, preview: String(out).slice(0, 240) });
+                sse.writeData(res, { type: "tool", phase: "result", name: tu.name,
+                  ok: !!r.ok, status: r.status, reason_code: r.reason_code,
+                  receipt: r.receipt, preview: String(out).slice(0, 240) });
                 results.push({ type: "tool_result", tool_use_id: tu.id, content: String(out).slice(0, 6000), is_error: !r.ok });
               }
               convo.push({ role: "user", content: results });
@@ -1888,7 +1898,9 @@ async function handleStreamChat(req, url, res) {
               sse.writeData(res, { type: "tool", phase: "call", name: tc.name, input: tc.input });
               const r = await toolRunner.runTool(tc.name, tc.input, { operator });
               const out = r.ok ? r.result : `ERROR(${r.reason || "error"}): ${r.error}`;
-              sse.writeData(res, { type: "tool", phase: "result", name: tc.name, ok: !!r.ok, preview: String(out).slice(0, 240) });
+              sse.writeData(res, { type: "tool", phase: "result", name: tc.name,
+                ok: !!r.ok, status: r.status, reason_code: r.reason_code,
+                receipt: r.receipt, preview: String(out).slice(0, 240) });
               messages.push({ role: "tool", tool_call_id: tc.id, content: String(out).slice(0, 6000) });
             }
           }
@@ -2019,7 +2031,9 @@ async function handleStreamChat(req, url, res) {
               sse.writeData(res, { type: "tool", phase: "call", name: tc.name, input: tc.input });
               const r = await toolRunner.runTool(tc.name, tc.input, { operator });
               const out = r.ok ? r.result : `ERROR(${r.reason || "error"}): ${r.error}`;
-              sse.writeData(res, { type: "tool", phase: "result", name: tc.name, ok: !!r.ok, preview: String(out).slice(0, 240) });
+              sse.writeData(res, { type: "tool", phase: "result", name: tc.name,
+                ok: !!r.ok, status: r.status, reason_code: r.reason_code,
+                receipt: r.receipt, preview: String(out).slice(0, 240) });
               messages.push({ role: "tool", tool_call_id: tc.id, content: String(out).slice(0, 6000) });
             }
           }

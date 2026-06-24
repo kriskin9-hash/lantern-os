@@ -31,10 +31,20 @@ const { resolveCommand } = require("./command-allowlist");
 const REPO = path.resolve(__dirname, "..", "..", "..");
 const MAX_OUT = 4000;
 const SKIP_DIR = /(^|[\\/])(\.git|node_modules|\.venv|\.venv-train|hf-cache)([\\/]|$)/;
+const CAPABILITY_SCHEMA_VERSION = 1;
+const RECEIPT_SCHEMA_VERSION = 1;
+
+function _codedError(message, reasonCode) {
+  const error = new Error(message);
+  error.reason = reasonCode;
+  return error;
+}
 
 function _safe(p) {
   const abs = path.resolve(REPO, String(p == null ? "." : p));
-  if (abs !== REPO && !abs.startsWith(REPO + path.sep)) throw new Error("path escapes repo");
+  if (abs !== REPO && !abs.startsWith(REPO + path.sep)) {
+    throw _codedError("path escapes repo", "unsafe_path");
+  }
   return abs;
 }
 
@@ -47,7 +57,7 @@ function _globToRe(glob) {
 function _runShell(command) {
   const cmd = String(command || "").trim();
   const resolved = resolveCommand(cmd);
-  if (!resolved) { const e = new Error(`command not allowlisted: ${cmd}`); e.reason = "unsafe"; throw e; }
+  if (!resolved) throw _codedError(`command not allowlisted: ${cmd}`, "command_not_allowlisted");
   return safeExec(tokenizeCommand(resolved), {
     cwd: REPO, encoding: "utf-8", timeout: 30000, maxBuffer: 1024 * 1024,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
@@ -74,9 +84,13 @@ function _blockedHost(hostname) {
 function _httpGet(url, redirects = 3) {
   return new Promise((resolve, reject) => {
     let u;
-    try { u = new URL(url); } catch { return reject(new Error("invalid url")); }
-    if (u.protocol !== "http:" && u.protocol !== "https:") return reject(new Error("only http(s) urls"));
-    if (_blockedHost(u.hostname)) return reject(new Error("host blocked (loopback/private/metadata)"));
+    try { u = new URL(url); } catch { return reject(_codedError("invalid url", "invalid_url")); }
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return reject(_codedError("only http(s) urls", "invalid_url"));
+    }
+    if (_blockedHost(u.hostname)) {
+      return reject(_codedError("host blocked (loopback/private/metadata)", "private_host_blocked"));
+    }
     const lib = u.protocol === "https:" ? https : http;
     const req = lib.get(u, {
       timeout: 12000,
@@ -220,9 +234,10 @@ const REGISTRY = {
     schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
     async run(i) {
       const url = String(i.url || "").trim();
-      if (!/^https?:\/\//i.test(url)) return "[web_fetch: url must start with http:// or https://]";
-      let html;
-      try { html = await _httpGet(url); } catch (e) { return `[web_fetch error: ${e.message}]`; }
+      if (!/^https?:\/\//i.test(url)) {
+        throw _codedError("url must start with http:// or https://", "invalid_url");
+      }
+      const html = await _httpGet(url);
       const text = _htmlToText(html);
       return text ? text.slice(0, 8000) : "[web_fetch: no readable text]";
     },
@@ -230,6 +245,57 @@ const REGISTRY = {
 };
 
 const TOOL_NAMES = Object.keys(REGISTRY);
+
+function capabilityManifest({
+  executionEnabled = process.env.CHAT_TOOL_EXEC === "1",
+} = {}) {
+  return {
+    schema_version: CAPABILITY_SCHEMA_VERSION,
+    receipt_schema_version: RECEIPT_SCHEMA_VERSION,
+    canonical_source: "apps/lantern-garage/lib/tool-runner.js",
+    execution: {
+      enabled: Boolean(executionEnabled),
+      reason: executionEnabled ? null : "chat_tool_exec_disabled",
+    },
+    tools: TOOL_NAMES.map((name) => {
+      const entry = REGISTRY[name];
+      return {
+        name,
+        description: entry.desc,
+        input_schema: entry.schema,
+        policy: entry.policy,
+        operator_required: entry.policy !== "read",
+        surface_availability: {
+          dream_chat: true,
+          mcp: true,
+        },
+        execution_enabled: Boolean(executionEnabled),
+        execution_disabled_reason: executionEnabled ? null : "chat_tool_exec_disabled",
+        result_receipt_schema_version: RECEIPT_SCHEMA_VERSION,
+      };
+    }),
+  };
+}
+
+function _outcome(status, tool, details = {}) {
+  const reasonCode = details.reason_code || null;
+  return {
+    ok: status === "executed",
+    status,
+    tool,
+    reason_code: reasonCode,
+    reason: reasonCode,
+    policy: details.policy || null,
+    ...(details.result !== undefined ? { result: details.result } : {}),
+    ...(details.error ? { error: details.error } : {}),
+    receipt: {
+      schema_version: RECEIPT_SCHEMA_VERSION,
+      tool,
+      status,
+      reason_code: reasonCode,
+    },
+  };
+}
 
 // Match Python json.dumps() default separators (", " / ": ") so this preamble is
 // BYTE-identical to the bridge's _render_tools (scripts/ouro_anthropic_bridge.py), which
@@ -272,17 +338,43 @@ function renderToolPreamble() {
  */
 async function runTool(name, input, ctx = {}) {
   const entry = REGISTRY[name];
-  if (!entry) return { ok: false, reason: "unknown", error: `unknown tool '${name}' (available: ${TOOL_NAMES.join(", ")})` };
+  if (!entry) {
+    return _outcome("unavailable", name, {
+      reason_code: "unknown_tool",
+      error: `unknown tool '${name}' (available: ${TOOL_NAMES.join(", ")})`,
+    });
+  }
+  if (ctx.executionEnabled === false) {
+    return _outcome("unavailable", name, {
+      reason_code: "chat_tool_exec_disabled",
+      policy: entry.policy,
+      error: "shared tool execution is disabled",
+    });
+  }
   if (entry.policy !== "read" && !ctx.operator) {
-    return { ok: false, reason: "auth", policy: entry.policy, error: `'${name}' (${entry.policy}) requires operator access` };
+    return _outcome("denied", name, {
+      reason_code: "operator_required",
+      policy: entry.policy,
+      error: `'${name}' (${entry.policy}) requires operator access`,
+    });
   }
   try {
     // run() may be sync (returns a string) or async (returns a Promise); await covers both.
     let out = String((await entry.run(input || {})) || "");
     if (out.length > MAX_OUT) out = out.slice(0, MAX_OUT) + "\n…[truncated]";
-    return { ok: true, result: out, policy: entry.policy };
+    return _outcome("executed", name, { result: out, policy: entry.policy });
   } catch (e) {
-    return { ok: false, reason: e.reason || "error", policy: entry.policy, error: String(e.stderr || e.message || e).slice(0, MAX_OUT) };
+    const reasonCode = e.reason || "execution_error";
+    const status = reasonCode === "unsafe_path" ||
+      reasonCode === "command_not_allowlisted" ||
+      reasonCode === "private_host_blocked"
+      ? "blocked"
+      : "unavailable";
+    return _outcome(status, name, {
+      reason_code: reasonCode,
+      policy: entry.policy,
+      error: String(e.stderr || e.message || e).slice(0, MAX_OUT),
+    });
   }
 }
 
@@ -390,4 +482,16 @@ function _loadsLenient(raw) {
   return null;
 }
 
-module.exports = { parseToolCall, runTool, renderToolPreamble, anthropicTools, openaiTools, geminiTools, REGISTRY, TOOL_NAMES };
+module.exports = {
+  parseToolCall,
+  runTool,
+  renderToolPreamble,
+  anthropicTools,
+  openaiTools,
+  geminiTools,
+  capabilityManifest,
+  REGISTRY,
+  TOOL_NAMES,
+  CAPABILITY_SCHEMA_VERSION,
+  RECEIPT_SCHEMA_VERSION,
+};

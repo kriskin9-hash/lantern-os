@@ -317,6 +317,27 @@ How this agent operates...
 
 **Exception:** If your change is docs-only or doesn't touch code, skip with `SKIP_AGENT_CHECK=1`.
 
+## Codex MCP parity agent
+
+**Status:** active
+**Model:** GPT-5 Codex
+**Lane:** codex/
+**Owner:** Alex Place
+
+### Capabilities
+- Canonical tool-contract integration
+- MCP and Dream Chat parity validation
+- Security-boundary regression testing
+
+### Runbook / Behavior
+Keeps `tool-runner.js` authoritative, delegates MCP execution through the
+bounded Node bridge, and validates structured policy outcomes on both surfaces.
+
+### Constraints
+- Max 1 open PR in the Codex lane
+- No duplicate Python tool schema/policy table
+- Preserve sandbox, command allowlist, SSRF, and operator gates
+
 ### Emergency Bypass (Rare)
 
 For true emergencies only:

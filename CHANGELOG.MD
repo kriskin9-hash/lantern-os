@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.7.71] - 2026-06-24
+- feat(mcp): expose Dream Chat's canonical tool manifest and executor through MCP with matching schemas, policy gates, structured denials, and receipt shape (#1139).
+
 ## [1.7.70] - 2026-06-24
 - feat(orchestration): restore the open, unclaimed GitHub issue research queue with priority filtering and bounded Keystone Chat, Codex, and Claude Code handoffs (#1130).
 

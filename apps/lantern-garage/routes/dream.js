@@ -21,6 +21,14 @@ module.exports = async function dreamRoutes(req, res, url, deps) {
   const { handleConvergenceCommand, selectAgent, verifyResponse, isVerifyEnabled } = require("../lib/dream-chat");
   const { classifyIntent, CAPABILITY_REGISTRY } = require("../lib/intent-router");
 
+  if (url.pathname === "/api/dream/tools" && req.method === "GET") {
+    const { capabilityManifest } = require("../lib/tool-runner");
+    sendJson(res, capabilityManifest({
+      executionEnabled: process.env.CHAT_TOOL_EXEC === "1",
+    }));
+    return true;
+  }
+
   // ── CSF search endpoint ───────────────────────────────────────────────
   if (url.pathname === "/api/csf/search" && req.method === "GET") {
     const query = (url.searchParams.get("q") || "").trim();
