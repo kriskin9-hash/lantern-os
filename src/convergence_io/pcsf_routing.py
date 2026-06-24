@@ -82,7 +82,7 @@ class RouteRequest:
     required_capabilities: Set[str] = field(default_factory=lambda: {"chat"})
     input_classification: str = "internal"
     estimated_input_tokens: int = 0
-    max_cost_usd: Optional[float] = 0.0
+    max_cost_usd: Optional[float] = None
     cloud_approved: bool = False
     secret_scan_passed: bool = False
     verification: EvidenceContract = field(default_factory=EvidenceContract)

@@ -111,6 +111,23 @@ def test_approved_cloud_task_can_select_cloud_route():
     assert decision.selected.provider_id == "anthropic"
 
 
+def test_explicit_cost_ceiling_blocks_paid_cloud_route():
+    decision = engine().decide(
+        RouteRequest(
+            task_id="K-4B",
+            intent="tool_review",
+            boundary=ExecutionBoundary.CLOUD_APPROVED,
+            required_capabilities={"chat", "code", "tools"},
+            max_cost_usd=0.0,
+            cloud_approved=True,
+            secret_scan_passed=True,
+            verification=evidence(),
+        )
+    )
+    assert decision.status is RouteStatus.BLOCKED
+    assert decision.failure_class is FailureClass.BUDGET_EXCEEDED
+
+
 def test_missing_evidence_contract_fails_closed():
     decision = engine().decide(
         RouteRequest(
