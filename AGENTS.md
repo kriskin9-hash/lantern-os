@@ -1,7 +1,7 @@
 ---
 author: Alex Place
 created: 2026-05-26
-updated: 2026-06-20
+updated: 2026-06-24
 ---
 
 # AGENTS.md — Keystone OS
@@ -9,6 +9,52 @@ updated: 2026-06-20
 A focused guide for AI coding agents. **Read this before touching anything.**
 
 **Core principle:** Be honest about what is real vs. designed. Never fabricate state.
+
+---
+
+## ⚠️ Accessibility Compliance (2026-06-24)
+
+**All surfaces must be WCAG AA compliant.** When working on UI changes:
+
+- ✅ Add keyboard focus indicators: `outline: 2px solid var(--accent); outline-offset: 2px;`
+- ✅ Use semantic HTML (`<section>`, proper heading hierarchy, landmarks)
+- ✅ Add ARIA labels (`aria-label`, `aria-labelledby`, `aria-hidden`)
+- ✅ Support `@media (prefers-reduced-motion: reduce)` — disable animations for users sensitive to motion
+- ✅ Support `@media (forced-colors: active)` — provide CanvasText fallbacks
+- ✅ Test with keyboard navigation (Tab, Shift+Tab, Enter)
+- ✅ Run `npm run test:a11y` (site audit & accessibility tests) before committing
+
+**Non-compliance will block merge.** See [WCAG 2.1 Level AA requirements](https://www.w3.org/TR/WCAG22/).
+
+---
+
+## Dual-Boot Worktree Architecture
+
+**Important:** The live servers use separate git worktrees, NOT the main checkout.
+
+| Server | Worktree | Source | Auto-Deploy |
+|--------|----------|--------|-------------|
+| **4177 (stable)** | `C:\dev\lantern-os-stable` | Deployed every 5 min from origin/master | ✅ Yes (non-destructive merge) |
+| **4178 (dev)** | `C:\dev\lantern-os-dev` | Current branch (hot-reload) | ❌ No |
+| **Main checkout** | `C:\dev\lantern-os` | Your working directory | — |
+
+**Critical:** Changes to `C:\dev\lantern-os` are NOT reflected on the live servers. To test:
+1. Commit to a branch in the main checkout
+2. Push to origin
+3. The stable server will pull and deploy in ~5 minutes
+
+**For immediate testing:** Use the dev server (4178) or manually restart the stable server after pushing.
+
+### Non-Destructive Deployment (2026-06-24)
+
+The stable auto-deploy uses `git merge --ff-only` instead of destructive `git reset --hard`. This means:
+
+- ✅ **Runtime data preserved** — JSONL logs, user data, `.env` files stay intact
+- ✅ **No commit loss** — Uncommitted changes don't get wiped
+- ✅ **Safe rollback** — Health check failure triggers automatic rollback to the last known-good commit
+- ⚠️ **Git conflicts impossible** — `--ff-only` aborts if branches have diverged
+
+See `C:\dev\deploy-stable-from-master.ps1` for the deployment script.
 
 ---
 
