@@ -351,3 +351,4 @@ tmp.*.patch
 
 # Chat document-processing work dir (uploads + generated .docx)
 data/documents/
+data/tmp-kaggle-out/
