@@ -805,6 +805,14 @@ async function handleStreamChat(req, url, res) {
   // roleplay requests in chat get pointed at /three-doors-game.html instead.
   const isRpMode = surfaceMode === "three-doors";
 
+  // #1167: the local Ollama coder (ouro:latest) is a 1.4B model fine-tuned on
+  // 243 code-only instruction/response pairs. Auto-mode local-first routing
+  // (below) sent it general/creative/meta chat too — hallucinated answers and,
+  // under pressure, full mode collapse (repeated/garbled word-salad). Scope
+  // local-first to intents the coder was actually trained for.
+  const CODING_INTENTS = new Set(["coding_change", "code_review"]);
+  const isCodingIntent = CODING_INTENTS.has(converganceDecision?.intent);
+
   const routeDecision = classifyIntent(message);
 
   // ── Route label (sent in every done event; shown below each assistant bubble) ─
@@ -863,15 +871,17 @@ async function handleStreamChat(req, url, res) {
       convergenceId: routeDecision.convergence_id || null,
       requiresConvergence: routeDecision.requires_convergence || false,
     };
-    // ── Degraded-local indicator (issue #740) ───────────────────────────────
+    // ── Degraded-local indicator (issue #740, narrowed by #1167) ────────────
     // In Auto mode (no explicit provider) the cloud chain (Gemini→Claude→OpenAI→
     // Grok) can silently fall through to the local Ollama model — which ignores
     // ROUTER_PROMPT and produces off-tone filler ("calm while wrong"). When that
     // happens, flag it so the UI shows "degraded — local model" instead of
     // passing the weak answer off as the normal route. Explicit ollama/local
-    // requests are intentional and not flagged.
+    // requests are intentional and not flagged — and so is the deliberate
+    // coding-intent local-first hit (#1167): that's the designed fast path,
+    // not a cloud outage, so labeling it "cloud unreachable" would be false.
     const isLocalSource = source === "ollama" || source === "offline";
-    const degradedLocal = isLocalSource && !requestedProvider && !isRpMode;
+    const degradedLocal = isLocalSource && !requestedProvider && !isRpMode && !isCodingIntent;
     let finalRouteLabel = routeLabel;
     if (degradedLocal) {
       signature.degraded = true;
@@ -1135,7 +1145,14 @@ async function handleStreamChat(req, url, res) {
   // ── Keystone: Task-aware provider selection using performance leaderboard ──
   let primaryProviderHint = null;
   try {
-    let taskType = detectTaskType(message, { isCreative: surfaceMode === "dream-chat" });
+    // #1167: this used to force isCreative whenever surfaceMode === "dream-chat" —
+    // but "dream-chat" is the surface name for ALL general Keystone chat (isRpMode
+    // is what flags the actual roleplay/journal surface, "three-doors"), so EVERY
+    // message here was tagged "creative" regardless of content. PROVIDER_CHAINS.creative
+    // leads with ollama, which is always "healthy" — so cloud was never reached for
+    // any message on the main chat surface. Use the real per-message intent instead:
+    // only the dream/journal-flavored intent gets the creative (local-first) chain.
+    let taskType = detectTaskType(message, { isCreative: converganceDecision?.intent === "dream_chat" && isRpMode });
 
     // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
     // The dream-chat surface forces isCreative -> always "creative" (ollama-first).
@@ -1341,7 +1358,12 @@ async function handleStreamChat(req, url, res) {
   // quality/grounding matters more than local latency/cost. Off by default (local-first
   // preserved). Honored only in Auto mode (an explicit ollama/local request still wins).
   const cloudFirst = process.env.CHAT_CLOUD_FIRST === "1" && !requestedProvider;
-  const ollamaLocalFirst = (!requestedProvider || requestedProvider === "ollama" || requestedProvider === "local") && !autoPrefersAnthropic && !cloudFirst;
+  // #1167: in Auto mode, only take the local-first path for coding intents — the
+  // local coder has no general/creative/meta training. An explicit ollama/local
+  // request still always wins (the user asked for it specifically).
+  const explicitLocalRequest = requestedProvider === "ollama" || requestedProvider === "local";
+  const autoLocalFirst = !requestedProvider && isCodingIntent;
+  const ollamaLocalFirst = (explicitLocalRequest || autoLocalFirst) && !autoPrefersAnthropic && !cloudFirst;
   if (ollamaLocalFirst && message && !isKeystoneDebug) {
     
     for (const ollamaModel of modelChain) {
