@@ -32,6 +32,10 @@ from .engine import (
     CIO_SDE,
     Trace,
     rollout,
+    InterventionPolicy,
+    InterventionReceipt,
+    PairedRunSummary,
+    paired_control_rollout,
 )
 from .loss import gaussian_kl, free_energy
 from .diagnostics import StabilityReport, analyze_trajectory
@@ -73,4 +77,8 @@ __all__ = [
     "ReconstructionOperator",
     "SurpriseMonitor",
     "kalman_predict",
+    "InterventionPolicy",
+    "InterventionReceipt",
+    "PairedRunSummary",
+    "paired_control_rollout",
 ]
