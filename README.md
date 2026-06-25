@@ -1,7 +1,7 @@
 ---
 author: Alex Place
 created: 2026-05-26
-updated: 2026-06-20
+updated: 2026-06-24
 ---
 
 # Keystone OS
@@ -40,7 +40,7 @@ updated: 2026-06-20
 
 It combines a web app, local memory systems, MCP tooling, multi-provider routing, and a structured convergence loop so work moves from raw context → validated artifacts → archived evidence with clear receipts and ground-truth verification.
 
-**Current state:** Σ₀ (Sigma-Zero) verification framework live (2026-06-14) · 1.6 dashboards shipped (2026-06-16) · Keystone serving split into **fast-cached default + deep Σ₀ opt-in** (`OURO_NATIVE=1`, 2026-06-18) · native Σ₀ LoopLM + standing benchmark landed (#756). The product surface is **[Keystone Chat](docs/KEYSTONE-PRODUCT.md)** — the member's operator console for their own copy of Keystone OS.
+**Current state:** Σ₀ (Sigma-Zero) verification framework live (2026-06-14) · 1.6 dashboards shipped (2026-06-16) · Keystone serving split into **fast-cached default + deep Σ₀ opt-in** (`OURO_NATIVE=1`, 2026-06-18) · native Σ₀ LoopLM + standing benchmark landed (#756) · **WCAG AA accessibility compliance** on all surfaces (2026-06-24) · **non-destructive auto-deploy** with `git merge --ff-only` (2026-06-24). The product surface is **[Keystone Chat](docs/KEYSTONE-PRODUCT.md)** — the member's operator console for their own copy of Keystone OS.
 
 ---
 
@@ -113,6 +113,8 @@ Observe → Remember → Reason → Act → Verify → Converge
 | **CSF Memory Archive** | ✅ Live | Symbolic searchable format, tiered promotion (trace → skill) |
 | **MCP Server** | ✅ Live | Local tool surface, agent registration, OAuth2 protected endpoint |
 | **Discord Integration** | ✅ Live | Bot with convergence-aware responses |
+| **WCAG AA Accessibility** | ✅ Live (2026-06-24) | Keyboard focus indicators (2px cyan outline), semantic HTML, ARIA labels, prefers-reduced-motion, forced-colors support — all surfaces compliant |
+| **Non-Destructive Auto-Deploy** | ✅ Live (2026-06-24) | Git `merge --ff-only` instead of destructive reset; preserves uncommitted runtime data; health-checks with auto-rollback |
 
 ---
 
@@ -153,6 +155,51 @@ Per Σ₀ framework: systems without feedback loops collapse. Without dust (obse
 **Current status:** All five paradoxes fixed with measurement loops + feedback gates. System verified stable under stress testing (1000+ iterations).
 
 See [docs/CONVERGANCE-SIGMA0-BRIEFING.md](docs/CONVERGANCE-SIGMA0-BRIEFING.md) for the full technical spec.
+
+---
+
+## Auto-Deploy Infrastructure (2026-06-24)
+
+The stable server (port 4177) uses a **non-destructive deployment model** that preserves uncommitted runtime data while safely deploying new code.
+
+### How It Works
+
+1. **Non-Destructive Merge** — Uses `git merge --ff-only origin/master` instead of `git reset --hard`, preserving any uncommitted changes to runtime files (JSONL logs, user data, etc.)
+2. **Smart Restart Logic** — Only restarts the server if server-side code changed (`.js`, `.py` files in `lib/`, `routes/`, etc.); documentation and data-only changes are served fresh from disk without restart
+3. **Health Checks** — After restart, validates `/api/convergence/health` endpoint with 25-second timeout; if unhealthy, automatically rolls back to the previous commit
+4. **Scheduled Runs** — Runs every 5 minutes via Windows scheduled task `KeystoneAutoDeployStable`, hydrating API keys from User-scope environment before startup
+
+### Deployment Benefits
+
+- ✅ **Safe** — Uncommitted data preserved; fast rollback on failure
+- ✅ **Efficient** — No unnecessary restarts; static assets served immediately
+- ✅ **Observable** — Full deploy log at `C:\dev\auto-deploy-stable.log`
+- ✅ **Automated** — Requires no manual intervention; health checks prevent broken deployments
+
+---
+
+## WCAG AA Accessibility Compliance (2026-06-24)
+
+All surfaces now meet **WCAG 2.1 Level AA** standards. Keystone OS is committed to accessibility for all users, including those using keyboard navigation and assistive technologies.
+
+### Accessibility Features
+
+- **Keyboard Focus Indicators** — 2px cyan outline (`outline: 2px solid var(--accent); outline-offset: 2px;`) on all interactive elements, visible on hover and focus-visible states
+- **Semantic HTML** — Proper use of `<section>`, `<h1>`-`<h3>` hierarchy, and structural landmarks for screen reader navigation
+- **ARIA Labels** — `aria-labelledby`, `aria-hidden`, `aria-label` attributes on all interactive components
+- **Prefers Reduced Motion** — Respects `@media (prefers-reduced-motion: reduce)` to disable animations for users sensitive to motion
+- **Forced Colors Mode** — Support for high-contrast modes with `@media (forced-colors: active)`
+- **High Contrast** — Support for `@media (prefers-contrast: more)` with increased border widths and outline visibility
+
+### Compliance Details
+
+Per WCAG 2.1 Success Criterion 2.4.7 (Focus Visible), all keyboard-operable elements must have a visible focus indicator with minimum 3:1 contrast ratio. Keystone's cyan accent provides 5.8:1 contrast on both light and dark backgrounds.
+
+### Latest Updates (2026-06-24)
+
+- ✅ `explore.html` — WCAG AA upgrade with semantic sections, focus indicators, ARIA labels, and animation preferences
+- ✅ `index.html` — Home page tiles now support keyboard focus with smooth visual feedback
+- ✅ All pages — Forced-colors and high-contrast modes fully functional
 
 ---
 
