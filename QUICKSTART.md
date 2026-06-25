@@ -127,7 +127,7 @@ You can skip all of this — the chat works without any of it. Come back when yo
 
 ### Run two copies at once (for tinkering)
 
-Handy if you want to experiment without breaking your working copy: one stable copy on port 4177, and a second "playground" copy on port 4178.
+Handy if you want to experiment without breaking your working copy: one stable copy on port 4177, and a second "playground" copy on port 4178. If Python is installed, the MCP server also starts automatically on port 8771, shared by both web servers.
 
 ```powershell
 pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DualServers.ps1
@@ -135,6 +135,7 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DualServers.ps1
 
 - **Port 4177** — your stable copy (the `master` branch)
 - **Port 4178** — your playground (your current branch, auto-reloads as you change files)
+- **Port 8771** — MCP server (shared, tools for Claude Code) *(requires Python)*
 
 *(If you happen to have `make` installed — it isn't on Windows by default — `make quickstart` does the same thing.)*
 
@@ -173,11 +174,22 @@ Voice playback needs ffmpeg: `winget install Gyan.FFmpeg`.
 
 ### Tools for AI agents (MCP)
 
+The MCP server starts automatically when you run the dual-boot launcher (if Python is installed):
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/Start-DualServers.ps1
+```
+
+This launches:
+- **Port 8771** — MCP server (shared by both web servers, tools for Claude Code)
+
+If you want to run the MCP server standalone on port 8771:
+
 ```bash
 python src/mcp_server/server.py
 ```
 
-Runs on port 8771. This lets coding assistants like Claude Code call Keystone's tools. Most people don't need it.
+The MCP server lets coding assistants like Claude Code call Keystone's tools — you only need it if you're using the Claude Code IDE extension or web app with this project.
 
 ### Share it on the internet (advanced)
 
