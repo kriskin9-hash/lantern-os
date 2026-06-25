@@ -253,19 +253,24 @@ function buildToolCard(inner, partial) {
   const tc = parseToolCallInner(inner);
   const name = tc && tc.name ? tc.name : 'tool';
   const args = esc(tc && tc.input ? JSON.stringify(tc.input, null, 2) : inner.trim());
-  const status = partial ? ' <span style="opacity:.6;font-weight:400">…calling</span>' : '';
-  return '<div class="tool-call-card" data-tool="' + esc(name) + '" style="border:1px solid var(--border,#2a2a3a);border-radius:10px;margin:8px 0;overflow:hidden">'
-    + '<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(92,200,255,.10);color:var(--accent,#5cc8ff);font-weight:600;font-size:13px">🔧 ' + esc(name) + status + '</div>'
+  const status = partial ? ' …calling' : '';
+  // Collapsed by default (<details> with no `open`): a tool call isn't typically
+  // something the user needs to read — they click the summary to expand args+result.
+  return '<details class="tool-call-card" data-tool="' + esc(name) + '" style="border:1px solid var(--border,#2a2a3a);border-radius:10px;margin:8px 0;overflow:hidden">'
+    + '<summary style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(92,200,255,.10);color:var(--accent,#5cc8ff);font-weight:600;font-size:13px;list-style:none">🔧 ' + esc(name) + '<span class="tcc-status" style="opacity:.7;font-weight:400">' + status + '</span></summary>'
     + '<pre style="margin:0;padding:8px 10px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--text,#cdd)">' + args + '</pre>'
     + '<div class="tcc-result" style="display:none;border-top:1px solid var(--border,#2a2a3a);padding:8px 10px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:var(--muted,#9aa)"></div>'
-    + '</div>';
+    + '</details>';
 }
 function fillToolSlot(slot, evt) {
   if (!slot) return;
+  const card = slot.closest('.tool-call-card');
+  const statusEl = card && card.querySelector('.tcc-status');
   if (evt.ok) {
-    slot.textContent = '↳ ' + String(evt.result || '');
+    slot.textContent = '↳ ' + String(evt.result ?? evt.preview ?? '');
     slot.style.color = 'var(--text,#cdd)';
     slot.style.opacity = '1';
+    if (statusEl) { statusEl.textContent = ' ✓'; statusEl.style.color = '#4ade80'; }
   } else {
     const msg = ({
       disabled: 'tool execution is off (set CHAT_TOOL_EXEC=1)',
@@ -276,6 +281,7 @@ function fillToolSlot(slot, evt) {
     slot.textContent = '⚠ ' + msg;
     slot.style.color = 'var(--muted,#9aa)';
     slot.style.opacity = '0.7';
+    if (statusEl) { statusEl.textContent = ' ⚠'; statusEl.style.color = '#f87171'; }
   }
   slot.style.display = 'block';
 }
@@ -413,7 +419,14 @@ function createAgentBubble(isError) {
   bubble.className = 'message-content';
   const thinking = document.createElement('span');
   thinking.className = 'thinking-mandala';
-  thinking.innerHTML = '<img src="/mandala.svg" alt="" style="width:20px;height:20px;opacity:0.5;animation:spin 2s linear infinite;vertical-align:middle">';
+  // aria-live="polite" so screen readers announce state changes without interrupting.
+  // role="status" marks this as a live region for assistive tech.
+  thinking.setAttribute('role', 'status');
+  thinking.setAttribute('aria-live', 'polite');
+  thinking.setAttribute('aria-label', 'Thinking');
+  thinking.innerHTML =
+    '<img src="/mandala.svg" alt="" class="thinking-spin" style="width:18px;height:18px;opacity:0.5;vertical-align:middle;margin-right:6px">' +
+    '<span class="thinking-label" style="font-size:12px;opacity:0.6;vertical-align:middle">Thinking…</span>';
   bubble.appendChild(thinking);
   const cursor = document.createElement('span');
   cursor.className = 'stream-cursor';
@@ -949,6 +962,9 @@ async function sendMessage() {
   let receivedDone = false;
   let doneActions = null;   // convergence-agent action chips, from the done event (Stage 3)
   let doneProvider = '';
+  let doneModel = '';       // actual model id from the PCSF receipt (e.g. claude-haiku-4-5)
+  let doneTimestamp = '';   // receipt generatedAt — the signature timestamp
+  let doneOnline = true;    // false when no model answered (offline path)
   // #930: coalesce per-token DOM writes into one render per animation frame instead
   // of re-parsing+re-rendering the whole bubble on every token.
   let rafId = 0;
@@ -967,6 +983,7 @@ async function sendMessage() {
     });
   };
   const toolResults = [];  // <tool_call> events arrive mid-stream; re-applied after the final render (which rebuilds the cards empty)
+  const nativeToolCalls = [];  // cloud-model (Claude/OpenAI/Gemini) tool *calls* — they emit no <tool_call> text, so we synthesize the cards at finalize
   const requestedProvider = document.getElementById('provider-select')?.value || '';
 
   try {
@@ -1011,6 +1028,9 @@ async function sendMessage() {
               rc.textContent = evt.label || `${evt.agentName} · ${evt.surface}`;
               bubble.insertBefore(rc, cursor);
             }
+            // Reflect routing in the spinner so users see real activity, not decorative spin.
+            const _rl = thinking.querySelector('.thinking-label');
+            if (_rl) { _rl.textContent = 'Researching…'; thinking.setAttribute('aria-label', 'Researching'); }
           } else if (evt.type === 'token' && evt.text) {
             if (thinking.parentNode) thinking.remove();
             fullText += evt.text;
@@ -1020,12 +1040,23 @@ async function sendMessage() {
             if (evt.text) serverErrorText = evt.text;
             if (!fullText) bubble.style.color = 'var(--muted)';
           } else if (evt.type === 'tool') {
-            // Server ran (or declined to run) the model's <tool_call>. Fill the result
-            // slot of the last tool-call card so the call + its real output show together.
-            toolResults.push(evt);
-            const cards = bubble.querySelectorAll('.tool-call-card');
-            const card = cards[cards.length - 1];
-            if (card) { fillToolSlot(card.querySelector('.tcc-result'), evt); container.scrollTop = container.scrollHeight; }
+            // Two shapes reach here:
+            //  • native cloud loop → {phase:"call",name,input} then {phase:"result",name,ok,preview}
+            //  • local Ouro path   → a single {name,input,ok,result} (its <tool_call> text already drew a card)
+            // For native calls there is no text card, so record the call and synthesize
+            // the card at finalize; results fill the last open card (and re-apply at the end).
+            if (evt.phase === 'call') {
+              nativeToolCalls.push({ name: evt.name, input: evt.input || {} });
+              // Show "Checking <tool>…" so users understand what the delay is.
+              const _tl = thinking.querySelector('.thinking-label');
+              const readableTool = (evt.name || 'tool').replace(/_/g, ' ');
+              if (_tl) { _tl.textContent = `Checking ${readableTool}…`; thinking.setAttribute('aria-label', `Checking ${readableTool}`); }
+            } else {
+              toolResults.push(evt);
+              const cards = bubble.querySelectorAll('.tool-call-card');
+              const card = cards[cards.length - 1];
+              if (card) { fillToolSlot(card.querySelector('.tcc-result'), evt); container.scrollTop = container.scrollHeight; }
+            }
           } else if (evt.type === 'sigma0' && evt.corrected) {
             // Response was revised by Σ₀ verify pass — show badge after stream completes
             bubble.dataset.sigma0Corrected = '1';
@@ -1033,7 +1064,10 @@ async function sendMessage() {
           } else if (evt.type === 'done') {
             if (evt.cleanText) fullText = evt.cleanText;
             if (evt.routeLabel || evt.label) routeLabel = evt.routeLabel || evt.label;
-            doneProvider = evt.source || evt.provider || '';
+            doneProvider = evt.source || evt.provider || (evt.receipt && evt.receipt.provider) || '';
+            doneModel = evt.model || (evt.receipt && evt.receipt.model) || '';
+            doneTimestamp = evt.timestamp || (evt.receipt && evt.receipt.generatedAt) || '';
+            doneOnline = evt.online !== false;
             if (Array.isArray(evt.actions) && evt.actions.length) doneActions = evt.actions;
             receivedDone = true;
           }
@@ -1067,6 +1101,14 @@ async function sendMessage() {
     bubble.style.fontStyle = 'italic';
   }
 
+  // Native cloud tool calls emit no <tool_call> text, and the done event replaces
+  // fullText with the markup-free cleanText — so synthesize the markup now (above the
+  // answer) so renderMarkdown draws the workflow cards and the re-apply below fills them.
+  if (nativeToolCalls.length && !/<tool_call>/i.test(fullText)) {
+    const blocks = nativeToolCalls.map(tc => '<tool_call>' + JSON.stringify(tc) + '</tool_call>').join('\n');
+    fullText = blocks + '\n\n' + fullText;
+  }
+
   bubble.innerHTML = renderMarkdown(fullText);
 
   // Convergence-agent action chips (Stage 3): the server streamed a deterministic
@@ -1082,6 +1124,26 @@ async function sendMessage() {
       const card = cards[i] || cards[cards.length - 1];
       if (card) fillToolSlot(card.querySelector('.tcc-result'), evt);
     });
+  }
+
+  // Group the synthesized native tool cards under ONE collapsed parent — the whole
+  // workflow is rarely something the user needs expanded. (Single call: no parent.)
+  if (nativeToolCalls.length > 1) {
+    const group = [...bubble.querySelectorAll('.tool-call-card')].slice(0, nativeToolCalls.length);
+    if (group.length > 1 && group[0].parentNode) {
+      const parent = document.createElement('details');
+      parent.className = 'tool-workflow';
+      parent.style.cssText = 'border:1px solid var(--border,#2a2a3a);border-radius:10px;margin:8px 0;overflow:hidden';
+      const sum = document.createElement('summary');
+      sum.style.cssText = 'cursor:pointer;padding:6px 10px;background:rgba(92,200,255,.08);color:var(--accent,#5cc8ff);font-weight:600;font-size:13px;list-style:none';
+      sum.textContent = '🔧 ' + group.length + ' tool calls';
+      parent.appendChild(sum);
+      group[0].parentNode.insertBefore(parent, group[0]);
+      const inner = document.createElement('div');
+      inner.style.cssText = 'padding:0 8px 4px';
+      parent.appendChild(inner);
+      group.forEach(c => { c.style.margin = '6px 0'; inner.appendChild(c); });
+    }
   }
 
   if (looksTruncated) {
@@ -1100,11 +1162,38 @@ async function sendMessage() {
     bubble.appendChild(badge);
   }
 
-  if (routeLabel) {
+  // Signature line: always show a human-readable label + time. Raw provider/model id
+  // goes in a collapsed <details> so curious users can inspect it without it cluttering
+  // every reply for normal users. (#1141)
+  if (!didError) {
     const sig = document.createElement('div');
     sig.className = 'msg-route-sig';
-    sig.setAttribute('aria-label', `Active route: ${routeLabel}`);
-    sig.textContent = routeLabel;
+    const t = doneTimestamp ? new Date(doneTimestamp) : new Date();
+    const time = isNaN(t) ? '' : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Human-readable label: "Keystone · chat" or the agent route label.
+    const displayLabel = routeLabel || 'Keystone · chat';
+    if (doneOnline === false) {
+      // Offline path: make it explicit for the user.
+      sig.textContent = `${displayLabel} · offline${time ? ' · ' + time : ''}`;
+      sig.setAttribute('aria-label', `Keystone replied offline${time ? ' at ' + time : ''}`);
+    } else {
+      const pm = [doneProvider, doneModel].filter(Boolean).join('/');
+      // Visible part: label + time only.
+      const visibleText = [displayLabel, time].filter(Boolean).join(' · ');
+      if (pm) {
+        // Wrap provider/model in a disclosure so it's accessible but not noisy.
+        sig.innerHTML =
+          `<span>${visibleText}</span>` +
+          `<details class="sig-debug" style="display:inline-block;margin-left:6px">` +
+          `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none" aria-label="Debug details">▸ debug</summary>` +
+          `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${pm}</span>` +
+          `</details>`;
+        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}; model: ${pm}`);
+      } else {
+        sig.textContent = visibleText;
+        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}`);
+      }
+    }
     msg.appendChild(sig);
   }
 
@@ -1124,7 +1213,16 @@ async function sendMessage() {
   // 🔊 Read-aloud + narration. This file is the live reply renderer, so TTS must live
   // here — the equivalent code in dream-chat.js runs on a dead render path, which is why
   // replies never read back. Reuses window.speakText (server TTS → browser fallback). (#858)
-  if (!didError && fullText && fullText.trim() && typeof window.speakText === 'function') {
+  // Narration reads the ANSWER only — never the tool calls. Strip <tool_call> markup
+  // (and the hidden [DOORS] tag) so the narrator doesn't read raw JSON / tool I/O aloud;
+  // the user opens a tool card deliberately if they want its detail.
+  const speakableText = (fullText || '')
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+    .replace(/<tool_call>[\s\S]*$/i, '')
+    .replace(/\[DOORS:[^\]]*\]?/i, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (!didError && speakableText && typeof window.speakText === 'function') {
     const speakBtn = document.createElement('button');
     speakBtn.type = 'button';
     speakBtn.className = 'read-aloud-btn';
@@ -1141,7 +1239,7 @@ async function sendMessage() {
       window.__activeReadReset = resetSpeakBtn;
       speakBtn.dataset.speaking = '1';
       speakBtn.textContent = '⏹ Stop';
-      window.speakText(fullText, resetSpeakBtn);
+      window.speakText(speakableText, resetSpeakBtn);
     };
     speakBtn.addEventListener('click', () => {
       if (speakBtn.dataset.speaking === '1') {
@@ -1174,6 +1272,28 @@ document.getElementById('input').addEventListener('input', e => {
     if (seed && typeof fillPrompt === 'function') {
       hideEmptyState();
       fillPrompt(seed.slice(0, 2000));
+    }
+  } catch (e) { /* no-op */ }
+})();
+
+// ── Provider selection handoff (?provider=) ─────────────────────────────────────
+// Allows orchestration.html to route chat through a specific AI provider.
+// Non-auto selections override the router's fallback chain for this session.
+(function applyProviderSelection() {
+  try {
+    const provider = new URLSearchParams(location.search).get('provider');
+    const select = document.getElementById('provider-select');
+    if (provider && select) {
+      // Try to set the selected provider
+      if (select.querySelector(`option[value="${provider}"]`)) {
+        select.value = provider;
+        console.log(`[dream-chat] Provider set to: ${provider}`);
+      } else if (provider !== 'auto') {
+        // Provider not available; log but don't break
+        console.warn(`[dream-chat] Requested provider '${provider}' not available, using router default`);
+      }
+      // Dispatch change event so any listeners update
+      select.dispatchEvent(new Event('change', { bubbles: true }));
     }
   } catch (e) { /* no-op */ }
 })();

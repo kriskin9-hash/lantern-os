@@ -19,6 +19,25 @@ if os.name == "nt":  # Windows local dev only — don't stomp HF_HOME on Linux/K
     os.environ.setdefault("HF_HOME", "D:/hf-cache")
 
 
+def load_training_records(path):
+    """Accept the Kaggle JSON array and legacy local JSONL files."""
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else [parsed]
+    except json.JSONDecodeError:
+        records = []
+        for line in raw.splitlines():
+            if not line.strip():
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return records
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="ByteDance/Ouro-1.4B")
@@ -31,11 +50,22 @@ def main():
     ap.add_argument("--seq", type=int, default=1536)  # audited p99=1219 on the FC corpus; 1024 truncates 3% from the END (cuts the tool call)
     a = ap.parse_args()
 
-    import torch
+    # datasets must be imported before torch on Windows to avoid pyarrow/CUDA DLL conflict
     from datasets import Dataset
-    from transformers import (AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
+    import torch
+    from transformers import (AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig,
                               Trainer, TrainingArguments, default_data_collator)
     from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
+    # Monkey-patch: Ouro-1.4B's modeling_ouro.py looks up ROPE_INIT_FUNCTIONS['default']
+    # which was removed in transformers>=4.53. Restore it if missing.
+    try:
+        from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS, _compute_default_rope_parameters
+        if "default" not in ROPE_INIT_FUNCTIONS:
+            ROPE_INIT_FUNCTIONS["default"] = _compute_default_rope_parameters
+            print("patched: ROPE_INIT_FUNCTIONS['default'] restored")
+    except Exception as _rope_e:
+        print(f"rope patch skipped: {_rope_e}")
 
     print(f"CUDA: {torch.cuda.is_available()} | base: {a.base}")
     if not torch.cuda.is_available():
@@ -53,14 +83,11 @@ def main():
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    # Ouro's custom modeling_ouro.py reads config.pad_token_id in __init__, but OuroConfig
-    # doesn't define one -> AttributeError on from_pretrained with newer transformers. Build
-    # the config first and backfill pad_token_id (fall back to eos) before instantiating.
+    from transformers import AutoConfig
     cfg = AutoConfig.from_pretrained(a.base, trust_remote_code=True)
-    if getattr(cfg, "pad_token_id", None) is None:
-        cfg.pad_token_id = (getattr(cfg, "eos_token_id", None)
-                            if getattr(cfg, "eos_token_id", None) is not None
-                            else tok.pad_token_id)
+    # OuroConfig (newer transformers / Python 3.12) may lack pad_token_id — set it from bos.
+    if not hasattr(cfg, "pad_token_id") or cfg.pad_token_id is None:
+        cfg.pad_token_id = getattr(cfg, "bos_token_id", tok.pad_token_id)
 
     bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
                              bnb_4bit_compute_dtype=compute_dtype, bnb_4bit_use_double_quant=True)
@@ -81,18 +108,13 @@ def main():
     model.print_trainable_parameters()
 
     rows = []
-    with open(a.data, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                r = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            instr, out = r.get("instruction", ""), r.get("output", "")
-            if instr and out:
-                rows.append({"text": f"### Instruction:\n{instr}\n\n### Response:\n{out}{tok.eos_token}"})
+    records = load_training_records(a.data)
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        instr, out = r.get("instruction", ""), r.get("output", "")
+        if instr and out:
+            rows.append({"text": f"### Instruction:\n{instr}\n\n### Response:\n{out}{tok.eos_token}"})
     print(f"training rows: {len(rows)}")
     ds = Dataset.from_list(rows)
 

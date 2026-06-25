@@ -13,14 +13,137 @@ const { appendJsonlQueued } = require("./file-queue");
 
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const JOBS_LOG = path.join(REPO_ROOT, "data", "self-improvement", "training-jobs.jsonl");
+const CONVERGENCE_LOG = path.join(REPO_ROOT, "data", "training", "convergence-records.jsonl");
 const GPU_PCSF = path.join(REPO_ROOT, "data", "pcsf", "gpu-training.pcsf.json");
 
+// Windows User environment sync — reads GPU API keys from User scope into process.env
+const GPU_KEY_ALLOWLIST = [
+  "HF_TOKEN", "HF_TRAINING_REPO",
+  "KAGGLE_API_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY",
+  "LIGHTNING_USER_ID", "LIGHTNING_API_KEY", "LIGHTNING_PYTHON",
+  "MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET",
+  "VAST_AI_API_KEY", "RUNPOD_API_KEY", "PAPERSPACE_API_KEY",
+];
+
+function _readWindowsUserEnv(key) {
+  try {
+    const val = execFileSync("powershell", [
+      "-NonInteractive", "-Command",
+      `[System.Environment]::GetEnvironmentVariable('${key}', 'User')`,
+    ], { timeout: 5_000, encoding: "utf8" }).trim();
+    return val || "";
+  } catch { return ""; }
+}
+
+let _keysSynced = false;
+function _syncUserEnvKeys() {
+  if (_keysSynced) return;
+  _keysSynced = true;
+  for (const k of GPU_KEY_ALLOWLIST) {
+    if (!process.env[k]) {
+      const val = _readWindowsUserEnv(k);
+      if (val) process.env[k] = val;
+    }
+  }
+}
+
 function isoNow() { return new Date().toISOString(); }
+
+// !convergence — every training event gets a ConvergenceRecord appended to CONVERGENCE_LOG.
+// Format: { timestamp, runId, type, provider, claim, evidence, confidence, source }
+// Nothing is accepted without evidence; confidence is observable (1.0 = directly verified).
+async function logConvergenceRecord(record) {
+  const cr = {
+    timestamp: isoNow(),
+    runId: record.jobId || record.testType || record.type,
+    type: record.type,
+    provider: record.provider,
+    claim: _buildClaim(record),
+    evidence: _buildEvidence(record),
+    confidence: _buildConfidence(record),
+    source: record.source || "training_dispatcher",
+  };
+  ensureDir(CONVERGENCE_LOG);
+  await appendJsonlQueued(CONVERGENCE_LOG, cr);
+}
+
+function _buildClaim(r) {
+  if (r.type === "training_dispatch") return `Dispatched ${r.steps || "?"}-step training run on ${r.provider}`;
+  if (r.type === "training_poll")     return `${r.provider} job ${r.jobId} is ${r.status}`;
+  if (r.type === "training_run")      return r.claim || `Local training run completed on ${r.provider}`;
+  if (r.type === "provider_test")     return r.claim || `Provider test: ${r.provider} ${r.testType}`;
+  return `${r.type} on ${r.provider}`;
+}
+
+function _buildEvidence(r) {
+  if (r.type === "training_dispatch") {
+    return { jobId: r.jobId, kernelUrl: r.kernelUrl || r.studioName, steps: r.steps,
+             cliOutput: r.cliOutput ? r.cliOutput.slice(0, 200) : undefined };
+  }
+  if (r.type === "training_poll") {
+    return { jobId: r.jobId, rawStatus: r.rawStatus, failureMessage: r.failureMessage };
+  }
+  return r.evidence || { status: r.status };
+}
+
+// Single write point: job log + convergence record in one call.
+async function logJob(record) {
+  ensureDir(JOBS_LOG);
+  await appendJsonlQueued(JOBS_LOG, record);
+  logConvergenceRecord(record).catch(() => {});
+}
+
+function _buildConfidence(r) {
+  if (r.confidence !== undefined) return r.confidence;
+  if (r.type === "training_run")  return 1.0;
+  if (r.type === "provider_test") return r.status === "done" ? 1.0 : 0.5;
+  if (r.type === "training_poll") {
+    if (r.status === "done")    return 1.0;
+    if (r.status === "running") return 0.7;
+    if (r.status === "failed")  return 1.0;
+    return 0.5;
+  }
+  if (r.type === "training_dispatch") return 0.6; // dispatched but not yet confirmed running
+  return 0.5;
+}
+
+// Records a failed dispatch attempt to the jobs log so it shows up in "Recent runs" —
+// without this, only successful/manual_required dispatches were ever persisted, so a
+// failed kaggle/lightning attempt left no trace once the live progress badge cleared.
+async function _logDispatchFailure(provider, errorRecord, steps) {
+  const record = {
+    type: "training_dispatch",
+    provider,
+    status: "failed",
+    steps,
+    error: errorRecord.error,
+    detail: errorRecord.detail,
+    dispatchedAt: isoNow(),
+  };
+  await logJob(record);
+  return errorRecord;
+}
 
 function ensureDir(p) { fs.mkdirSync(path.dirname(p), { recursive: true }); }
 
 function loadGpuPcsf() {
   try { return JSON.parse(fs.readFileSync(GPU_PCSF, "utf8")); } catch { return null; }
+}
+
+// Write updated provider state back to the PCSF JSON file.
+// state: "available" | "dispatched" | "verified" | "degraded" | "exhausted"
+// meta: { last_dispatch_at?, error?, error_count? }
+function updateProviderState(providerId, newState, meta = {}) {
+  let pcsf;
+  try { pcsf = JSON.parse(fs.readFileSync(GPU_PCSF, "utf8")); } catch { return; }
+  const providers = pcsf.providers || [];
+  const p = providers.find(x => x.provider_id === providerId);
+  if (!p) return;
+  p.state = newState;
+  p.last_dispatch_at = meta.last_dispatch_at || isoNow();
+  if (meta.error !== undefined) p.last_error = meta.error;
+  if (meta.error_count !== undefined) p.error_count = meta.error_count;
+  try { fs.writeFileSync(GPU_PCSF, JSON.stringify(pcsf, null, 2), "utf8"); } catch { /* best-effort */ }
 }
 
 function readJobsLog() {
@@ -98,8 +221,7 @@ async function packAndUploadCheckpoint(checkpointDir, hfRepoId) {
     hfRepo,
     uploadedAt: isoNow(),
   };
-  ensureDir(JOBS_LOG);
-  await appendJsonlQueued(JOBS_LOG, record);
+  await logJob(record);
   return record;
 }
 
@@ -108,6 +230,9 @@ async function packAndUploadCheckpoint(checkpointDir, hfRepoId) {
 // ---------------------------------------------------------------------------
 
 async function dispatchTrainingJob(provider, checkpointUri, steps = 600) {
+  // Sync GPU API keys from Windows User environment scope
+  _syncUserEnvKeys();
+
   const creds = _checkCredentials(provider);
   if (creds.error) return creds;
 
@@ -127,8 +252,7 @@ async function dispatchTrainingJob(provider, checkpointUri, steps = 600) {
     notebookTemplate: _notebookTemplate(provider, checkpointUri, steps),
     dispatchedAt: isoNow(),
   };
-  ensureDir(JOBS_LOG);
-  await appendJsonlQueued(JOBS_LOG, record);
+  await logJob(record);
   return record;
 }
 
@@ -171,16 +295,23 @@ async function _dispatchKaggle(checkpointUri, steps) {
   const metaPath = path.join(tmpDir, "kernel-metadata.json");
   const scriptPath = path.join(tmpDir, "train.py");
 
+  // Title must slugify to exactly the slug portion of kernelId.
+  // Kaggle slugifies titles by replacing spaces → hyphens; hyphens IN the title are
+  // stripped (not kept), so "ouro-qlora" → "ouroqlora" ≠ "ouro-qlora".
+  // Use spaces: "ouro qlora" → slug "ouro-qlora" ✓
+  const [, kernelSlugOnly] = kernelId.split("/");
   const meta = {
     id: kernelId,
-    title: "Ouro Training",
+    title: kernelSlugOnly.replace(/-/g, " "),
     code_file: "train.py",
     language: "python",
     kernel_type: "script",
     is_private: true,
     enable_gpu: true,
     enable_internet: true,
-    dataset_sources: [],
+    // Attach the Ouro training set as a Kaggle Dataset (66 MB; too large to commit
+    // to the repo the kernel clones). Override via KAGGLE_TRAINING_DATASET.
+    dataset_sources: [process.env.KAGGLE_TRAINING_DATASET || "lanternfounder/ouro-claude-sessions"],
     kernel_sources: [],
     competition_sources: [],
     model_sources: [],
@@ -200,16 +331,25 @@ async function _dispatchKaggle(checkpointUri, steps) {
   let raw;
   try {
     raw = execFileSync("python", ["-m", "kaggle", "kernels", "push", "-p", tmpDir],
-      { encoding: "utf8", timeout: 60_000, env });
+      { encoding: "utf8", timeout: 30_000, env, stdio: ["pipe", "pipe", "pipe"] });
   } catch (err) {
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    return { error: "kaggle_push_failed", detail: err.message + (err.stderr || "") };
+    const msg = err.message || "Unknown error";
+    const stderr = (err.stderr || "").toString().slice(0, 500);
+    const detail = [msg, stderr].filter(Boolean).join("\n");
+    if (err.code === "ETIMEDOUT") {
+      return _logDispatchFailure("kaggle", { error: "kaggle_timeout", detail: "Kaggle CLI did not respond within 30 seconds. Check your internet connection or credentials." }, steps);
+    }
+    if (msg.includes("not found") || msg.includes("no such file")) {
+      return _logDispatchFailure("kaggle", { error: "kaggle_not_installed", detail: "Kaggle CLI not found. Install with: pip install kaggle" }, steps);
+    }
+    return _logDispatchFailure("kaggle", { error: "kaggle_push_failed", detail }, steps);
   }
   fs.rmSync(tmpDir, { recursive: true, force: true });
 
-  // Extract actual slug from the CLI output URL — title may produce a different slug
-  // e.g. "Ouro Training — 600 steps" → "ouro-training-600-steps" not "ouro-training"
-  const slugMatch = raw.match(/kaggle\.com\/code\/[^/]+\/([^\s"]+)/);
+  // Extract actual slug from the CLI output URL — handles both URL formats:
+  // old: kaggle.com/code/user/slug  new: kaggle.com/user/slug
+  const slugMatch = raw.match(/kaggle\.com(?:\/code)?\/[^/]+\/([^\s"]+)/);
   const actualSlug = slugMatch ? slugMatch[1].replace(/[^\w-]/g, "") : kernelSlug;
   const actualKernelUrl = slugMatch
     ? `https://www.kaggle.com/code/${cfg?.username || "lanternfounder"}/${actualSlug}`
@@ -229,8 +369,7 @@ async function _dispatchKaggle(checkpointUri, steps) {
     cliOutput: raw.trim(),
     dispatchedAt: isoNow(),
   };
-  ensureDir(JOBS_LOG);
-  await appendJsonlQueued(JOBS_LOG, record);
+  await logJob(record);
   return record;
 }
 
@@ -241,7 +380,7 @@ async function _dispatchPaperspace(checkpointUri, steps) {
 
   let responseData;
   try {
-    const res = await fetch("https://api.paperspace.io/v1/notebooks", {
+    const res = await fetch("https://api.paperspace.com/v1/notebooks", {
       method: "POST",
       headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -272,8 +411,7 @@ async function _dispatchPaperspace(checkpointUri, steps) {
     hoursEstimated,
     dispatchedAt: isoNow(),
   };
-  ensureDir(JOBS_LOG);
-  await appendJsonlQueued(JOBS_LOG, record);
+  await logJob(record);
   return record;
 }
 
@@ -311,8 +449,7 @@ async function _dispatchColab(checkpointUri, steps) {
     ],
     dispatchedAt: isoNow(),
   };
-  ensureDir(JOBS_LOG);
-  await appendJsonlQueued(JOBS_LOG, record);
+  await logJob(record);
   return record;
 }
 
@@ -422,17 +559,33 @@ resume_args = ["--resume_from", "/kaggle/working/checkpoint"]
 
 print("=== Ouro QLoRA training — ${steps} steps ===")
 
-# Install dependencies
+# Install dependencies — pin transformers <4.53 (ROPE_INIT_FUNCTIONS changed in 4.53+)
 subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-    "transformers>=4.40", "peft>=0.10", "bitsandbytes>=0.43",
+    "transformers>=4.40,<4.53", "peft>=0.10", "bitsandbytes>=0.43",
     "datasets", "accelerate", "scipy", "huggingface_hub", "zstandard"],
     check=True)
 
-# Clone repo (training script + data)
+# Monkey-patch: restore 'default' rope type in case transformers>=4.53 was pre-installed
+# OuroRotaryEmbedding looks up ROPE_INIT_FUNCTIONS['default'] at model init time.
+try:
+    from transformers.modeling_rope_utils import ROPE_INIT_FUNCTIONS
+    if 'default' not in ROPE_INIT_FUNCTIONS:
+        from transformers.modeling_rope_utils import _compute_default_rope_parameters
+        ROPE_INIT_FUNCTIONS['default'] = _compute_default_rope_parameters
+        print("patched: ROPE_INIT_FUNCTIONS['default'] restored")
+except Exception as _e:
+    print(f"rope patch skipped: {_e}")
+
+# Clone repo (training script + data).
+# GIT_LFS_SKIP_SMUDGE=1 skips downloading LFS objects (*.png, *.pdf, *.zip) —
+# the repo LFS budget is exceeded; we only need the Python script + JSONL data,
+# neither of which is tracked by LFS.
 REPO = "/kaggle/working/lantern-os"
 if not os.path.exists(REPO):
+    clone_env = {**os.environ, "GIT_LFS_SKIP_SMUDGE": "1"}
     subprocess.run(["git", "clone", "--depth", "1",
-        "https://github.com/alex-place/lantern-os", REPO], check=True)
+        "https://github.com/alex-place/lantern-os", REPO],
+        env=clone_env, check=True)
 
 os.chdir(REPO)
 sys.path.insert(0, os.path.join(REPO, "src"))
@@ -442,10 +595,20 @@ ${resumeBlock}
 # Run QLoRA fine-tune — override HF_HOME to a writable Linux path
 # (train-qlora-ouro.py defaults to D:/hf-cache which is Windows-only)
 train_env = {**os.environ, "HF_HOME": "/kaggle/working/hf-cache"}
+# Data comes from the attached private Kaggle Dataset, not the cloned repo.
+# It contains the scrubbed Claude + Codex + tool-using ChatGPT corpus. Fail
+# closed if the mount is missing; silently using the tiny seed corrupts runs.
+data_path = "/kaggle/input/ouro-claude-sessions/training-data.claude-combined.json"
+if not os.path.exists(data_path):
+    raise FileNotFoundError(
+        "Attach Kaggle dataset lanternfounder/ouro-claude-sessions; missing "
+        + data_path
+    )
+print(f"training data: {data_path}")
 subprocess.run([
     sys.executable, "scripts/train-qlora-ouro.py",
     "--base", "ByteDance/Ouro-1.4B",
-    "--data", "models/lantern-sigma0-coder/training-data.jsonl",
+    "--data", data_path,
     "--out", "/kaggle/working/output",
     "--max-steps", "${steps}",
     "--seq", "1536",
@@ -470,23 +633,57 @@ else:
 }
 
 function _notebookTemplate(provider, checkpointUri, steps) {
-  const hfRepo = process.env.HF_TRAINING_REPO || "ouro-checkpoints";
-  const filename = checkpointUri ? path.basename(checkpointUri) : "checkpoint.csf";
-  return [
-    `# Ouro training continuation — ${steps} steps on ${provider}`,
-    `# Provider: ${provider} | Checkpoint: ${checkpointUri || "(none — cold start)"}`,
-    "!pip install -q huggingface_hub zstandard",
-    "import csf, subprocess, sys",
-    "from huggingface_hub import hf_hub_download, upload_file",
-    `local_csf = hf_hub_download(repo_id="${hfRepo}", filename="${filename}", repo_type="model")`,
-    "csf.unpack(local_csf, '/tmp/checkpoint')",
-    `subprocess.run([sys.executable, 'scripts/train_ouro.py',`,
-    `  '--resume_from', '/tmp/checkpoint', '--max_steps', '${steps}',`,
-    `  '--seq_len', '1536', '--output_dir', '/tmp/output'], check=True)`,
-    "manifest = csf.pack(['/tmp/output'], '/tmp/output.csf')",
-    `upload_file('/tmp/output.csf', 'output.csf', repo_id="${hfRepo}", repo_type='model')`,
-    "print('Done — checkpoint uploaded to HuggingFace Hub')",
-  ].join("\n");
+  const hfRepo = process.env.HF_TRAINING_REPO || "lanternfounder/ouro-checkpoints";
+  const hfToken = process.env.HUGGINGFACE_TOKEN || "";
+  const checkpointFile = checkpointUri ? path.basename(checkpointUri) : "";
+  // Returns a bash startup script (Paperspace startupScript / Colab init)
+  return `#!/usr/bin/env bash
+set -euo pipefail
+echo "=== Ouro training startup: ${steps} steps on ${provider} ==="
+
+pip install -q "transformers>=4.40,<4.53" peft bitsandbytes datasets accelerate \\
+  scipy huggingface_hub zstandard
+
+# Clone repo (skip LFS blobs — budget often exceeded)
+REPO=/tmp/lantern-os
+if [ ! -d "$REPO" ]; then
+  GIT_LFS_SKIP_SMUDGE=1 git clone --depth 1 \\
+    https://github.com/alex-place/lantern-os "$REPO"
+fi
+cd "$REPO"
+export PYTHONPATH="$REPO/src:$PYTHONPATH"
+
+# Pull checkpoint from HF if provided
+RESUME_ARGS=""
+if [ -n "${checkpointFile}" ]; then
+  python3 -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download(repo_id='${hfRepo}', filename='${checkpointFile}',
+    repo_type='model', local_dir='/tmp/checkpoint')
+"
+  RESUME_ARGS="--resume_from /tmp/checkpoint"
+fi
+
+# Run training
+HF_HOME=/tmp/hf-cache python3 scripts/train-qlora-ouro.py \\
+  --base ByteDance/Ouro-1.4B \\
+  --data models/lantern-sigma0-coder/training-data.jsonl \\
+  --out /tmp/output \\
+  --max-steps ${steps} \\
+  --seq 1536 \\
+  $RESUME_ARGS
+
+# Pack + upload checkpoint
+python3 -c "
+import csf, sys
+sys.path.insert(0, '$REPO/src')
+from huggingface_hub import upload_file
+manifest = csf.pack(['/tmp/output'], '/tmp/output.csf')
+upload_file('/tmp/output.csf', 'output.csf', repo_id='${hfRepo}', repo_type='model')
+print('checkpoint uploaded to HuggingFace Hub')
+"
+echo "=== Done ==="
+`;
 }
 
 // ---------------------------------------------------------------------------
@@ -499,7 +696,7 @@ async function pollJobStatus(provider, jobId) {
   if (provider === "lightning")  return _pollLightning(jobId);
   // SageMaker, Colab — manual check
   const update = { type: "training_poll", provider, jobId, status: "manual_required", polledAt: isoNow() };
-  await appendJsonlQueued(JOBS_LOG, update);
+  await logJob(update);
   return update;
 }
 
@@ -510,13 +707,30 @@ function _runLightningScript(subcommand, extraArgs = []) {
     ...process.env,
     LIGHTNING_USER_ID:        process.env.LIGHTNING_USER_ID        || "",
     LIGHTNING_API_KEY:        process.env.LIGHTNING_API_KEY        || "",
-    LIGHTNING_STUDIO_USER:    process.env.LIGHTNING_STUDIO_USER    || "alexplace7",
+    // The ouro-training studio lives in a USER-owned teamspace
+    // (lightning.ai/alexplace7/custom-ml-model-development-project). Resolve under
+    // the user by default; org stays empty (set LIGHTNING_STUDIO_ORG only for an
+    // org-owned teamspace). #1079 set org=lantern + the wrong teamspace, which made
+    // the SDK unable to infer the owner and broke every Lightning dispatch.
+    LIGHTNING_STUDIO_USER:      process.env.LIGHTNING_STUDIO_USER      || "alexplace7",
+    LIGHTNING_STUDIO_ORG:       process.env.LIGHTNING_STUDIO_ORG       || "",
     LIGHTNING_STUDIO_TEAMSPACE: process.env.LIGHTNING_STUDIO_TEAMSPACE || "custom-ml-model-development-project",
     HF_TRAINING_REPO:         process.env.HF_TRAINING_REPO         || "ouro-checkpoints",
   };
-  const raw = execFileSync("python", [script, subcommand, ...extraArgs],
-    { encoding: "utf8", timeout: 120_000, env });
-  return JSON.parse(raw.trim());
+  try {
+    const pythonExe = process.env.LIGHTNING_PYTHON || "python";
+    const raw = execFileSync(pythonExe, [script, subcommand, ...extraArgs],
+      { encoding: "utf8", timeout: 120_000, env, stdio: ["pipe", "pipe", "pipe"] });
+    return JSON.parse(raw.trim());
+  } catch (err) {
+    if (err.code === "ETIMEDOUT") {
+      return { error: "lightning_timeout", message: "Lightning CLI did not respond within 60 seconds." };
+    }
+    if (err.message.includes("not found")) {
+      return { error: "lightning_not_configured", message: "Lightning training script not found or not configured." };
+    }
+    return { error: "lightning_script_error", message: err.message };
+  }
 }
 
 async function _dispatchLightning(checkpointUri, steps) {
@@ -524,15 +738,14 @@ async function _dispatchLightning(checkpointUri, steps) {
   const hfRepo = process.env.HF_TRAINING_REPO || loadGpuPcsf()?.checkpoint_repo_default || "ouro-checkpoints";
   let result;
   try {
-    result = _runLightningScript("dispatch", [
-      "--steps", String(steps),
-      "--checkpoint-uri", checkpointUri || "",
-      "--hf-repo", hfRepo,
-    ]);
+    const lightningArgs = ["--steps", String(steps), "--hf-repo", hfRepo];
+    if (checkpointUri) lightningArgs.push("--checkpoint-uri", checkpointUri);
+    result = _runLightningScript("dispatch", lightningArgs);
+
   } catch (err) {
-    return { error: "lightning_dispatch_failed", detail: err.message };
+    return _logDispatchFailure("lightning", { error: "lightning_dispatch_failed", detail: err.message }, steps);
   }
-  if (result.error) return { error: result.error, provider: "lightning", detail: result };
+  if (result.error) return _logDispatchFailure("lightning", { error: result.error, provider: "lightning", detail: result }, steps);
   const hoursEstimated = Math.ceil(steps / (cfg?.steps_per_hour_estimate || 180));
   const record = {
     type: "training_dispatch",
@@ -547,8 +760,7 @@ async function _dispatchLightning(checkpointUri, steps) {
     logPath: result.log_path,
     dispatchedAt: isoNow(),
   };
-  ensureDir(JOBS_LOG);
-  await appendJsonlQueued(JOBS_LOG, record);
+  await logJob(record);
   return record;
 }
 
@@ -571,7 +783,7 @@ async function _pollLightning(studioName) {
     status: result.status, studioStatus: result.studio_status,
     lastLogLine: result.last_log_line, polledAt: isoNow(),
   };
-  await appendJsonlQueued(JOBS_LOG, update);
+  await logJob(update);
   return update;
 }
 
@@ -605,7 +817,7 @@ async function _pollKaggle(jobId) {
     failureMessage: data.failureMessage || null,
     polledAt: isoNow(),
   };
-  await appendJsonlQueued(JOBS_LOG, update);
+  await logJob(update);
   return update;
 }
 
@@ -615,7 +827,7 @@ async function _pollPaperspace(jobId) {
 
   let data;
   try {
-    const res = await fetch(`https://api.paperspace.io/v1/notebooks/${jobId}`, {
+    const res = await fetch(`https://api.paperspace.com/v1/notebooks/${jobId}`, {
       headers: { "Authorization": `Bearer ${process.env.PAPERSPACE_API_KEY}` },
     });
     if (!res.ok) return { error: "paperspace_poll_failed", httpStatus: res.status };
@@ -628,7 +840,7 @@ async function _pollPaperspace(jobId) {
   const status = statusMap[data.state] || data.state;
 
   const update = { type: "training_poll", provider: "paperspace", jobId, status, rawStatus: data.state, polledAt: isoNow() };
-  await appendJsonlQueued(JOBS_LOG, update);
+  await logJob(update);
   return update;
 }
 
@@ -652,21 +864,76 @@ function rotateProvider(current) {
     used[j.provider] = (used[j.provider] || 0) + (j.hoursEstimated || 0);
   }
 
-  // Return next provider after current with quota remaining
+  // Return next provider after current with quota remaining, skipping degraded
   const startIdx = Math.max(0, order.indexOf(current));
   const candidates = [...order.slice(startIdx + 1), ...order.slice(0, startIdx + 1)];
   for (const p of candidates) {
     const cfg = (pcsf?.providers || []).find(x => x.provider_id === p);
+    if (cfg?.state === "degraded") continue;
     const quota = cfg?.quota_hours_per_week || 0;
     if ((used[p] || 0) < quota) return p;
   }
   return null;
 }
 
+// Fan out to ALL automatable providers with quota remaining, in parallel.
+// Updates PCSF state per provider from outcomes — "dispatched" on success, "degraded" on error.
+// Returns { dispatched: Array<{provider, ...result|error}> }
+async function dispatchAllAutomatable(checkpointUri, steps) {
+  _syncUserEnvKeys();
+  const pcsf = loadGpuPcsf();
+  if (!pcsf) return { error: "no_pcsf", dispatched: [] };
+
+  const weekStart = _weekStartMs();
+  const used = {};
+  for (const j of readJobsLog()) {
+    if (j.type !== "training_dispatch" || j.status === "manual_required") continue;
+    if (!j.dispatchedAt || new Date(j.dispatchedAt).getTime() < weekStart) continue;
+    used[j.provider] = (used[j.provider] || 0) + (j.hoursEstimated || 0);
+  }
+
+  const candidates = (pcsf.providers || []).filter(p =>
+    p.automatable &&
+    p.state !== "degraded" &&
+    (p.quota_hours_per_week || 0) > 0 &&
+    (used[p.provider_id] || 0) < (p.quota_hours_per_week || 0)
+  );
+
+  if (candidates.length === 0) {
+    return { error: "no_automatable_providers_with_quota", dispatched: [] };
+  }
+
+  const results = await Promise.allSettled(
+    candidates.map(p => dispatchTrainingJob(p.provider_id, checkpointUri, steps))
+  );
+
+  const dispatched = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const p = candidates[i];
+    const r = results[i];
+    if (r.status === "fulfilled" && !r.value?.error) {
+      updateProviderState(p.provider_id, "dispatched", { last_dispatch_at: isoNow() });
+      dispatched.push({ provider: p.provider_id, ...r.value });
+    } else {
+      const errMsg = r.status === "rejected" ? (r.reason?.message || "rejected") : r.value?.error;
+      updateProviderState(p.provider_id, "degraded", {
+        error: errMsg,
+        last_dispatch_at: isoNow(),
+        error_count: (p.error_count || 0) + 1,
+      });
+      dispatched.push({ provider: p.provider_id, error: errMsg });
+    }
+  }
+
+  return { dispatched };
+}
+
 module.exports = {
   packAndUploadCheckpoint,
   dispatchTrainingJob,
+  dispatchAllAutomatable,
   pollJobStatus,
   rotateProvider,
   loadGpuPcsf,
+  updateProviderState,
 };

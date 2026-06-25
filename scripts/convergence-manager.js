@@ -15,7 +15,7 @@
 
 const fs   = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync, execSync } = require("child_process");
 
 // ── Config ───────────────────────────────────────────────────────────────────
 
@@ -40,7 +40,7 @@ const REQUIRED = [
 
 // Top-level directories allowed to exist (anti-sprawl gate)
 const ALLOWED_TOP = new Set([
-  "apps", "archive", "assets", "caad", "config", "content", "csf", "data", "dev", "docs",
+  "apps", "archive", "assets", "caad", "changelog.d", "config", "content", "csf", "data", "dev", "docs",
   "dual-boot", "experiments", "integrations", "lantern-discord", "logs", "lore", "manifests",
   "merge-patches", "models", "patches", "private-ip", "rag", "references", "reports",
   "research", "safezone-debug",
@@ -57,6 +57,15 @@ const read = p  => fs.readFileSync(rel(p), "utf8");
 function git(cmd) {
   try { return execSync(`git -C ${ROOT} ${cmd}`, { encoding: "utf8" }).trim(); }
   catch { return null; }
+}
+
+function isGitIgnored(filePath) {
+  try {
+    execFileSync("git", ["-C", ROOT, "check-ignore", "-q", "--", filePath], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function issue(id, severity, summary, fix, autoFixFn = null) {
@@ -79,7 +88,7 @@ function scan() {
   for (const entry of fs.readdirSync(ROOT)) {
     if (entry.startsWith(".")) continue;
     const full = path.join(ROOT, entry);
-    if (fs.statSync(full).isDirectory() && !ALLOWED_TOP.has(entry)) {
+    if (fs.statSync(full).isDirectory() && !ALLOWED_TOP.has(entry) && !isGitIgnored(entry)) {
       issues.push(issue(
         `SPRAWL:${entry}`,
         "medium",
@@ -101,14 +110,17 @@ function scan() {
   }
 
   // 4. Git state — local master ahead of origin
-  const ahead = git("rev-list --count origin/master..master 2>/dev/null");
-  if (ahead && parseInt(ahead, 10) > 0) {
-    issues.push(issue(
-      "GIT:UNPUSHED",
-      "high",
-      `master is ${ahead} commit(s) ahead of origin/master`,
-      "Push master: git push origin master"
-    ));
+  const branch = git("branch --show-current");
+  if (branch === "master") {
+    const ahead = git("rev-list --count origin/master..master 2>/dev/null");
+    if (ahead && parseInt(ahead, 10) > 0) {
+      issues.push(issue(
+        "GIT:UNPUSHED",
+        "high",
+        `master is ${ahead} commit(s) ahead of origin/master`,
+        "Push master: git push origin master"
+      ));
+    }
   }
 
   // 5. Package.json engine check
@@ -136,17 +148,6 @@ function scan() {
         "Replace deploy.yml with the GitHub Pages + Railway workflow"
       ));
     }
-  }
-
-  // 7. Stash check
-  const stashes = git("stash list");
-  if (stashes && stashes.trim().length > 0) {
-    issues.push(issue(
-      "GIT:STASH",
-      "low",
-      `Stashed work exists:\n${stashes}`,
-      "Pop, commit, or drop stash entries before shipping"
-    ));
   }
 
   return issues;

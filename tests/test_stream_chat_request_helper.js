@@ -19,20 +19,22 @@ assert.deepStrictEqual(sanitizeHistory(null), []);
 assert.deepStrictEqual(sanitizeHistory([{ role: "user" }]), []);
 
 (async () => {
+  const postUrl = new URL("http://local/api/dream/chat/stream");
+
+  // GET path
   const getUrl = new URL("http://local/api/dream/chat/stream?message=%20hello%20&user=Alex&agent=keystone&provider=OpenAI");
   const parsedGet = await parseStreamChatRequest({ method: "GET" }, getUrl, {
     normalizeDreamerUser: (value) => String(value).toLowerCase(),
   });
-  assert.deepStrictEqual(parsedGet, {
-    message: "hello",
-    user: "alex",
-    requestedAgent: "keystone",
-    requestedProvider: "openai",
-    history: [],
-    mcpFlag: false,
-  });
+  assert.strictEqual(parsedGet.message, "hello");
+  assert.strictEqual(parsedGet.user, "alex");
+  assert.strictEqual(parsedGet.requestedAgent, "keystone");
+  assert.strictEqual(parsedGet.requestedProvider, "openai");
+  assert.deepStrictEqual(parsedGet.history, []);
+  assert.strictEqual(parsedGet.mcpFlag, false);
+  assert.strictEqual(parsedGet.parseError, undefined);
 
-  const postUrl = new URL("http://local/api/dream/chat/stream");
+  // Normal POST
   const parsedPost = await parseStreamChatRequest({ method: "POST" }, postUrl, {
     normalizeDreamerUser: (value) => `u:${value}`,
     collectRequestBody: async () => JSON.stringify({
@@ -50,13 +52,37 @@ assert.deepStrictEqual(sanitizeHistory([{ role: "user" }]), []);
   assert.strictEqual(parsedPost.requestedProvider, "gemini");
   assert.strictEqual(parsedPost.mcpFlag, true);
   assert.deepStrictEqual(parsedPost.history, [{ role: "assistant", text: "previous" }]);
+  assert.strictEqual(parsedPost.parseError, undefined);
 
+  // Malformed JSON → parseError not silent swallow (#1009)
   const malformed = await parseStreamChatRequest({ method: "POST" }, postUrl, {
     collectRequestBody: async () => "not-json",
   });
+  assert.strictEqual(malformed.parseError, "malformed_json");
   assert.strictEqual(malformed.message, "");
   assert.strictEqual(malformed.user, "dreamer");
   assert.deepStrictEqual(malformed.history, []);
+
+  // UTF-8 BOM prefix → strips cleanly, parses fine (#1009)
+  const BOM = "﻿";
+  const bomPrefixed = await parseStreamChatRequest({ method: "POST" }, postUrl, {
+    collectRequestBody: async () => BOM + JSON.stringify({ message: "bom test", user: "alice" }),
+  });
+  assert.strictEqual(bomPrefixed.parseError, undefined);
+  assert.strictEqual(bomPrefixed.message, "bom test");
+  assert.strictEqual(bomPrefixed.user, "alice");
+
+  // Empty body → parseError "empty_body" (#1009)
+  const emptyBody = await parseStreamChatRequest({ method: "POST" }, postUrl, {
+    collectRequestBody: async () => "",
+  });
+  assert.strictEqual(emptyBody.parseError, "empty_body");
+
+  // Whitespace-only body → parseError "empty_body" (#1009)
+  const whitespaceBody = await parseStreamChatRequest({ method: "POST" }, postUrl, {
+    collectRequestBody: async () => "   \n  ",
+  });
+  assert.strictEqual(whitespaceBody.parseError, "empty_body");
 
   console.log("stream-chat request helper tests passed");
 })().catch((error) => {

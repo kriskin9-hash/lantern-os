@@ -387,6 +387,76 @@ async function rejectPacket(repoRoot, packetId, reviewer = "local_operator") {
   return { ok: true, packet };
 }
 
+/**
+ * Issue #919 finding #4 — time-aware contradiction detection.
+ *
+ * Scans all "approved" claim packets for scope overlaps and content disagreement.
+ * Returns an array of {packetA, packetB, scope, reason} contradiction records.
+ *
+ * Rules (per #919 spec):
+ *   - Only APPROVED packets are compared (pending/rejected are ignored).
+ *   - Two packets "disagree" when their safe_wording is sufficiently different on
+ *     the same scope (cosine of bag-of-words < threshold). Naive token comparison
+ *     avoids false-positives from updates to the same fact over time — a REVOKED
+ *     packet is never flagged (revocation IS the sanctioned update path).
+ *   - Scope overlap: exact match OR one scope is a prefix of the other (e.g.
+ *     "kalshi:market" overlaps "kalshi:market_data").
+ *
+ * @param {string} repoRoot
+ * @param {object} [opts]
+ * @param {number} [opts.threshold=0.7] — BOW cosine below this triggers a flag.
+ * @returns {Array<{packetA: string, packetB: string, scope: string, reason: string}>}
+ */
+function detectContradictions(repoRoot, { threshold = 0.7 } = {}) {
+  const approved = listPackets(repoRoot, "approved");
+
+  // Build simple bag-of-words vector
+  function bow(text) {
+    const freq = {};
+    for (const w of String(text || "").toLowerCase().split(/\W+/).filter(Boolean)) {
+      freq[w] = (freq[w] || 0) + 1;
+    }
+    return freq;
+  }
+
+  function cosine(a, b) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    let dot = 0, na = 0, nb = 0;
+    for (const k of keys) {
+      const va = a[k] || 0, vb = b[k] || 0;
+      dot += va * vb;
+      na += va * va;
+      nb += vb * vb;
+    }
+    if (!na || !nb) return 0;
+    return dot / Math.sqrt(na * nb);
+  }
+
+  function scopesOverlap(sa, sb) {
+    if (sa === sb) return true;
+    return sa.startsWith(sb + ":") || sb.startsWith(sa + ":");
+  }
+
+  const contradictions = [];
+  for (let i = 0; i < approved.length; i++) {
+    for (let j = i + 1; j < approved.length; j++) {
+      const pa = approved[i], pb = approved[j];
+      if (!scopesOverlap(pa.claim?.scope || "", pb.claim?.scope || "")) continue;
+      const sim = cosine(bow(pa.claim?.safe_wording), bow(pb.claim?.safe_wording));
+      if (sim < threshold) {
+        contradictions.push({
+          packetA: pa.packet_id,
+          packetB: pb.packet_id,
+          scope: pa.claim?.scope,
+          similarity: Math.round(sim * 1000) / 1000,
+          reason: `approved packets on overlapping scope '${pa.claim?.scope}' / '${pb.claim?.scope}' have low wording similarity (${(sim * 100).toFixed(1)}% < ${(threshold * 100).toFixed(0)}%)`,
+        });
+      }
+    }
+  }
+  return contradictions;
+}
+
 async function revokePacket(repoRoot, packetId) {
   const packet = loadPacket(repoRoot, packetId);
   if (!packet) return { ok: false, error: "packet_not_found" };
@@ -421,6 +491,7 @@ module.exports = {
   approvePacket,
   rejectPacket,
   revokePacket,
+  detectContradictions,
   getPacketPath,
   getPacketLogPath,
 };

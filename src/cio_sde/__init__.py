@@ -32,6 +32,10 @@ from .engine import (
     CIO_SDE,
     Trace,
     rollout,
+    InterventionPolicy,
+    InterventionReceipt,
+    PairedRunSummary,
+    paired_control_rollout,
 )
 from .loss import gaussian_kl, free_energy
 from .diagnostics import StabilityReport, analyze_trajectory
@@ -47,6 +51,13 @@ from .collapse import (
 )
 from .surprise import SurpriseMonitor, kalman_predict
 from .providers import ProviderDynamics, route_provider_nodes
+from .calibration import (
+    ScenarioLabel,
+    ScenarioResult,
+    CalibrationReport,
+    run_scenario,
+    run_calibration,
+)
 
 __all__ = [
     "Dynamics",
@@ -73,4 +84,13 @@ __all__ = [
     "ReconstructionOperator",
     "SurpriseMonitor",
     "kalman_predict",
+    "InterventionPolicy",
+    "InterventionReceipt",
+    "PairedRunSummary",
+    "paired_control_rollout",
+    "ScenarioLabel",
+    "ScenarioResult",
+    "CalibrationReport",
+    "run_scenario",
+    "run_calibration",
 ]

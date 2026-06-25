@@ -268,6 +268,33 @@ async function callProvider(provider, model, payload, taskType = "default", cont
 
   if (nextProviderStep && fallbackState.attemptCount < MAX_FALLBACK_ATTEMPTS) {
     console.log(`[provider-router] Fallback: ${provider} failed, trying ${nextProviderStep.provider} (attempt ${fallbackState.attemptCount}/${MAX_FALLBACK_ATTEMPTS})`);
+    // #897: record Claude escalation as a convergence event so the rollover dashboard
+    // (#898) can track Keystone win/loss rate without grepping logs.
+    if (nextProviderStep.provider === "anthropic" && provider !== "anthropic") {
+      try {
+        const { emitConvergenceRecord } = require("./convergence-records");
+        emitConvergenceRecord({
+          hypothesis: `Provider fallback: ${provider} failed → escalating to claude (${taskType})`,
+          evidence_ids: [],
+          result: {
+            type: "claude_fallback",
+            trigger: "provider_failed",
+            failed_provider: provider,
+            fallback_provider: "anthropic",
+            fallback_model: nextProviderStep.models[0],
+            task_type: taskType,
+            failed_providers: [...fallbackState.providers],
+            issue_number: context.issueNumber || null,
+            keystone_stage: context.keystoneStage || null,
+            error: lastError ? String(lastError.message).slice(0, 200) : null,
+          },
+          confidence: 1.0,
+          reasoner: "provider-router",
+          verified: false,
+          verification_notes: "automatic fallback — not a human decision",
+        }).catch(() => {}); // best-effort, never block the fallback
+      } catch (_e) { /* require may fail in tests — never block */ }
+    }
     return await callProvider(nextProviderStep.provider, nextProviderStep.models[0], payload, taskType, context, fallbackState.attemptCount);
   }
 

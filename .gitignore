@@ -336,6 +336,11 @@ data/keystone-test-runs.jsonl
 data/ouro-harvest-candidates.jsonl
 # Live coding-success harvest log (#911) — agent-derived, local only
 data/harvest/live-coding-successes.jsonl
+data/ouro-harvest-live.jsonl
+# Runtime-generated artifacts that kept churning into unrelated commits/PRs.
+data/convergence/patch-receipts.jsonl
+data/self-improvement/colab-notebooks/
+models/*/training-data.*.jsonl
 data/backlog-triage-verdicts.json
 data/batch1-specs.json
 # Generated benchmark PDFs (the *.json result artifacts stay tracked).
@@ -343,3 +348,6 @@ experiments/results/*.pdf
 # Process / scratch artifacts.
 *.pid
 tmp.*.patch
+
+# Chat document-processing work dir (uploads + generated .docx)
+data/documents/

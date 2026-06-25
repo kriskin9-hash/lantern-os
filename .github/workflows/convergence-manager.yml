@@ -31,9 +31,11 @@ jobs:
       - name: Run convergence manager
         id: scan
         run: |
-          node scripts/convergence-manager.js --json | tee manifests/validation/CONVERGENCE-MANAGER-LATEST.json
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-        continue-on-error: true
+          set +e
+          node scripts/convergence-manager.js --json
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Upload convergence receipt
         uses: actions/upload-artifact@v7
@@ -44,4 +46,8 @@ jobs:
 
       - name: Enforce clean on master
         if: github.ref == 'refs/heads/master'
-        run: node scripts/convergence-manager.js
+        run: |
+          if [ "${{ steps.scan.outputs.exit_code }}" -ne 0 ]; then
+            echo "Convergence Manager found blocking issues; see the uploaded receipt."
+            exit 1
+          fi

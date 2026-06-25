@@ -18,6 +18,7 @@ module.exports = async function claimsRoutes(req, res, url, deps) {
     approvePacket,
     rejectPacket,
     revokePacket,
+    detectContradictions,
   } = require("../lib/consent-gate");
 
   // ── GET /api/claims — list packets ───────────────────────────────────
@@ -70,6 +71,14 @@ module.exports = async function claimsRoutes(req, res, url, deps) {
     } catch (error) {
       sendJson(res, { error: error.message }, 500);
     }
+    return true;
+  }
+
+  // ── GET /api/claims/contradictions — #919 finding #4 ─────────────────
+  if (url.pathname === "/api/claims/contradictions" && req.method === "GET") {
+    const threshold = parseFloat(url.searchParams.get("threshold") || "0.7");
+    const results = detectContradictions(repoRoot, { threshold });
+    sendJson(res, { count: results.length, threshold, contradictions: results });
     return true;
   }
 

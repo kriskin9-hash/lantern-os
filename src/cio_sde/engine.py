@@ -216,6 +216,62 @@ class GraphController:
         return rec
 
 
+# ── Intervention policy + receipts (Issue #1138) ─────────────────────────────
+
+@dataclass
+class InterventionPolicy:
+    """
+    Bounded autonomy policy for CIO-SDE operators.
+
+    Safe defaults: observe-only, zero budget, rollback and approval required.
+    Broadening these defaults requires an explicit caller decision.
+    """
+    observe_only: bool = True
+    max_interventions: int = 0          # 0 = never intervene, even if observe_only=False
+    max_added_stage_cost: Optional[float] = 0.0  # None = no cost ceiling
+    rollback_required: bool = True
+    approval_required: bool = True
+
+
+@dataclass
+class InterventionReceipt:
+    """
+    Replayable record of one Σ₀ operator decision per forward_step.
+
+    kind:
+      "observe"              - trigger detected; state NOT mutated (observe_only or budget=0)
+      "excite"               - anti_collapse_op fired and mutated x_next / sigma_next
+      "project_to_attractor" - collapse_op fired and projected x_next to x_star
+      "blocked"              - trigger fired but policy blocked mutation; records reason
+    """
+    step: int
+    kind: str                        # observe | excite | project_to_attractor | blocked
+    trigger_source: str              # structural | surprise | both | collapse_trigger
+    sigma0_proximity: float
+    surprise_spook: bool
+    pre_x_norm: float
+    post_x_norm: float
+    pre_sigma_tr: float
+    post_sigma_tr: float
+    policy_reason: str               # why this kind was chosen
+    stage_cost_delta: Optional[float] = None   # post − pre cost, when computable
+
+    def to_dict(self) -> dict:
+        return {
+            "step": self.step,
+            "kind": self.kind,
+            "trigger_source": self.trigger_source,
+            "sigma0_proximity": self.sigma0_proximity,
+            "surprise_spook": self.surprise_spook,
+            "pre_x_norm": self.pre_x_norm,
+            "post_x_norm": self.post_x_norm,
+            "pre_sigma_tr": self.pre_sigma_tr,
+            "post_sigma_tr": self.post_sigma_tr,
+            "policy_reason": self.policy_reason,
+            "stage_cost_delta": self.stage_cost_delta,
+        }
+
+
 # ── Trace (observability + replay) ───────────────────────────────────────────
 
 @dataclass
@@ -226,6 +282,7 @@ class Trace:
     steps: List[Dict[str, float]] = field(default_factory=list)
     swaps: List[SwapRecord] = field(default_factory=list)
     collapses: List[Dict[str, object]] = field(default_factory=list)
+    interventions: List[InterventionReceipt] = field(default_factory=list)
     running_cost: object = None      # differentiable ∫L dt when accumulate_cost
 
     def emit(self, step: int, **fields: float) -> None:
@@ -251,7 +308,8 @@ class CIO_SDE(nn.Module):
 
     def __init__(self, dim: int, ctrl_dim: int, hidden: int = 64,
                  r: float = 1.0, ctrl_cost: float = 0.1,
-                 u_max: float = 5.0) -> None:
+                 u_max: float = 5.0,
+                 intervention_policy: Optional[InterventionPolicy] = None) -> None:
         super().__init__()
         self.dim = dim
         self.ctrl_dim = ctrl_dim
@@ -262,6 +320,12 @@ class CIO_SDE(nn.Module):
         self.collapse_op = None      # optional Σ₀ Semantic Collapse Operator
         self.anti_collapse_op = None # optional Σ₀⁻¹ Anti-Collapse Operator
         self.surprise_monitor = None # optional SurpriseMonitor for NIS-based collapse detection
+        # Bounded autonomy policy. Safe default: observe-only, zero budget.
+        self.intervention_policy: InterventionPolicy = (
+            intervention_policy if intervention_policy is not None
+            else InterventionPolicy()
+        )
+        self._intervention_count: int = 0  # resets per rollout via reset_intervention_count()
         # One-step prediction (x̂_{t|t-1}, P_{t|t-1}) for the surprise observation model
         # (#657). Instead of self-observing (y=x gave innovation ν≡0), the engine runs a
         # genuine Kalman predict/update cycle: it predicts the NEXT state from the model's
@@ -284,6 +348,10 @@ class CIO_SDE(nn.Module):
         ctrl = self.ctrl_cost * (u ** 2).sum(-1)
         return goal + ctrl
 
+    def reset_intervention_count(self) -> None:
+        """Call at the start of each rollout to reset the per-run intervention budget."""
+        self._intervention_count = 0
+
     # H = L + λᵀ f + tr(Σ)
     def hamiltonian(self, x: Tensor, u: Tensor, lam: Tensor, sigma: Tensor) -> Tensor:
         f = self.graph.active.drift(x, u)
@@ -291,7 +359,8 @@ class CIO_SDE(nn.Module):
         return self.stage_cost(x, u) + (lam * f).sum(-1) + tr
 
     def forward_step(self, x: Tensor, sigma: Tensor, dt: float,
-                     noise: Tensor) -> Tuple[Tensor, Tensor, Dict[str, Tensor]]:
+                     noise: Tensor,
+                     step: int = -1) -> Tuple[Tensor, Tensor, Dict[str, Tensor]]:
         node = self.graph.active
         u = self.pcsf(x, sigma)
         f = node.drift(x, u)
@@ -365,28 +434,96 @@ class CIO_SDE(nn.Module):
             P_next = F @ P_post @ F.transpose(-1, -2) + Q
             self._surprise_pred_cov = 0.5 * (P_next + P_next.transpose(-1, -2)).detach()
         
+        policy = self.intervention_policy
+        pre_x_norm = x.norm().item()
+        pre_sigma_tr = torch.diagonal(sigma, dim1=-2, dim2=-1).sum(-1).mean().item()
+        receipt: Optional[InterventionReceipt] = None
+
         if self.anti_collapse_op is not None:
             sigma0_proximity = self.anti_collapse_op.proximity(self, x, u, sigma, A)
-            # Combine structural proximity with surprise boost
             effective_proximity = max(sigma0_proximity, surprise_boost)
             info["sigma0_proximity"] = sigma0_proximity
+
             if effective_proximity > 0.0:
-                dx_extra, sig_extra = self.anti_collapse_op.excite(
-                    x, sigma_next, A, effective_proximity, noise)
-                x_next = x_next + dx_extra
-                sigma_next = self.cov._project_psd(sigma_next + sig_extra)
-                info["anti_collapse_p"] = effective_proximity
-                anti_active = True
+                trigger_src = "surprise" if surprise_boost >= sigma0_proximity else "structural"
+                if surprise_boost > 0.0 and sigma0_proximity > 0.0:
+                    trigger_src = "both"
+
+                budget_ok = (
+                    not policy.observe_only
+                    and self._intervention_count < policy.max_interventions
+                )
+                if budget_ok:
+                    dx_extra, sig_extra = self.anti_collapse_op.excite(
+                        x, sigma_next, A, effective_proximity, noise)
+                    x_next = x_next + dx_extra
+                    sigma_next = self.cov._project_psd(sigma_next + sig_extra)
+                    info["anti_collapse_p"] = effective_proximity
+                    anti_active = True
+                    self._intervention_count += 1
+                    receipt = InterventionReceipt(
+                        step=step, kind="excite", trigger_source=trigger_src,
+                        sigma0_proximity=sigma0_proximity, surprise_spook=bool(surprise_boost > 0.0),
+                        pre_x_norm=pre_x_norm, post_x_norm=x_next.norm().item(),
+                        pre_sigma_tr=pre_sigma_tr,
+                        post_sigma_tr=torch.diagonal(sigma_next, dim1=-2, dim2=-1).sum(-1).mean().item(),
+                        policy_reason="budget_ok: anti-collapse excite fired",
+                    )
+                else:
+                    kind = "observe" if policy.observe_only else "blocked"
+                    reason = (
+                        "observe_only=True" if policy.observe_only
+                        else f"budget exhausted ({self._intervention_count}/{policy.max_interventions})"
+                    )
+                    receipt = InterventionReceipt(
+                        step=step, kind=kind, trigger_source=trigger_src,
+                        sigma0_proximity=sigma0_proximity, surprise_spook=bool(surprise_boost > 0.0),
+                        pre_x_norm=pre_x_norm, post_x_norm=x_next.norm().item(),
+                        pre_sigma_tr=pre_sigma_tr,
+                        post_sigma_tr=torch.diagonal(sigma_next, dim1=-2, dim2=-1).sum(-1).mean().item(),
+                        policy_reason=reason,
+                    )
 
         # Σ₀ gating: dx = f dt + dW − Σ₀(x,Σ,G,u). When the system is
         # underdetermined, freeze onto the minimal invariant attractor.
         if self.collapse_op is not None and not anti_active:
             res = self.collapse_op.evaluate(self, x, u, sigma, A)
             if res.triggered:
-                x_next = res.x_star          # collapse: dx→0 onto attractor
-                sigma_next = sigma           # freeze dΣ→0
-                info["collapse"] = res
+                budget_ok = (
+                    not policy.observe_only
+                    and self._intervention_count < policy.max_interventions
+                )
+                if budget_ok:
+                    x_next = res.x_star
+                    sigma_next = sigma
+                    info["collapse"] = res
+                    self._intervention_count += 1
+                    receipt = InterventionReceipt(
+                        step=step, kind="project_to_attractor", trigger_source="collapse_trigger",
+                        sigma0_proximity=float(info.get("sigma0_proximity", 0.0)),
+                        surprise_spook=bool(info.get("surprise_spook", False)),
+                        pre_x_norm=pre_x_norm, post_x_norm=x_next.norm().item(),
+                        pre_sigma_tr=pre_sigma_tr,
+                        post_sigma_tr=torch.diagonal(sigma_next, dim1=-2, dim2=-1).sum(-1).mean().item(),
+                        policy_reason="budget_ok: collapse projected to attractor",
+                    )
+                else:
+                    kind = "observe" if policy.observe_only else "blocked"
+                    reason = (
+                        "observe_only=True" if policy.observe_only
+                        else f"budget exhausted ({self._intervention_count}/{policy.max_interventions})"
+                    )
+                    receipt = InterventionReceipt(
+                        step=step, kind=kind, trigger_source="collapse_trigger",
+                        sigma0_proximity=float(info.get("sigma0_proximity", 0.0)),
+                        surprise_spook=bool(info.get("surprise_spook", False)),
+                        pre_x_norm=pre_x_norm, post_x_norm=x_next.norm().item(),
+                        pre_sigma_tr=pre_sigma_tr,
+                        post_sigma_tr=torch.diagonal(sigma_next, dim1=-2, dim2=-1).sum(-1).mean().item(),
+                        policy_reason=reason,
+                    )
 
+        info["intervention_receipt"] = receipt
         return x_next, sigma_next, info
 
     def costate(self, x: Tensor, u: Tensor, sigma: Tensor) -> Tensor:
@@ -419,6 +556,7 @@ def rollout(model: CIO_SDE, x0: Tensor, sigma0: Tensor, steps: int,
     swap_schedule = swap_schedule or {}
     device = x0.device
     running = torch.zeros((), device=device)
+    model.reset_intervention_count()
 
     for t in range(steps):
         gen = torch.Generator(device=device)
@@ -431,10 +569,13 @@ def rollout(model: CIO_SDE, x0: Tensor, sigma0: Tensor, steps: int,
             rec = model.graph.hot_swap(swap_schedule[t], x.detach(), u_probe, t)
             trace.swaps.append(rec)
 
-        x_next, sigma_next, info = model.forward_step(x, sigma, dt, noise)
+        x_next, sigma_next, info = model.forward_step(x, sigma, dt, noise, step=t)
 
         if info.get("collapse") is not None:
             trace.collapses.append({"step": t, "result": info["collapse"]})
+
+        if info.get("intervention_receipt") is not None:
+            trace.interventions.append(info["intervention_receipt"])
 
         if accumulate_cost:
             running = running + model.stage_cost(x, info["u"]).mean() * dt
@@ -457,3 +598,80 @@ def rollout(model: CIO_SDE, x0: Tensor, sigma0: Tensor, steps: int,
 
     trace.running_cost = running
     return x, sigma, trace
+
+
+# ── Paired control helper (Issue #1138 §4) ───────────────────────────────────
+
+@dataclass
+class PairedRunSummary:
+    """Comparable outcome summary for one arm of a paired control experiment."""
+    label: str
+    final_x_norm: float
+    final_sigma_tr: float
+    integrated_cost: Optional[float]
+    collapse_count: int
+    intervention_count: int
+    receipts: List[dict]
+
+
+def paired_control_rollout(
+    model: CIO_SDE,
+    x0: Tensor,
+    sigma0: Tensor,
+    steps: int,
+    dt: float = 0.05,
+    base_seed: int = 0,
+) -> Tuple[PairedRunSummary, PairedRunSummary, PairedRunSummary]:
+    """
+    Run three arms from the same (x0, sigma0, base_seed):
+
+      1. no_op  — no collapse/anti-collapse operators attached at all
+      2. observe — operators attached, policy=observe_only (default)
+      3. bounded — operators attached, policy allows up to max_interventions=10
+
+    Returns (no_op_summary, observe_summary, bounded_summary).
+
+    Arm 1 establishes the baseline trajectory. Arm 2 proves observe-only produces
+    the same trajectory. Arm 3 shows what bounded intervention does. No claim is
+    made that any arm is optimal.
+    """
+    saved_policy = model.intervention_policy
+    saved_collapse = model.collapse_op
+    saved_anti = model.anti_collapse_op
+
+    def _summarise(label: str, xf: Tensor, sf: Tensor, trace: Trace, cost_tensor) -> PairedRunSummary:
+        return PairedRunSummary(
+            label=label,
+            final_x_norm=xf.norm().item(),
+            final_sigma_tr=torch.diagonal(sf, dim1=-2, dim2=-1).sum(-1).mean().item(),
+            integrated_cost=cost_tensor.item() if cost_tensor is not None else None,
+            collapse_count=len(trace.collapses),
+            intervention_count=len(trace.interventions),
+            receipts=[r.to_dict() for r in trace.interventions],
+        )
+
+    # Arm 1: no operators
+    model.collapse_op = None
+    model.anti_collapse_op = None
+    model.intervention_policy = InterventionPolicy()  # observe_only=True, budget=0
+    xf1, sf1, t1 = rollout(model, x0, sigma0, steps, dt=dt, base_seed=base_seed, accumulate_cost=True)
+    s1 = _summarise("no_op", xf1, sf1, t1, t1.running_cost)
+
+    # Arm 2: operators attached, observe_only=True (default policy)
+    model.collapse_op = saved_collapse
+    model.anti_collapse_op = saved_anti
+    model.intervention_policy = InterventionPolicy(observe_only=True, max_interventions=0)
+    xf2, sf2, t2 = rollout(model, x0, sigma0, steps, dt=dt, base_seed=base_seed, accumulate_cost=True)
+    s2 = _summarise("observe", xf2, sf2, t2, t2.running_cost)
+
+    # Arm 3: bounded intervention (up to 10 per rollout)
+    model.intervention_policy = InterventionPolicy(observe_only=False, max_interventions=10)
+    xf3, sf3, t3 = rollout(model, x0, sigma0, steps, dt=dt, base_seed=base_seed, accumulate_cost=True)
+    s3 = _summarise("bounded", xf3, sf3, t3, t3.running_cost)
+
+    # Restore
+    model.collapse_op = saved_collapse
+    model.anti_collapse_op = saved_anti
+    model.intervention_policy = saved_policy
+
+    return s1, s2, s3

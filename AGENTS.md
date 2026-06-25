@@ -317,6 +317,30 @@ How this agent operates...
 
 **Exception:** If your change is docs-only or doesn't touch code, skip with `SKIP_AGENT_CHECK=1`.
 
+## Codex convergence agent
+
+**Status:** active
+**Model:** GPT-5 Codex
+**Lane:** codex/
+**Owner:** Alex Place
+
+### Capabilities
+- Canonical tool-contract integration
+- MCP and Dream Chat parity validation
+- Security-boundary regression testing
+- Private multi-source training-data builders and provenance validation
+
+### Runbook / Behavior
+Keeps `tool-runner.js` authoritative, delegates MCP execution through the
+bounded Node bridge, validates structured policy outcomes on both surfaces, and
+keeps generated session corpora local while committing only reproducible
+builders and synthetic fixtures.
+
+### Constraints
+- Max 1 open PR in the Codex lane
+- No duplicate Python tool schema/policy table
+- Preserve sandbox, command allowlist, SSRF, and operator gates
+
 ### Emergency Bypass (Rare)
 
 For true emergencies only:

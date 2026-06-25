@@ -9,12 +9,14 @@ const { execFileSync } = require("child_process");
 
 const {
   dispatchTrainingJob,
+  dispatchAllAutomatable,
   pollJobStatus,
   rotateProvider,
   loadGpuPcsf,
 } = require("../lib/training-dispatcher");
 
 const JOBS_LOG_REL = ["data", "self-improvement", "training-jobs.jsonl"];
+const CONVERGENCE_LOG_REL = ["data", "training", "convergence-records.jsonl"];
 
 // Only these keys may be set via the UI — prevents arbitrary env injection
 const GPU_KEY_ALLOWLIST = [
@@ -64,12 +66,16 @@ function _syncUserEnvKeys() {
   }
 }
 
-function readJobsLog(fs, path, repoRoot) {
-  const p = path.join(repoRoot, ...JOBS_LOG_REL);
+function readJsonl(fs, path, repoRoot, relPath) {
+  const p = path.join(repoRoot, ...relPath);
   try {
     const lines = fs.readFileSync(p, "utf8").trim().split("\n").filter(Boolean);
     return lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
   } catch { return []; }
+}
+
+function readJobsLog(fs, path, repoRoot) {
+  return readJsonl(fs, path, repoRoot, JOBS_LOG_REL);
 }
 
 function activeJob(jobs) {
@@ -111,6 +117,9 @@ module.exports = async function gpuTrainingRoutes(req, res, url, deps) {
     const active = activeJob(jobs);
     const nextProvider = rotateProvider(active?.provider || null);
 
+    const crAll = readJsonl(fs, path, repoRoot, CONVERGENCE_LOG_REL);
+    const recentConvergence = crAll.slice(-10).reverse();
+
     sendJson(res, {
       providers: pcsf?.providers || [],
       rotation_order: pcsf?.rotation_order || [],
@@ -119,6 +128,7 @@ module.exports = async function gpuTrainingRoutes(req, res, url, deps) {
       nextProvider,
       recentJobs: last20,
       totalJobs: jobs.length,
+      recentConvergence,
     });
     return true;
   }
@@ -145,6 +155,22 @@ module.exports = async function gpuTrainingRoutes(req, res, url, deps) {
 
     try {
       const result = await dispatchTrainingJob(provider, checkpointUri, steps);
+      sendJson(res, result);
+    } catch (e) {
+      sendJson(res, { error: e.message }, 500);
+    }
+    return true;
+  }
+
+  // ── POST /api/gpu-training/dispatch-all ─────────────────────────
+  // Fan out to ALL automatable providers with quota simultaneously.
+  // PCSF state updated per provider: "dispatched" on success, "degraded" on error.
+  if (url.pathname === "/api/gpu-training/dispatch-all" && req.method === "POST") {
+    let body = {};
+    try { body = JSON.parse(await collectRequestBody(req)); } catch {}
+    const { checkpointUri = "", steps = 600 } = body;
+    try {
+      const result = await dispatchAllAutomatable(checkpointUri, Number(steps));
       sendJson(res, result);
     } catch (e) {
       sendJson(res, { error: e.message }, 500);

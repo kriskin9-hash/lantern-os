@@ -101,6 +101,27 @@ function queryMemories(message, limit = 3) {
   return result;
 }
 
+// Issue #919 finding #1 — semantic memory retrieval via nomic-embed-text.
+// Upgrades queryMemories with real embeddings from the local Ollama model.
+// Falls back silently to keyword results when the embed model is unavailable.
+// Returns a Promise; callers that need sync can use queryMemories() above.
+async function queryMemoriesSemantic(message, limit = 3) {
+  const keyword = queryMemories(message, limit * 3);  // wider candidate pool for reranker
+  if (keyword.length === 0) return [];
+  try {
+    const { semanticRerank } = require("./semantic-reranker");
+    const textField = "__text";
+    const withText = keyword.map(r => ({
+      ...r,
+      [textField]: r.content?.text || r.content?.raw_input || (r.tags || []).join(" "),
+    }));
+    const reranked = await semanticRerank(message, withText, { topK: limit, textField });
+    return reranked.map(r => { const c = { ...r }; delete c[textField]; return c; });
+  } catch {
+    return keyword.slice(0, limit);
+  }
+}
+
 // Query-filtered ingest docs: only return docs relevant to the message
 function queryIngestDocs(message, limit = 2) {
   const allDocs = readIngestDocs(10);
@@ -310,6 +331,7 @@ module.exports = {
   readMemoryRecords,
   readIngestDocs,
   queryMemories,
+  queryMemoriesSemantic,
   queryIngestDocs,
   queryDreamEntries,
   queryRagHouse,

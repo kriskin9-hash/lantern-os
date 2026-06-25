@@ -1,8 +1,8 @@
-// test_grounding_policy.js — the within→without bridge in the chat (#764).
+// test_grounding_policy.js — the within→without bridge in the chat (#764, #1012).
 // JS mirror of the Python dilation/grounding_policy tests. Run: node tests/test_grounding_policy.js
 const assert = require("node:assert");
 const {
-  dilation, groundingPolicy, chatDilation, D_MIN,
+  dilation, groundingPolicy, chatDilation, shouldForceGrounding, recordGroundingTick, D_MIN,
 } = require("../apps/lantern-garage/lib/grounding-policy");
 
 let n = 0;
@@ -56,6 +56,34 @@ ok("uncertain query dilates more than a plain one", () => {
   assert.ok(uncertain > plain, `uncertain(${uncertain}) should exceed plain(${plain})`);
   // and that maps to wider grounding
   assert.ok(groundingPolicy(uncertain).maxResults >= groundingPolicy(plain).maxResults);
+});
+
+// #1012 — mandatory periodic grounding tick: fires after interval, silences after record
+ok("shouldForceGrounding fires on a fresh module (lastTs=0)", () => {
+  // After require() _lastGroundingTs=0, so it should fire immediately.
+  assert.strictEqual(shouldForceGrounding(), true);
+});
+
+ok("recordGroundingTick suppresses shouldForceGrounding briefly", () => {
+  recordGroundingTick();
+  assert.strictEqual(shouldForceGrounding(), false);
+});
+
+ok("forcedByTimer overrides low-D fetchExternal=false", () => {
+  const pol = groundingPolicy(0.4, { forcedByTimer: true });
+  assert.strictEqual(pol.fetchExternal, true, "timer override must force fetchExternal");
+  assert.strictEqual(pol.forcedByTimer, true);
+});
+
+ok("forcedByTimer is absent on normal low-D policy", () => {
+  const pol = groundingPolicy(0.4);
+  assert.ok(!pol.forcedByTimer, "forcedByTimer should not appear on normal policy");
+});
+
+ok("forcedByTimer does not alter high-D policy (already fetches)", () => {
+  const hi = groundingPolicy(4.0, { forcedByTimer: true });
+  assert.strictEqual(hi.fetchExternal, true);
+  assert.strictEqual(hi.deepMode, true);
 });
 
 console.log(`\nPASS — ${n} grounding-policy checks`);

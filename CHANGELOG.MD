@@ -1,5 +1,89 @@
 # Changelog
 
+## [1.7.74] - 2026-06-25
+- feat(chat): Document Studio — a collaborative, versioned document editor (Slice 1: markdown/plain-text). Open it from the chat "+" menu ("📐 Document Studio") or /document-studio.html: document canvas on the left, Keystone chat on the right. Say what to change ("make this less corporate", "add a stronger closing", "fix grammar, keep my meaning") and Keystone proposes a minimal edit shown as a DIFF with an explanation — nothing changes until you click Apply. Each accepted turn is a new revision; Undo and a revision dropdown roll back to any prior version; Export rebuilds a styled .docx. Edits stay local until you export. New `lib/docmode-store.js` (file-persisted revisions), `routes/docmode.js` (create/import-docx/get/propose/apply/revert/title/export, operator-gated), `public/document-studio.html`, and markdown⇄docx modes in `scripts/resume_docx.py`. Slice 2 (full .docx heading/list/table fidelity) is the next step.
+
+## [1.7.73] - 2026-06-24
+- feat(chat): document upload + AI rewrite + download in Keystone chat. The "+" attach menu now has "📝 Improve a document (.docx)": pick a .docx, type an instruction (or accept the default), and Keystone extracts the text, rewrites it with Claude per your instruction (truthfully — no invented facts), regenerates a styled .docx, and returns a download link inline. New `POST /api/documents/process` + `GET /api/documents/file` (routes/documents.js, operator-gated) backed by a python-docx helper (scripts/resume_docx.py) that reads headers/footers (name/contact) too. Adds `python-docx` to requirements.
+
+## [1.7.72] - 2026-06-24
+- feat(training): build the private Kaggle Ouro corpus from Claude, authentic Codex tool traces, and authentic tool-using ChatGPT exports with provenance, scrubbing, deterministic deduplication, and a fail-closed dataset mount (#1142).
+
+## [1.7.71] - 2026-06-24
+- feat(mcp): expose Dream Chat's canonical tool manifest and executor through MCP with matching schemas, policy gates, structured denials, and receipt shape (#1139).
+
+## [1.7.70] - 2026-06-24
+- feat(orchestration): restore the open, unclaimed GitHub issue research queue with priority filtering and bounded Keystone Chat, Codex, and Claude Code handoffs (#1130).
+
+## [1.7.69] - 2026-06-24
+- fix(chat): narration (🔊) no longer reads tool calls. The auto-narrate toggle and Read-aloud button now speak the answer only — `<tool_call>` markup and the hidden `[DOORS]` tag are stripped from the spoken text, so the narrator never reads raw tool JSON/IO aloud.
+- feat(chat): the PCSF signature line under each reply now shows the actual provider, model, and timestamp from the receipt (e.g. `Keystone · chat · anthropic/claude-haiku-4-5 · 2:50 PM`) instead of just `Keystone · chat`.
+- fix(chat): the signature is now rendered for EVERY reply, including the offline/no-model path (shows `Keystone · no model available · <time>`), so a normal answer and a degraded answer have the same shape — they previously looked inconsistent because the offline path rendered no signature at all.
+
+## [1.7.68] - 2026-06-24
+- ux(chat): tool-call cards are now collapsed by default. Each call renders as a `<details>` summary (`🔧 web_search ✓`) that expands to show args + result on click, and multiple native (Claude/OpenAI/Gemini) tool calls are grouped under a single collapsed parent (`🔧 N tool calls`). The workflow is visible but no longer takes over the message — open it only when you want the detail.
+
+## [1.7.67] - 2026-06-24
+- fix(chat): remove the hardcoded dream-persona slop from Keystone's offline reply. When both cloud and local models were unreachable, `unified_agent_connector._offline_reply` returned a fake mystical line for the keystone agent ("Truth: this connects to something older. The Return Door remembers. What pattern repeats?"). Keystone is a technical assistant, not a dream narrator — it now returns an honest "no model is reachable; start a local model or set a cloud key" message. (The other Three-Doors RP personas keep their flavor.)
+
+## [1.7.66] - 2026-06-24
+- fix(chat): show the tool workflow for cloud models. Claude/OpenAI/Gemini use the native tool-use loop (server emits `{type:"tool",phase:"call"/"result"}`), but the chat UI only knew how to fill cards parsed from the *local* model's `<tool_call>` text — so native tool calls ran invisibly and only the final answer appeared. The stream handler now records native calls and synthesizes the same tool-call cards at finalize (filled with the real results), so the user sees `🔧 web_search → 🔧 web_fetch → answer`. `fillToolSlot` also reads the native `preview` field.
+
+## [1.7.65] - 2026-06-24
+- chore(gitignore): stop runtime-generated artifacts from churning into unrelated commits/PRs — ignore `data/convergence/patch-receipts.jsonl`, generated `data/self-improvement/colab-notebooks/`, and `models/*/training-data.*.jsonl`.
+
+## [1.7.64] - 2026-06-24
+- test(eval): lock `accuracy_by_difficulty` in the keystone leaderboard (#843). Clean re-cut of PR #1090 — that branch was stale and showed a destructive −515k-line/2564-file diff; the feature itself already landed on master, so only the (BOM-stripped) test is added here.
+
+## [1.7.63] - 2026-06-24
+- refactor(chat): split `lib/stream-chat.js` (the streaming dispatcher) into focused modules under `lib/stream-chat/` — `history.js` (compaction + provider-message assembly), `doors.js` (reply post-processing + door/web suggestions), `tool-turns.js` (per-provider native tool-use turn helpers), `provider-order.js` (brain ordering). Smaller files for smaller-context coding agents; behavior unchanged.
+- feat(chat): universal tool access — every chat provider now reaches the same `tool-runner` registry. Added native function-calling loops for OpenAI and xAI/Grok and a `functionDeclarations` loop for Gemini (new `openaiTools()`/`geminiTools()` adapters), and upgraded the local Ouro path from single-shot to a bounded multi-step tool loop. Gated by `CHAT_TOOL_EXEC=1` as before.
+- fix(chat): keep the dream-tuned `lantern-csf-dream` model out of the non-RP Keystone chat model chain. An offline/degraded Keystone chat was falling back to the dream model and answering in persona ("the Return Door remembers…"); that model is now reserved for the Three Doors RP surface.
+
+## [1.7.62] - 2026-06-23
+- fix(training): Lightning AI dispatch was broken by #1079, which set `org=lantern` + teamspace `api-credential-management-project`. The ouro-training studio actually lives in the user-owned teamspace `lightning.ai/alexplace7/custom-ml-model-development-project`, so the SDK could not infer the owner ("Neither name is provided nor can the user be inferred..."). Restore `user=alexplace7` resolution (org is now an optional override) with the correct teamspace, in both `lightning_dispatch.py` and the dispatcher env.
+- fix(training): the Lightning train script was uploaded to an absolute remote path (`/home/zeus/...`); a Windows dispatch client mangled it into a single backslash-named file in the studio working dir, so the run command never found it. Upload to a bare filename and run it relative to the studio working dir.
+- fix(training): write the generated Lightning train script as UTF-8. The default cp1252 encoding on a Windows dispatch client turned the em-dash in a comment into a lone `\x97` byte, which the studio's Python 3 rejected (`Non-UTF-8 code ... no encoding declared`).
+- fix(training): pin `transformers>=4.40,<4.53` in the Lightning train script (matching the Kaggle dispatch). 4.53+ removed `ROPE_INIT_FUNCTIONS['default']`, which `OuroRotaryEmbedding` looks up at init → `KeyError: 'default'` killed every run.
+
+## [1.7.61] - 2026-06-23
+- fix(knowledgecenter): PDF report links were all broken (403) and many showed "(anonymous)" as the title. The `/api/pdfs` list advertised `/repo/data/ingest/…` URLs, but the `/repo` handler deliberately denies `data/ingest` as a PII pool (#868), so every PDF link 403'd. Added a bounded `GET /api/pdfs/file?filename=…` endpoint that serves only `.pdf` files from inside the ingest pool (path-traversal/extension guarded; the broad `/repo` deny stays intact) and a `fileUrl` field the Knowledge Center now links to. Junk PDF titles (`(anonymous)`, blank, whitespace) are normalized to null server- and client-side so cards fall back to the readable filename — consistent with how the markdown docs display.
+
+## [1.7.60] - 2026-06-23
+- feat(orchestration): surface the local/offline model on orchestration.html. New "Local Model" panel shows the actual wired-in offline brain — the pinned `OLLAMA_MODEL` (e.g. `ouro:latest`, the Σ₀ Ouro Coder), whether it's genuinely being served vs only configured, the model actually active right now, the Σ₀ adapter, served-model list, and fast/deep mode. Backed by a new `local_model` block on `/api/serving/status` that live-probes the local Ollama-API server (`:11434/api/tags`). When the pinned model isn't served, the panel explains how to start it (`ouro_serve.py`). Previously the page had no local-model view at all — its only "offline" label was a server-reachability light.
+
+## [1.7.59] - 2026-06-23
+- fix(orchestration): leaderboard panel was empty — agent-performance lib grouped agents by splitting the joined `taskType_agentId` cache key on "_", but both halves contain underscores (dream_chat, ...Q4_K_M), collapsing all agents into one bogus bucket; now groups by each record's own agentId/taskType and supports `taskType=all` aggregation. orchestration.html queried `taskType=coding` (zero records) → switched to `taskType=all`. Calibration panel now shows a placeholder instead of blank space when no groundings are calibrated.
+
+## [1.7.58] - 2026-06-23
+- refactor(orchestration): rebuild orchestration.html as an action-first operator control panel. API-key entry (9 LLM providers + 7 GPU accounts, inline Save) and training dispatch (Start-all + per-provider Dispatch/Get-notebook + Poll) are the primary surface; removed the invented read-only panels (AI Brains, Needs Attention, queue/agent/work cluster, hero stats, loop strip) and the collapsing accordion. Wired read-only panels (provider chains, leaderboard, calibration, self-tests, rollover) kept flat below. No new API routes.
+
+## [1.7.57] - 2026-06-23
+- fix(operator): /api/actions/update no longer runs `git reset --hard origin/master` over a dirty serving checkout. The auto-update used to silently destroy uncommitted interactive/agent edits in the live checkout; it now refuses on a dirty tree (local changes preserved, count reported) and only resets a clean checkout, matching Invoke-OrchestratorRepoSync.ps1's dirty-guard policy.
+
+## [1.7.56] - 2026-06-23
+- fix(orchestration): improve GPU training dispatch error reporting — add error display panel with specific failure codes (missing_credentials, kaggle_timeout, lightning_not_configured, etc.)
+- fix(gpu-training): add timeout guards and better error handling for dispatch — reduce Kaggle timeout 60s→30s, Lightning 120s→60s, prevent interactive prompts via stdio pipe config
+
+## [1.7.55] - 2026-06-23
+- feat(orchestration): add provider management UI — LLM provider grid, task-type routing chains, secure API key storage in orchestration.html; new /api/providers/* endpoints for status and key management; Keystone automatically selects best provider per task type with automatic fallback
+
+## [1.7.55] - 2026-06-23
+- feat(orchestration): add provider management UI — LLM provider grid, task-type routing chains, secure API key storage in orchestration.html; new /api/providers/* endpoints for status and key management; Keystone automatically selects best provider per task type with automatic fallback
+
+## [1.7.54] - 2026-06-23
+- fix(training): ROPE_INIT_FUNCTIONS['default'] monkey-patch for transformers>=4.53 (OuroRotaryEmbedding KeyError on Kaggle)
+- fix(training): pin transformers>=4.40,<4.53 in Kaggle script as belt-and-suspenders
+- fix(training): Paperspace API URL corrected to api.paperspace.com
+- fix(training): Lightning dispatch — full remote script path, skip start() when already running, TRAIN_SCRIPT clone repo + correct script name
+- fix(training): skip --checkpoint-uri flag when empty (argparse crash)
+
+## [1.7.53] - 2026-06-23
+- fix(training): patch OuroConfig missing pad_token_id on Kaggle Python 3.12 — fixes AttributeError in modeling_ouro.py
+- fix(training): skip LFS objects on Kaggle git clone (GIT_LFS_SKIP_SMUDGE=1)
+- fix(training): Kaggle kernel slug — title spaces map to hyphens, URL regex handles both /code/user/slug and /user/slug
+- feat(orchestration): normie copy pass + full convergence API wiring (calibration panel, self-tests panel)
+
 ## [1.7.52] - 2026-06-22
 - feat(wip): land working-tree files from session (consequence-gate, goal-engine, gpu-training route, mandala-clock, action-tiers, self-improvement data, convergence work records, experiment scripts)
 

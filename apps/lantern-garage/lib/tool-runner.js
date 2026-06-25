@@ -1,6 +1,7 @@
 "use strict";
 /**
  * tool-runner.js — one canonical tool registry for the local Σ₀ Ouro coder in chat.
+ * ADR-0008: capabilities are Tools in this registry — advertised == executed == trainable.
  *
  * CONSISTENCY RULE (how Claude Code / OpenAI / any tool-calling LLM works): a tool is
  * defined ONCE — name + input_schema + executor + policy — and that single definition
@@ -23,17 +24,50 @@
  */
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
+const https = require("https");
 const { tokenizeCommand, safeExec } = require("./safe-exec");
 const { resolveCommand } = require("./command-allowlist");
+const { webSearchMcp } = require("./web-search-client");
+const { workspaceWrite, workspaceRead, workspaceList, getWorkspaceRoot } = require("./user-workspace");
+const { createDocument, listTemplates } = require("./doc-generator");
 
 const REPO = path.resolve(__dirname, "..", "..", "..");
+// User workspace: outside the repo, for user artifacts (resumes, exports, generated docs).
+// Defaults to ~/.keystone/workspace; overrideable via KEYSTONE_WORKSPACE env var.
+const WORKSPACE = process.env.KEYSTONE_WORKSPACE
+  || path.join(require("os").homedir(), ".keystone", "workspace");
 const MAX_OUT = 4000;
 const SKIP_DIR = /(^|[\\/])(\.git|node_modules|\.venv|\.venv-train|hf-cache)([\\/]|$)/;
 
+const CAPABILITY_SCHEMA_VERSION = 1;
+const RECEIPT_SCHEMA_VERSION = 1;
+
+function _codedError(message, reasonCode) {
+  const error = new Error(message);
+  error.reason = reasonCode;
+  return error;
+}
+
 function _safe(p) {
   const abs = path.resolve(REPO, String(p == null ? "." : p));
-  if (abs !== REPO && !abs.startsWith(REPO + path.sep)) throw new Error("path escapes repo");
+  if (abs !== REPO && !abs.startsWith(REPO + path.sep)) {
+    throw _codedError("path escapes repo", "unsafe_path");
+  }
   return abs;
+}
+
+// #1096: workspace safe-path guard — mirrors _safe() but anchored to WORKSPACE root
+function _safeWs(p) {
+  const abs = path.resolve(WORKSPACE, String(p == null ? "." : p));
+  if (abs !== WORKSPACE && !abs.startsWith(WORKSPACE + path.sep)) {
+    throw _codedError("path escapes workspace", "unsafe_workspace_path");
+  }
+  return abs;
+}
+
+function _ensureWorkspace() {
+  if (!fs.existsSync(WORKSPACE)) fs.mkdirSync(WORKSPACE, { recursive: true });
 }
 
 function _globToRe(glob) {
@@ -45,11 +79,70 @@ function _globToRe(glob) {
 function _runShell(command) {
   const cmd = String(command || "").trim();
   const resolved = resolveCommand(cmd);
-  if (!resolved) { const e = new Error(`command not allowlisted: ${cmd}`); e.reason = "unsafe"; throw e; }
+  if (!resolved) throw _codedError(`command not allowlisted: ${cmd}`, "command_not_allowlisted");
   return safeExec(tokenizeCommand(resolved), {
     cwd: REPO, encoding: "utf-8", timeout: 30000, maxBuffer: 1024 * 1024,
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
   });
+}
+
+// SSRF guard for web_fetch: block loopback / private / link-local hosts so the
+// model can't poke internal services (the local server, cloud metadata, LAN).
+function _blockedHost(hostname) {
+  const h = String(hostname || "").toLowerCase();
+  if (!h || h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal")) return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (a === 127 || a === 0 || a === 10) return true;              // loopback / this-host / private-A
+    if (a === 169 && b === 254) return true;                        // link-local + cloud metadata
+    if (a === 192 && b === 168) return true;                        // private-C
+    if (a === 172 && b >= 16 && b <= 31) return true;               // private-B
+  }
+  return false;
+}
+
+// Minimal HTTP(S) GET with redirect handling + timeout, for web_fetch.
+function _httpGet(url, redirects = 3) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch { return reject(_codedError("invalid url", "invalid_url")); }
+    if (u.protocol !== "http:" && u.protocol !== "https:") {
+      return reject(_codedError("only http(s) urls", "invalid_url"));
+    }
+    if (_blockedHost(u.hostname)) {
+      return reject(_codedError("host blocked (loopback/private/metadata)", "private_host_blocked"));
+    }
+    const lib = u.protocol === "https:" ? https : http;
+    const req = lib.get(u, {
+      timeout: 12000,
+      headers: { "User-Agent": "KeystoneOS/1.0 (+web_fetch tool)", "Accept": "text/html,text/plain,*/*" },
+    }, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        return resolve(_httpGet(new URL(res.headers.location, u).toString(), redirects - 1));
+      }
+      if (code >= 400) { res.resume(); return reject(new Error(`http ${code}`)); }
+      let data = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => { data += c; if (data.length > 600_000) { req.destroy(); } });
+      res.on("end", () => resolve(data));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(new Error("fetch timeout")); });
+  });
+}
+
+function _htmlToText(html) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<\/(p|div|li|h[1-6]|tr|br)>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&[a-z#0-9]+;/gi, " ")
+    .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
 }
 
 // ── canonical registry (names/schemas == training == Claude Code) ───────────────
@@ -133,9 +226,411 @@ const REGISTRY = {
       return `edited ${i.file_path}`;
     },
   },
+
+  // ── ADR-0008 capability tools ───────────────────────────────────────────────
+  web_search: {
+    policy: "read",
+    desc: "Search the web for real-time information. Returns top results with title, URL, and snippet. Each result is cited per the Σ₀ External Reality Rule.",
+    schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "The search query" },
+        max_results: { type: "integer", description: "Max results to return (1–10, default 5)" },
+      },
+      required: ["query"],
+    },
+    async run(i) {
+      const query = String(i.query || "").trim();
+      if (!query) return "[error: query is required]";
+      const maxResults = Math.max(1, Math.min(10, parseInt(i.max_results, 10) || 5));
+      const raw = await webSearchMcp(query, maxResults);
+      // Unwrap MCP envelope {content:[{type:'text',text:'<json>'}]} or a direct {results}.
+      let payload = raw;
+      if (raw && Array.isArray(raw.content)) {
+        const t = raw.content.find((c) => c && c.type === "text");
+        try { payload = t ? JSON.parse(t.text) : raw; } catch { payload = raw; }
+      }
+      if (raw && raw.isError) return `[web_search error: ${payload && payload.error ? payload.error : "search failed"}]`;
+      if (payload && payload.success === false) return `[web_search error: ${payload.error || "search failed"}]`;
+      const results = (payload && payload.results) || [];
+      if (!results.length) return `[no results for: ${query}]`;
+      const lines = [`web_search("${query}") — ${results.length} result(s):\n`];
+      results.forEach((r, idx) => {
+        lines.push(`[${idx + 1}] ${r.title || "(untitled)"}`);
+        lines.push(`    url: ${r.url || ""}`);
+        if (r.snippet) lines.push(`    snippet: ${r.snippet}`);
+      });
+      return lines.join("\n");
+    },
+  },
+
+  web_fetch: {
+    policy: "read",
+    desc: "Fetch the text content of a public URL. HTML is stripped to readable plain text. Use for reading web pages, documentation, or articles. No internal/private IPs allowed.",
+    schema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The public https:// or http:// URL to fetch" },
+        max_chars: { type: "integer", description: "Max characters of content to return (default 3000)" },
+      },
+      required: ["url"],
+    },
+    async run(i) {
+      const url = String(i.url || "").trim();
+      if (!url) return "[error: url is required]";
+      const maxChars = Math.max(200, Math.min(MAX_OUT, parseInt(i.max_chars, 10) || 3000));
+      let html;
+      try { html = await _httpGet(url); }
+      catch (e) { return `[web_fetch error: ${e.message}]`; }
+      const text = _htmlToText(html || "");
+      const excerpt = text.length > maxChars ? text.slice(0, maxChars) + "\n…[truncated]" : text;
+      return `web_fetch(${url})\n\n${excerpt}`;
+    },
+  },
+
+  // ── ADR-0008 user workspace tools ──────────────────────────────────────────
+  workspace_write: {
+    policy: "mutating",
+    desc: "Write a file to the user workspace (~/.keystone/workspace/). Use for saving user artifacts: resumes, cover letters, documents. Path must be relative, no .. escapes. Operator only.",
+    schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Workspace-relative path, e.g. 'resumes/my-resume.md'" },
+        content: { type: "string", description: "File content to write" },
+      },
+      required: ["path", "content"],
+    },
+    run(i) {
+      const abs = workspaceWrite(String(i.path || ""), String(i.content || ""));
+      return `wrote workspace:${i.path} (${String(i.content || "").length} bytes)\nfull path: ${abs}`;
+    },
+  },
+
+  workspace_read: {
+    policy: "read",
+    desc: "Read a file from the user workspace (~/.keystone/workspace/). Path must be relative.",
+    schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Workspace-relative path to read" },
+      },
+      required: ["path"],
+    },
+    run(i) {
+      const content = workspaceRead(String(i.path || ""));
+      return content.length > MAX_OUT ? content.slice(0, MAX_OUT) + "\n…[truncated]" : content;
+    },
+  },
+
+  workspace_list: {
+    policy: "read",
+    desc: "List files and directories in the user workspace (~/.keystone/workspace/) or a subdirectory.",
+    schema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Workspace-relative directory to list (default: root)" },
+      },
+      required: [],
+    },
+    run(i) {
+      const entries = workspaceList(String(i.path || ""));
+      const root = getWorkspaceRoot();
+      if (!entries.length) return `workspace:${i.path || "/"} is empty\nroot: ${root}`;
+      const lines = [`workspace:${i.path || "/"} — ${entries.length} entries (root: ${root})`];
+      entries.forEach((e) => lines.push(`  ${e.type === "dir" ? "[dir]" : "[file]"} ${e.name}${e.type === "file" ? ` (${e.size}B)` : ""}`));
+      return lines.join("\n");
+    },
+  },
+
+  // ── ADR-0008 document generation (#1097) ────────────────────────────────────
+  create_document: {
+    policy: "mutating",
+    desc: 'Generate a document from a template and save it to the user workspace. Templates: "resume", "cover_letter". Pass structured fields matching the template. Returns the workspace path of the created file. Operator only.',
+    schema: {
+      type: "object",
+      properties: {
+        template: { type: "string", description: '"resume" or "cover_letter"' },
+        fields: { type: "object", description: "Template-specific fields (name, email, experience, etc.)" },
+        output_path: { type: "string", description: "Optional workspace-relative output path (auto-generated if omitted)" },
+      },
+      required: ["template", "fields"],
+    },
+    run(i) {
+      if (!i.template) return "[error: template is required]";
+      if (!i.fields || typeof i.fields !== "object") return "[error: fields must be an object]";
+      try {
+        const result = createDocument(String(i.template), i.fields, i.output_path || null);
+        return [
+          `created ${result.template}: workspace:${result.path}`,
+          `full path: ${result.fullPath}`,
+          `size: ${result.byteLength} bytes`,
+          "",
+          "--- preview (first 500 chars) ---",
+          result.content.slice(0, 500) + (result.content.length > 500 ? "\n…" : ""),
+        ].join("\n");
+      } catch (e) {
+        const tmplList = listTemplates().map((t) => `  ${t.name}: ${t.description}`).join("\n");
+        return `[create_document error: ${e.message}]\n\nAvailable templates:\n${tmplList}`;
+      }
+    },
+  },
+  // ── workspace tools (ADR-0008 §Decision 4): user-artifact area outside the repo ────
+  // User artifacts (resumes, exports, generated docs) are written to WORKSPACE, never into
+  // the repo. Each tool uses _safeWs() to reject path-escape attempts before touching disk.
+  workspace_read: {
+    policy: "read",
+    desc: "Read a file from the user workspace (~/.keystone/workspace/). Use for user-owned artifacts: resumes, exports, generated docs.",
+    schema: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] },
+    run(i) {
+      const p = _safeWs(i.file_path);
+      if (!fs.existsSync(p)) throw _codedError(`workspace file not found: ${i.file_path}`, "not_found");
+      const content = fs.readFileSync(p, "utf8");
+      return content.length > MAX_OUT ? content.slice(0, MAX_OUT) + "\n…[truncated]" : content;
+    },
+  },
+  workspace_write: {
+    policy: "mutating",
+    desc: "Write a file to the user workspace (~/.keystone/workspace/). Creates intermediate directories. Never writes to the repo.",
+    schema: {
+      type: "object",
+      properties: { file_path: { type: "string" }, content: { type: "string" } },
+      required: ["file_path", "content"],
+    },
+    run(i) {
+      _ensureWorkspace();
+      const p = _safeWs(i.file_path);
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, String(i.content == null ? "" : i.content), "utf8");
+      return `wrote workspace/${i.file_path} (${String(i.content || "").length} bytes)`;
+    },
+  },
+  workspace_list: {
+    policy: "read",
+    desc: "List files in the user workspace (~/.keystone/workspace/) under an optional subdirectory.",
+    schema: { type: "object", properties: { path: { type: "string" } } },
+    run(i) {
+      _ensureWorkspace();
+      const dir = _safeWs(i.path || ".");
+      if (!fs.existsSync(dir)) return "(workspace directory is empty)";
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      if (!entries.length) return "(no files)";
+      return entries.map(e => (e.isDirectory() ? `${e.name}/` : e.name)).join("\n");
+    },
+  },
+  create_document: {
+    policy: "mutating",
+    desc: "Create a formatted document (markdown, plaintext) in the user workspace. Returns the workspace-relative path.",
+    schema: {
+      type: "object",
+      properties: {
+        filename: { type: "string", description: "Workspace-relative path, e.g. 'resume-2026.md'" },
+        content: { type: "string" },
+        format: { type: "string", enum: ["markdown", "text"], description: "File format hint (default: markdown)" },
+      },
+      required: ["filename", "content"],
+    },
+    run(i) {
+      _ensureWorkspace();
+      const ext = (i.format === "text") ? ".txt" : ".md";
+      const filename = String(i.filename || "document").replace(/\.+\//g, "");
+      const finalName = filename.endsWith(ext) ? filename : (filename.includes(".") ? filename : filename + ext);
+      const p = _safeWs(finalName);
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      fs.writeFileSync(p, String(i.content == null ? "" : i.content), "utf8");
+      return `created workspace/${finalName} (${String(i.content || "").length} chars)`;
+    },
+  },
+  // ── bounded eval recipe (issue #843) ──────────────────────────────────────
+  // Runs scripts/eval_keystone.py against a local Ollama-compatible endpoint.
+  // Inputs are validated and allowlisted; arbitrary command construction is
+  // forbidden. Probes the endpoint before running; returns a blocked receipt
+  // if unavailable. OPERATOR policy (shell execution).
+  local_eval_keystone_run: {
+    policy: "shell",
+    desc: "Run the Keystone eval harness (eval_keystone.py) against a local Ollama endpoint. Returns a structured receipt with accuracy and latency. Endpoint must be loopback-only.",
+    schema: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "Unique run label (alphanumeric, dash, dot, max 64 chars)" },
+        base: { type: "string", description: "Ollama API base URL (loopback only, default: http://127.0.0.1:11434)" },
+        model: { type: "string", description: "Model name passed to eval harness (default: ouro:latest)" },
+        limit: { type: "integer", description: "Max prompts to evaluate (default: all; max: 65)" },
+        timeout: { type: "integer", description: "Per-prompt timeout in seconds (default: 60; max: 300)" },
+      },
+      required: ["label"],
+    },
+    async run(i) {
+      const os = require("os");
+      const childProcess = require("child_process");
+      const { promisify } = require("util");
+      const execFile = promisify(childProcess.execFile);
+
+      // ── Validate label ───────────────────────────────────────────────
+      const label = String(i.label || "").trim();
+      if (!label || !/^[\w.\-]{1,64}$/.test(label)) {
+        throw _codedError("label must be 1-64 chars, alphanumeric/dash/dot", "invalid_label");
+      }
+
+      // ── Validate base URL (loopback only) ────────────────────────────
+      const base = String(i.base || "http://127.0.0.1:11434").trim();
+      let parsedBase;
+      try { parsedBase = new URL(base); } catch {
+        throw _codedError("base is not a valid URL", "invalid_base");
+      }
+      if (!["127.0.0.1", "::1", "localhost"].includes(parsedBase.hostname)) {
+        throw _codedError("base must be a loopback address (127.0.0.1 / ::1 / localhost)", "non_loopback_base");
+      }
+
+      // ── Validate model ───────────────────────────────────────────────
+      const model = String(i.model || "ouro:latest").trim();
+      if (!/^[\w.:/-]{1,128}$/.test(model)) {
+        throw _codedError("model contains invalid characters", "invalid_model");
+      }
+
+      // ── Validate limit ───────────────────────────────────────────────
+      const rawLimit = parseInt(i.limit, 10);
+      const limit = isNaN(rawLimit) ? null : Math.min(65, Math.max(1, rawLimit));
+
+      // ── Validate timeout ─────────────────────────────────────────────
+      const rawTimeout = parseInt(i.timeout, 10);
+      const timeoutSec = isNaN(rawTimeout) ? 60 : Math.min(300, Math.max(10, rawTimeout));
+
+      // ── Probe endpoint availability ──────────────────────────────────
+      const tagsUrl = base.replace(/\/$/, "") + "/api/tags";
+      let endpointAvailable = false;
+      try {
+        await _httpGet(tagsUrl); // will throw if unavailable
+        endpointAvailable = true;
+      } catch (probeErr) {
+        return JSON.stringify({
+          receipt: "blocked",
+          label,
+          base,
+          model,
+          cause: "endpoint_unavailable",
+          probe_url: tagsUrl,
+          probe_error: probeErr && probeErr.message ? probeErr.message : String(probeErr),
+          ts: new Date().toISOString(),
+        }, null, 2);
+      }
+
+      // ── Build validated argument list (no shell interpolation) ───────
+      const evalScript = path.join(REPO, "scripts", "eval_keystone.py");
+      if (!fs.existsSync(evalScript)) {
+        throw _codedError("scripts/eval_keystone.py not found", "eval_script_missing");
+      }
+      const args = [evalScript, "--label", label, "--base", base, "--model", model];
+      if (limit !== null) args.push("--limit", String(limit));
+
+      // ── Run with explicit timeout ────────────────────────────────────
+      const pythonBin = process.platform === "win32" ? "python" : "python3";
+      const hardTimeout = (timeoutSec * (limit || 65) + 30) * 1000; // generous outer timeout
+      let stdout = "", stderr = "", exitCode = 0;
+      try {
+        const result = await execFile(pythonBin, args, {
+          cwd: REPO,
+          encoding: "utf8",
+          timeout: hardTimeout,
+          maxBuffer: 2 * 1024 * 1024,
+          env: { ...process.env, PYTHONPATH: path.join(REPO, "apps") + path.delimiter + path.join(REPO, "src") },
+        });
+        stdout = result.stdout || "";
+        stderr = result.stderr || "";
+      } catch (err) {
+        exitCode = err.code || 1;
+        stdout = err.stdout || "";
+        stderr = err.stderr || "";
+        if (err.killed || err.signal === "SIGTERM") {
+          return JSON.stringify({
+            receipt: "error",
+            label, base, model,
+            exit_code: exitCode,
+            cause: "timeout",
+            timeout_ms: hardTimeout,
+            ts: new Date().toISOString(),
+          }, null, 2);
+        }
+      }
+
+      // ── Try to parse leaderboard row ─────────────────────────────────
+      const leaderboardPath = path.join(REPO, "data", "eval", "leaderboard.jsonl");
+      let leaderboardRow = null;
+      if (fs.existsSync(leaderboardPath)) {
+        try {
+          const rows = fs.readFileSync(leaderboardPath, "utf8").trim().split("\n").filter(Boolean);
+          const last = rows[rows.length - 1];
+          const parsed = JSON.parse(last);
+          if (parsed.label === label) leaderboardRow = parsed;
+        } catch {}
+      }
+
+      return JSON.stringify({
+        receipt: exitCode === 0 ? "success" : "error",
+        label, base, model,
+        limit: limit || 65,
+        exit_code: exitCode,
+        stdout_hash: require("crypto").createHash("sha256").update(stdout).digest("hex").slice(0, 12),
+        stderr_hash: require("crypto").createHash("sha256").update(stderr).digest("hex").slice(0, 12),
+        leaderboard_row: leaderboardRow,
+        accuracy_by_difficulty: leaderboardRow ? leaderboardRow.accuracy_by_difficulty || null : null,
+        ts: new Date().toISOString(),
+      }, null, 2);
+    },
+  },
 };
 
 const TOOL_NAMES = Object.keys(REGISTRY);
+
+function capabilityManifest({
+  executionEnabled = process.env.CHAT_TOOL_EXEC === "1",
+} = {}) {
+  return {
+    schema_version: CAPABILITY_SCHEMA_VERSION,
+    receipt_schema_version: RECEIPT_SCHEMA_VERSION,
+    canonical_source: "apps/lantern-garage/lib/tool-runner.js",
+    execution: {
+      enabled: Boolean(executionEnabled),
+      reason: executionEnabled ? null : "chat_tool_exec_disabled",
+    },
+    tools: TOOL_NAMES.map((name) => {
+      const entry = REGISTRY[name];
+      return {
+        name,
+        description: entry.desc,
+        input_schema: entry.schema,
+        policy: entry.policy,
+        operator_required: entry.policy !== "read",
+        surface_availability: {
+          dream_chat: true,
+          mcp: true,
+        },
+        execution_enabled: Boolean(executionEnabled),
+        execution_disabled_reason: executionEnabled ? null : "chat_tool_exec_disabled",
+        result_receipt_schema_version: RECEIPT_SCHEMA_VERSION,
+      };
+    }),
+  };
+}
+
+function _outcome(status, tool, details = {}) {
+  const reasonCode = details.reason_code || null;
+  return {
+    ok: status === "executed",
+    status,
+    tool,
+    reason_code: reasonCode,
+    reason: reasonCode,
+    policy: details.policy || null,
+    ...(details.result !== undefined ? { result: details.result } : {}),
+    ...(details.error ? { error: details.error } : {}),
+    receipt: {
+      schema_version: RECEIPT_SCHEMA_VERSION,
+      tool,
+      status,
+      reason_code: reasonCode,
+    },
+  };
+}
 
 // Match Python json.dumps() default separators (", " / ": ") so this preamble is
 // BYTE-identical to the bridge's _render_tools (scripts/ouro_anthropic_bridge.py), which
@@ -176,18 +671,45 @@ function renderToolPreamble() {
  * @param {{operator?:boolean}} ctx
  * @returns {{ok:boolean, result?:string, reason?:string, error?:string, policy?:string}}
  */
-function runTool(name, input, ctx = {}) {
+async function runTool(name, input, ctx = {}) {
   const entry = REGISTRY[name];
-  if (!entry) return { ok: false, reason: "unknown", error: `unknown tool '${name}' (available: ${TOOL_NAMES.join(", ")})` };
+  if (!entry) {
+    return _outcome("unavailable", name, {
+      reason_code: "unknown_tool",
+      error: `unknown tool '${name}' (available: ${TOOL_NAMES.join(", ")})`,
+    });
+  }
+  if (ctx.executionEnabled === false) {
+    return _outcome("unavailable", name, {
+      reason_code: "chat_tool_exec_disabled",
+      policy: entry.policy,
+      error: "shared tool execution is disabled",
+    });
+  }
   if (entry.policy !== "read" && !ctx.operator) {
-    return { ok: false, reason: "auth", policy: entry.policy, error: `'${name}' (${entry.policy}) requires operator access` };
+    return _outcome("denied", name, {
+      reason_code: "operator_required",
+      policy: entry.policy,
+      error: `'${name}' (${entry.policy}) requires operator access`,
+    });
   }
   try {
-    let out = String(entry.run(input || {}) || "");
+    // run() may be sync (returns a string) or async (returns a Promise); await covers both.
+    let out = String((await entry.run(input || {})) || "");
     if (out.length > MAX_OUT) out = out.slice(0, MAX_OUT) + "\n…[truncated]";
-    return { ok: true, result: out, policy: entry.policy };
+    return _outcome("executed", name, { result: out, policy: entry.policy });
   } catch (e) {
-    return { ok: false, reason: e.reason || "error", policy: entry.policy, error: String(e.stderr || e.message || e).slice(0, MAX_OUT) };
+    const reasonCode = e.reason || "execution_error";
+    const status = reasonCode === "unsafe_path" ||
+      reasonCode === "command_not_allowlisted" ||
+      reasonCode === "private_host_blocked"
+      ? "blocked"
+      : "unavailable";
+    return _outcome(status, name, {
+      reason_code: reasonCode,
+      policy: entry.policy,
+      error: String(e.stderr || e.message || e).slice(0, MAX_OUT),
+    });
   }
 }
 
@@ -205,6 +727,48 @@ function anthropicTools({ operator = false } = {}) {
       description: REGISTRY[name].desc,
       input_schema: REGISTRY[name].schema,
     }));
+}
+
+// Same single source of truth, rendered for the OpenAI / xAI function-calling API
+// (chat/completions `tools`). OpenAI-compatible providers (GPT, Grok) emit native
+// `tool_calls`, so they use this instead of the free-text preamble. Operator filter
+// matches anthropicTools — runTool still enforces policy regardless.
+function openaiTools({ operator = false } = {}) {
+  return TOOL_NAMES
+    .filter((name) => operator || REGISTRY[name].policy === "read")
+    .map((name) => ({
+      type: "function",
+      function: {
+        name,
+        description: REGISTRY[name].desc,
+        parameters: REGISTRY[name].schema,
+      },
+    }));
+}
+
+// Same registry rendered for the Gemini API (`tools[].functionDeclarations`). Gemini
+// accepts an OpenAPI-subset schema; our schemas are already that subset, but we strip
+// any keys Gemini rejects (e.g. additionalProperties) defensively. One element with all
+// declarations, matching Gemini's expected shape.
+function geminiTools({ operator = false } = {}) {
+  const clean = (schema) => {
+    if (!schema || typeof schema !== "object") return schema;
+    const { additionalProperties, $schema, ...rest } = schema;
+    if (rest.properties) {
+      rest.properties = Object.fromEntries(
+        Object.entries(rest.properties).map(([k, v]) => [k, clean(v)])
+      );
+    }
+    return rest;
+  };
+  const functionDeclarations = TOOL_NAMES
+    .filter((name) => operator || REGISTRY[name].policy === "read")
+    .map((name) => ({
+      name,
+      description: REGISTRY[name].desc,
+      parameters: clean(REGISTRY[name].schema),
+    }));
+  return [{ functionDeclarations }];
 }
 
 // ── parse the model's free-text <tool_call> (light JSON repair; not a vocab hack) ──
@@ -253,4 +817,16 @@ function _loadsLenient(raw) {
   return null;
 }
 
-module.exports = { parseToolCall, runTool, renderToolPreamble, anthropicTools, REGISTRY, TOOL_NAMES };
+module.exports = {
+  parseToolCall,
+  runTool,
+  renderToolPreamble,
+  anthropicTools,
+  openaiTools,
+  geminiTools,
+  capabilityManifest,
+  REGISTRY,
+  TOOL_NAMES,
+  CAPABILITY_SCHEMA_VERSION,
+  RECEIPT_SCHEMA_VERSION,
+};

@@ -1,5 +1,7 @@
 "use strict";
 // Verify trigger for the Kalshi slice of the Convergence loop (agent-spine note §6, step 3).
+// #1011: Brier-grade each outcome via convergence-outcome-grader so confidence is
+// earned against settled markets, not frozen at 0.7/0.3 heuristic.
 //
 // THE GAP THIS CLOSES
 // kalshi-suggest.js already EMITS a ConvergenceRecord per tradeable entry (Reason),
@@ -23,6 +25,7 @@ const fs = require("fs");
 const path = require("path");
 const { appendJsonlQueued } = require("./file-queue");
 const { RECORDS_PATH } = require("./convergence-records");
+const { gradeRecord, calibrationSummary, parseGradedLines } = require("./convergence-outcome-grader");
 
 const OUTCOMES_PATH = path.join(path.dirname(RECORDS_PATH), "outcomes.jsonl");
 const KALSHI_REASONER = "kalshi-suggest";
@@ -59,20 +62,21 @@ function marketFromResponse(resp) {
   return resp.data.market || resp.data || null;
 }
 
-// ── Pure: settled market + record → outcome line (or null if not resolvable) ──
+// ── Pure: settled market + record → Brier-graded outcome line (or null if not resolvable) ──
 // A market is graded only once its result is a definitive yes/no. Anything else
 // (open, empty, void/"") returns null so the record stays pending, not mis-graded.
+// Uses gradeRecord() to add brier_score alongside pass/fail (#1011).
 function resolutionToOutcome(record, market) {
   if (!market) return null;
   const result = String(market.result == null ? "" : market.result).trim().toLowerCase();
   if (result !== "yes" && result !== "no") return null;
   const pred = parsePrediction(record);
   if (!pred) return null;
-  return {
-    record_id: record.id,
-    passed: pred.side === result,
+  const passed = pred.side === result;
+  return gradeRecord(record, {
+    passed,
     notes: `kalshi ${pred.ticker} settled ${result}; predicted ${pred.side}`,
-  };
+  });
 }
 
 // ── I/O: load already-graded record ids so a re-run is idempotent ────────────
@@ -148,6 +152,14 @@ async function generateOutcomes({
       summary.pending++; // lookup failed → retry next run
     }
   }
+  // Compute Brier calibration over all currently-graded outcomes (#1011)
+  try {
+    const outcomesText = fs.readFileSync(outcomesPath, "utf-8");
+    summary.calibration = calibrationSummary(parseGradedLines(outcomesText));
+    console.log(`[kalshi-outcomes] Brier calibration: mean=${summary.calibration.mean_brier?.toFixed(3) ?? "n/a"} ECE=${summary.calibration.ece?.toFixed(3) ?? "n/a"} skill=${summary.calibration.skill_score?.toFixed(3) ?? "n/a"} n=${summary.calibration.n}`);
+  } catch {
+    // No outcomes yet, or file unreadable — calibration stays undefined
+  }
   return summary;
 }
 
@@ -160,6 +172,9 @@ module.exports = {
   generateOutcomes,
   OUTCOMES_PATH,
   KALSHI_REASONER,
+  // Re-export domain-agnostic grader so callers don't need a separate require
+  calibrationSummary,
+  parseGradedLines,
 };
 
 // Runnable: live pass against the Kalshi API. Pair with the Converge grader:

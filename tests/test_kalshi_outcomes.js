@@ -63,10 +63,15 @@ function rec(over = {}) {
   });
 
   console.log("resolutionToOutcome()");
-  await test("predicted yes + settled yes → passed true", () => {
-    assert.deepStrictEqual(
-      resolutionToOutcome(rec(), { result: "yes" }),
-      { record_id: "cr-test-1", passed: true, notes: "kalshi KXBTC15M-26JUN-30 settled yes; predicted yes" });
+  await test("predicted yes + settled yes → passed true, includes Brier score (#1011)", () => {
+    const outcome = resolutionToOutcome(rec(), { result: "yes" });
+    assert.strictEqual(outcome.record_id, "cr-test-1");
+    assert.strictEqual(outcome.passed, true);
+    assert.strictEqual(outcome.notes, "kalshi KXBTC15M-26JUN-30 settled yes; predicted yes");
+    assert.ok(typeof outcome.brier_score === "number", "must have brier_score");
+    // confidence=0.62, outcome=1 → brier=(0.62-1)^2=0.1444
+    assert.ok(Math.abs(outcome.brier_score - 0.1444) < 1e-6, `brier_score should be ~0.1444, got ${outcome.brier_score}`);
+    assert.strictEqual(outcome.confidence, 0.62);
   });
   await test("predicted yes + settled no → passed false", () => {
     assert.strictEqual(resolutionToOutcome(rec(), { result: "no" }).passed, false);
@@ -102,9 +107,14 @@ function rec(over = {}) {
 
     const written = fs.readFileSync(outcomesPath, "utf-8").trim().split("\n").map(JSON.parse);
     assert.strictEqual(written.length, 1);
-    assert.deepStrictEqual(written[0], {
-      record_id: "win", passed: true, notes: "kalshi T-WIN settled yes; predicted yes",
-    });
+    assert.strictEqual(written[0].record_id, "win");
+    assert.strictEqual(written[0].passed, true);
+    assert.strictEqual(written[0].notes, "kalshi T-WIN settled yes; predicted yes");
+    // #1011: outcome line must carry Brier score
+    assert.ok(typeof written[0].brier_score === "number", "must have brier_score");
+    // calibration summary must be returned (#1011)
+    assert.ok(s1.calibration && typeof s1.calibration.mean_brier === "number", "calibration summary required");
+    assert.strictEqual(s1.calibration.n, 1);
 
     const s2 = await generateOutcomes({ recordsPath, outcomesPath, getMarketFn });
     assert.strictEqual(s2.alreadyGraded, 1, "re-run skips the already-graded record");

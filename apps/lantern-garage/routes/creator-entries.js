@@ -1,12 +1,31 @@
 // Creator Dashboard Entry Management Routes
 // Handles entry metadata, analysis, renders, and thumbnails
 
+const entryStore = require("../lib/entry-store");
+const { generateProjectThumbnail } = require("../lib/thumbnail-generator");
+const ci = require("../../../src/creator-intelligence");
+
+function _generateThumbnailAsync(repoRoot, entryId, filePath, label) {
+  setImmediate(async () => {
+    try {
+      const thumbnailPath = await generateProjectThumbnail(repoRoot, entryId, filePath);
+      if (thumbnailPath) {
+        entryStore.updateEntry(repoRoot, entryId, { thumbnail: thumbnailPath });
+        console.log(`[creator-entries] ✅ Thumbnail generated ${label}`);
+      } else {
+        console.error(`[creator-entries] ❌ Thumbnail returned no path ${label}`);
+        entryStore.updateEntry(repoRoot, entryId, { thumbnailError: "generation returned no path" });
+      }
+    } catch (err) {
+      console.error(`[creator-entries] ❌ Thumbnail failed ${label}:`, err.message);
+      entryStore.updateEntry(repoRoot, entryId, { thumbnailError: err.message });
+    }
+  });
+}
+
 module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
   const { sendJson, path: pathModule, repoRoot, collectRequestBody } = deps;
   const fs = require("fs");
-  const entryStore = require("../lib/entry-store");
-  const { generateProjectThumbnail } = require("../lib/thumbnail-generator");
-  const ci = require("../../../src/creator-intelligence");
 
   // =========================================================================
   // GET /api/creator-entries - List all entries
@@ -97,17 +116,7 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
 
       // Generate thumbnail in background (non-blocking)
       if (body.filePath && (body.filePath.endsWith(".mp4") || body.filePath.endsWith(".mov") || body.filePath.endsWith(".avi"))) {
-        setImmediate(async () => {
-          try {
-            const thumbnailPath = await generateProjectThumbnail(repoRoot, entry.id, body.filePath);
-            if (thumbnailPath) {
-              entryStore.updateEntry(repoRoot, entry.id, { thumbnail: thumbnailPath });
-              console.log("[creator-entries] ✅ Thumbnail generated for entry " + entry.id);
-            }
-          } catch (err) {
-            console.error("[creator-entries] Thumbnail generation failed:", err.message);
-          }
-        });
+        _generateThumbnailAsync(repoRoot, entry.id, body.filePath, `for entry ${entry.id}`);
       }
 
       // Add formatted date and send
@@ -211,17 +220,7 @@ module.exports = async function creatorEntriesRoutes(req, res, url, deps) {
 
       // Regenerate thumbnail from highlight/render video (non-blocking)
       if (renderType === "highlight" || renderType.startsWith("variant")) {
-        setImmediate(async () => {
-          try {
-            const thumbnailPath = await generateProjectThumbnail(repoRoot, entryId, body.filePath);
-            if (thumbnailPath) {
-              entryStore.updateEntry(repoRoot, entryId, { thumbnail: thumbnailPath });
-              console.log(`[creator-entries] ✅ Updated thumbnail for ${renderType} video of entry ${entryId}`);
-            }
-          } catch (err) {
-            console.error("[creator-entries] Thumbnail regeneration failed:", err.message);
-          }
-        });
+        _generateThumbnailAsync(repoRoot, entryId, body.filePath, `for ${renderType} of entry ${entryId}`);
       }
 
       sendJson(res, {
