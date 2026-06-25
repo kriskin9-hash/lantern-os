@@ -440,6 +440,143 @@ const REGISTRY = {
       return `created workspace/${finalName} (${String(i.content || "").length} chars)`;
     },
   },
+  // ── bounded eval recipe (issue #843) ──────────────────────────────────────
+  // Runs scripts/eval_keystone.py against a local Ollama-compatible endpoint.
+  // Inputs are validated and allowlisted; arbitrary command construction is
+  // forbidden. Probes the endpoint before running; returns a blocked receipt
+  // if unavailable. OPERATOR policy (shell execution).
+  local_eval_keystone_run: {
+    policy: "shell",
+    desc: "Run the Keystone eval harness (eval_keystone.py) against a local Ollama endpoint. Returns a structured receipt with accuracy and latency. Endpoint must be loopback-only.",
+    schema: {
+      type: "object",
+      properties: {
+        label: { type: "string", description: "Unique run label (alphanumeric, dash, dot, max 64 chars)" },
+        base: { type: "string", description: "Ollama API base URL (loopback only, default: http://127.0.0.1:11434)" },
+        model: { type: "string", description: "Model name passed to eval harness (default: ouro:latest)" },
+        limit: { type: "integer", description: "Max prompts to evaluate (default: all; max: 65)" },
+        timeout: { type: "integer", description: "Per-prompt timeout in seconds (default: 60; max: 300)" },
+      },
+      required: ["label"],
+    },
+    async run(i) {
+      const os = require("os");
+      const childProcess = require("child_process");
+      const { promisify } = require("util");
+      const execFile = promisify(childProcess.execFile);
+
+      // ── Validate label ───────────────────────────────────────────────
+      const label = String(i.label || "").trim();
+      if (!label || !/^[\w.\-]{1,64}$/.test(label)) {
+        throw _codedError("label must be 1-64 chars, alphanumeric/dash/dot", "invalid_label");
+      }
+
+      // ── Validate base URL (loopback only) ────────────────────────────
+      const base = String(i.base || "http://127.0.0.1:11434").trim();
+      let parsedBase;
+      try { parsedBase = new URL(base); } catch {
+        throw _codedError("base is not a valid URL", "invalid_base");
+      }
+      if (!["127.0.0.1", "::1", "localhost"].includes(parsedBase.hostname)) {
+        throw _codedError("base must be a loopback address (127.0.0.1 / ::1 / localhost)", "non_loopback_base");
+      }
+
+      // ── Validate model ───────────────────────────────────────────────
+      const model = String(i.model || "ouro:latest").trim();
+      if (!/^[\w.:/-]{1,128}$/.test(model)) {
+        throw _codedError("model contains invalid characters", "invalid_model");
+      }
+
+      // ── Validate limit ───────────────────────────────────────────────
+      const rawLimit = parseInt(i.limit, 10);
+      const limit = isNaN(rawLimit) ? null : Math.min(65, Math.max(1, rawLimit));
+
+      // ── Validate timeout ─────────────────────────────────────────────
+      const rawTimeout = parseInt(i.timeout, 10);
+      const timeoutSec = isNaN(rawTimeout) ? 60 : Math.min(300, Math.max(10, rawTimeout));
+
+      // ── Probe endpoint availability ──────────────────────────────────
+      const tagsUrl = base.replace(/\/$/, "") + "/api/tags";
+      let endpointAvailable = false;
+      try {
+        await _httpGet(tagsUrl); // will throw if unavailable
+        endpointAvailable = true;
+      } catch (probeErr) {
+        return JSON.stringify({
+          receipt: "blocked",
+          label,
+          base,
+          model,
+          cause: "endpoint_unavailable",
+          probe_url: tagsUrl,
+          probe_error: probeErr && probeErr.message ? probeErr.message : String(probeErr),
+          ts: new Date().toISOString(),
+        }, null, 2);
+      }
+
+      // ── Build validated argument list (no shell interpolation) ───────
+      const evalScript = path.join(REPO, "scripts", "eval_keystone.py");
+      if (!fs.existsSync(evalScript)) {
+        throw _codedError("scripts/eval_keystone.py not found", "eval_script_missing");
+      }
+      const args = [evalScript, "--label", label, "--base", base, "--model", model];
+      if (limit !== null) args.push("--limit", String(limit));
+
+      // ── Run with explicit timeout ────────────────────────────────────
+      const pythonBin = process.platform === "win32" ? "python" : "python3";
+      const hardTimeout = (timeoutSec * (limit || 65) + 30) * 1000; // generous outer timeout
+      let stdout = "", stderr = "", exitCode = 0;
+      try {
+        const result = await execFile(pythonBin, args, {
+          cwd: REPO,
+          encoding: "utf8",
+          timeout: hardTimeout,
+          maxBuffer: 2 * 1024 * 1024,
+          env: { ...process.env, PYTHONPATH: path.join(REPO, "apps") + path.delimiter + path.join(REPO, "src") },
+        });
+        stdout = result.stdout || "";
+        stderr = result.stderr || "";
+      } catch (err) {
+        exitCode = err.code || 1;
+        stdout = err.stdout || "";
+        stderr = err.stderr || "";
+        if (err.killed || err.signal === "SIGTERM") {
+          return JSON.stringify({
+            receipt: "error",
+            label, base, model,
+            exit_code: exitCode,
+            cause: "timeout",
+            timeout_ms: hardTimeout,
+            ts: new Date().toISOString(),
+          }, null, 2);
+        }
+      }
+
+      // ── Try to parse leaderboard row ─────────────────────────────────
+      const leaderboardPath = path.join(REPO, "data", "eval", "leaderboard.jsonl");
+      let leaderboardRow = null;
+      if (fs.existsSync(leaderboardPath)) {
+        try {
+          const rows = fs.readFileSync(leaderboardPath, "utf8").trim().split("\n").filter(Boolean);
+          const last = rows[rows.length - 1];
+          const parsed = JSON.parse(last);
+          if (parsed.label === label) leaderboardRow = parsed;
+        } catch {}
+      }
+
+      return JSON.stringify({
+        receipt: exitCode === 0 ? "success" : "error",
+        label, base, model,
+        limit: limit || 65,
+        exit_code: exitCode,
+        stdout_hash: require("crypto").createHash("sha256").update(stdout).digest("hex").slice(0, 12),
+        stderr_hash: require("crypto").createHash("sha256").update(stderr).digest("hex").slice(0, 12),
+        leaderboard_row: leaderboardRow,
+        accuracy_by_difficulty: leaderboardRow ? leaderboardRow.accuracy_by_difficulty || null : null,
+        ts: new Date().toISOString(),
+      }, null, 2);
+    },
+  },
 };
 
 const TOOL_NAMES = Object.keys(REGISTRY);
