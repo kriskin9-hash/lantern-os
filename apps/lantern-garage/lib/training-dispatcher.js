@@ -598,11 +598,22 @@ train_env = {**os.environ, "HF_HOME": "/kaggle/working/hf-cache"}
 # Data comes from the attached private Kaggle Dataset, not the cloned repo.
 # It contains the scrubbed Claude + Codex + tool-using ChatGPT corpus. Fail
 # closed if the mount is missing; silently using the tiny seed corrupts runs.
-data_path = "/kaggle/input/ouro-claude-sessions/training-data.claude-combined.json"
-if not os.path.exists(data_path):
+# The dataset ships a .jsonl file; older revisions used .json. Probe both so a
+# filename-extension drift can't fast-fail the run (was: hard-coded .json while
+# the dataset only had .jsonl — every dispatch errored in ~2 min at this check).
+_data_dir = "/kaggle/input/ouro-claude-sessions"
+data_path = None
+for _fname in ("training-data.claude-combined.jsonl", "training-data.claude-combined.json"):
+    _candidate = os.path.join(_data_dir, _fname)
+    if os.path.exists(_candidate):
+        data_path = _candidate
+        break
+if data_path is None:
+    _present = os.listdir(_data_dir) if os.path.exists(_data_dir) else "(mount missing)"
     raise FileNotFoundError(
-        "Attach Kaggle dataset lanternfounder/ouro-claude-sessions; missing "
-        + data_path
+        "Attach Kaggle dataset lanternfounder/ouro-claude-sessions; expected "
+        "training-data.claude-combined.jsonl (or .json) under "
+        + _data_dir + f" — found: {_present}"
     )
 print(f"training data: {data_path}")
 subprocess.run([

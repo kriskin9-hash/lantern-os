@@ -141,6 +141,11 @@ class ConvergenceRecord:
     - Act: result field (decision/action)
     - Verify: confidence updated post-facto
     - Converge: high-confidence records become patterns
+
+    Σ₀ Grounding (SIGMA0-COLLAPSE-CERTIFICATE.md):
+    External Reality Rule — every claim must have [claim, evidence, confidence, source].
+    High-confidence records must cite external grounding (test, market, feedback).
+    Prevents confidence laundering and collapse onto the 42-state.
     """
     id: str
     hypothesis: str  # What we think is true / the claim
@@ -157,6 +162,23 @@ class ConvergenceRecord:
     # idempotent, so replaying one passing test can no longer ratchet confidence → 1.0.
     # See src/convergence/verify.py.
     applied_evidence: List[str] = field(default_factory=list)
+    # Σ₀ anti-collapse: external signals anchoring this record to reality
+    grounding_signals: List[str] = field(default_factory=list)  # ExternalGroundingSensor IDs
+    # Confidence capped by grounding signal quality (VerificationHardener)
+    allowed_max_confidence: Optional[float] = None
+
+    def is_grounded(self) -> bool:
+        """Does this record cite external evidence?"""
+        return bool(self.grounding_signals)
+
+    def confidence_valid(self) -> bool:
+        """Is the claimed confidence consistent with grounding?
+
+        Returns: True if confidence ≤ allowed_max_confidence or both are None
+        """
+        if self.allowed_max_confidence is None:
+            return True
+        return self.confidence <= self.allowed_max_confidence
 
     def to_jsonl(self) -> str:
         """Serialize to JSONL format."""
@@ -172,4 +194,6 @@ class ConvergenceRecord:
             "verification_notes": self.verification_notes,
             "source": self.source,
             "applied_evidence": self.applied_evidence,
+            "grounding_signals": self.grounding_signals,
+            "allowed_max_confidence": self.allowed_max_confidence,
         })
