@@ -77,12 +77,13 @@ HF_REPO = "{hf_repo}"
 CHECKPOINT_FILE = "{checkpoint_file}"
 STEPS = {steps}
 
-# Pin transformers <4.53: 4.53+ dropped ROPE_INIT_FUNCTIONS['default'], which
-# OuroRotaryEmbedding looks up at model init -> KeyError: 'default' (same pin the
-# Kaggle dispatch script uses). This installs into the shared env that the
-# train-qlora-ouro.py subprocess below inherits.
+# Pin transformers 4.57.x: Ouro-1.4B's custom modeling code imports
+# layer_type_validation (added in 4.54+), so the old <4.53 pin made model load
+# fail with ImportError. train-qlora-ouro.py restores ROPE_INIT_FUNCTIONS['default']
+# (dropped in 4.53+, what the old pin avoided), so the bump is safe. This installs
+# into the shared env that the train-qlora-ouro.py subprocess below inherits.
 subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-                "transformers>=4.40,<4.53", "peft>=0.10", "bitsandbytes>=0.43",
+                "transformers>=4.57,<4.58", "peft>=0.10", "bitsandbytes>=0.43",
                 "datasets", "accelerate", "scipy", "huggingface_hub", "zstandard"],
                check=True)
 

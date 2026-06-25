@@ -559,9 +559,13 @@ resume_args = ["--resume_from", "/kaggle/working/checkpoint"]
 
 print("=== Ouro QLoRA training — ${steps} steps ===")
 
-# Install dependencies — pin transformers <4.53 (ROPE_INIT_FUNCTIONS changed in 4.53+)
+# Install dependencies — pin transformers 4.57.x: Ouro-1.4B's custom modeling
+# code (configuration_ouro.py) imports layer_type_validation, added in 4.54+,
+# so the old <4.53 pin made model load fail with ImportError. train-qlora-ouro.py
+# already restores ROPE_INIT_FUNCTIONS['default'] (dropped in 4.53+), which is why
+# the original <4.53 pin existed — that workaround makes the bump safe.
 subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-    "transformers>=4.40,<4.53", "peft>=0.10", "bitsandbytes>=0.43",
+    "transformers>=4.57,<4.58", "peft>=0.10", "bitsandbytes>=0.43",
     "datasets", "accelerate", "scipy", "huggingface_hub", "zstandard"],
     check=True)
 
@@ -652,7 +656,7 @@ function _notebookTemplate(provider, checkpointUri, steps) {
 set -euo pipefail
 echo "=== Ouro training startup: ${steps} steps on ${provider} ==="
 
-pip install -q "transformers>=4.40,<4.53" peft bitsandbytes datasets accelerate \\
+pip install -q "transformers>=4.57,<4.58" peft bitsandbytes datasets accelerate \\
   scipy huggingface_hub zstandard
 
 # Clone repo (skip LFS blobs — budget often exceeded)
