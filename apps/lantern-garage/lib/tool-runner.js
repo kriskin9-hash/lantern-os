@@ -31,6 +31,7 @@ const { resolveCommand } = require("./command-allowlist");
 const { webSearchMcp } = require("./web-search-client");
 const { workspaceWrite, workspaceRead, workspaceList, getWorkspaceRoot } = require("./user-workspace");
 const { createDocument, listTemplates } = require("./doc-generator");
+const toolLogger = require("./tool-logger");
 
 const REPO = path.resolve(__dirname, "..", "..", "..");
 // User workspace: outside the repo, for user artifacts (resumes, exports, generated docs).
@@ -672,32 +673,48 @@ function renderToolPreamble() {
  * @returns {{ok:boolean, result?:string, reason?:string, error?:string, policy?:string}}
  */
 async function runTool(name, input, ctx = {}) {
+  const startTime = Date.now();
   const entry = REGISTRY[name];
+
   if (!entry) {
-    return _outcome("unavailable", name, {
+    const result = _outcome("unavailable", name, {
       reason_code: "unknown_tool",
       error: `unknown tool '${name}' (available: ${TOOL_NAMES.join(", ")})`,
     });
+    // Log the unavailable tool
+    await _logToolExecution(name, input, "unavailable", "unknown_tool", startTime, ctx);
+    return result;
   }
+
   if (ctx.executionEnabled === false) {
-    return _outcome("unavailable", name, {
+    const result = _outcome("unavailable", name, {
       reason_code: "chat_tool_exec_disabled",
       policy: entry.policy,
       error: "shared tool execution is disabled",
     });
+    await _logToolExecution(name, input, "unavailable", "chat_tool_exec_disabled", startTime, ctx);
+    return result;
   }
+
   if (entry.policy !== "read" && !ctx.operator) {
-    return _outcome("denied", name, {
+    const result = _outcome("denied", name, {
       reason_code: "operator_required",
       policy: entry.policy,
       error: `'${name}' (${entry.policy}) requires operator access`,
     });
+    await _logToolExecution(name, input, "denied", "operator_required", startTime, ctx);
+    return result;
   }
+
   try {
     // run() may be sync (returns a string) or async (returns a Promise); await covers both.
     let out = String((await entry.run(input || {})) || "");
+    const outputLength = out.length;
     if (out.length > MAX_OUT) out = out.slice(0, MAX_OUT) + "\n…[truncated]";
-    return _outcome("executed", name, { result: out, policy: entry.policy });
+
+    const result = _outcome("executed", name, { result: out, policy: entry.policy });
+    await _logToolExecution(name, input, "executed", null, startTime, ctx, outputLength);
+    return result;
   } catch (e) {
     const reasonCode = e.reason || "execution_error";
     const status = reasonCode === "unsafe_path" ||
@@ -705,11 +722,13 @@ async function runTool(name, input, ctx = {}) {
       reasonCode === "private_host_blocked"
       ? "blocked"
       : "unavailable";
-    return _outcome(status, name, {
+    const result = _outcome(status, name, {
       reason_code: reasonCode,
       policy: entry.policy,
       error: String(e.stderr || e.message || e).slice(0, MAX_OUT),
     });
+    await _logToolExecution(name, input, status, reasonCode, startTime, ctx, null, e.message);
+    return result;
   }
 }
 
@@ -815,6 +834,28 @@ function _loadsLenient(raw) {
   r = r.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");         // invalid escapes -> literal backslash
   try { return JSON.parse(r); } catch {}
   return null;
+}
+
+async function _logToolExecution(name, input, status, errorCode, startTime, ctx = {}, outputLength = null, errorMessage = null) {
+  const duration = Date.now() - startTime;
+  try {
+    await toolLogger.log({
+      tool: name,
+      input,
+      status,
+      error_code: errorCode,
+      error_message: errorMessage,
+      output_length: outputLength,
+      duration_ms: duration,
+      operator: ctx.operator ?? false,
+      provider: ctx.provider || null,
+      session_id: ctx.sessionId || null,
+      user: ctx.user || null,
+    });
+  } catch (err) {
+    // Logging errors should not crash tool execution
+    console.warn(`[ToolRunner] Failed to log ${name}: ${err.message}`);
+  }
 }
 
 module.exports = {

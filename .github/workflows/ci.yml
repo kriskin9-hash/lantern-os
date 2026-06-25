@@ -28,7 +28,7 @@ jobs:
     name: Validate repo structure
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Check required files
         run: |
@@ -41,6 +41,7 @@ jobs:
         run: |
           test -f manifests/FOUNDRY-MATRIX-RAG-DOLLHOUSE.md || (echo "FOUNDRY-MATRIX-RAG-DOLLHOUSE.md missing" && exit 1)
           test -f manifests/open-issues.md || (echo "open-issues.md missing" && exit 1)
+          test -f config/batch-jobs-enhanced.json || (echo "config/batch-jobs-enhanced.json missing" && exit 1)
           echo "All required manifests present"
 
       - name: Check surfaces
@@ -81,14 +82,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache pip dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-ci-${{ hashFiles('tests/**/*.py', 'src/**/*.py') }}
@@ -111,7 +112,7 @@ jobs:
             --ignore=tests/test_three_doors_engine.py
 
       - name: Upload test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pytest-results
@@ -122,14 +123,14 @@ jobs:
     name: Node tests (Playwright, etc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Cache npm dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
@@ -157,7 +158,7 @@ jobs:
           node tests/test_dream_journal_keystone.js
 
       - name: Upload Node test results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: node-test-results
@@ -172,14 +173,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Cache npm dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
@@ -202,7 +203,7 @@ jobs:
         run: node tests/run-dream-journal-tests.js dream-chat-ui
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dream-chat-ui-report
@@ -218,7 +219,7 @@ jobs:
     name: Convergence validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Verify repo contract
         run: |
@@ -246,7 +247,7 @@ jobs:
     name: Integration & cloud readiness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Check cloud mirrors config
         run: |
@@ -268,7 +269,7 @@ jobs:
     needs: [validate-repo, integration-checks]
     if: always()
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Validate convergence batch framework
         run: |
@@ -302,14 +303,14 @@ jobs:
     name: Security scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache pip dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-security-${{ hashFiles('**/requirements.txt') }}
@@ -327,7 +328,7 @@ jobs:
         run: pip-audit --format=json --output=pip-audit-results.json || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: security-scan-results
@@ -343,9 +344,9 @@ jobs:
     name: CSF cache validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -379,9 +380,9 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -389,7 +390,7 @@ jobs:
         run: python src/convergence_io_engine.py loop > convergence-report.json
 
       - name: Upload convergence report
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: convergence-report
           path: convergence-report.json

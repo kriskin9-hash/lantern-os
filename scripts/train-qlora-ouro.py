@@ -89,17 +89,38 @@ def main():
     if not hasattr(cfg, "pad_token_id") or cfg.pad_token_id is None:
         cfg.pad_token_id = getattr(cfg, "bos_token_id", tok.pad_token_id)
 
-    bnb = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4",
-                             bnb_4bit_compute_dtype=compute_dtype, bnb_4bit_use_double_quant=True)
+    # bitsandbytes 4-bit (nf4) kernels are only compiled for compute capability
+    # >= 7.5 (Turing+). On a Pascal P100 (cc 6.0) — which Kaggle assigns at random
+    # alongside T4 — loading a 4-bit model crashes mid-run with
+    # `CUDA error: no kernel image is available for execution on the device`.
+    # Ouro-1.4B is small enough to fit unquantized on a 16 GB card, so on older
+    # GPUs we skip 4-bit and load in compute_dtype with plain (non-Q) LoRA.
+    cc_major, cc_minor = torch.cuda.get_device_capability()
+    use_4bit = (cc_major, cc_minor) >= (7, 5)
+    print(f"GPU cc: {cc_major}.{cc_minor} | 4-bit QLoRA: {use_4bit}")
+
+    load_kwargs = dict(config=cfg, device_map="auto", trust_remote_code=True)
+    if use_4bit:
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=compute_dtype, bnb_4bit_use_double_quant=True)
+    else:
+        load_kwargs["torch_dtype"] = compute_dtype
+
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            a.base, config=cfg, quantization_config=bnb, device_map="auto", trust_remote_code=True,
+            a.base, **load_kwargs,
             attn_implementation="sdpa")   # ouro_serve.py has used sdpa since #775; mirror here
     except (ValueError, TypeError):
-        model = AutoModelForCausalLM.from_pretrained(
-            a.base, config=cfg, quantization_config=bnb, device_map="auto", trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(a.base, **load_kwargs)
     model.config.use_cache = False
-    model = prepare_model_for_kbit_training(model)
+    if use_4bit:
+        model = prepare_model_for_kbit_training(model)
+    else:
+        # Non-quantized LoRA still needs grad checkpointing + input grads for
+        # memory; prepare_model_for_kbit_training's non-quant equivalents.
+        model.gradient_checkpointing_enable()
+        model.enable_input_require_grads()
     # all-linear is robust for a custom (trust_remote_code) architecture whose
     # exact projection names we don't want to hardcode.
     model = get_peft_model(model, LoraConfig(

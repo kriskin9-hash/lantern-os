@@ -559,9 +559,13 @@ resume_args = ["--resume_from", "/kaggle/working/checkpoint"]
 
 print("=== Ouro QLoRA training — ${steps} steps ===")
 
-# Install dependencies — pin transformers <4.53 (ROPE_INIT_FUNCTIONS changed in 4.53+)
+# Install dependencies — pin transformers 4.57.x: Ouro-1.4B's custom modeling
+# code (configuration_ouro.py) imports layer_type_validation, added in 4.54+,
+# so the old <4.53 pin made model load fail with ImportError. train-qlora-ouro.py
+# already restores ROPE_INIT_FUNCTIONS['default'] (dropped in 4.53+), which is why
+# the original <4.53 pin existed — that workaround makes the bump safe.
 subprocess.run([sys.executable, "-m", "pip", "install", "-q",
-    "transformers>=4.40,<4.53", "peft>=0.10", "bitsandbytes>=0.43",
+    "transformers>=4.57,<4.58", "peft>=0.10", "bitsandbytes>=0.43",
     "datasets", "accelerate", "scipy", "huggingface_hub", "zstandard"],
     check=True)
 
@@ -598,11 +602,22 @@ train_env = {**os.environ, "HF_HOME": "/kaggle/working/hf-cache"}
 # Data comes from the attached private Kaggle Dataset, not the cloned repo.
 # It contains the scrubbed Claude + Codex + tool-using ChatGPT corpus. Fail
 # closed if the mount is missing; silently using the tiny seed corrupts runs.
-data_path = "/kaggle/input/ouro-claude-sessions/training-data.claude-combined.json"
-if not os.path.exists(data_path):
+# The dataset ships a .jsonl file; older revisions used .json. Probe both so a
+# filename-extension drift can't fast-fail the run (was: hard-coded .json while
+# the dataset only had .jsonl — every dispatch errored in ~2 min at this check).
+_data_dir = "/kaggle/input/ouro-claude-sessions"
+data_path = None
+for _fname in ("training-data.claude-combined.jsonl", "training-data.claude-combined.json"):
+    _candidate = os.path.join(_data_dir, _fname)
+    if os.path.exists(_candidate):
+        data_path = _candidate
+        break
+if data_path is None:
+    _present = os.listdir(_data_dir) if os.path.exists(_data_dir) else "(mount missing)"
     raise FileNotFoundError(
-        "Attach Kaggle dataset lanternfounder/ouro-claude-sessions; missing "
-        + data_path
+        "Attach Kaggle dataset lanternfounder/ouro-claude-sessions; expected "
+        "training-data.claude-combined.jsonl (or .json) under "
+        + _data_dir + f" — found: {_present}"
     )
 print(f"training data: {data_path}")
 subprocess.run([
@@ -641,7 +656,7 @@ function _notebookTemplate(provider, checkpointUri, steps) {
 set -euo pipefail
 echo "=== Ouro training startup: ${steps} steps on ${provider} ==="
 
-pip install -q "transformers>=4.40,<4.53" peft bitsandbytes datasets accelerate \\
+pip install -q "transformers>=4.57,<4.58" peft bitsandbytes datasets accelerate \\
   scipy huggingface_hub zstandard
 
 # Clone repo (skip LFS blobs — budget often exceeded)

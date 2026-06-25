@@ -134,6 +134,7 @@ const routes = [
   require("./routes/media"), // Video/media streaming (range requests)
   require("./routes/rag"),
   require("./routes/operator"),
+  require("./routes/api-tools-log"),     // Tool execution logs
   require("./routes/files"),
   require("./routes/files-upload"),
   require("./routes/dreamer"),

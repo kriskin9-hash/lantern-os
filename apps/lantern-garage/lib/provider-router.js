@@ -38,20 +38,25 @@ const PROVIDER_CHAINS = {
     { provider: "mistral", models: ["mistral-large-latest"] },
   ],
 
+  // #1167: ollama used to lead here too. isProviderHealthy() defaults an unrecorded
+  // provider to "healthy" and ollama essentially never gets recorded unhealthy (it
+  // always returns *something*, even a hallucinated/off-tone answer) — so once the
+  // local coder was reliably served, cloud was never reached for ANY general/creative
+  // message. Cloud now leads; ollama stays as a genuine offline backstop.
   creative: [
-    { provider: "ollama", models: ["lantern-csf-dream"] },
     { provider: "mistral", models: ["mistral-large-latest"] },
     { provider: "openai", models: ["gpt-4o"] },
     { provider: "gemini", models: ["gemini-2.5-flash"] },
     { provider: "cohere", models: ["command-r-plus"] },
+    { provider: "ollama", models: ["lantern-csf-dream"] },
   ],
 
   default: [
-    { provider: "ollama", models: ["lantern-csf-dream", "qwen2.5-coder"] },
     { provider: "gemini", models: ["gemini-2.5-flash"] },
     { provider: "anthropic", models: ["claude-sonnet-4-6"] },
     { provider: "openai", models: ["gpt-4o-mini"] },
     { provider: "mistral", models: ["mistral-large-latest"] },
+    { provider: "ollama", models: ["lantern-csf-dream", "qwen2.5-coder"] },
   ],
 };
 

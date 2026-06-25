@@ -76,6 +76,13 @@ foreach ($port in 4177,4178,8771,8772,5050) {
 Start-Sleep -Milliseconds 1000
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 
+# --- Check for Python (MCP server needs it) --
+$pythonExists = Get-Command python -ErrorAction SilentlyContinue
+if (-not $pythonExists) {
+    Write-Host "Warning: Python not found. MCP server (port 8771) will not start." -ForegroundColor Yellow
+    Write-Host "To use MCP tools, install Python from python.org and run: pip install -r requirements.txt" -ForegroundColor DarkGray
+}
+
 # --- :4177 stable / public (PORT=4177 -> binds 0.0.0.0 for the Cloudflare tunnel)
 Write-Host "Starting stable :4177 from $StableRoot ..." -ForegroundColor Blue
 $env:PORT = "4177"
@@ -92,17 +99,35 @@ $dev = Start-Process -FilePath "node" -ArgumentList "apps/lantern-garage/server-
     -RedirectStandardOutput (Join-Path $LogDir "dev-4178.out.log") `
     -RedirectStandardError  (Join-Path $LogDir "dev-4178.err.log")
 
+# --- :8771 MCP server (shared by both web servers) if Python is available --
+if ($pythonExists) {
+    Write-Host "Starting MCP :8771 from $StableRoot ..." -ForegroundColor Blue
+    $env:MCP_SERVER_PORT = "8771"
+    $mcp_stable = Start-Process -FilePath "python" -ArgumentList "src/mcp_server/server.py" `
+        -WorkingDirectory $StableRoot -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput (Join-Path $LogDir "mcp-8771.out.log") `
+        -RedirectStandardError  (Join-Path $LogDir "mcp-8771.err.log")
+
+    Remove-Item env:MCP_SERVER_PORT -ErrorAction SilentlyContinue
+}
+
 # --- Health check ------------------------------------------------------------
 Write-Host "Health check..." -ForegroundColor Yellow
-$stableOk = $false; $devOk = $false
+$stableOk = $false; $devOk = $false; $mcpOk = $false
 foreach ($i in 1..20) {
     if (-not $stableOk) { try { if ((Invoke-WebRequest "http://127.0.0.1:4177/api/version" -TimeoutSec 2 -ErrorAction SilentlyContinue).StatusCode -eq 200) { $stableOk = $true } } catch {} }
     if (-not $devOk)    { try { if ((Invoke-WebRequest "http://127.0.0.1:4178/api/version" -TimeoutSec 2 -ErrorAction SilentlyContinue).StatusCode -eq 200) { $devOk = $true } } catch {} }
-    if ($stableOk -and $devOk) { break }
+    if ($pythonExists) {
+        if (-not $mcpOk)   { try { if ((Invoke-WebRequest "http://127.0.0.1:8771/health" -TimeoutSec 2 -ErrorAction SilentlyContinue).StatusCode -eq 200) { $mcpOk = $true } } catch {} }
+    }
+    if ($stableOk -and $devOk -and (-not $pythonExists -or $mcpOk)) { break }
     Start-Sleep -Milliseconds 800
 }
 if ($stableOk) { Write-Host "  OK  stable :4177 (pid $($stable.Id))" -ForegroundColor Green } else { Write-Host "  WARN stable :4177 not responding - see $LogDir\stable-4177.err.log" -ForegroundColor Yellow }
 if ($devOk)    { Write-Host "  OK  dev    :4178 (pid $($dev.Id))"    -ForegroundColor Green } else { Write-Host "  WARN dev :4178 not responding - see $LogDir\dev-4178.err.log" -ForegroundColor Yellow }
+if ($pythonExists) {
+    if ($mcpOk) { Write-Host "  OK  MCP    :8771 (pid $($mcp_stable.Id))" -ForegroundColor Blue } else { Write-Host "  WARN MCP :8771 not responding - see $LogDir\mcp-8771.err.log" -ForegroundColor Yellow }
+}
 
 if (-not $NoChrome) {
     try { Start-Process "chrome.exe" "http://127.0.0.1:4177/dream-chat.html" -ErrorAction SilentlyContinue } catch {}
@@ -112,9 +137,16 @@ Write-Host ""
 Write-Host "Dual boot running:" -ForegroundColor Cyan
 Write-Host "  Stable (public) http://127.0.0.1:4177  <- $StableRoot" -ForegroundColor Blue
 Write-Host "  Dev    (local)  http://127.0.0.1:4178  <- $DevRoot" -ForegroundColor Green
+if ($pythonExists) {
+    Write-Host "  MCP    (shared) http://127.0.0.1:8771  <- $StableRoot (MCP tools for Claude Code)" -ForegroundColor Blue
+}
 Write-Host ""
-Write-Host "Note: both instances run their own Discord bot / Kalshi collector and try to" -ForegroundColor DarkGray
-Write-Host "bind the shared MCP port 8771 - only one wins; the other logs a bind error and" -ForegroundColor DarkGray
-Write-Host "keeps serving HTTP. The Cloudflare tunnel (if running) reconnects to :4177." -ForegroundColor DarkGray
+Write-Host "Note: both instances run their own Discord bot / Kalshi collector." -ForegroundColor DarkGray
+Write-Host "The Cloudflare tunnel (if running) reconnects to :4177." -ForegroundColor DarkGray
+if ($pythonExists) {
+    Write-Host "MCP server (port 8771) is available for Claude Code to call Keystone's tools." -ForegroundColor DarkGray
+} else {
+    Write-Host "MCP server requires Python. Install with: python -m pip install -r requirements.txt" -ForegroundColor DarkGray
+}
 Write-Host ""
 # Servers run detached (Start-Process); this launcher returns instead of blocking.
