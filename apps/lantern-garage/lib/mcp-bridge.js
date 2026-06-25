@@ -1,101 +1,74 @@
-function tryMcpChatReply(messages, context) {
-  return {
-    source: "mcp_bridge",
-    context,
-    queued: true,
-    status: "waiting_for_mcp_response",
-  };
-}
+/**
+ * lib/mcp-bridge.js
+ *
+ * Bridge between keystone-context and mcp-client.
+ * Wraps MCP tool calls with graceful offline handling.
+ *
+ * Usage:
+ *   const { callMcpTool } = require('./mcp-bridge');
+ *   const result = await callMcpTool('github_list_issues', { repo: 'foo/bar' });
+ *   // Returns null if MCP is offline (graceful degradation)
+ */
 
-function get_mcp_feature_overview() {
-  return {
-    name: "Lantern MCP Bridge",
-    description: "Model Context Protocol, not Multi-Chain Protocol",
-    status: "operational",
-    features: ["tool_discovery", "tool_invocation", "sse_transport"],
-  };
-}
+const mcpClient = require("./mcp-client");
 
-function processMcpChatRoute(text, context) {
-  const lower = text.toLowerCase();
-  const wantsFleet = lower.includes("fleet") || lower.includes("agent");
-  const mcpReadOnlyTimeoutMs = 30000;
+/**
+ * Call an MCP tool with graceful fallback.
+ * If MCP server is offline or the call fails, returns null (degraded mode).
+ *
+ * @param {string} toolName - MCP tool name
+ * @param {Object} args - Tool arguments
+ * @returns {Promise<any|null>} Tool result, or null if MCP unavailable
+ */
+async function callMcpTool(toolName, args = {}) {
+  try {
+    // Check if MCP is available
+    const available = await mcpClient.isAvailable();
+    if (!available) {
+      console.debug(`[mcp-bridge] MCP server offline, skipping ${toolName}`);
+      return null;
+    }
 
-  if (wantsFleet && context && context.mode === "read_only") {
-    return {
-      status: "read_only_denied",
-      reason: "Read-only chat path only; dispatch requires founder auth",
-    };
+    // Call the tool
+    const result = await mcpClient.callTool(toolName, args);
+
+    // If result is an error, return null instead of the error object
+    // (keystone-context expects null for graceful degradation)
+    if (result && result.status === "error") {
+      console.debug(`[mcp-bridge] Tool ${toolName} failed: ${result.error}`);
+      return null;
+    }
+
+    // If result is unavailable, return null
+    if (result && result.status === "unavailable") {
+      console.debug(`[mcp-bridge] Tool ${toolName} unavailable: ${result.error}`);
+      return null;
+    }
+
+    // Success: return the tool output/result
+    return result;
+  } catch (err) {
+    // Any unexpected error: log and return null
+    console.debug(`[mcp-bridge] Unexpected error calling ${toolName}: ${err.message}`);
+    return null;
   }
-
-  return {
-    status: "routed_to_mcp",
-    wantsFleet,
-    timeoutMs: mcpReadOnlyTimeoutMs,
-  };
 }
 
-function summarizeDispatchFleet(queue) {
-  if (!queue || !queue.items) return "No fleet data";
-  const active = queue.items.filter((i) => !i.blocked).length;
-  const blocked = queue.items.filter((i) => i.blocked).length;
-  return `Fleet: ${active} active, ${blocked} blocked`;
-}
-
-// Real MCP client: GET ${MCP_BASE_URL}/tools/{toolName}?args → parsed JSON.
-// Never throws — resolves null on any failure (server down, 401, timeout) so
-// callers can degrade gracefully. MCP_BASE_URL defaults to the local server.
-async function callMcpTool(toolName, args = {}, mcpReadOnlyTimeoutMs = 15000) {
-  if (toolName === "get_agent_status") {
-    // Legacy local shim (no MCP round-trip).
-    return { canDispatch: false, dispatchableSlots: [], reason: "Dispatch held: no safe agent slots available." };
+/**
+ * Check MCP server health (for diagnostics).
+ * Returns true if MCP is available and responding.
+ *
+ * @returns {Promise<boolean>}
+ */
+async function isMcpAvailable() {
+  try {
+    return await mcpClient.isAvailable();
+  } catch (err) {
+    return false;
   }
-  const http = require("http");
-  const https = require("https");
-  const base = process.env.MCP_BASE_URL || "http://127.0.0.1:8771";
-  const entries = Object.entries(args || {}).map(([k, v]) => [k, String(v)]);
-  const qs = new URLSearchParams(Object.fromEntries(entries)).toString();
-  let url;
-  try { url = new URL(`${base}/tools/${encodeURIComponent(toolName)}${qs ? `?${qs}` : ""}`); }
-  catch { return null; }
-  const lib = url.protocol === "https:" ? https : http;
-  const headers = {};
-  if (process.env.MCP_TOKEN) headers["Authorization"] = `Bearer ${process.env.MCP_TOKEN}`;
-  return new Promise((resolve) => {
-    const rq = lib.request(url, { method: "GET", headers }, (resp) => {
-      let d = "";
-      resp.on("data", (c) => (d += c));
-      resp.on("end", () => {
-        if (resp.statusCode !== 200) return resolve(null);
-        try { resolve(JSON.parse(d)); } catch { resolve(null); }
-      });
-    });
-    rq.on("error", () => resolve(null));
-    rq.setTimeout(mcpReadOnlyTimeoutMs, () => { rq.destroy(); resolve(null); });
-    rq.end();
-  });
-}
-
-function runAgentDispatchBatch(now, dispatchableSlots) {
-  return {
-    timestamp: now,
-    slots: dispatchableSlots,
-    nextHumanAction: dispatchableSlots.length > 0 ? "Review and approve" : "Wait for slots to register",
-  };
-}
-
-async function prefilteredFleetDispatch(req) {
-  const mcpReadOnlyTimeoutMs = 30000;
-  const result = await callMcpTool("get_agent_status", {}, mcpReadOnlyTimeoutMs);
-  return result;
 }
 
 module.exports = {
-  tryMcpChatReply,
-  get_mcp_feature_overview,
-  processMcpChatRoute,
-  summarizeDispatchFleet,
   callMcpTool,
-  runAgentDispatchBatch,
-  prefilteredFleetDispatch,
+  isMcpAvailable,
 };
