@@ -7,6 +7,7 @@
 const path = require("path");
 const fs = require("fs");
 const https = require("https");
+const feeds = require("../lib/flourishing-feeds");
 
 // ── Live world-news feed (RSS, no API keys) ──
 const NEWS_FEEDS = [
@@ -142,6 +143,22 @@ module.exports = async function flourishingRoutes(req, res, url, deps) {
 
   if (url.pathname === "/api/flourishing/adoption/stats") {
     sendJson(res, { ok: true, source: snap ? "snapshot" : "empty", ...(snap?.adoption ?? { verified_nodes: 0, active_nodes: 0, total_nodes: 0 }) });
+    return true;
+  }
+
+  // ── Live grounding from real yearly feeds (World Bank world aggregates) ──
+  // The beliefs here are GROUNDED, not seeded: each carries a posterior, an
+  // uncertainty, a source URL, and the data year. The Question Machine ranks
+  // which belief to ground next (uncertainty × leverage). `?refresh=1` bypasses
+  // the 24h cache (the data is annual, so polling more often is pointless).
+  if (url.pathname === "/api/flourishing/feeds" || url.pathname === "/api/flourishing/panel") {
+    try {
+      const force = url.searchParams.get("refresh") === "1";
+      const p = await feeds.panel(force);
+      sendJson(res, p);
+    } catch (e) {
+      sendJson(res, { ok: false, error: String(e && e.message || e), domains: [], questions: [], beliefs: [] });
+    }
     return true;
   }
 
