@@ -106,12 +106,39 @@ def stage_verify_build(candidates_path):
     # merged in): identical code would otherwise be 2x-weighted in QLoRA training.
     fresh = [r for r in verified if r.get("output", "").strip() not in base_outputs]
     n_dupe_of_base = len(verified) - len(fresh)
+    # #1198 distillation flywheel: verified cloud-teacher solutions to escalated tasks.
+    # These ALREADY passed the repo tests at capture time (lib/keystone-escalation.js
+    # recordDistillationPair only writes verified cloud landings), so they skip the
+    # function-asserts gate above and merge straight in — deduped by output.
+    seen_outputs = set(base_outputs) | {r.get("output", "").strip() for r in fresh}
+    distill = []
+    distill_path = os.path.join(ROOT, "data", "distill", "escalation-wins.jsonl")
+    if os.path.exists(distill_path):
+        with open(distill_path, encoding="utf-8") as df:
+            for ln in df:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    row = json.loads(ln)
+                except json.JSONDecodeError:
+                    continue
+                out = str(row.get("output", "")).strip()
+                if not row.get("instruction") or not out or out in seen_outputs:
+                    continue
+                seen_outputs.add(out)
+                distill.append({"instruction": row["instruction"],
+                                "input": row.get("input", ""), "output": row["output"]})
     os.makedirs(os.path.dirname(TRAIN_OUT), exist_ok=True)
     with open(TRAIN_OUT, "w", encoding="utf-8") as f:
         for ln in base_lines:
             f.write(ln + "\n")
         for r in fresh:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+        for r in distill:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    if distill:
+        print(f"[verify] + {len(distill)} verified cloud-escalation distill pair(s) (#1198)")
     print(f"\n[verify] execution-verified {len(verified)} / {len(verified) + len(dropped)} "
           f"harvested candidates (green-subprocess gate)")
     if dropped:

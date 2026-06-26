@@ -19,6 +19,10 @@ const { emitConvergenceRecord } = require("./convergence-records");
 
 const KERNEL_REASONER = "keystone-kernel";
 const HARD_TASK_REL = path.join("data", "convergence-autonomous-work.jsonl");
+// #1198 distillation flywheel: verified cloud-teacher solutions to escalated tasks,
+// captured as {instruction,input,output} training pairs (training-data.jsonl schema)
+// so the continual pipeline can teach the local student exactly its failure cases.
+const DISTILL_REL = path.join("data", "distill", "escalation-wins.jsonl");
 // keystoneRun statuses that mean "the kernel landed it" — anything else escalates.
 const SUCCESS_STATUSES = new Set(["success", "applied_unverified"]);
 // Providers that are "Claude" for landed-work share purposes.
@@ -173,7 +177,41 @@ function readRolloverShare(records, { sinceTs = 0 } = {}) {
   };
 }
 
+/**
+ * #1198 — capture a verified cloud-teacher solution to an escalated task as an
+ * instruction→response training pair. Fires ONLY when the cloud LANDED an
+ * ESCALATED task that VERIFIED (tests passed) — i.e. exactly the cases the local
+ * student currently fails. Schema matches training-data.jsonl ({instruction,
+ * input, output}) so `continual_ouro_pipeline.py` ingests it with no re-verification
+ * (the repo tests already passed). Returns the written row, or null if gated out.
+ */
+function recordDistillationPair({ task, plan, patch, landedBy, verified, escalated, provider, model, repoRoot }) {
+  if (landedBy !== "cloud" || !verified || !escalated) return null;
+  const solution = patch
+    ? (plan ? `Plan:\n${plan}\n\nPatch:\n${patch}` : String(patch))
+    : (plan ? String(plan) : "");
+  if (!task || !solution.trim()) return null;
+  const row = {
+    instruction: String(task).slice(0, 4000),
+    input: "",
+    output: solution.slice(0, 16000),
+    meta: {
+      source: "escalation-distill",
+      teacher: `${provider || "?"}/${model || "?"}`,
+      verified: true,
+      ts: new Date().toISOString(),
+    },
+  };
+  try {
+    const p = path.join(repoRoot, DISTILL_REL);
+    fsSync.mkdirSync(path.dirname(p), { recursive: true });
+    fsSync.appendFileSync(p, JSON.stringify(row) + "\n");
+  } catch (_e) { return null; }
+  return row;
+}
+
 module.exports = {
   kernelEscalationChain, runKernelWithEscalation, recordEscalation, recordLanded,
-  readRolloverShare, landedByOf, KERNEL_REASONER, SUCCESS_STATUSES,
+  recordDistillationPair, readRolloverShare, landedByOf,
+  KERNEL_REASONER, SUCCESS_STATUSES, DISTILL_REL,
 };

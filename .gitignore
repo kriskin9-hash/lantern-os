@@ -358,3 +358,6 @@ data/tmp-kaggle-out/
 # PII pool (#868) and stay LOCAL ONLY — never commit them to this public repo.
 data/csf_archives/*ingest*.csf
 data/csf_archives/*ingest*.manifest.json
+
+# #1198 distillation flywheel: verified cloud-escalation training pairs (repo diffs) — keep local; commit reviewed wins deliberately
+data/distill/

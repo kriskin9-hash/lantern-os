@@ -345,6 +345,7 @@ async function handleStreamChat(req, url, res) {
         // the final landed-by as convergence events. In shadow mode it's Claude-only.
         const {
           kernelEscalationChain, runKernelWithEscalation, recordEscalation, recordLanded,
+          recordDistillationPair,
         } = require("./keystone-escalation");
         const runId = `kernel-${Date.now()}`;
         // #1197 verify-gated local-first: run Ouro(local) → … → Claude and escalate
@@ -393,6 +394,16 @@ async function handleStreamChat(req, url, res) {
               verified: !!(result.tests && result.tests.success), repoRoot,
             });
           } catch (_e) { /* best effort */ }
+          // #1198 flywheel: when the cloud TEACHER landed an ESCALATED task and it
+          // VERIFIED, capture (task → cloud diff) as a training pair so the next
+          // retrain teaches the local student exactly this failure case.
+          try {
+            recordDistillationPair({
+              task: issue, plan: result.plan, patch: result.patch,
+              landedBy, verified, escalated: escalations.length > 0,
+              provider: used.provider, model: used.model, repoRoot,
+            });
+          } catch (_e) { /* logging must never break the stream */ }
           sendDone("keystone", {
             agent: "Keystone", provider: used.provider, model: used.model, rolloverMode,
             status: "success", filesChanged: Array.isArray(result.applied) ? result.applied.length : 0,
