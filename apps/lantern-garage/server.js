@@ -83,8 +83,16 @@ const jobQueue = new JobQueue(repoRoot);
 const jobWorker = new JobWorker(jobQueue, repoRoot);
 jobWorker.start(2000); // Poll every 2 seconds for new jobs
 
-// PR Watcher — auto-reviews PRs idle for 3min via Keystone fleet
-const prWatcher = new PrWatcher({ repoRoot, port, idleMs: Number(process.env.PR_WATCHER_IDLE_MS || 3 * 60_000) });
+// PR Watcher — auto-reviews PRs idle for 3min via Keystone fleet, and (when
+// PR_WATCHER_AUTOMERGE=1) auto-merges reviewed + green + conflict-free PRs.
+const prWatcher = new PrWatcher({
+  repoRoot, port,
+  idleMs: Number(process.env.PR_WATCHER_IDLE_MS || 3 * 60_000),
+  autoMerge: process.env.PR_WATCHER_AUTOMERGE === "1",
+  mergeIgnoreChecks: process.env.PR_WATCHER_MERGE_IGNORE_CHECKS
+    ? process.env.PR_WATCHER_MERGE_IGNORE_CHECKS.split(",").map((s) => s.trim()).filter(Boolean)
+    : null,
+});
 
 // Shared dependency bundle passed to every route module
 const deps = {
@@ -148,10 +156,10 @@ const routes = [
   require("./routes/youtube"),
   require("./routes/github-activity"), // Explore: latest releases + commits (cached)
   require("./routes/discover-feeds"),  // Explore: curated discovery rail (RSS/Atom, cached)
-  require("./routes/three-doors-image-pool"),
-  require("./routes/three-doors-convergence"),
+  require("./routes/explore"),         // Explore: single-pane PCSF-ranked feed + interaction logging (#1211)
   require("./routes/convergence-dispatch"),
   require("./routes/memory"),
+  require("./routes/research-repo"),    // Research Team: repo→Convergence-Memory learning
   require("./routes/flourishing"),
   require("./routes/claims"),
   require("./routes/cubes"),
@@ -605,10 +613,11 @@ server.listen(port, host, () => {
   // others). Enable PR_WATCHER_ENABLED=1 on exactly ONE machine.
   if (process.env.PR_WATCHER_ENABLED === "1") {
     prWatcher.start();
+    console.log(`[PR Watcher] auto-merge ${process.env.PR_WATCHER_AUTOMERGE === "1" ? "ENABLED" : "off (set PR_WATCHER_AUTOMERGE=1 to land ready PRs)"}`);
   } else {
     console.log("[PR Watcher] disabled — set PR_WATCHER_ENABLED=1 on ONE fleet host to enable");
   }
-  refreshAllPcsf(repoRoot);
+  Promise.resolve(refreshAllPcsf(repoRoot)).catch((e) => console.error("[PCSF] refresh failed:", e.message));
 
   // ── CSF Research Tesseract — auto-pack on startup ──────────────────────────
   // Runs in background; skips if archive is less than 24 hours old.

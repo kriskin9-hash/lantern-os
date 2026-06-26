@@ -352,3 +352,15 @@ tmp.*.patch
 # Chat document-processing work dir (uploads + generated .docx)
 data/documents/
 data/tmp-kaggle-out/
+
+# CSF condensed corpus archives. The PUBLIC archive (research/report PDFs) is
+# committed for durability. The INGEST archive + its manifest hold the data/ingest
+# PII pool (#868) and stay LOCAL ONLY — never commit them to this public repo.
+data/csf_archives/*ingest*.csf
+data/csf_archives/*ingest*.manifest.json
+
+# #1198 distillation flywheel: verified cloud-escalation training pairs (repo diffs) — keep local; commit reviewed wins deliberately
+data/distill/
+
+# Generated documents (pdf/docx/xlsx/pptx output of /api/document/generate)
+data/generated-docs/

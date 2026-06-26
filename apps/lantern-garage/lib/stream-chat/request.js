@@ -11,6 +11,18 @@ function sanitizeHistory(value, limit = 6) {
     }));
 }
 
+// Uploaded files attached to this turn (the "+" work tool). Bounded count + size.
+function sanitizeAttachments(value, maxItems = 4, maxChars = 24000) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((a) => a && typeof a === "object" && typeof a.text === "string" && a.text.trim())
+    .slice(0, maxItems)
+    .map((a) => ({
+      name: String(a.name || "file").slice(0, 200),
+      text: String(a.text).slice(0, maxChars),
+    }));
+}
+
 async function parseStreamChatRequest(req, url, deps = {}) {
   const normalizeDreamerUser = deps.normalizeDreamerUser || ((value) => String(value || "dreamer"));
   const collectRequestBody = deps.collectRequestBody;
@@ -25,6 +37,8 @@ async function parseStreamChatRequest(req, url, deps = {}) {
     routeIntent: "",
     surface: "",
     sessionId: null,
+    attachments: [],
+    forceGround: false,
   };
 
   if (req.method === "GET") {
@@ -35,6 +49,9 @@ async function parseStreamChatRequest(req, url, deps = {}) {
     parsed.routeIntent = String(url.searchParams.get("routeIntent") || "").trim();
     parsed.surface = String(url.searchParams.get("surface") || "").trim().toLowerCase();
     parsed.sessionId = String(url.searchParams.get("sessionId") || "").trim().slice(0, 64) || null;
+    // "Ground this" retry: force the web-search grounding branch for a reply the
+    // groundedness canary flagged as confident-but-unanchored (the 42-state).
+    parsed.forceGround = ["1", "true"].includes(String(url.searchParams.get("forceGround") || "").toLowerCase());
     return parsed;
   }
 
@@ -57,6 +74,8 @@ async function parseStreamChatRequest(req, url, deps = {}) {
     parsed.routeIntent = String(body.routeIntent || "").trim();
     parsed.surface = String(body.surface || "").trim().toLowerCase();
     parsed.sessionId = String(body.sessionId || "").trim().slice(0, 64) || null;
+    parsed.attachments = sanitizeAttachments(body.attachments);
+    parsed.forceGround = body.forceGround === true || body.forceGround === "1";
   } catch {
     // Body was present but unparseable (malformed JSON, bad encoding). Flag it so the
     // handler surfaces an honest "couldn't read your message" instead of routing an
@@ -69,5 +88,6 @@ async function parseStreamChatRequest(req, url, deps = {}) {
 
 module.exports = {
   sanitizeHistory,
+  sanitizeAttachments,
   parseStreamChatRequest,
 };

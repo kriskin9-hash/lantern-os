@@ -425,8 +425,8 @@ function createAgentBubble(isError) {
   thinking.setAttribute('aria-live', 'polite');
   thinking.setAttribute('aria-label', 'Thinking');
   thinking.innerHTML =
-    '<img src="/mandala.svg" alt="" class="thinking-spin" style="width:18px;height:18px;opacity:0.5;vertical-align:middle;margin-right:6px">' +
-    '<span class="thinking-label" style="font-size:12px;opacity:0.6;vertical-align:middle">Thinking…</span>';
+    '<img src="/mandala.svg" alt="" class="thinking-spin" style="width:44px;height:44px;opacity:0.85;vertical-align:middle;margin-right:12px">' +
+    '<span class="thinking-label" style="font-size:14px;opacity:0.7;vertical-align:middle">Thinking…</span>';
   bubble.appendChild(thinking);
   const cursor = document.createElement('span');
   cursor.className = 'stream-cursor';
@@ -589,51 +589,161 @@ function parseImageRequest(text) {
   return null;
 }
 
-// Render a real image from the web for `prompt`. Keyless text-to-image (Pollinations)
-// with a real-photo fallback (LoremFlickr); each source has a load timeout so a slow
-// or down service falls through instead of hanging. The browser loads the external
-// image directly (no server round-trip), so it works despite local TLS interception.
+// Render a generated image for `prompt`. Tries OpenAI (DALL·E / gpt-image-1) FIRST via the
+// server (the key stays server-side; the saved image serves from /images/… so it dodges local
+// TLS interception). On any failure — no key, billing limit, content refusal, timeout — it
+// falls back to a keyless text-to-image source (Pollinations) and then real photos (LoremFlickr),
+// loaded directly by the browser, so an image still appears.
 function renderWebImage(prompt) {
   const messages = document.getElementById('messages');
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Finding an image of <b>${esc(prompt)}</b>…</div>`;
+  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Generating an image of <b>${esc(prompt)}</b>…</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
 
-  const seed = Math.floor(Math.random() * 1e6);
-  const keywords = encodeURIComponent(prompt.split(/\s+/).slice(0, 3).join(','));
-  const sources = [
-    `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=512&nologo=true&seed=${seed}`,
-    `https://loremflickr.com/768/512/${keywords}?lock=${seed}`,
-  ];
-
-  let i = 0;
-  (function tryNext() {
-    if (i >= sources.length) {
-      bubble.innerHTML = `Sorry — couldn't reach an image service for <b>${esc(prompt)}</b> right now. Please try again.`;
-      if (typeof scrollToBottom === 'function') scrollToBottom();
-      return;
-    }
-    const url = sources[i++];
+  const show = (url, label) => {
     const img = new Image();
-    let settled = false;
-    const to = setTimeout(() => { if (!settled) { settled = true; img.onload = img.onerror = null; tryNext(); } }, 15000);
     img.onload = () => {
-      if (settled) return;
-      settled = true; clearTimeout(to);
-      bubble.innerHTML = `Here's an image of <b>${esc(prompt)}</b>:`;
+      bubble.innerHTML = label;
       img.style.cssText = 'max-width:100%;border-radius:8px;margin:6px 0;display:block';
       img.alt = prompt;
       bubble.appendChild(img);
       if (typeof scrollToBottom === 'function') scrollToBottom();
     };
-    img.onerror = () => { if (!settled) { settled = true; clearTimeout(to); tryNext(); } };
+    img.onerror = () => keylessFallback();   // local/openai image failed to load → keyless
     img.referrerPolicy = 'no-referrer';
     img.src = url;
-  })();
+  };
+
+  // Keyless fallback: Pollinations (text-to-image) then LoremFlickr (real photos), browser-loaded.
+  function keylessFallback() {
+    const seed = Math.floor(Math.random() * 1e6);
+    const keywords = encodeURIComponent(prompt.split(/\s+/).slice(0, 3).join(','));
+    const sources = [
+      `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=512&nologo=true&seed=${seed}`,
+      `https://loremflickr.com/768/512/${keywords}?lock=${seed}`,
+    ];
+    let i = 0;
+    (function tryNext() {
+      if (i >= sources.length) {
+        bubble.innerHTML = `Sorry — couldn't reach an image service for <b>${esc(prompt)}</b> right now. Please try again.`;
+        if (typeof scrollToBottom === 'function') scrollToBottom();
+        return;
+      }
+      const url = sources[i++];
+      const img = new Image();
+      let settled = false;
+      const to = setTimeout(() => { if (!settled) { settled = true; img.onload = img.onerror = null; tryNext(); } }, 15000);
+      img.onload = () => {
+        if (settled) return;
+        settled = true; clearTimeout(to);
+        bubble.innerHTML = `Here's an image of <b>${esc(prompt)}</b>:`;
+        img.style.cssText = 'max-width:100%;border-radius:8px;margin:6px 0;display:block';
+        img.alt = prompt;
+        bubble.appendChild(img);
+        if (typeof scrollToBottom === 'function') scrollToBottom();
+      };
+      img.onerror = () => { if (!settled) { settled = true; clearTimeout(to); tryNext(); } };
+      img.referrerPolicy = 'no-referrer';
+      img.src = url;
+    })();
+  }
+
+  // OpenAI first (server-side). 80s budget; on timeout/failure, fall back to keyless.
+  let done = false;
+  const to = setTimeout(() => { if (!done) { done = true; keylessFallback(); } }, 80000);
+  fetch('/api/image/ai-generate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (done) return; done = true; clearTimeout(to);
+      if (d && d.ok && d.url) show(d.url, `Here's an image of <b>${esc(prompt)}</b> <span style="opacity:.55;font-size:11px">· ${esc(d.model || 'openai')}</span>:`);
+      else keylessFallback();
+    })
+    .catch(() => { if (!done) { done = true; clearTimeout(to); keylessFallback(); } });
+}
+
+// Vision: send an uploaded image to a vision model (Claude / GPT-4o, server-side) and render
+// the answer. Used when the user attaches an image via "+" and asks about it.
+function renderVisionAnswer(prompt, attachment) {
+  const messages = document.getElementById('messages');
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Looking at <b>${esc(attachment.name)}</b>…</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+  const bubble = row.querySelector('.bubble');
+  fetch('/api/vision/analyze', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, image: attachment.image, mimeType: attachment.mimeType }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.ok && d.text) {
+        bubble.innerHTML = (typeof renderMarkdown === 'function' ? renderMarkdown(d.text) : esc(d.text))
+          + `<div style="opacity:.5;font-size:11px;margin-top:4px">👁 vision · ${esc(d.model || 'vision')}</div>`;
+      } else {
+        bubble.innerHTML = `Couldn't analyze <b>${esc(attachment.name)}</b>: ${esc((d && d.error) || 'vision unavailable')}`;
+      }
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+    })
+    .catch(e => { bubble.innerHTML = `Vision error: ${esc(e.message)}`; if (typeof scrollToBottom === 'function') scrollToBottom(); });
+}
+
+// ── Document generation ──────────────────────────────────────────────────────────
+// Detect a request to produce a document and return {prompt, format}, else null. Forms:
+// explicit (!doc / !pdf / !docx / !deck <prompt>) and natural language ("make me a
+// Word doc / spreadsheet / deck about X"). Requires a document noun so ordinary asks
+// don't trigger it. Format inferred from the noun: word→docx, excel→xlsx, deck→pptx.
+function docFormatOf(noun) {
+  const n = String(noun).toLowerCase();
+  if (/docx|word/.test(n)) return 'docx';
+  if (/xlsx|excel|spread\s?sheet|workbook/.test(n)) return 'xlsx';
+  if (/pptx|power\s?point|slide|deck|presentation/.test(n)) return 'pptx';
+  return 'pdf';
+}
+// One alternation of document nouns, ordered specific→general so the format is inferable.
+var DOC_NOUNS = 'docx|word\\s?document|word\\s?doc|word\\s?file|word(?!s)|xlsx|spread\\s?sheet|excel|workbook|pptx|power\\s?point|slide\\s?deck|slide\\s?show|slides?|deck|presentation|pdf|document|report|brief|memo|white\\s?paper|one[- ]?pager|write[- ]?up';
+function parseDocRequest(text) {
+  const explicit = text.match(new RegExp('^[!/](' + DOC_NOUNS + '|doc)\\s+(.+)', 'i'));
+  if (explicit) return { prompt: explicit[2].trim(), format: docFormatOf(explicit[1]) };
+  const nl = text.match(new RegExp('\\b(?:make|create|generate|write|draft|build|produce|prepare)\\b[^.?!]*?\\b(' + DOC_NOUNS + ')\\b\\s*(?:about|on|for|covering|titled|of|:)?\\s*(.+)', 'i'));
+  if (nl && nl[2] && nl[2].trim().length >= 3) return { prompt: nl[2].trim().replace(/[.?!]+$/, ''), format: docFormatOf(nl[1]) };
+  return null;
+}
+
+// Generate a document via the server (model writes it → Markdown → PDF) and show a download link.
+function renderDocGen(prompt, format) {
+  const messages = document.getElementById('messages');
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Writing &amp; rendering a document about <b>${esc(prompt)}</b>… (this takes a few seconds)</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+  const bubble = row.querySelector('.bubble');
+  fetch('/api/document/generate', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, format: format || 'pdf' }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d && d.ok && d.url) {
+        const kb = d.bytes ? ' · ' + Math.round(d.bytes / 1024) + ' KB' : '';
+        bubble.innerHTML = `✓ Generated <b>${esc(d.title || 'document')}</b> <span style="opacity:.6;font-size:11px">(${esc(d.format)}${kb})</span><br>`
+          + `<a href="${esc(d.url)}" download="${esc(d.filename)}" style="display:inline-block;margin-top:6px;padding:6px 12px;border:1px solid var(--accent,#06b6d4);border-radius:8px;color:var(--accent,#06b6d4);text-decoration:none;font-weight:600">⬇ Download ${esc(d.filename)}</a>`;
+      } else {
+        bubble.innerHTML = `Couldn't generate the document: ${esc((d && d.error) || 'unavailable')}`;
+      }
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+    })
+    .catch(e => { bubble.innerHTML = `Document error: ${esc(e.message)}`; if (typeof scrollToBottom === 'function') scrollToBottom(); });
 }
 
 // ── Video requests ──────────────────────────────────────────────────────────────
@@ -801,8 +911,13 @@ function detectEmbedIntent(text) {
 }
 
 // ── Main send ─────────────────────────────────────────────────────────────────
-async function sendMessage() {
+async function sendMessage(opts = {}) {
   const input = document.getElementById('input');
+  // "Ground this" retry path: re-run a specific message with forced web grounding
+  // (groundedness canary loop). overrideText comes from the button, not the input
+  // box — so we must not read or clear the box on this path.
+  const overrideText = (opts && typeof opts.text === 'string') ? opts.text : null;
+  const forceGround = !!(opts && opts.forceGround);
   // ── Single send entry ── These two checks used to be window.sendMessage WRAPPERS
   // (gatedSendMessage in dream-chat.html + the !convergance shim in convergance-sync.js);
   // they're folded in here so there is exactly one sendMessage, no monkey-patching.
@@ -819,8 +934,20 @@ async function sendMessage() {
   } catch (_) { /* gate is best-effort; the server enforces limits regardless */ }
   // Normalize the legacy !convergance command → canonical !convergence.
   if (/^!convergance(?:\s+(?:sync|loop|run))?\s*$/i.test(String(input.value || "").trim())) input.value = "!convergence";
-  const text = input.value.trim();
+  const text = (overrideText != null ? overrideText : input.value).trim();
   if (!text || isSending) return;
+
+  // Image attachment → vision: the user uploaded an image via "+" to ask about it. The image
+  // is sent to a vision model (Claude / GPT-4o) so the chat can actually SEE it. Sticky, so
+  // follow-up questions about the same image keep working until the chip is removed.
+  const visionAttach = (window.pendingAttachments || []).find(a => a && a.image);
+  if (visionAttach && text) {
+    input.value = '';
+    input.style.height = 'auto';
+    addUserBubble(text);
+    renderVisionAnswer(text, visionAttach);
+    return;
+  }
 
   // Image request → return a visible image from the web (deterministic, no LLM —
   // the desk model can't draw and just declines). Handles "draw me a picture of X"
@@ -846,11 +973,21 @@ async function sendMessage() {
     return;
   }
 
-  // Three-doors game lives on its own page now — Keystone guides there, not in chat
-  const kingdomeMatch = text.match(/^!(?:three-doors|threedoors|doors|kingdome|kingdome-of-hearts|explore)\b/i);
-  if (kingdomeMatch) {
+  // Document request → generate a downloadable document (the model writes it, the server
+  // renders Markdown → PDF). Handles "make me a PDF/report/brief about X" and !doc/!pdf <prompt>.
+  const docReq = parseDocRequest(text);
+  if (docReq) {
     input.value = '';
-    window.location.href = '/three-doors-game.html';
+    input.style.height = 'auto';
+    addUserBubble(text);
+    renderDocGen(docReq.prompt, docReq.format);
+    return;
+  }
+
+  // !explore opens the Explore page (the Three-Doors game was removed 2026-06-26).
+  if (/^!explore\b/i.test(text)) {
+    input.value = '';
+    window.location.href = '/explore.html';
     return;
   }
 
@@ -946,9 +1083,9 @@ async function sendMessage() {
   const abortTimer = setTimeout(() => ac.abort(), 90000);
   showStopButton(() => { userStopped = true; ac.abort(); });
 
-  addUserBubble(text);
-  input.value = '';
-  input.style.height = 'auto';
+  addUserBubble(forceGround && overrideText != null ? text + '  ↻ grounding' : text);
+  // Don't clear the input box on a "Ground this" retry — the user didn't type this.
+  if (overrideText == null) { input.value = ''; input.style.height = 'auto'; }
   history.push({ role: 'user', text });
   writeCubeDelta('chat_message', [], 'conversation:' + Date.now());
 
@@ -988,6 +1125,8 @@ async function sendMessage() {
 
   try {
     const provider = requestedProvider;
+    // Files attached via the "+" work tool — sent with this one turn, then cleared.
+    const sentAttachments = (window.pendingAttachments || []).filter(a => a && a.text).map(a => ({ name: a.name, text: a.text }));
     const resp = await fetch('/api/dream/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -995,8 +1134,11 @@ async function sendMessage() {
         message: text,
         user: 'dream-chat',
         provider,
+        attachments: sentAttachments,
         history: history.slice(-10),
         personalContext: sanitizePersonalContext(personalContext || {}),
+        // "Ground this" retry: force the server's web-search grounding branch.
+        forceGround: forceGround || undefined,
         // Scope this turn to the active chat session so it persists into the Chats
         // drawer (#773). dream-chat.js owns the id and mirrors it to localStorage;
         // without it, turns log untagged and never form a saved session.
@@ -1004,6 +1146,9 @@ async function sendMessage() {
       }),
       signal: ac.signal,
     });
+    // Attachments PERSIST across turns (work-tool semantics): the file content is re-sent each
+    // turn so you can keep discussing/editing it. The chip stays visible; clear via the chip ×
+    // or by starting a new chat. (Without this, a follow-up loses the file — only turn 1 has it.)
 
     if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
 
@@ -1069,6 +1214,15 @@ async function sendMessage() {
             doneTimestamp = evt.timestamp || (evt.receipt && evt.receipt.generatedAt) || '';
             doneOnline = evt.online !== false;
             if (Array.isArray(evt.actions) && evt.actions.length) doneActions = evt.actions;
+            // Σ₀ groundedness canary (42-state guardrail): the reply asserted confident
+            // claims with no external anchor. Flag it so the user knows it's self-
+            // consistent but unverified, rather than letting it pass as grounded.
+            if (evt.ungrounded) {
+              bubble.dataset.ungrounded = '1';
+              if (evt.sigma0_grounding && evt.sigma0_grounding.risk != null) {
+                bubble.dataset.ungroundedRisk = String(evt.sigma0_grounding.risk);
+              }
+            }
             receivedDone = true;
           }
         } catch { /* skip malformed line */ }
@@ -1160,6 +1314,35 @@ async function sendMessage() {
     badge.style.cssText = 'font-size:10px;opacity:0.55;margin-left:6px;vertical-align:middle';
     badge.textContent = '✓ Σ₀';
     bubble.appendChild(badge);
+  }
+
+  // Σ₀ groundedness canary: confident claims, no external anchor (the 42-state).
+  // Honest signal to the user — internally consistent but unverified. Suppressed
+  // when Σ₀ verify already grounded the reply.
+  if (bubble.dataset.ungrounded && !bubble.dataset.sigma0Corrected) {
+    const risk = bubble.dataset.ungroundedRisk;
+    const badge = document.createElement('span');
+    badge.title = 'Confident claims with no external source — self-consistent but unverified.'
+      + (risk ? ` (Σ₀ groundedness risk ${risk})` : '');
+    badge.style.cssText = 'font-size:10px;opacity:0.7;margin-left:6px;vertical-align:middle;color:#f5a623;cursor:help';
+    badge.textContent = '⚠ ungrounded';
+    bubble.appendChild(badge);
+    // Actionable half: offer a one-click retry that re-runs THIS question with forced
+    // web grounding — detect → actually ground, the 42-state loop closed in the UI.
+    // Suppressed when we're online-less (web search can't reach reality) or when this
+    // turn was already a forced-grounding retry (don't invite an endless re-ground).
+    if (doneOnline !== false && !forceGround) {
+      const reground = document.createElement('button');
+      reground.type = 'button';
+      reground.textContent = '🌐 Ground this';
+      reground.title = 'Re-answer this question with a live web search for sources.';
+      reground.style.cssText = 'font-size:10px;margin-left:8px;vertical-align:middle;color:var(--accent);background:none;border:1px solid currentColor;border-radius:4px;padding:1px 6px;cursor:pointer;opacity:0.85';
+      reground.addEventListener('click', () => {
+        reground.disabled = true;
+        sendMessage({ text, forceGround: true });
+      });
+      bubble.appendChild(reground);
+    }
   }
 
   // Signature line: always show a human-readable label + time. Raw provider/model id

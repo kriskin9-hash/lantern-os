@@ -20,8 +20,10 @@ const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 const { scoreReplyCollapse, antiCollapseSignal } = require("./collapse-canary");
+const { scoreReplyGroundedness, ungroundedSignal } = require("./groundedness-canary");
 const { assembleSessionContext } = require("./session-summary-store");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
+const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
@@ -34,6 +36,7 @@ const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, selectKernelProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
 const { detectTaskType } = require("./task-detector");
 const { classifyIntent } = require("./intent-router");
+const { classifyIntentOuro } = require("./ouro-router");
 const serving = require("./serving-modes");
 const { convergeMessage } = require("./convergence-adapter");
 const { keystoneRun, KEYSTONE_SYSTEM_PROMPT } = require("./keystone-runtime");
@@ -201,6 +204,10 @@ async function handleStreamChat(req, url, res) {
     collectRequestBody,
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
+  const attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+  // "Ground this" retry (groundedness canary loop): force the web-search grounding
+  // branch even when the heuristic wouldn't have fired for this message.
+  const forceGround = !!parsed.forceGround;
 
   // Surface mode: dream-chat (default) or three-doors.
   // The game page declares itself via body.surface; bang commands can also flip it below.
@@ -343,14 +350,23 @@ async function handleStreamChat(req, url, res) {
         // the final landed-by as convergence events. In shadow mode it's Claude-only.
         const {
           kernelEscalationChain, runKernelWithEscalation, recordEscalation, recordLanded,
+          recordDistillationPair,
         } = require("./keystone-escalation");
         const runId = `kernel-${Date.now()}`;
-        const providers = rolloverMode === "default"
+        // Policy (#1207): cloud is the reasoning brain; the local best-in-slot coder
+        // (e.g. Qwen2.5-Coder-7B) handles CODING/TOOLS first to save cloud tokens, with
+        // #1197 verify-gated escalation to the cloud teacher when the local result isn't
+        // VERIFIED (tests pass) — not when it merely "returns something" (#1167). So the
+        // interactive coding path is local-first BY DEFAULT now; disable with
+        // KEYSTONE_LOCAL_FIRST=0 (e.g. when no capable local coder is served).
+        const localFirst = rolloverMode === "default" || process.env.KEYSTONE_LOCAL_FIRST !== "0";
+        const providers = localFirst
           ? kernelEscalationChain()
           : [{ provider, model: kernelModel || "claude-opus-4-8" }];
 
-        const { result, providerUsed, escalations } = await runKernelWithEscalation({
+        const { result, providerUsed, escalations, landedBy, verified } = await runKernelWithEscalation({
           providers,
+          requireVerified: localFirst,
           runOne: async (prov, mdl, i) => {
             if (i > 0) sendToken(`\n↪ Escalating to ${prov}/${mdl}…\n`);
             return keystoneRun(issue, repoRoot, async (opts) => {
@@ -384,10 +400,23 @@ async function handleStreamChat(req, url, res) {
               verified: !!(result.tests && result.tests.success), repoRoot,
             });
           } catch (_e) { /* best effort */ }
+          // #1198 flywheel: when the cloud TEACHER landed an ESCALATED task and it
+          // VERIFIED, capture (task → cloud diff) as a training pair so the next
+          // retrain teaches the local student exactly this failure case.
+          try {
+            recordDistillationPair({
+              task: issue, plan: result.plan, patch: result.patch,
+              landedBy, verified, escalated: escalations.length > 0,
+              provider: used.provider, model: used.model, repoRoot,
+            });
+          } catch (_e) { /* logging must never break the stream */ }
           sendDone("keystone", {
             agent: "Keystone", provider: used.provider, model: used.model, rolloverMode,
             status: "success", filesChanged: Array.isArray(result.applied) ? result.applied.length : 0,
             testsRun: !!result.tests, escalations: escalations.length,
+            // #1197 parity metric: who actually landed it (local vs cloud teacher) + verified.
+            landed_by: landedBy || (used.provider === "ollama" ? "local" : "cloud"),
+            verified: !!verified,
           });
         } else {
           sendToken(`\n❌ Keystone failed after ${escalations.length + 1} attempt(s): ${result ? result.error : "unknown"}\n`);
@@ -718,10 +747,11 @@ async function handleStreamChat(req, url, res) {
   // when proximity~0 and the message wouldn't otherwise trigger grounding. Internal
   // monitors are provably blind to slow drift, so we ground on a timer regardless.
   const groundingTickDue = isGroundingDue(_lastGroundingTickMs);
-  if (!isKeystoneDebug && (needsGrounding(message) || groundingD >= 1.5 || groundingTickDue)) {
-    // On a mandatory tick fall back to the message itself when no query extracts, so
-    // the cadence still reaches external reality on otherwise un-groundable turns.
-    const searchQuery = extractSearchQuery(message) || (groundingTickDue ? String(message || "").slice(0, 120).trim() : "");
+  if (!isKeystoneDebug && (needsGrounding(message) || groundingD >= 1.5 || groundingTickDue || forceGround)) {
+    // On a mandatory tick — or an explicit "Ground this" retry — fall back to the
+    // message itself when no query extracts, so we still reach external reality on
+    // otherwise un-groundable turns.
+    const searchQuery = extractSearchQuery(message) || ((groundingTickDue || forceGround) ? String(message || "").slice(0, 120).trim() : "");
     if (searchQuery) {
       try {
         const searchResult = await withTimeout(webSearchMcp(searchQuery, gpol.maxResults), GROUNDING_TIMEOUT_MS, { success: false });
@@ -790,6 +820,20 @@ async function handleStreamChat(req, url, res) {
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
+  // Convergence Oracle — ground EVERY question in its cosmic-time observer slice (in-process
+  // Node port; the live stream path had no oracle grounding before this). Fail-safe: any error → "".
+  let oracleBlock = "";
+  try { const og = message ? oracleFormatGrounding(message) : ""; if (og) oracleBlock = `\n\n${og}`; }
+  catch { oracleBlock = ""; }
+
+  // Attached files (the "+" work tool) — the user uploaded these for THIS turn. Treat them as
+  // primary evidence: read, quote, summarize, or act on them, and ground answers in their content.
+  let attachmentBlock = "";
+  if (attachments.length) {
+    const blocks = attachments.map((a) => `--- Attached file: ${a.name} (${a.text.length} chars) ---\n${a.text}`).join("\n\n");
+    attachmentBlock = `\n\nAttached files for this turn (the user uploaded these — treat them as the primary evidence; quote/summarize/act on them and cite the filename):\n${blocks}`;
+  }
+
   // ── Convergance OS routing (runs before systemPrompt so intent drives prompt + label) ──
   let converganceDecision = null;
   try {
@@ -810,13 +854,33 @@ async function handleStreamChat(req, url, res) {
   // (below) sent it general/creative/meta chat too — hallucinated answers and,
   // under pressure, full mode collapse (repeated/garbled word-salad). Scope
   // local-first to intents the coder was actually trained for.
+  // ── Ouro intent router (Σ₀ Step 2, OURO_ROUTER=1) ─────────────────────────
+  // In AUTO mode (no explicit model) the local Ouro model classifies the message
+  // into a task type, which then drives isCodingIntent (→ cloud-first) and taskType
+  // (→ provider selection). Ouro never writes the answer — it only triages. Any
+  // failure returns null → we fall back to the keyword detectTaskType/convergance
+  // signals below. Explicit model picks skip Ouro entirely (no added latency).
+  let ouroRoute = null;
+  if (process.env.OURO_ROUTER === "1" && !requestedProvider && message) {
+    try { ouroRoute = await classifyIntentOuro(message); } catch { ouroRoute = null; }
+    console.warn(ouroRoute
+      ? `[ouro-router] taskType=${ouroRoute.taskType} conf=${ouroRoute.confidence} raw="${ouroRoute.raw}"`
+      : "[ouro-router] unavailable → keyword fallback");
+  }
+
   const CODING_INTENTS = new Set(["coding_change", "code_review"]);
-  const isCodingIntent = CODING_INTENTS.has(converganceDecision?.intent);
+  const isCodingIntent = ouroRoute ? ouroRoute.isCoding : CODING_INTENTS.has(converganceDecision?.intent);
 
   const routeDecision = classifyIntent(message);
 
   // ── Route label (sent in every done event; shown below each assistant bubble) ─
   const converganceIntent = converganceDecision?.intent || routeIntent || routeDecision.intent || "general";
+  // Leaderboard recording key. The PCSF leaderboard / chain ordering query by
+  // detectTaskType ("coding"/"reasoning"/"default"...), but outcomes used to be
+  // recorded under `intent` ("dream_chat"/"technical_debug"), so per-task ranking
+  // never matched. Hoisted here (before the sendDone closure) and assigned from
+  // detectTaskType below so success AND failure record under the routing taxonomy (#1236).
+  let leaderboardTaskType = "default";
   const ROUTE_LABEL_MAP = {
     code: "Keystone · code via convergence",
     strategy: "Keystone · strategy via convergence",
@@ -845,18 +909,40 @@ async function handleStreamChat(req, url, res) {
   // cloud providers are unavailable) a correct, concrete answer to "what is this?" so new
   // users get an orientation instead of improvised dream-journal filler. The journal block
   // is explicitly labelled background so the model does not narrate it as if it were the app.
-  const ROUTER_PROMPT = `You are Keystone Σ₀ — the grounded reasoning and engineering agent for Keystone OS, a local-first private journaling and reasoning app that runs on the user's own machine with no account required. You run the convergence loop (Observe → Remember → Reason → Act → Verify → Converge), and external reality beats internal consistency: ground every important claim in evidence, give an honest confidence, and say "I don't know" rather than improvise. Answer directly, technically, and concretely. NO roleplay, NO dream personas, NO "doors", NO mystical or poetic language — you are a precise technical agent, not a dream narrator, even though the background below happens to be a dream journal. For code, give complete, correct, copy-paste-ready implementations grounded in real files/APIs and state exactly how to verify (test command or expected output). Be concise for simple asks, but COMPREHENSIVE for substantive, factual, or research questions: give full context and reasoning, structure longer answers with short headings and bullet lists, and cite sources as clickable Markdown links [descriptive title](https://url). Your replies render as rich Markdown in this chat UI: \`![alt](https://image-url)\` displays the image inline, a plain YouTube link (https://youtube.com/watch?v=… or https://youtu.be/…) embeds as a player, and \`[text](https://url)\` becomes a link that opens in a new tab — so you absolutely CAN show images and embed videos; never tell the user you "can't embed", "can't display images", or "lack web/embedding capability" (that is false). When an image or video genuinely helps, include it — but use ONLY real, working URLs you actually know (e.g. Wikimedia Commons upload URLs, well-known sources); never invent, guess, or fabricate a media URL — if unsure, link the source page instead. If the user asks "what is this?", "what can you do?", or anything about the app itself, give a plain one- or two-sentence description of Keystone OS; do NOT describe the journal entries below as if they were the app, and do NOT use mystical or "dream" language. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Keystone, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nBackground (the user's recent journal entries — context ONLY; do NOT narrate, theme, echo, or poeticize them unless the user explicitly asks about their journal):\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+  const ROUTER_PROMPT = `You are Keystone Σ₀ — the grounded reasoning and engineering agent for Keystone OS, a local-first private journaling and reasoning app that runs on the user's own machine with no account required. You run the convergence loop (Observe → Remember → Reason → Act → Verify → Converge), and external reality beats internal consistency: ground every important claim in evidence, give an honest confidence, and say "I don't know" rather than improvise. Answer directly, technically, and concretely. You are a precise technical agent — never use roleplay, mystical, or poetic language. For code, give complete, correct, copy-paste-ready implementations grounded in real files/APIs and state exactly how to verify (test command or expected output). Be concise for simple asks, but COMPREHENSIVE for substantive, factual, or research questions: give full context and reasoning, structure longer answers with short headings and bullet lists, and cite sources as clickable Markdown links [descriptive title](https://url). Your replies render as rich Markdown in this chat UI: \`![alt](https://image-url)\` displays the image inline, a plain YouTube link (https://youtube.com/watch?v=… or https://youtu.be/…) embeds as a player, and \`[text](https://url)\` becomes a link that opens in a new tab — so you absolutely CAN show images and embed videos; never tell the user you "can't embed", "can't display images", or "lack web/embedding capability" (that is false). When an image or video genuinely helps, include it — but use ONLY real, working URLs you actually know (e.g. Wikimedia Commons upload URLs, well-known sources); never invent, guess, or fabricate a media URL — if unsure, link the source page instead. If the user asks "what is this?" or "what can you do?", give a plain one- or two-sentence description of Keystone OS. IMPORTANT: Your very first token must be substantive content — never output only your name or any greeting. Go straight to the answer.\n\n${_realtimeCtx}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${attachmentBlock}`;
 
-  const systemPrompt = isKeystoneDebug
+  // Grounded identity (#1242). The underlying foundation model (Gemini/Claude/
+  // OpenAI/xAI/Ouro) must never leak its vendor identity through the Keystone
+  // persona — a Gemini-served turn was answering "I'm a large language model built
+  // by Google". Inject a deterministic identity block on the assistant surfaces
+  // (debug + router); leave the creative RP/journal personas untouched.
+  const KEYSTONE_IDENTITY =
+    "You are Keystone, the assistant of Keystone OS — a local-first, model-agnostic " +
+    "reasoning system. You are part of Keystone OS; you were NOT built by Google, OpenAI, " +
+    "Anthropic, xAI, or any other company, and you must never claim otherwise. Keystone OS " +
+    "routes each turn across a chain of interchangeable models, so the specific model serving " +
+    "any given turn varies. If asked which model or company powers you, answer consistently: " +
+    "you are Keystone (part of Keystone OS), which selects from several interchangeable " +
+    "providers per turn — do not name a specific vendor as your maker or invent a model name.";
+  const baseSystemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
     : isRpMode
-      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
+      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${attachmentBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
       : ROUTER_PROMPT;
+  const systemPrompt = isRpMode ? baseSystemPrompt : `${KEYSTONE_IDENTITY}\n\n${baseSystemPrompt}`;
 
 
   const sendToken = (token) => sse.sendToken(res, token);
   const sendRoute = (route) => sse.sendRoute(res, route);
   const sendReceipt = (receipt) => sse.sendReceipt(res, receipt);
+
+  // Turn-start for cloud leaderboard latency; reset just before the dispatch loop.
+  let _turnStart = Date.now();
+  // Cloud providers the streaming dispatch can actually run. Local (ollama/keystone-ft)
+  // already records its own outcomes in-line; we only fill the cloud gap here.
+  // Includes both "xai" and "grok": the xai success path reports provider "grok",
+  // so without it grok successes were silently never recorded to the leaderboard (#1236).
+  const _EXECUTABLE_CLOUD = new Set(["anthropic", "gemini", "openai", "xai", "grok"]);
 
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
@@ -911,6 +997,29 @@ async function handleStreamChat(req, url, res) {
         }
       }
     } catch { /* canary must never break a reply */ }
+    // ── Σ₀ groundedness canary (42-state guardrail) ─────────────────────────
+    // The collapse canary above catches textual *degeneration*. It cannot see the
+    // other Σ₀ failure mode (SIGMA0-COLLAPSE-CERTIFICATE §2, the "42-state"): a
+    // fluent, non-repeating reply that asserts confident claims with no external
+    // anchor — internally coherent, externally adrift. Score that axis here, where
+    // the upstream groundingContext is already in scope, and stamp the risk onto the
+    // done signature so a confident-but-ungrounded reply can't pass as healthy.
+    // Passive observer: advisory only, never blocks a reply.
+    try {
+      if (fullReply) {
+        const g = scoreReplyGroundedness(fullReply, { groundingContext });
+        signature.sigma0_grounding = { risk: g.risk, anchored: g.anchored };
+        if (g.ungrounded) {
+          signature.ungrounded = true;
+          const usig = ungroundedSignal(g);
+          signature.ungroundedSignal = usig;
+          console.warn(
+            `[canary_ungrounded] risk=${g.risk} source=${source} ` +
+            `provider=${signature.provider} signals=${JSON.stringify(g.signals)}`
+          );
+        }
+      }
+    } catch { /* canary must never break a reply */ }
     // ── #911 live coding emitter: log Python candidates offline ─────────────
     if (fullReply && message) { _emitCodingCandidate(message, fullReply); }
     // ── #919 finding #2: auto-draft claim packet for grounded replies ────────
@@ -920,6 +1029,20 @@ async function handleStreamChat(req, url, res) {
         agentId: agent.id || agent.name || "keystone",
       });
     }
+    // ── Feed the leaderboard cloud outcomes (the missing half) ───────────────
+    // Previously only the ollama path called recordModelOutcome, so cloud
+    // providers stayed cold-start forever and PCSF could never rank them on
+    // merit. Record a success here when a cloud provider produced a real reply
+    // (not degraded-to-local). agentId = provider name so it ranks in the same
+    // table as local models. (Cloud FAILURE recording is intentionally deferred:
+    // the per-provider catch blocks also fire on 429-retries that then succeed,
+    // so recording there would over-penalize — a follow-up will add it safely.)
+    try {
+      const prov = extra.provider;
+      if (prov && _EXECUTABLE_CLOUD.has(prov) && extra.online !== false && !degradedLocal && fullReply) {
+        recordModelOutcome(prov, leaderboardTaskType, true, Date.now() - _turnStart);
+      }
+    } catch { /* leaderboard must never break a reply */ }
     return sse.sendDone(res, source, { ...extra, ...signature, routeLabel: finalRouteLabel });
   };
 
@@ -1114,7 +1237,15 @@ async function handleStreamChat(req, url, res) {
 
   // converganceDecision already computed above (before systemPrompt)
 
-  if (routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
+  // ── Dream persona deleted (2026-06-26): chat NEVER routes through the convergence/persona engine ──
+  // classifyIntent flags coding (and other intents) as requires_convergence →
+  // convergeMessage() ran the Python convergence engine with a persona, which served
+  // chat in a dream voice ("…carries a wish. What are you protecting?") and reported
+  // provider:"unknown". All chat now goes to the direct provider dispatch below with the
+  // technical ROUTER_PROMPT (cloud coders lead; local is the offline backstop). This
+  // supersedes the narrower coding-only bypass from PR #1265. Re-enable with CONVERGENCE_CHAT=1.
+  const _useConvergenceChat = process.env.CONVERGENCE_CHAT === "1";
+  if (_useConvergenceChat && routeDecision.requires_convergence && !isKeystoneDebug && surfaceMode !== "three-doors") {
     const convResult = await convergeMessage(message, routeDecision.agent, requestedProvider || null, {
       timeoutMs: Number(process.env.CONVERGENCE_ROUTE_TIMEOUT_MS || 20000),
     });
@@ -1152,7 +1283,9 @@ async function handleStreamChat(req, url, res) {
     // leads with ollama, which is always "healthy" — so cloud was never reached for
     // any message on the main chat surface. Use the real per-message intent instead:
     // only the dream/journal-flavored intent gets the creative (local-first) chain.
-    let taskType = detectTaskType(message, { isCreative: converganceDecision?.intent === "dream_chat" && isRpMode });
+    // Ouro router (Auto mode) owns taskType when it classified; else keyword detect.
+    let taskType = ouroRoute ? ouroRoute.taskType : detectTaskType(message, { isCreative: converganceDecision?.intent === "dream_chat" && isRpMode });
+    leaderboardTaskType = taskType; // align leaderboard recording with routing taxonomy (#1236)
 
     // ── Router gate (opt-in via ROUTER_GATE=1) ────────────────────────────────
     // The dream-chat surface forces isCreative -> always "creative" (ollama-first).
@@ -1211,7 +1344,25 @@ async function handleStreamChat(req, url, res) {
   // provider) AND the router escalated to Anthropic, prefer Claude: skip the
   // Ollama/Gemini first-attempts so the chosen reasoning provider handles the
   // turn. OpenAI + the local fallback below still backstop a Claude failure.
-  const autoHintProvider = (!requestedProvider && primaryProviderHint) ? primaryProviderHint.provider : null;
+  let autoHintProvider = (!requestedProvider && primaryProviderHint) ? primaryProviderHint.provider : null;
+
+  // ── Coding goes CLOUD-FIRST (locked design 2026-06-26) ────────────────────
+  // The local Σ₀ coder (Ouro-1.4B on ollama) scores ~0/5 on HumanEval — it can't
+  // code. The old #1167 path sent coding intents local-first, so a broken local
+  // answer was served as the PRIMARY reply. Cloud coders (Claude/GPT) are the best
+  // tool for code, so a coding ask in Auto mode now LEADS with a cloud coder when a
+  // key exists. Ollama stays in the dispatch ladder as the OFFLINE backstop (it's
+  // appended last by buildBrainOrder), so a coding ask with no cloud reachable still
+  // gets answered locally. Setting the cloud hint also disables ollamaLocalFirst
+  // below (it requires !autoPrefersAnthropic). Escape hatch: CODING_LOCAL_FIRST=1
+  // restores the old coding-goes-local-first behavior.
+  const codingLocalFirst = process.env.CODING_LOCAL_FIRST === "1";
+  if (isCodingIntent && !requestedProvider && !codingLocalFirst &&
+      (!autoHintProvider || autoHintProvider === "ollama" || autoHintProvider === "local")) {
+    if (process.env.ANTHROPIC_API_KEY) autoHintProvider = "anthropic";
+    else if (process.env.OPENAI_API_KEY) autoHintProvider = "openai";
+    // no cloud key → leave the local hint; the offline coder backstop handles it
+  }
   const autoPrefersAnthropic = autoHintProvider === "anthropic";
 
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
@@ -1266,6 +1417,18 @@ async function handleStreamChat(req, url, res) {
     const cleaned = staticChain.filter((m) => m !== "lantern-csf-dream");
     if (cleaned.length) staticChain = cleaned;
   }
+  // Σ₀ local-model adapter (lib/local-model-registry.js): the registry is the
+  // source of truth for which LOCAL model LEADS this intent — VRAM-gated to the
+  // box and Ouro-default / capability-first aware. Its picks lead; any remaining
+  // static-chain models stay as fallbacks. Falls back to the static chain on any
+  // error so this is purely additive. See docs/SIGMA0-MODEL-ADAPTER.md.
+  try {
+    const regChain = require("./local-model-registry").selectChain(intent);
+    if (regChain && regChain.length) {
+      const lead = new Set(regChain);
+      staticChain = [...regChain, ...staticChain.filter((m) => !lead.has(m))];
+    }
+  } catch (_e) { /* keep static chain */ }
   let modelChain = staticChain;
   try { modelChain = await orderChainByLeaderboard(staticChain, intent); } catch { /* keep static */ }
   // Lead with the operator-pinned served model (OLLAMA_MODEL) when set, so the chat
@@ -1312,8 +1475,16 @@ async function handleStreamChat(req, url, res) {
   // Opt-in via LOOP_REASONER=1; applies to reasoning/coding intents. Emits
   // loop_n/confidence/exit_reason for the "Ouro Σ₀ CDF exit" panel the UI reads.
   // Falls through to normal streaming on any error.
+  // Σ₀ adapter: only wrap NON-self-converging local models in the API-level loop.
+  // Ouro (selfConverges=true) Q-exits INTERNALLY — wrapping it would double-loop;
+  // Qwen (selfConverges=false) is single-pass, so the loop is what makes it
+  // Σ₀-compliant (verify-gated convergence). Unknown models → false → wrapped
+  // (grounding by default). See lib/local-model-registry.js.
+  let _leadSelfConverges = false;
+  try { _leadSelfConverges = require("./local-model-registry").selfConverges(modelChain[0]); } catch (_e) {}
   if (process.env.LOOP_REASONER === "1" && !isKeystoneDebug && !isRpMode && !requestedProvider
-      && (intent === "coding" || intent === "reasoning")) {
+      && (intent === "coding" || intent === "reasoning")
+      && !_leadSelfConverges) {
     try {
       const http = require("http");
       const { loopedReason } = require("./loop-reasoner");
@@ -1343,7 +1514,7 @@ async function handleStreamChat(req, url, res) {
         await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream",
           role: "lantern", text: cleanText.slice(0, maxConversationTextLength) }).catch(() => {});
         sendToken(cleanText);
-        try { recordProviderSuccess("ollama"); recordModelOutcome(loopModel, intent, true, 0); } catch (_e) {}
+        try { recordProviderSuccess("ollama"); recordModelOutcome(loopModel, leaderboardTaskType, true, 0); } catch (_e) {}
         sendDone("ollama", { agent: doneAgentName, online: true, cleanText, suggestions, model: loopModel,
           source: "ollama", loop_n: lr.loop_n, confidence: lr.confidence, exit_reason: lr.exit_reason });
         return;
@@ -1481,7 +1652,7 @@ async function handleStreamChat(req, url, res) {
             text: cleanText.slice(0, maxConversationTextLength),
           }).catch(() => {});
           recordProviderSuccess("ollama");
-          recordModelOutcome(ollamaModel, intent, true, Date.now() - _ollamaStart); // feed leaderboard
+          recordModelOutcome(ollamaModel, leaderboardTaskType, true, Date.now() - _ollamaStart); // feed leaderboard
           const ollamaReceipt = buildPcsfReceipt("ollama", ollamaModel, true);
           sendReceipt(ollamaReceipt);
           const meta = { agent: doneAgentName, online: true, cleanText, suggestions, model: ollamaModel, webSuggestions, receipt: ollamaReceipt };
@@ -1490,7 +1661,7 @@ async function handleStreamChat(req, url, res) {
           return;
         }
       } catch (err) {
-        recordModelOutcome(ollamaModel, intent, false, Date.now() - _ollamaStart); // leaderboard learns failures too
+        recordModelOutcome(ollamaModel, leaderboardTaskType, false, Date.now() - _ollamaStart); // leaderboard learns failures too
         fullReply = "";
         continue; // Try next model in chain
       }
@@ -1546,7 +1717,17 @@ async function handleStreamChat(req, url, res) {
   // (the brain) chose `autoHintProvider`; buildBrainOrder turns it into the ranked,
   // key-filtered order this loop walks. Each provider's streamer body is unchanged: on
   // success it returns; on auto-mode failure it falls through to the next brain pick.
-  for (const _p of buildBrainOrder({ requestedProvider, hintProvider: autoHintProvider })) {
+  _turnStart = Date.now();   // reset so cloud leaderboard latency measures the actual provider turn
+  const _brainOrder = buildBrainOrder({ requestedProvider, hintProvider: autoHintProvider });
+  for (let _pIdx = 0; _pIdx < _brainOrder.length; _pIdx++) {
+    const _p = _brainOrder[_pIdx];
+    // A pinned provider leads but backstops through the rest of the order; only emit a
+    // hard error if the pinned provider is also the LAST one standing. Otherwise its
+    // failure falls through to the next provider so chat still answers.
+    const _isLastProvider = _pIdx === _brainOrder.length - 1;
+    // A pinned provider's failure is only a hard error when it's the last option;
+    // otherwise it falls through to the backstop. Gates every per-provider guard.
+    const _hardPin = requestedProvider && _isLastProvider;
     fullReply = "";   // fresh per provider — never carry a failed attempt's partial text
 
   // Provider: Gemini (streaming)
@@ -1564,16 +1745,18 @@ async function handleStreamChat(req, url, res) {
         const tools = toolRunner.geminiTools({ operator });
         if (tools[0] && tools[0].functionDeclarations.length) {
           const geminiModelName = modelFor("gemini");
-          const generationConfig = { maxOutputTokens: isRpMode ? 1536 : 1024, temperature: isRpMode ? 0.88 : 0.7 };
+          const generationConfig = { maxOutputTokens: isRpMode ? 2048 : 4096, temperature: isRpMode ? 0.88 : 0.7 }; // #1210: room for multi-call tool reasoning + answer
           const contents = [
             ...compacted.map((h) => ({ role: h.role === "assistant" ? "model" : "user", parts: [{ text: h.text }] })),
             { role: "user", parts: [{ text: message }] },
           ];
           const MAX_TOOL_ITERS = 6;
           let toolCalls = 0;
+          const geminiTransport = require("./gemini-transport").geminiTransport;
           for (let iter = 0; iter < MAX_TOOL_ITERS; iter++) {
             const turn = await geminiToolTurn({
-              apiKey: geminiKey, model: geminiModelName, contents, tools,
+              transport: await geminiTransport({ model: geminiModelName, apiKey: geminiKey }),
+              model: geminiModelName, contents, tools,
               systemInstruction: systemPrompt, generationConfig,
               onToken: (t) => { fullReply += t; sendToken(t); },
             });
@@ -1609,7 +1792,7 @@ async function handleStreamChat(req, url, res) {
           sendDone("gemini", { agent: doneAgentName, provider: "gemini", model: modelFor("gemini"), online: true, cleanText, suggestions, webSuggestions });
           return;
         }
-        if (requestedProvider && !requestedProvider.startsWith("gemini-")) { sendError(humanError(err)); sendFail(err.message); return; }
+        if (_hardPin && !requestedProvider.startsWith("gemini-")) { sendError(humanError(err)); sendFail(err.message); return; }
         // else: fall through to grounded single-shot / model chain
       }
     }
@@ -1626,7 +1809,10 @@ async function handleStreamChat(req, url, res) {
     try {
       // Grounding: Google Search enabled by default on gemini-3.x models (5K free/month)
       // Disable with GEMINI_GROUNDING=false if needed
-      const isGroundable = geminiModel.startsWith("gemini-3");
+      const { geminiTransport, useVertex } = require("./gemini-transport");
+      // Google Search grounding only on the AI Studio wire (Vertex uses a different
+      // grounding schema; keep Vertex calls plain so they just work + spend credits).
+      const isGroundable = geminiModel.startsWith("gemini-3") && !useVertex();
       const groundingEnabled = process.env.GEMINI_GROUNDING !== "false" && isGroundable;
       const searchInstruction = groundingEnabled ? "\n\nYou have access to live web search. Use it to find current information, verify facts, or answer questions about recent events when relevant." : "";
       const geminiPayloadBase = {
@@ -1637,14 +1823,15 @@ async function handleStreamChat(req, url, res) {
         geminiPayloadBase.tools = [{ googleSearch: {} }];
       }
       const payload = JSON.stringify(geminiPayloadBase);
+      const _gt = await geminiTransport({ model: geminiModel, apiKey: geminiKey });
       await new Promise((resolve, reject) => {
         const req2 = https.request({
           agent: llmAgent,
-          hostname: "generativelanguage.googleapis.com",
-          path: `/v1beta/models/${geminiModel}:streamGenerateContent?alt=sse&key=${geminiKey}`,
+          hostname: _gt.hostname,
+          path: _gt.path,
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            ..._gt.headers,
             "Content-Length": Buffer.byteLength(payload),
           },
         }, (upstream) => {
@@ -1708,10 +1895,21 @@ async function handleStreamChat(req, url, res) {
       return;
     } catch (err) {
       recordProviderFailure("gemini", err.message);
-      // On 429/quota, try next model in chain before emitting error
-      const is429 = err.message.includes("429") || err.message.includes("quota");
-      if (is429) { fullReply = ""; continue; } // retry with next model silently
-      if (requestedProvider) {
+      // On transient errors (429/quota, 5xx "high demand", timeout) try the next
+      // model in the chain before emitting an error. A 503 on a middle model must
+      // not abort the chain before it reaches a working model (#1234).
+      const msg = err.message || "";
+      const isTransient =
+        msg.includes("429") ||
+        msg.includes("quota") ||
+        /gemini_status_5\d\d/.test(msg) || // 500/502/503/504 high-demand
+        msg.includes("gemini_timeout");
+      if (isTransient) { fullReply = ""; continue; } // retry with next model silently
+      // Terminal gemini failure (chain exhausted / non-transient): record to the
+      // leaderboard so PCSF learns provider reliability. Not reached on a
+      // transient retry that later succeeds (that path `continue`d above). (#1236)
+      try { recordModelOutcome("gemini", leaderboardTaskType, false, Date.now() - _turnStart); } catch { /* never break a reply */ }
+      if (_hardPin) {
         sendError(humanError(err));
         sendFail(err.message);
         return;
@@ -1752,7 +1950,7 @@ async function handleStreamChat(req, url, res) {
             for (let iter = 0; iter < MAX_TOOL_ITERS; iter++) {
               const { assistantContent, toolUses, stopReason } = await anthropicToolTurn({
                 anthropicKey, model: claudeModel, system, messages: convo, tools,
-                maxTokens: isRpMode ? 1536 : 1024,
+                maxTokens: isRpMode ? 2048 : 4096, // #1210: room for multi-call tool reasoning + answer
                 onToken: (t) => { fullReply += t; sendToken(t); },
               });
               if (!toolUses.length || stopReason !== "tool_use") break; // model gave its answer
@@ -1789,7 +1987,7 @@ async function handleStreamChat(req, url, res) {
             sendDone("anthropic", { agent: doneAgentName, provider: "anthropic", model: claudeModel, online: true, cleanText, suggestions, webSuggestions });
             return;
           }
-          if (requestedProvider) { sendError(humanError(err)); await streamLocalFallback(err.message); return; }
+          if (_hardPin) { sendError(humanError(err)); await streamLocalFallback(err.message); return; }
           // else (auto mode, nothing streamed yet): fall through to the single-shot path
         }
       }
@@ -1881,7 +2079,10 @@ async function handleStreamChat(req, url, res) {
       const errorCode = err.message.includes("anthropic_status_") ? err.message : "unknown";
       recordProviderFailure("anthropic", err.message);
       recordProviderFailureRouter("anthropic", errorCode); // Also log to provider-router
-      if (requestedProvider) {
+      // Terminal anthropic failure for this turn (no within-block retry-then-success):
+      // record to the PCSF leaderboard so it learns provider reliability (#1236).
+      try { recordModelOutcome("anthropic", leaderboardTaskType, false, Date.now() - _turnStart); } catch { /* never break a reply */ }
+      if (_hardPin) {
         sendError(humanError(err));
         await streamLocalFallback(err.message);
         return;
@@ -1943,7 +2144,7 @@ async function handleStreamChat(req, url, res) {
           sendDone("openai", { agent: doneAgentName, provider: "openai", model: modelFor("openai"), online: true, cleanText, suggestions, webSuggestions });
           return;
         }
-        if (requestedProvider) { sendError(humanError(err)); sendFail(err.message); return; }
+        if (_hardPin) { sendError(humanError(err)); sendFail(err.message); return; }
         // else (auto mode, nothing streamed): fall through to the single-shot path
       }
     }
@@ -2015,7 +2216,8 @@ async function handleStreamChat(req, url, res) {
       const errorCode = err.message.includes("openai_status_") ? err.message : "unknown";
       recordProviderFailure("openai", err.message);
       recordProviderFailureRouter("openai", errorCode); // Also log to provider-router
-      if (requestedProvider) {
+      try { recordModelOutcome("openai", leaderboardTaskType, false, Date.now() - _turnStart); } catch { /* never break a reply */ } // #1236
+      if (_hardPin) {
         sendError(humanError(err));
         sendFail(err.message);
         return;
@@ -2075,7 +2277,7 @@ async function handleStreamChat(req, url, res) {
           sendDone("grok", { agent: doneAgentName, provider: "grok", model: modelFor("xai"), online: true, cleanText, suggestions, webSuggestions });
           return;
         }
-        if (requestedProvider) { sendError(humanError(err)); sendFail(err.message); return; }
+        if (_hardPin) { sendError(humanError(err)); sendFail(err.message); return; }
         // else: fall through to single-shot
       }
     }
@@ -2121,7 +2323,9 @@ async function handleStreamChat(req, url, res) {
       return;
     } catch (err) {
       recordProviderFailure("xai", err.message);
-      if (requestedProvider) {
+      // Record under "grok" to match the success key (sendDone reports provider "grok"). (#1236)
+      try { recordModelOutcome("grok", leaderboardTaskType, false, Date.now() - _turnStart); } catch { /* never break a reply */ }
+      if (_hardPin) {
         sendError(humanError(err));
         sendFail(err.message);
         return;
@@ -2248,7 +2452,7 @@ async function handleStreamChat(req, url, res) {
         // 200 OK but no tokens — ouro:latest proxy manifest without ouro_serve.py (#996)
         console.warn(`[stream-chat] ollama direct-http: 200 OK but 0 bytes from ${ollamaModel} — is ouro_serve.py running?`);
         recordProviderFailure("ollama", "direct_http_empty_reply");
-        if (requestedProvider) {
+        if (_hardPin) {
           sendError("Local model returned empty response. Start ouro_serve.py to back the ouro:latest proxy.");
           sendFail("ollama_empty_reply");
           return;
@@ -2257,7 +2461,7 @@ async function handleStreamChat(req, url, res) {
       }
     } catch (err) {
       recordProviderFailure("ollama", err.message);
-      if (requestedProvider) {
+      if (_hardPin) {
         sendError(humanError(err));
         sendFail(err.message);
         return;

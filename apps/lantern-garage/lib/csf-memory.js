@@ -10,6 +10,7 @@ const DREAM_JOURNAL_PATH = path.join(repoRoot, "data", "dream_journal");
 const TESSERACT_MANIFEST = path.join(repoRoot, "data", "tesseract", "manifest.json");
 const DOOR_STATE_PATH = path.join(DREAM_JOURNAL_PATH, "door_state.json");
 const RAG_HOUSE_PATH = path.join(repoRoot, "data", "rag-house", "flat-rag-house-latest.json");
+const CONVERSATION_LOG_PATH = path.join(repoRoot, "data", "conversations", "garage-conversations.jsonl");
 
 let _cache = { memories: null, ingest: null, ts: 0 };
 const CACHE_TTL_MS = 10_000;
@@ -244,6 +245,35 @@ function buildCSFContext() {
   return { memories, ingest, doors: loadDoorState() };
 }
 
+// Cross-session chat memory: recall the most relevant PAST chat turns (across ALL sessions)
+// for the current message, so the chat "remembers what we discussed" beyond the live history
+// window. Reuses the existing conversation-store log (data/conversations/garage-conversations.jsonl)
+// — NOT a new memory system. In-process, fail-safe.
+function queryConversationMemory(message, limit = 4) {
+  if (!message) return [];
+  const text = _readText(CONVERSATION_LOG_PATH);
+  if (!text) return [];
+  const lines = text.trim().split("\n").filter(Boolean);
+  const window = lines.slice(-600); // bounded scan; the log is rotated at ~5MB
+  const cur = String(message).trim().toLowerCase();
+  const seen = new Set();
+  const scored = [];
+  for (const line of window) {
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    const t = e && typeof e.text === "string" ? e.text.trim() : "";
+    if (!t || e.role === "system" || e.role === "note") continue;
+    if (t.toLowerCase() === cur) continue;          // never recall the current question itself
+    const score = relevanceScore(t, message);
+    if (score < 0.4) continue;                        // require real topical overlap
+    const key = t.slice(0, 80).toLowerCase();
+    if (seen.has(key)) continue;                      // de-dup near-identical turns
+    seen.add(key);
+    scored.push({ role: e.role, text: t, score, at: e.recordedAt || "" });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
 // New: query-time relevance-filtered context — compact, ~500-1500 chars max
 function formatCSFContextForPrompt(message) {
   const parts = [];
@@ -268,6 +298,18 @@ function formatCSFContextForPrompt(message) {
     if (dreams.length > 0) {
       const dreamText = dreams.map(e => `- ${e.text.slice(0, 100)}`).join("\n");
       parts.push(`Recent dreams:\n${dreamText}`);
+    }
+
+    // Cross-session chat memory — what we actually discussed before, recalled by relevance.
+    // This is what makes the chat "remember" across separate sessions. The framing is assertive:
+    // these are REAL recalled turns, so the model references them instead of disowning them as
+    // "inferred" (which the anti-fabrication system prompt otherwise causes).
+    const convo = queryConversationMemory(message, 4);
+    if (convo.length > 0) {
+      const convoText = convo
+        .map(c => `- ${c.role === "lantern" ? "You (Keystone) previously said" : "The user previously said"}: ${c.text.slice(0, 220)}`)
+        .join("\n");
+      parts.push(`Recalled memory — verbatim excerpts from THIS user's earlier conversations with you (persisted across sessions). These ARE real prior turns: rely on them, and when the user asks what you discussed, answer directly from them. Do NOT claim you "have no record" or that the details were "inferred" — you genuinely remember this:\n${convoText}`);
     }
   }
 
@@ -336,6 +378,7 @@ module.exports = {
   queryDreamEntries,
   queryRagHouse,
   queryResearchLibrary,
+  queryConversationMemory,
   loadDoorState,
   saveDoorState,
   saveDoorChoice,

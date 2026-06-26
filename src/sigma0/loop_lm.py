@@ -53,9 +53,9 @@ def _stability_gates(A_tensor):
         _src = os.path.join(os.path.dirname(__file__), "..", "..")
         if _src not in sys.path:
             sys.path.insert(0, _src)
-        from cio_sde.collapse import stability_gates  # noqa: PLC0415
+        from cio_sde.collapse import stability_gates, dichotomy_certificate  # noqa: PLC0415
         g = stability_gates(A_tensor, margin=0.0)
-        return {
+        out = {
             "gate_numerical_range": g.gate_numerical_range,
             "gate_lyapunov": g.gate_lyapunov,
             "gate_pseudospectral": g.gate_pseudospectral,
@@ -66,6 +66,26 @@ def _stability_gates(A_tensor):
             "lyapunov_transient_bound": _finite(g.lyapunov_transient_bound),
             "kreiss_bound": _finite(g.kreiss_bound),
         }
+        # #768 contraction half — the non-normal spectral dichotomy. The gates above
+        # certify contraction of the FULL Jacobian (and over-reject non-normal A); the
+        # dichotomy splits by A's own spectrum (cross-term vanishes by invariance) and
+        # reports the actual fate of the ungrounded decode drift: COLLAPSE onto the slow
+        # manifold vs DIVERGE. Purely diagnostic; reported, not consumed by the gate.
+        try:
+            dc = dichotomy_certificate(A_tensor, delta=0.0)
+            out["dichotomy"] = {
+                "fate": dc.fate,
+                "collapses": dc.collapses,
+                "active_dim": dc.active_dim,
+                "slow_dim": dc.slow_dim,
+                "slow_abscissa": _finite(dc.slow_abscissa),
+                "active_decay_rate": _finite(dc.active_decay_rate),
+                "transient_bound": _finite(dc.transient_bound),
+                "invariance_residual": _finite(dc.invariance_residual),
+            }
+        except Exception:
+            out["dichotomy"] = None
+        return out
     except Exception:
         return None
 

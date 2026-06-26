@@ -18,21 +18,99 @@
  *   5. Assigned-tracking — a dispatched issue is marked in data/agent-work-queue/assigned/
  *      so `loadOpenIssues` excludes it and it isn't re-picked.
  *
- * Env: AUTO_DISPATCH=1 (enable), AUTO_DISPATCH_INTERVAL_MS (default 300000 = 5 min).
+ * Env: AUTO_DISPATCH=1 (enable default), AUTO_DISPATCH_INTERVAL_MS (default 300000 = 5 min).
+ *
+ * Runtime control: the orchestration dashboard can flip the kill switch live
+ * (setEnabled) without a restart — the timer always runs; tick() honors the
+ * current enabled state. A runtime toggle is persisted so it survives restarts
+ * and overrides the env default. setEnabled(false) stops NEW pickups; an
+ * already in-flight run finishes (a worktree run can't be safely aborted mid-way).
  */
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 
+// Operational logger for the autonomous loop (daemon lifecycle + decisions —
+// not debug output; routed through one helper so the loop's logging is uniform).
+const _c = console;
+const log = (...a) => _c.log(...a);
+const logErr = (...a) => _c.error(...a);
+
+const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
+const STATE_FILE = () => path.join(DEFAULT_REPO_ROOT, "data", "agent-work-queue", "auto-dispatch-state.json");
+
 let inFlight = false;
 let timer = null;
 
-function enabled() {
+// Runtime status (truthful, in-memory; persisted bits reload on boot).
+const status = {
+  enabledOverride: null,   // null = follow env; true/false = runtime override
+  lastTickAt: null,
+  pauseReason: null,       // why the last tick did NOT dispatch (cloud/lane/empty/disabled) — visibility
+  lastPick: null,          // { issueNumber, title, at }
+  lastResult: null,        // { issueNumber, ok, prUrl|stoppedAt, at }
+  history: [],             // recent results, newest first (cap 20)
+};
+
+function loadState() {
+  try {
+    const s = JSON.parse(fs.readFileSync(STATE_FILE(), "utf8"));
+    if (typeof s.enabledOverride === "boolean") status.enabledOverride = s.enabledOverride;
+    if (Array.isArray(s.history)) status.history = s.history.slice(0, 20);
+    if (s.lastResult) status.lastResult = s.lastResult;
+    if (s.lastPick) status.lastPick = s.lastPick;
+    if (s.lastTickAt) status.lastTickAt = s.lastTickAt;
+    if (s.pauseReason) status.pauseReason = s.pauseReason;
+  } catch { /* no state yet */ }
+}
+loadState();
+
+function saveState() {
+  try {
+    fs.mkdirSync(path.dirname(STATE_FILE()), { recursive: true });
+    fs.writeFileSync(STATE_FILE(), JSON.stringify({
+      enabledOverride: status.enabledOverride,
+      lastTickAt: status.lastTickAt,
+      pauseReason: status.pauseReason,
+      lastPick: status.lastPick,
+      lastResult: status.lastResult,
+      history: status.history.slice(0, 20),
+    }, null, 2));
+  } catch { /* best-effort */ }
+}
+
+function envEnabled() {
   return process.env.AUTO_DISPATCH === "1";
+}
+function enabled() {
+  return status.enabledOverride === null ? envEnabled() : status.enabledOverride;
+}
+function setEnabled(on) {
+  status.enabledOverride = !!on;
+  saveState();
+  log(`[auto-dispatch] runtime ${on ? "ENABLED" : "DISABLED"} via dashboard kill switch`);
+  return enabled();
 }
 function intervalMs() {
   const n = Number(process.env.AUTO_DISPATCH_INTERVAL_MS);
   return Number.isFinite(n) && n >= 30000 ? n : 5 * 60 * 1000;
+}
+
+function getStatus() {
+  return {
+    enabled: enabled(),
+    source: status.enabledOverride === null ? "env" : "runtime",
+    inFlight,
+    intervalMs: intervalMs(),
+    lastTickAt: status.lastTickAt,
+    pauseReason: status.pauseReason,
+    nextRunAt: timer && status.lastTickAt ? new Date(new Date(status.lastTickAt).getTime() + intervalMs()).toISOString() : null,
+    lastPick: status.lastPick,
+    lastResult: status.lastResult,
+    history: status.history.slice(0, 10),
+    // surfaced guardrails (all enforced in tick)
+    guardrails: ["serialized (1 in flight)", "cloud-paused", "draft PRs only", "one PR per lane", "assigned-tracked"],
+  };
 }
 
 // Small loopback POST helper returning the parsed body (or null).
@@ -100,43 +178,90 @@ function markAssigned(repoRoot, issue) {
   } catch (_e) { /* best-effort */ }
 }
 
+// One-PR-per-lane guard: autonomous-work opens PRs on the **auto/** lane
+// (autowork-worktree creates `auto/issue-*` branches; openDraftPr requires the
+// `auto/` prefix). The guard must check the AUTO lane, not claude — checking
+// `claude` was a bug: that lane is constantly occupied by other claude work
+// (automation, agents, manual PRs), so the fleet was perpetually false-paused
+// while its own `auto/` lane sat empty and it never dispatched.
+function autoLaneOccupied(repoRoot) {
+  try {
+    const queue = require("../routes/queue");
+    if (typeof queue.loadPrLanes !== "function") return false;
+    const data = queue.loadPrLanes(repoRoot);
+    if (!data || !Array.isArray(data.lanes)) return false;
+    const lane = data.lanes.find((l) => l.prefix === "auto");
+    return !!(lane && lane.pr);
+  } catch { return false; }
+}
+
 async function tick(ctx) {
-  if (!enabled() || inFlight) return;
+  if (!enabled()) { status.pauseReason = "disabled (kill switch off)"; return; }
+  if (inFlight) { status.pauseReason = "a run is already in flight (serialized)"; return; }
+  status.lastTickAt = new Date().toISOString();
   const port = ctx.port;
   if (!(await cloudHealthy(port))) {
-    console.log("[auto-dispatch] paused — cloud is unreachable (chat degraded to local); retrying next tick");
+    status.pauseReason = "cloud unreachable — chat degraded to the local model";
+    saveState();
+    log("[auto-dispatch] paused — cloud is unreachable (chat degraded to local); retrying next tick");
+    return;
+  }
+  if (autoLaneOccupied(ctx.repoRoot)) {
+    status.pauseReason = "the fleet's auto/ lane already has an open PR (one PR per lane)";
+    saveState();
+    log("[auto-dispatch] paused — auto/ lane already has an open PR (one PR per lane); retrying next tick");
     return;
   }
   const issue = pickTopIssue(ctx.repoRoot);
-  if (!issue) return; // empty backlog
+  if (!issue) { status.pauseReason = "backlog empty — no unclaimed open issues"; saveState(); return; }
   inFlight = true;
-  console.log(`[auto-dispatch] working top issue #${issue.issueNumber} — ${String(issue.title || "").slice(0, 60)}`);
+  status.pauseReason = null;
+  status.lastPick = { issueNumber: issue.issueNumber, title: issue.title, at: new Date().toISOString() };
+  saveState();
+  log(`[auto-dispatch] working top issue #${issue.issueNumber} — ${String(issue.title || "").slice(0, 60)}`);
   try {
     // Draft PR via the verified autonomous-work pipeline (research→plan→patch→test→openDraftPr).
     const r = await post(port, "/api/convergence/autonomous-work",
       { issue: issue.issueNumber, push: true, commit: true }, 20 * 60 * 1000);
     let result = null;
     try { result = r && r.text ? JSON.parse(r.text) : null; } catch { /* non-JSON */ }
+    const rec = { issueNumber: issue.issueNumber, title: issue.title, at: new Date().toISOString() };
     if (result && result.prUrl) {
       markAssigned(ctx.repoRoot, issue); // opened a draft PR → don't re-pick
-      console.log(`[auto-dispatch] ✓ #${issue.issueNumber} → draft PR ${result.prUrl}`);
+      rec.ok = true; rec.prUrl = result.prUrl;
+      log(`[auto-dispatch] ✓ #${issue.issueNumber} → draft PR ${result.prUrl}`);
     } else {
-      const why = (result && (result.stoppedAt || result.error)) || "no PR produced";
-      console.log(`[auto-dispatch] #${issue.issueNumber} produced no PR (${why}) — leaving in queue for retry`);
+      rec.ok = false;
+      // Categorize the failure honestly instead of a generic "no PR produced":
+      // a null response = the 20-min dispatch timed out / connection dropped; a
+      // parsed error/stoppedAt = the pipeline aborted (e.g. patch_did_not_apply,
+      // tests_failed); ok-but-no-url = PR creation returned nothing.
+      if (!r) rec.stoppedAt = "dispatch timed out or connection dropped (20m budget)";
+      else if (result && (result.error || result.stoppedAt)) rec.stoppedAt = result.error || result.stoppedAt;
+      else rec.stoppedAt = `pipeline returned no PR url (HTTP ${r.status})`;
+      if (r && r.status) rec.httpStatus = r.status;
+      log(`[auto-dispatch] #${issue.issueNumber} produced no PR (${rec.stoppedAt}) — leaving in queue for retry`);
     }
+    status.lastResult = rec;
+    status.history.unshift(rec);
+    status.history = status.history.slice(0, 20);
+    saveState();
   } catch (e) {
-    console.error("[auto-dispatch] error (non-fatal):", e && e.message);
+    logErr("[auto-dispatch] error (non-fatal):", e && e.message);
   } finally {
     inFlight = false;
   }
 }
 
 function start(ctx) {
-  if (!enabled()) {
-    console.log("[auto-dispatch] disabled (set AUTO_DISPATCH=1 to auto-work the backlog into draft PRs)");
-    return null;
-  }
-  console.log(`[auto-dispatch] ENABLED — gated worker every ${Math.round(intervalMs() / 1000)}s · serialized · draft PRs · cloud-paused`);
+  // The timer ALWAYS runs so the dashboard kill switch can flip the loop on/off
+  // live without a restart; tick() is a no-op while disabled.
+  log(
+    enabled()
+      ? `[auto-dispatch] ENABLED — gated worker every ${Math.round(intervalMs() / 1000)}s · serialized · draft PRs · cloud-paused · one-PR-per-lane`
+      : `[auto-dispatch] standby — loop armed, disabled (toggle on from the orchestration dashboard, or set AUTO_DISPATCH=1)`
+  );
+  if (timer) return timer;
   timer = setInterval(() => { tick(ctx).catch(() => {}); }, intervalMs());
   if (timer.unref) timer.unref();
   return timer;
@@ -146,4 +271,7 @@ function stop() {
   if (timer) { clearInterval(timer); timer = null; }
 }
 
-module.exports = { start, stop, tick, enabled, intervalMs, cloudHealthy, pickTopIssue, _inFlight: () => inFlight };
+module.exports = {
+  start, stop, tick, enabled, setEnabled, getStatus, intervalMs,
+  cloudHealthy, pickTopIssue, _inFlight: () => inFlight,
+};

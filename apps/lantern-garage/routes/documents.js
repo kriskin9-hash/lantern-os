@@ -81,6 +81,40 @@ module.exports = async function documentRoutes(req, res, url, deps) {
   const { sendJson, sendFile, repoRoot } = deps;
   const workDir = path.join(repoRoot, "data", "documents");
 
+  // POST /api/document/generate — generate a downloadable document (pdf/md/html) from a prompt
+  // (content written by the model) or supplied markdown. Markdown → print-styled PDF via Playwright.
+  if (url.pathname === "/api/document/generate" && req.method === "POST") {
+    try {
+      const raw = await deps.collectRequestBody(req, 2 * 1024 * 1024);
+      const body = JSON.parse(raw || "{}");
+      const { generateDocument } = require("../lib/document-builder");
+      const result = await generateDocument({
+        prompt: String(body.prompt || ""),
+        markdown: String(body.markdown || ""),
+        title: String(body.title || ""),
+        format: String(body.format || "pdf"),
+      });
+      sendJson(res, result, result.ok ? 200 : 502);
+    } catch (err) {
+      sendJson(res, { ok: false, error: err.message }, 500);
+    }
+    return true;
+  }
+
+  // GET /api/document/download?file=<name> — serve a generated document.
+  if (url.pathname === "/api/document/download" && req.method === "GET") {
+    const file = (url.searchParams.get("file") || "").replace(/[^a-zA-Z0-9._-]/g, "");
+    if (!file || file.includes("..")) { sendJson(res, { error: "invalid file" }, 400); return true; }
+    const { DOCS_DIR } = require("../lib/document-builder");
+    const fp = path.join(DOCS_DIR, file);
+    if (!fs.existsSync(fp)) { sendJson(res, { error: "not found" }, 404); return true; }
+    // Content-Type is set by sendFile from the extension (incl. docx/xlsx/pptx);
+    // we only force the download disposition + filename here.
+    res.setHeader("Content-Disposition", `attachment; filename="${file}"`);
+    sendFile(res, fp);
+    return true;
+  }
+
   // GET /api/documents/file?id=<id> — download a processed document
   if (url.pathname === "/api/documents/file" && req.method === "GET") {
     const id = (url.searchParams.get("id") || "").replace(/[^a-zA-Z0-9_-]/g, "");

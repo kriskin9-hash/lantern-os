@@ -7,10 +7,46 @@
 const http = require("http");
 const https = require("https");
 const path = require("path");
+const fs = require("fs");
 const { appendJsonlQueued } = require("./file-queue");
 
 const CACHE_TTL_MS = 60_000;
 const PROVIDER_CALL_LOG_PATH = path.resolve(__dirname, "..", "..", "data", "provider-calls.jsonl");
+// lib/ -> lantern-garage -> apps -> repo root (3 levels up).
+const PCSF_PROVIDER_PATH = path.resolve(__dirname, "..", "..", "..", "data", "pcsf", "provider.pcsf.json");
+
+// ── PCSF live ranking ────────────────────────────────────────────────────────
+// provider.pcsf.json is the persisted, inspectable provider ranking — refreshed
+// from real leaderboard outcomes by lib/pcsf-refresh.js. It is the SOURCE OF
+// TRUTH for provider order; the static PROVIDER_CHAINS below is the candidate set
+// + cold fallback when PCSF has no ranking yet. Kill-switch: PCSF_ROUTING=0.
+let _pcsfRoutingCache = { at: 0, byTask: null };
+function loadPcsfRouting() {
+  if (process.env.PCSF_ROUTING === "0") return null;
+  const now = Date.now();
+  if (now - _pcsfRoutingCache.at < CACHE_TTL_MS) return _pcsfRoutingCache.byTask;
+  let byTask = null;
+  try {
+    const raw = JSON.parse(fs.readFileSync(PCSF_PROVIDER_PATH, "utf8"));
+    if (raw && raw.routing && raw.routing.by_task_type) byTask = raw.routing.by_task_type;
+  } catch { byTask = null; }
+  _pcsfRoutingCache = { at: now, byTask };
+  return byTask;
+}
+
+/** Reorder a static chain so providers follow the PCSF ranking for this task.
+ *  Providers absent from the PCSF list keep their static order, after ranked ones. */
+function orderChainByPcsf(chain, taskType, byTaskOverride) {
+  const byTask = byTaskOverride !== undefined ? byTaskOverride : loadPcsfRouting();
+  const order = byTask && (byTask[taskType] || byTask.default);
+  if (!Array.isArray(order) || !order.length) return { chain, ranked: false };
+  const rank = new Map(order.map((p, i) => [String(p).toLowerCase(), i]));
+  const reordered = chain
+    .map((step, i) => ({ step, i, r: rank.has(step.provider) ? rank.get(step.provider) : Infinity }))
+    .sort((a, b) => (a.r - b.r) || (a.i - b.i))
+    .map((x) => x.step);
+  return { chain: reordered, ranked: true };
+}
 
 // Provider configuration with fallback chains by task type
 const PROVIDER_CHAINS = {
@@ -22,8 +58,12 @@ const PROVIDER_CHAINS = {
     { provider: "anthropic", models: ["claude-opus-4-8"] },
   ],
 
+  // Local model order here is the coarse fallback; lib/local-model-registry.js is
+  // the source of truth for which LOCAL model leads (VRAM-gated, Ouro-default /
+  // capability-first aware — see docs/SIGMA0-MODEL-ADAPTER.md). Ouro leads by
+  // decision (2026-06-26); Qwen is the opt-in capability lever behind it.
   coding: [
-    { provider: "ollama", models: ["qwen2.5-coder", "deepseek"] },
+    { provider: "ollama", models: ["ouro:latest", "qwen2.5-coder"] },
     { provider: "mistral", models: ["mistral-large-latest"] },
     { provider: "anthropic", models: ["claude-opus-4-8", "claude-sonnet-4-6"] },
     { provider: "openai", models: ["gpt-4-turbo", "gpt-4o-mini"] },
@@ -106,8 +146,11 @@ async function selectProvider(message, taskType = "default", requestedProvider =
     }
   }
 
-  // Use task type to select chain
-  const chain = PROVIDER_CHAINS[taskType] || PROVIDER_CHAINS.default;
+  // Use task type to select chain, then reorder by the live PCSF ranking
+  // (provider.pcsf.json, refreshed from leaderboard outcomes). PCSF is the source
+  // of truth for order; the static chain is the candidate set + cold fallback.
+  const baseChain = PROVIDER_CHAINS[taskType] || PROVIDER_CHAINS.default;
+  const { chain, ranked: pcsfRanked } = orderChainByPcsf(baseChain, taskType);
 
   // LEADERBOARD_ROUTING: rank cloud(with key) + local together by compositeScore
   // and pick the best on merit (Auto mode only). Default off → legacy chain order.
@@ -152,7 +195,7 @@ async function selectProvider(message, taskType = "default", requestedProvider =
         provider: step.provider,
         model: step.models[0],
         chain: step.models.slice(1),
-        reason: `task_type:${taskType}`,
+        reason: pcsfRanked ? `pcsf_rank:${taskType}` : `task_type:${taskType}`,
       };
     }
   }
@@ -460,4 +503,6 @@ module.exports = {
   getProviderStatus,
   selectKernelProvider,
   PROVIDER_CHAINS,
+  loadPcsfRouting,
+  orderChainByPcsf,
 };

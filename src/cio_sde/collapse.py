@@ -420,6 +420,138 @@ def stability_gates(A: Tensor, margin: float = 0.0, pseudo_eps: float = 1e-2) ->
     )
 
 
+# ── #768 contraction half — Theorem 1 for NON-NORMAL A (spectral dichotomy) ───
+
+@dataclass
+class DichotomyCertificate:
+    """Theorem 1's collapse-onto-the-manifold guarantee, extended to NON-NORMAL A.
+
+    Theorem 1 (CollapseCertificate) splits the state by the SYMMETRIC part A_s and
+    runs an energy V=½‖P_M x‖² on the active modes. For non-normal A the cross-term
+    P_M A P_N ≠ 0 breaks V̇ ≤ 2αV, and the A_s-null manifold is not even invariant —
+    so that proof genuinely fails. The fix is to split by A's OWN spectrum:
+
+      active M = {Re λ < −δ},  slow/center N = {Re λ ≥ −δ}.
+
+    These are A-invariant, so the oblique Riesz projector commutes with A and the
+    cross-term that defeats the energy proof is identically zero (measured by
+    `invariance_residual`). Then:
+
+      • (active) on M, A is Hurwitz (abscissa ≤ −δ). The reduced Lyapunov metric P
+        (AᴹᵀP+PAᴹ=−I) gives ‖e^{tA}Π_M x‖ ≤ √cond(P)·e^{−t/(2λ_max(P))}‖Π_M x‖ → 0:
+        the active modes ALWAYS decay, after a bounded transient √cond(P) (the
+        non-normality shows up only as that finite overshoot, never as a failure to
+        contract). This is the SAME Lyapunov metric as stability_gates(), on Aᴹ.
+      • (fate) decided purely by β = max Re λ(N): β > 0 ⇒ DIVERGE; β < 0 ⇒ COLLAPSE
+        (whole system Hurwitz); β ≈ 0 ⇒ MARGINAL — bounded collapse onto the center
+        manifold (assuming the axis modes are semisimple; a defective imaginary-axis
+        eigenvalue gives polynomial growth, a measure-zero boundary). No third fate:
+        the active part always dies, so only sign(β) decides.
+
+    For NORMAL A the Riesz projector IS the orthogonal A_s-projector and this reduces
+    to Theorem 1 exactly — so this strictly generalizes CollapseCertificate.
+
+    HONEST SCOPE: contraction of the LOCAL linear Jacobian onto its slow manifold —
+    NOT a global non-collapse guarantee. Grounding remains the safety mechanism.
+    See docs/SIGMA0-T1-NONNORMAL-DICHOTOMY.md.
+    """
+    fate: str                  # "COLLAPSE" | "MARGINAL" | "DIVERGE"
+    collapses: bool            # active decays AND slow stays bounded (β ≤ tol)
+    active_dim: int
+    slow_dim: int
+    active_abscissa: float     # max Re λ on M  (≤ −δ by construction; −inf if empty)
+    slow_abscissa: float       # β = max Re λ on N — the quantity that decides the fate
+    active_decay_rate: float   # 1/(2λ_max(P)): provable finite-t Lyapunov rate on M
+    transient_bound: float     # √cond(P): bound on the active transient overshoot
+    invariance_residual: float # ‖(I−BBᵀ)A B‖ — numerical quality of the split (→0)
+    delta: float
+
+    def summary(self) -> str:
+        return (
+            f"dichotomy[#768]: fate={self.fate} "
+            f"(active maxReλ={self.active_abscissa:+.4f} on {self.active_dim} modes, "
+            f"slow β={self.slow_abscissa:+.4f} on {self.slow_dim}) "
+            f"decay≥{self.active_decay_rate:.4f} transient≤{self.transient_bound:.3g} "
+            f"split-resid={self.invariance_residual:.2e}"
+        )
+
+
+@torch.no_grad()
+def dichotomy_certificate(A: Tensor, delta: float = 0.0,
+                          tol: float = 1e-7) -> DichotomyCertificate:
+    """Evaluate the non-normal spectral-dichotomy extension of Theorem 1 on A.
+
+    Splits A by its own spectrum at −δ (active = {Re λ < −δ}), certifies that the
+    active block decays (reduced Lyapunov, bounded transient), and classifies the
+    fate from the slow block's abscissa. Reuses the SAME Lyapunov metric as
+    stability_gates(), applied to the active block Aᴹ.
+
+    `delta ≥ 0` is the split threshold; use a value inside a spectral gap so the
+    Riesz projector stays well-conditioned (a near-split-line eigenvalue inflates
+    `invariance_residual`). Never raises on degeneracy — returns −inf abscissae and
+    inf transient for the empty/ill-posed blocks.
+    """
+    import numpy as np
+    Abar = A.mean(0) if A.dim() == 3 else A
+    M = Abar.detach().cpu().numpy().astype(float)
+    n = M.shape[0]
+
+    w, V = np.linalg.eig(M)
+    active_mask = w.real < -delta
+    n_active = int(active_mask.sum())
+    n_slow = n - n_active
+    active_abscissa = float(w.real[active_mask].max()) if n_active else float("-inf")
+    slow_abscissa = float(w.real[~active_mask].max()) if n_slow else float("-inf")
+
+    # oblique Riesz projector onto the active invariant subspace, then an ORTHONORMAL
+    # basis of its range (SVD) — evolving/measuring in this basis stays inside the
+    # invariant subspace, so the slow (possibly divergent) modes never contaminate it.
+    Pi_M = np.real_if_close(
+        V @ np.diag(active_mask.astype(complex)) @ np.linalg.inv(V), tol=1000).real
+    U, s, _ = np.linalg.svd(Pi_M)
+    r = int((s > 1e-9).sum())
+    B = U[:, :r] if r > 0 else np.zeros((n, 0))
+
+    # invariance residual: M is A-invariant ⟺ (I−BBᵀ)A B = 0 (the vanishing cross-term)
+    invariance_residual = (
+        float(np.linalg.norm((np.eye(n) - B @ B.T) @ M @ B)) if r > 0 else 0.0)
+
+    # active decay: reduced Lyapunov P on Aᴹ=BᵀAB (the SAME metric as stability_gates)
+    rate, transient = 0.0, float("nan")
+    if r > 0:
+        A_M = B.T @ M @ B
+        try:
+            from scipy.linalg import solve_continuous_lyapunov
+            P = solve_continuous_lyapunov(A_M.T, -np.eye(r))
+            pe = np.linalg.eigvalsh(0.5 * (P + P.T))
+            if float(pe.min()) > 0:
+                rate = float(1.0 / (2.0 * pe.max()))            # finite-t Lyapunov rate
+                transient = float(np.sqrt(pe.max() / pe.min())) # √cond(P) overshoot
+        except Exception:
+            pass
+
+    # fate — decided purely by the slow block's abscissa β (no third option)
+    if slow_abscissa > tol:
+        fate, collapses = "DIVERGE", False
+    elif slow_abscissa < -tol:
+        fate, collapses = "COLLAPSE", True
+    else:
+        fate, collapses = "MARGINAL", True   # bounded onto center (axis modes semisimple)
+
+    return DichotomyCertificate(
+        fate=fate,
+        collapses=collapses,
+        active_dim=n_active,
+        slow_dim=n_slow,
+        active_abscissa=active_abscissa,
+        slow_abscissa=slow_abscissa,
+        active_decay_rate=rate,
+        transient_bound=transient,
+        invariance_residual=invariance_residual,
+        delta=delta,
+    )
+
+
 @torch.no_grad()
 def lyapunov_value(x: Tensor, A: Tensor, eig_eps: float = 1e-2) -> float:
     """V(x) = ½‖P_M x‖² — energy in the active (non-null) subspace of A_s."""
@@ -476,18 +608,77 @@ class AntiCollapseOperator:
         return min(p_grad, p_rank, p_flat, p_ctrl)   # all must be near to act
 
     @torch.no_grad()
+    def _near_null_basis(self, A: Tensor) -> Tensor:
+        """The m smallest-|λ(A_s)| eigenvectors — the banded near-null subspace (Fix B).
+
+        m = clamp(max(hard_null_count, d − round(eff_rank)), 1, d−1).
+
+        Two corrections over the old hard `|λ| < eig_eps` cutoff (see
+        docs/SIGMA0-C3-NONCOLLAPSE-NORMAL.md §2.2):
+          • G13 — modes parked just above eig_eps no longer yield a rank-0 (blank)
+            bump: the rank deficit `d − eff_rank` guarantees `m ≥ 1` whenever
+            `cond_rank` fires.
+          • k=d clamp — `m ≤ d−1` always leaves ≥1 mode unbumped, so the covariance
+            bump creates genuine anisotropy. Bumping ALL d modes is `Σ + b·I`, a
+            uniform shift that LOWERS anisotropy (std unchanged, mean up) — the
+            opposite of the intent, and L2's denominator √(k(d−k)) − ε·k is negative
+            at k=d. Full degeneracy is handled as a k=d−1 bump.
+        """
+        Abar = 0.5 * (A.mean(0) + A.mean(0).T) if A.dim() == 3 else 0.5 * (A + A.T)
+        d = Abar.shape[-1]
+        evals, evecs = torch.linalg.eigh(Abar)
+        absval = evals.abs()
+        hard_null = int((absval < self.eig_eps).sum().item())
+        eff_rank = self.detector._effective_rank(A if A.dim() == 3 else A.unsqueeze(0))
+        m = max(hard_null, d - int(round(eff_rank)))
+        m = max(1, min(m, d - 1))                          # proper subspace: 1 ≤ m ≤ d−1
+        idx = torch.argsort(absval)[:m]                    # m smallest |λ| modes
+        return evecs[:, idx]                               # (d, m)
+
+    @torch.no_grad()
+    def _cov_floor(self, sigma: Tensor, d: int, m: int) -> float:
+        """L2's exact per-step bump threshold Δ(a, μ, d, m) — the μ-aware floor (Fix A).
+
+            Δ = (ε_a + a)·μ·d / (√(m(d−m)) − ε_a·m),   a = clip(a(Σ),0,ε_a), μ = mean λ(Σ)
+
+        Scale-equivariant (Δ ∝ μ), so a rescaling Σ ↦ cΣ — which leaves the trigger
+        invariant — cannot defeat it. Denominator > 0 since m ≤ d−1.
+        """
+        eps_a = self.detector.anisotropy_eps
+        sym = 0.5 * (sigma + sigma.transpose(-1, -2))
+        ev = torch.linalg.eigvalsh(sym).clamp_min(1e-12)
+        mu = float(ev.mean().item())
+        a = min(self.detector._anisotropy(sigma), eps_a)
+        denom = (m * (d - m)) ** 0.5 - eps_a * m
+        if denom <= 0:
+            return 0.0
+        return (eps_a + a) * mu * d / denom
+
+    @torch.no_grad()
     def excite(self, x: Tensor, sigma: Tensor, A: Tensor, p: float,
                noise: Tensor) -> tuple[Tensor, Tensor]:
-        """Return (dx_extra, sigma_extra) injected along the null subspace."""
-        Abar = 0.5 * (A.mean(0) + A.mean(0).T)
-        evals, evecs = torch.linalg.eigh(Abar)
-        null = evecs[:, evals.abs() < self.eig_eps]      # (d, k)
-        if null.shape[1] == 0:
-            return torch.zeros_like(x), torch.zeros_like(sigma)
-        coeff = noise @ null                              # (B, k) random in null
+        """Return (dx_extra, sigma_extra) injected along the banded near-null subspace.
+
+        Two decoupled legs (docs/SIGMA0-C3-NONCOLLAPSE-NORMAL.md §2.2):
+          • covariance leg — the bump `b_cov · P_N` that breaks `cond_flat`. Its
+            magnitude is FLOORED to L2's threshold Δ (μ-aware), so one bump provably
+            lifts anisotropy above ε_a (Theorem C3, normal A). This is the certificate
+            leg.
+          • state-kick leg — the random `dx_extra` that raises ‖x‖ (and so the gradient
+            signal); kept at `strength·p` exactly as before, so the measured escape
+            behavior is unchanged.
+        """
+        null = self._near_null_basis(A)                   # (d, m), 1 ≤ m ≤ d−1
+        m = null.shape[1]
+        d = null.shape[0]
+
+        # state-kick leg — unchanged (cond_grad escape)
+        coeff = noise @ null                              # (B, m) random in null
         dx_extra = self.strength * p * (coeff @ null.T)   # back to state space
-        # re-anisotropize Σ along the recovered directions
-        bump = self.strength * p * (null @ null.T)
+
+        # covariance leg — μ-aware floor so b_cov ≥ Δ (L2 hypothesis), breaking cond_flat
+        b_cov = max(self.strength * p, self._cov_floor(sigma, d, m))
+        bump = b_cov * (null @ null.T)                    # (d, d), rank m
         sigma_extra = bump.unsqueeze(0).expand_as(sigma)
         return dx_extra, sigma_extra
 

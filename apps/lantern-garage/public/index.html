@@ -53,29 +53,16 @@
       overflow: hidden;
     }
     .hero { position: relative; text-align: center; padding: 0; }
-    .ambient {
-      position: fixed; inset: 0;
-      z-index: 0; overflow: clip;
+    /* Hero mandala — the same self-contained animated SVG used in the header,
+       sized up and centered above the title. Renders reliably in Chrome
+       (replaces the masked full-bleed ambient background that did not). */
+    .hero__mandala {
+      display: block;
+      width: clamp(88px, 14vh, 148px);
+      height: auto; aspect-ratio: 1;
+      margin: 0 auto clamp(10px, 2vh, 20px);
       pointer-events: none; user-select: none;
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 15%, #000 78%, transparent 100%);
-              mask-image: linear-gradient(to bottom, transparent 0, #000 15%, #000 78%, transparent 100%);
     }
-    .ambient__mandala {
-      position: absolute; left: 50%;
-      top: clamp(240px, 42vh, 480px);
-      width: min(160vh, 140vw, 1600px);
-      height: min(160vh, 140vw, 1600px);
-      object-fit: contain;
-      opacity: 0.48;
-      -webkit-mask-image: radial-gradient(closest-side, #000 35%, rgba(0,0,0,.45) 62%, transparent 80%);
-              mask-image: radial-gradient(closest-side, #000 35%, rgba(0,0,0,.45) 62%, transparent 80%);
-      animation: ambient-spin 72s linear infinite;
-    }
-    @keyframes ambient-spin {
-      from { transform: translate(-50%, -50%) rotate(0deg); }
-      to   { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    .site-nav, .home-main, .site-footer { position: relative; z-index: 1; }
     .hero h1 { margin-bottom: 6px; font-size: clamp(2rem, 6vw, 3.2rem); letter-spacing: -0.01em; }
     .hero .motto { font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
     .hero .tagline { color: var(--text); max-width: 560px; margin: 0 auto 20px; font-size: 1rem; line-height: 1.55; }
@@ -98,7 +85,19 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
     }
-    .home-chat button {
+    .home-chat select {
+      flex-shrink: 0;
+      padding: 0 12px; height: 46px;
+      border: 1.5px solid var(--border);
+      border-radius: 9999px;
+      background: var(--bg); color: var(--text);
+      font-size: 0.9rem; cursor: pointer; outline: none;
+      transition: border-color .18s, color .18s;
+    }
+    .home-chat select:hover { border-color: var(--accent); }
+    .home-chat select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+    @media (max-width: 520px) { .home-chat { flex-wrap: wrap; } .home-chat select { flex: 1; } }
+    .home-chat button[type="submit"] {
       padding: 12px 22px;
       border: none; border-radius: 9999px;
       background: var(--accent); color: #fff;
@@ -106,9 +105,33 @@
       cursor: pointer; white-space: nowrap;
       transition: background .18s, transform .12s;
     }
-    .home-chat button:hover { transform: scale(1.03); }
-    .home-chat button:active { transform: scale(0.97); }
+    .home-chat button[type="submit"]:hover { transform: scale(1.03); }
+    .home-chat button[type="submit"]:active { transform: scale(0.97); }
+    /* ── "+" attach button ── */
+    .home-attach-btn {
+      flex-shrink: 0;
+      width: 46px; padding: 0;
+      border: 1.5px solid var(--border);
+      border-radius: 9999px;
+      background: var(--bg); color: var(--muted);
+      font-size: 22px; line-height: 1; cursor: pointer;
+      transition: border-color .18s, color .18s, background .18s;
+    }
+    .home-attach-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .home-attach-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .home-chat.drag-over { outline: 2px dashed var(--accent); outline-offset: 5px; }
+    /* ── Whole-screen file drop overlay ── */
+    #home-drop-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px;
+      background: color-mix(in srgb, var(--accent) 16%, rgba(0,0,0,.55));
+      color: #fff; font-size: 1.4rem; font-weight: 700; text-align: center;
+      -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+      pointer-events: none;
+    }
+    #home-drop-overlay.active { display: flex; }
+    #home-drop-overlay .drop-sub { font-size: 0.85rem; font-weight: 400; opacity: .82; }
     .home-file-chip {
       display: none; align-items: center; gap: 6px;
       max-width: 560px; margin: -8px auto 0;
@@ -209,13 +232,57 @@
         background: CanvasText;
       }
     }
+
+    /* ── Flourishing world-model panel (grounded from real yearly feeds) ── */
+    .flourish-panel {
+      --tile: var(--accent);
+      position: relative; overflow: hidden;
+      max-width: 900px; width: 100%; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 11px;
+      padding: 18px 18px 16px;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+    }
+    /* match the home tiles: same top accent bar + hover treatment */
+    .flourish-panel::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--tile); transform-origin: left;
+    }
+    .flourish-panel:hover { border-color: var(--tile); box-shadow: var(--shadow-hover); }
+    .flourish-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .flourish-head .panel-label { color: var(--accent); font-size: 0.62rem; }
+    .flourish-head h2 { margin: 1px 0 0; font-size: 1.12rem; }
+    .flourish-more { font-size: 0.78rem; color: var(--accent); white-space: nowrap; align-self: center; }
+    .flourish-domains { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 20px; }
+    @media (max-width: 480px) { .flourish-domains { grid-template-columns: 1fr; } }
+    .fd-row { display: flex; flex-direction: column; gap: 4px; }
+    .fd-top { display: flex; justify-content: space-between; font-size: 0.8rem; }
+    .fd-name { text-transform: capitalize; color: var(--text); font-weight: 600; }
+    .fd-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .fd-bar { position: relative; height: 7px; border-radius: 9999px;
+              background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; }
+    .fd-ci { position: absolute; top: 0; bottom: 0;
+             background: color-mix(in srgb, var(--accent) 30%, transparent); }
+    .fd-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 9999px; background: var(--accent); }
+    .flourish-q { font-size: 0.82rem; color: var(--text); line-height: 1.45;
+                  background: color-mix(in srgb, var(--accent) 8%, transparent);
+                  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+                  border-radius: 10px; padding: 8px 11px; }
+    .flourish-q b { color: var(--accent); }
+    .flourish-pattern { font-size: 0.8rem; color: var(--text); line-height: 1.4;
+                        background: color-mix(in srgb, var(--accent) 9%, transparent);
+                        border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+                        border-radius: 10px; padding: 7px 11px; }
+    .flourish-pattern b { color: var(--accent); }
+    .flourish-pattern .fp-r { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .flourish-prov { font-size: 0.7rem; color: var(--muted); }
+    .flourish-prov a, .flourish-prov u { color: var(--muted); }
   </style>
   <title>Keystone OS</title>
 </head>
 <body>
 
-<!-- ── Ambient Σ₀ mandala — full-bleed background field, behind all content ── -->
-<div class="ambient" aria-hidden="true"><img class="ambient__mandala" src="/sigma0-mandala.svg" alt=""></div>
+<!-- ── Whole-screen file drop overlay ── -->
+<div id="home-drop-overlay" aria-hidden="true">📄 Drop to upload<span class="drop-sub">.pdf → Knowledge Center &nbsp;·&nbsp; .docx → improve &amp; rewrite</span></div>
 
 <!-- ── Site nav ── -->
 <nav class="site-nav">
@@ -242,6 +309,7 @@
 
   <!-- ── Hero ── -->
   <div class="hero">
+    <img class="hero__mandala" src="/mandala.svg" alt="" aria-hidden="true" width="148" height="148">
     <h1>Keystone OS</h1>
     <p class="motto">Observe · Remember · Reason · Act · Verify · Converge</p>
     <p class="tagline">Your AI that actually remembers you — local, private, and free.</p>
@@ -249,9 +317,20 @@
 
   <!-- ── Home chat bar ── -->
   <form class="home-chat" id="home-chat-form" onsubmit="homeChat(event)" role="search" aria-label="Start a chat">
+    <button type="button" class="home-attach-btn" id="home-attach-btn" onclick="homeAttachPick()" aria-label="Attach a file (PDF or Word .docx)" title="Attach a file — PDF or .docx">+</button>
     <input id="home-chat-input" type="text" placeholder="Ask Keystone anything…" autocomplete="off" aria-label="Chat message">
+    <select id="home-provider-pin" aria-label="Pin AI provider" title="Pin which AI provider answers (Auto = best-ranked)">
+      <option value="">Auto</option>
+      <option value="claude">Claude</option>
+      <option value="openai">ChatGPT</option>
+      <option value="gemini">Gemini</option>
+      <option value="grok">Grok</option>
+      <option value="ollama">Local Σ₀</option>
+      <option value="keystone-ft">Keystone FT</option>
+    </select>
     <button type="submit">Chat ✦</button>
   </form>
+  <input type="file" id="home-file-input" accept=".pdf,.docx" multiple style="display:none">
   <div class="home-file-chip" id="home-file-chip">
     <span id="home-file-chip-name">📄 file.docx</span>
     <button type="button" onclick="clearHomeDocx()" aria-label="Remove file">✕</button>
@@ -282,6 +361,21 @@
       <span class="panel-arrow">Open →</span>
     </a>
   </div>
+
+  <!-- ── Flourishing world-model panel — grounded from real yearly feeds ── -->
+  <section class="panel flourish-panel" id="flourish-panel" aria-label="Flourishing world model" hidden>
+    <div class="flourish-head">
+      <div>
+        <span class="panel-label">World Model</span>
+        <h2>Flourishing — the Bayesian world model</h2>
+      </div>
+      <a class="flourish-more" href="/flourishing.html">Full dashboard →</a>
+    </div>
+    <div class="flourish-domains" id="flourish-domains"></div>
+    <div class="flourish-q" id="flourish-q" hidden></div>
+    <div class="flourish-pattern" id="flourish-pattern" hidden></div>
+    <div class="flourish-prov" id="flourish-prov"></div>
+  </section>
 
 </main>
 
@@ -426,6 +520,66 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
+<script>
+/* Flourishing world-model panel — fetches grounded yearly feeds + the Question Machine's
+   next-to-ground question. Hidden until data loads, so feed/network failures degrade to
+   nothing rather than a broken card. */
+(async function loadFlourishing() {
+  const panel = document.getElementById('flourish-panel');
+  if (!panel) return;
+  try {
+    const r = await fetch('/api/flourishing/panel', { cache: 'no-store', signal: AbortSignal.timeout(25000) });
+    if (!r.ok) return;
+    const p = await r.json();
+    if (!p || !p.ok || !Array.isArray(p.domains) || !p.domains.length) return;
+
+    document.getElementById('flourish-domains').innerHTML = p.domains.map(d => {
+      const pct = Math.round(d.score * 100), u = Math.round(d.uncertainty * 100);
+      const lo = Math.max(0, pct - u), hi = Math.min(100, pct + u);
+      return `<div class="fd-row">
+        <div class="fd-top"><span class="fd-name">${d.domain}</span>
+          <span class="fd-val">${pct}% ±${u}% · ${d.n} belief${d.n === 1 ? '' : 's'} · ${d.n_sources || d.n} src</span></div>
+        <div class="fd-bar"><span class="fd-ci" style="left:${lo}%;width:${hi - lo}%"></span>
+          <span class="fd-fill" style="width:${pct}%"></span></div>
+      </div>`;
+    }).join('');
+
+    const q = p.questions && p.questions[0];
+    const qEl = document.getElementById('flourish-q');
+    if (q) {
+      qEl.innerHTML = `<b>Question Machine →</b> next to ground: <b>${q.entity}</b> ` +
+        `(±${Math.round(q.uncertainty * 100)}%, ${q.n_sources || 1} source${(q.n_sources || 1) === 1 ? '' : 's'}${q.agreement ? ' · ' + q.agreement : ''})`;
+      qEl.hidden = false;
+    }
+
+    const upd = p.updated_at ? new Date(p.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'now';
+    const ung = (p.ungrounded_domains || []).join(', ');
+    const corr = p.corroboration || {};
+    document.getElementById('flourish-prov').innerHTML =
+      `${(p.sources || ['World Bank']).join(' · ')} · ` +
+      `<u title="beliefs grounded by ≥2 independent sources — agreement tightens uncertainty">` +
+      `${corr.multi_source || 0}/${corr.beliefs || 0} corroborated</u> · updated ${upd}` +
+      (ung ? ` · <u title="no live feed for this domain">${ung} not live-grounded</u>` : '');
+
+    panel.hidden = false;
+
+    // Cross-domain patterns load separately — the per-country correlation fetch is heavier,
+    // so it must not block the belief panel. Populates the pattern line when it arrives.
+    fetch('/api/flourishing/correlations', { cache: 'no-store', signal: AbortSignal.timeout(45000) })
+      .then(r => (r.ok ? r.json() : null))
+      .then(c => {
+        const top = c && c.correlations && c.correlations[0];
+        if (!top) return;
+        const pe = document.getElementById('flourish-pattern');
+        const sign = top.r >= 0 ? '+' : '';
+        pe.innerHTML = `<b>Pattern →</b> ${top.label} ` +
+          `<span class="fp-r">(r=${sign}${top.r}, ${top.strength} ${top.direction}, n=${top.n} countries)</span>`;
+        pe.hidden = false;
+      })
+      .catch(() => {});
+  } catch (_) { /* leave hidden */ }
+})();
+</script>
 <script src="/js/update-checker.js" defer></script>
 <script src="/js/auth-gate.js" defer></script>
 <script>
@@ -448,6 +602,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('home-chat-input').placeholder = 'Ask Keystone anything…';
   };
 
+  // ── Provider pin: sticky choice forwarded to dream-chat via ?provider= ──────
+  // dream-chat-ui.js reads ?provider= and routes the turn to that provider
+  // (empty = Auto, i.e. the live PCSF-ranked pick). Persisted in localStorage so
+  // the pin survives reloads.
+  const providerPin = document.getElementById('home-provider-pin');
+  if (providerPin) {
+    try { providerPin.value = localStorage.getItem('keystone.providerPin') || ''; } catch {}
+    providerPin.addEventListener('change', () => {
+      try { localStorage.setItem('keystone.providerPin', providerPin.value); } catch {}
+    });
+  }
+  function pinnedProviderQS() {
+    const v = providerPin && providerPin.value;
+    return v ? '&provider=' + encodeURIComponent(v) : '';
+  }
+
   window.homeChat = function (e) {
     e.preventDefault();
     const q = document.getElementById('home-chat-input').value.trim();
@@ -467,27 +637,54 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (!q) { document.getElementById('home-chat-input').focus(); return; }
-    window.location.href = '/dream-chat.html?q=' + encodeURIComponent(q);
+    window.location.href = '/dream-chat.html?q=' + encodeURIComponent(q) + pinnedProviderQS();
   };
 
-  /* Drag-and-drop on the home chat form */
-  const form = document.getElementById('home-chat-form');
-  let dragDepth = 0;
+  /* Route picked/dropped files: .docx → chip (improve flow on submit),
+     .pdf → forward to the chat's Knowledge Center upload. Mirrors the
+     dream-chat.html drop handler so both pages behave the same. */
+  function forwardPdf(file) {
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        sessionStorage.setItem('pendingPdf', JSON.stringify({ name: file.name, data: reader.result }));
+      } catch { /* storage full — chat will fall back to its own picker */ }
+      window.location.href = '/dream-chat.html?autoprocess=pdf';
+    };
+    reader.readAsDataURL(file);
+  }
 
-  form.addEventListener('dragenter', (e) => {
+  function handleHomeFiles(fileList) {
+    const files = [...(fileList || [])];
+    if (!files.length) return;
+    const docx = files.find(f => f.name.toLowerCase().endsWith('.docx'));
+    const pdf  = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (docx) setDocxChip(docx);
+    else if (pdf) forwardPdf(pdf);
+    else document.getElementById('home-chat-input').placeholder = 'Please choose a PDF or Word (.docx) file…';
+  }
+
+  /* "+" attach button → native file picker */
+  const fileInput = document.getElementById('home-file-input');
+  window.homeAttachPick = function () { fileInput.click(); };
+  fileInput.addEventListener('change', () => { handleHomeFiles(fileInput.files); fileInput.value = ''; });
+
+  /* Whole-screen drag-and-drop — drop a file anywhere on the page */
+  const overlay = document.getElementById('home-drop-overlay');
+  let dragDepth = 0;
+  document.addEventListener('dragenter', (e) => {
     e.preventDefault();
     if (![...(e.dataTransfer.types || [])].includes('Files')) return;
-    if (++dragDepth === 1) form.classList.add('drag-over');
+    if (++dragDepth === 1) overlay.classList.add('active');
   });
-  form.addEventListener('dragleave', () => {
-    if (--dragDepth <= 0) { dragDepth = 0; form.classList.remove('drag-over'); }
+  document.addEventListener('dragleave', () => {
+    if (--dragDepth <= 0) { dragDepth = 0; overlay.classList.remove('active'); }
   });
-  form.addEventListener('dragover', (e) => e.preventDefault());
-  form.addEventListener('drop', (e) => {
+  document.addEventListener('dragover', (e) => e.preventDefault());
+  document.addEventListener('drop', (e) => {
     e.preventDefault();
-    dragDepth = 0; form.classList.remove('drag-over');
-    const file = [...(e.dataTransfer.files || [])].find(f => f.name.toLowerCase().endsWith('.docx'));
-    if (file) setDocxChip(file);
+    dragDepth = 0; overlay.classList.remove('active');
+    handleHomeFiles(e.dataTransfer.files);
   });
 })();
 </script>

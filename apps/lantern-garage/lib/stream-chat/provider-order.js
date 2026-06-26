@@ -30,12 +30,24 @@ function buildBrainOrder({ requestedProvider, hintProvider }) {
   };
   if (requestedProvider) {
     const n = norm(requestedProvider);
-    return n && DISPATCH.includes(n) ? [n] : [];   // explicit request pins to one
+    if (!n || !DISPATCH.includes(n)) return [];
+    // The pinned provider LEADS, but the rest of the chain backstops it: a pinned
+    // provider that is rate-limited / down must not dead-end the whole turn. The
+    // dispatch loop emits a hard error only if the pinned provider is also the last
+    // one standing (see _isLastProvider in stream-chat.js).
+    const order = [n];
+    for (const p of DISPATCH) if (p !== n) order.push(p);
+    return order.filter(_dispatchHasKey);
   }
   const seen = new Set();
   const order = [];
   const push = (p) => { const n = norm(p); if (n && DISPATCH.includes(n) && !seen.has(n)) { seen.add(n); order.push(n); } };
-  push(hintProvider);                  // the brain's pick leads
+  // Operator preference (KEYSTONE_PREFERRED_PROVIDER) leads Auto mode — e.g. set to
+  // "gemini" to spend Google credits first. Only biases the lead; the brain hint and
+  // the full backstop chain still follow, so a down/rate-limited preferred provider
+  // never dead-ends the turn. Empty/unset → unchanged (brain hint leads).
+  push(process.env.KEYSTONE_PREFERRED_PROVIDER);
+  push(hintProvider);                  // the brain's pick leads next
   for (const p of DISPATCH) push(p);   // stable backstop chain after it
   return order.filter(_dispatchHasKey);
 }

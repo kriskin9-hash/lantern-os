@@ -31,6 +31,12 @@ import torch  # noqa: E402
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer  # noqa: E402
 
 MODEL_ID = os.environ.get("OURO_MODEL", "ByteDance/Ouro-1.4B-Thinking")
+# Serve a generic instruct model (e.g. Qwen2.5-Coder-7B as the local coder slot) — not
+# just Ouro. Ouro's QLoRA used the "### Instruction/### Response" format; any other
+# instruct model needs its OWN chat template, so auto-detect by model id. Override with
+# OURO_CHAT_TEMPLATE=1 (force chat template) / 0 (force the ### format).
+_ct = os.environ.get("OURO_CHAT_TEMPLATE")
+USE_CHAT_TEMPLATE = (_ct == "1") if _ct is not None else ("ouro" not in MODEL_ID.lower())
 ADAPTER = os.environ.get("OURO_ADAPTER", "")
 PORT = int(os.environ.get("OURO_PORT", "11434"))
 MODEL_NAME = "ouro:latest"  # what the Ollama API advertises
@@ -153,9 +159,17 @@ print(f"[ouro] ready on :{PORT} as '{MODEL_NAME}' (native={NATIVE})", flush=True
 
 
 def _prompt_from_messages(messages):
-    # #810: use the QLoRA training template byte-exactly — apply_chat_template adds
-    # special tokens that misalign with the "### Instruction / ### Response" training
-    # format and cost ~11pts accuracy (served 0.23 vs raw 0.34 on HumanEval).
+    if USE_CHAT_TEMPLATE:
+        # Non-Ouro instruct model (the local coder slot, e.g. Qwen2.5-Coder-7B): use
+        # its NATIVE chat template — the ### format below would wreck a model that
+        # wasn't fine-tuned on it.
+        try:
+            return _tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+        except Exception:
+            pass  # no chat template on this model → fall through to the raw format
+    # #810: Ouro QLoRA "### Instruction / ### Response" format byte-exactly — apply_chat_template
+    # adds special tokens that misalign with the training format and cost ~11pts accuracy
+    # (served 0.23 vs raw 0.34 on HumanEval).
     parts = []
     for m in messages:
         role, content = m.get("role", ""), m.get("content", "")

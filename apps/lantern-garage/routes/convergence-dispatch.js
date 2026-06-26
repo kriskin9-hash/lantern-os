@@ -11,8 +11,9 @@
 
 const { getRouter } = require("../lib/convergence-router");
 const convergenceAgent = require("../lib/convergence-agent");
-const { sendJson } = require("../lib/http-utils");
+const { sendJson, collectRequestBody } = require("../lib/http-utils");
 const { appendConversationEntry } = require("../lib/conversation-store");
+const autoDispatch = require("../lib/auto-dispatch");
 const maxConversationTextLength = 2000;
 
 module.exports = async (req, res, url, deps) => {
@@ -30,6 +31,33 @@ module.exports = async (req, res, url, deps) => {
         cacheHitRatePercent: 70
       }
     }, 200);
+    return true;
+  }
+
+  // GET /api/convergence/auto-dispatch/status — autonomous auto-pull loop status
+  if (pathname === "/api/convergence/auto-dispatch/status" && req.method === "GET") {
+    try {
+      sendJson(res, { ok: true, ...autoDispatch.getStatus() }, 200);
+    } catch (err) {
+      sendJson(res, { ok: false, error: err.message }, 500);
+    }
+    return true;
+  }
+
+  // POST /api/convergence/auto-dispatch/toggle — runtime kill switch { enabled: bool }
+  if (pathname === "/api/convergence/auto-dispatch/toggle" && req.method === "POST") {
+    try {
+      const body = await collectRequestBody(req);
+      const { enabled } = JSON.parse(body || "{}");
+      if (typeof enabled !== "boolean") {
+        sendJson(res, { ok: false, error: "enabled_boolean_required" }, 400);
+        return true;
+      }
+      const now = autoDispatch.setEnabled(enabled);
+      sendJson(res, { ok: true, enabled: now, ...autoDispatch.getStatus() }, 200);
+    } catch (err) {
+      sendJson(res, { ok: false, error: err.message }, 500);
+    }
     return true;
   }
 
@@ -137,6 +165,11 @@ module.exports = async (req, res, url, deps) => {
     let body = "";
     req.on("data", chunk => body += chunk);
     req.on("end", async () => {
+      // Declared OUTSIDE the try so the `finally` worktree-teardown can reference them.
+      // A `let` inside the try is block-scoped → `cleanupWorktree is not defined` in the
+      // `finally`, an unhandled rejection that CRASHED the whole server after every
+      // autonomous-work run (the real reason the Auto-Pull loop kept killing 4177).
+      let workRoot = null, cleanupWorktree = null;
       try {
         const { issue } = JSON.parse(body || "{}");
         const issueNumber = parseInt(issue, 10);
@@ -154,8 +187,9 @@ module.exports = async (req, res, url, deps) => {
         const REPO_ROOT = path.resolve(__dirname, "../../..");
         const GH_REPO = "alex-place/lantern-os";
         // Code-mutating git ops run in `workRoot` (an isolated worktree), not the
-        // live serving checkout (REPO_ROOT). Torn down in `finally`.
-        let workRoot = REPO_ROOT, cleanupWorktree = null;
+        // live serving checkout (REPO_ROOT). Torn down in `finally`. (Declared above
+        // the try; assigned here once REPO_ROOT exists.)
+        workRoot = REPO_ROOT;
 
         // Fetch issue details
         const issueDetails = await new Promise((resolve) => {
@@ -214,24 +248,57 @@ module.exports = async (req, res, url, deps) => {
         // Step 1: Generate plan
         const plan = await generatePlan(workRoot, issueDetails.title + "\n\n" + issueDetails.body, [], []);
 
-        // Step 2: Generate patch
-        const { diffText, files } = await generatePatch(workRoot, plan);
+        // Steps 2-3: generate patch → apply, with a feedback retry loop. LLM diffs
+        // routinely miss exact hunk context/counts; on failure we feed the apply
+        // errors + ground-truth file back and let the model self-correct. The stream
+        // path already did this — this (the autonomous FLEET loop's) path used to
+        // single-shot and abort, which is the #1 reason the loop "produced no PR"
+        // (verified: a real run aborted with hunk_not_located on attempt 1).
+        const MAX_PATCH_ATTEMPTS = 3;
+        let diffText = "", applyStats = null, changedFiles = [], feedback = null, applied = false;
+        for (let attempt = 1; attempt <= MAX_PATCH_ATTEMPTS; attempt++) {
+          let gen;
+          try {
+            gen = await generatePatch(workRoot, plan, feedback ? { feedback } : {});
+          } catch (genErr) {
+            // generatePatch itself failed (e.g. diff_parse_failed — the model returned
+            // no valid diff). Feed that back and retry instead of 500ing on attempt 1.
+            feedback = { priorDiff: "", errors:
+              `patch generation failed: ${genErr.message}. Output ONLY a valid unified diff `
+              + `(--- a/path / +++ b/path / @@ hunks with exact context) — no prose, no fences.` };
+            if (attempt < MAX_PATCH_ATTEMPTS) continue;
+            break; // exhausted → fall through to the !applied abort
+          }
+          diffText = gen.diffText;
+          applyStats = applyPatch(workRoot, diffText);
+          changedFiles = [...(applyStats.changed || []), ...(applyStats.created || [])];
+          // Anti-fraud gate: a usable patch changes ≥1 file with zero hunk errors —
+          // otherwise a hallucinated/failed patch could let unrelated data-file churn
+          // be committed as the "fix".
+          if (changedFiles.length > 0 && !(applyStats.errors && applyStats.errors.length > 0)) {
+            applied = true;
+            break;
+          }
+          // Failed — roll the tree back clean and carry the errors into the next try.
+          await new Promise((resolve) =>
+            execFile("git", ["checkout", "--", "."], { cwd: workRoot, timeout: 10000, windowsHide: true }, () => resolve()));
+          feedback = {
+            priorDiff: diffText,
+            errors: (applyStats.errors && applyStats.errors.length)
+              ? applyStats.errors.map((e) => `${e.file}: ${e.error}`).join("\n")
+              : "the diff changed no files (paths/hunks did not match the repo)",
+          };
+        }
 
-        // Step 3: Apply patch — capture stats so we can verify it actually changed code
-        const applyStats = applyPatch(workRoot, diffText);
-        const changedFiles = [...(applyStats.changed || []), ...(applyStats.created || [])];
-
-        // Anti-fraud gate: the patch MUST produce real, clean code changes.
-        // Without this, a hallucinated/failed patch leaves the working tree
-        // unchanged, then `git add -A` would commit unrelated runtime data churn
-        // (prices.jsonl etc.) as the "fix" — closing the issue with no real work.
-        if (changedFiles.length === 0 || (applyStats.errors && applyStats.errors.length > 0)) {
-          execFile("git", ["checkout", "--", "."], { cwd: workRoot });
+        if (!applied) {
+          await new Promise((resolve) =>
+            execFile("git", ["checkout", "--", "."], { cwd: workRoot, timeout: 10000, windowsHide: true }, () => resolve()));
           sendJson(res, {
             ok: false,
             error: "patch_did_not_apply",
+            attempts: MAX_PATCH_ATTEMPTS,
             applyStats,
-            message: "Generated patch produced no usable code changes (hunks failed or empty). Aborted — nothing committed.",
+            message: `Generated patch produced no usable code changes after ${MAX_PATCH_ATTEMPTS} attempts (hunks failed or empty). Aborted — nothing committed.`,
           }, 422);
           return;
         }
@@ -539,7 +606,18 @@ module.exports = async (req, res, url, deps) => {
         let diffText = "", stats = null, changedFiles = [], feedback = null, applied = false;
         for (let attempt = 1; attempt <= MAX_PATCH_ATTEMPTS; attempt++) {
           step("patch", attempt === 1 ? "start" : "retry", { attempt, of: MAX_PATCH_ATTEMPTS });
-          const gen = await generatePatch(workRoot, plan, feedback ? { feedback } : {});
+          let gen;
+          try {
+            gen = await generatePatch(workRoot, plan, feedback ? { feedback } : {});
+          } catch (genErr) {
+            // generatePatch failed (e.g. diff_parse_failed) — feed it back and retry.
+            feedback = { priorDiff: "", errors:
+              `patch generation failed: ${genErr.message}. Output ONLY a valid unified diff `
+              + `(--- a/path / +++ b/path / @@ hunks with exact context) — no prose, no fences.` };
+            step("patch", attempt < MAX_PATCH_ATTEMPTS ? "retry" : "error", { attempt, error: genErr.message });
+            if (attempt < MAX_PATCH_ATTEMPTS) continue;
+            break;
+          }
           diffText = gen.diffText;
           const affected = (gen.files || []).map((f) => (f.newFile || f.oldFile || "").replace(/^[ab]\//, ""));
           send("diff", { diffText, files: affected, attempt });

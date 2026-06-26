@@ -46,6 +46,104 @@ const EXCLUDE_PATTERNS = [
   /\.vscode/,
 ];
 
+// ── Code-aware retrieval (#1200) ─────────────────────────────────────────────
+// The legacy scorer matched only the filename/path, so a task like "fix paginate()"
+// never found the file that *defines* paginate unless its name said so. We now also
+// index the SYMBOLS each source file declares (functions/classes/consts/exports) and
+// boost files whose symbols match the query — the core "code-aware" signal.
+const CODE_FILE_RE = /\.(js|mjs|cjs|ts|tsx|jsx|py)$/;
+const SYMBOL_INDEX_TTL = 5 * 60_000;
+let _symbolIndex = null;        // { ts, map: Map<file, Set<symbol>> }
+
+// Pure: extract declared symbol names from source text (JS + Python). Regex-level
+// (no full parse) — fast and good enough to rank files by what they define.
+function extractSymbols(content) {
+  const out = new Set();
+  if (!content) return out;
+  const add = (m) => { if (m && m.length > 1) out.add(m); };
+  const patterns = [
+    /\bfunction\s+([A-Za-z_$][\w$]*)/g,              // function foo
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/g, // const foo =
+    /\bclass\s+([A-Za-z_$][\w$]*)/g,                 // class Foo (JS+PY)
+    /\bdef\s+([A-Za-z_][\w]*)/g,                      // def foo (PY)
+    /\bexports\.([A-Za-z_$][\w$]*)/g,                // exports.foo
+    /^\s*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm,     // method foo(...) {
+    /\b([A-Za-z_$][\w$]*)\s*:\s*(?:async\s*)?(?:function|\()/g, // foo: function / foo: (
+  ];
+  for (const re of patterns) {
+    let m;
+    while ((m = re.exec(content)) !== null) add(m[1]);
+  }
+  return out;
+}
+
+// Pure: identifier-ish tokens from a free-text query (so "fix paginate() off-by-one"
+// yields paginate/fix/off/by/one). Used for symbol matching.
+function queryTokens(query) {
+  return [...new Set(String(query || "").toLowerCase().match(/[a-z_$][\w$]*/g) || [])]
+    .filter((t) => t.length >= 3);
+}
+
+// Pure: score files by how well their declared symbols match the query. Returns a
+// Map<file, score>. Exact symbol == query token is a strong signal; substring weaker.
+function scoreBySymbols(query, symbolMap) {
+  const tokens = queryTokens(query);
+  const scores = new Map();
+  if (!tokens.length) return scores;
+
+  // lowercased symbol set per file + document frequency of each exact token, so we
+  // can down-weight generic names (verify/gate/run) that are defined everywhere.
+  const fileLower = new Map();
+  for (const [file, symbols] of symbolMap) {
+    fileLower.set(file, new Set([...symbols].map((s) => s.toLowerCase())));
+  }
+  const df = new Map();
+  for (const tok of tokens) {
+    let c = 0;
+    for (const syms of fileLower.values()) if (syms.has(tok)) c++;
+    df.set(tok, c);
+  }
+  const exactWeight = (tok) => {
+    const d = df.get(tok) || 0;
+    if (d <= 2) return 40;   // rare, specific identifier — strong signal
+    if (d <= 6) return 18;   // somewhat common
+    return 6;                // generic name (verify/gate/run) — weak
+  };
+
+  for (const [file, syms] of fileLower) {
+    let s = 0;
+    for (const tok of tokens) {
+      if (syms.has(tok)) { s += exactWeight(tok); continue; } // exact symbol match
+      for (const sym of syms) {
+        if (sym.length >= 5 && (sym.includes(tok) || tok.includes(sym))) {
+          s += 10; break;                                     // partial match (once/token)
+        }
+      }
+    }
+    if (s > 0) scores.set(file, s);
+  }
+  return scores;
+}
+
+// Build (and cache) the file→symbols index over tracked code files. Bounded reads;
+// best-effort — any failure leaves the index empty and search falls back to filenames.
+function buildSymbolIndex(gitFiles, readFileSync, maxBytes = 200_000) {
+  if (_symbolIndex && Date.now() - _symbolIndex.ts < SYMBOL_INDEX_TTL) return _symbolIndex.map;
+  const map = new Map();
+  for (const f of gitFiles) {
+    if (!CODE_FILE_RE.test(f) || EXCLUDE_PATTERNS.some((p) => p.test(f))) continue;
+    try {
+      const abs = path.join(REPO_ROOT, f);
+      const content = readFileSync(abs, "utf-8");
+      if (content.length > maxBytes) continue;
+      const syms = extractSymbols(content);
+      if (syms.size) map.set(f, syms);
+    } catch (_e) { /* skip unreadable */ }
+  }
+  _symbolIndex = { ts: Date.now(), map };
+  return map;
+}
+
 /**
  * Search repository for files matching a query.
  * Uses git ls-files for speed, falls back to directory scan.
@@ -61,6 +159,13 @@ async function searchRepoFiles(query, maxResults = 10) {
     })
       .split("\n")
       .filter(Boolean);
+
+    // #1200 code-aware signal: symbol-match scores for files that DECLARE a symbol
+    // named in the query (even when the filename doesn't). Best-effort + cached.
+    let symbolScores = new Map();
+    try {
+      symbolScores = scoreBySymbols(query, buildSymbolIndex(gitFiles, require("fs").readFileSync));
+    } catch (_e) { /* fall back to filename/path scoring */ }
 
     // Score files based on keyword matches
     const scored = gitFiles
@@ -79,6 +184,9 @@ async function searchRepoFiles(query, maxResults = 10) {
         for (const kw of keywords) {
           if (filePath.includes(kw)) score += 5;
         }
+
+        // Code-aware: declared-symbol matches (the #1200 lift)
+        score += symbolScores.get(file) || 0;
 
         // Boost priority file types
         if (PRIORITY_PATTERNS.some((p) => p.test(file))) score += 2;
@@ -270,4 +378,9 @@ module.exports = {
   resolveRepoPath,
   listIssues,
   REPO_ROOT,
+  // #1200 code-aware retrieval internals (pure — exported for tests/reuse)
+  extractSymbols,
+  queryTokens,
+  scoreBySymbols,
+  buildSymbolIndex,
 };

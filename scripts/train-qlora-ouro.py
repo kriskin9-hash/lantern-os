@@ -75,9 +75,18 @@ def main():
     # (observed grad_norm=nan on a smoke run), which max_grad_norm clipping then
     # propagates into the LoRA weights -> a NaN/garbage adapter. bf16 has fp32's
     # exponent range, so no overflow. Fall back to fp16 only if bf16 is unsupported.
-    use_bf16 = torch.cuda.is_bf16_supported()
+    #
+    # bf16 needs Ampere (cc>=8.0). torch.cuda.is_bf16_supported() returns a FALSE
+    # POSITIVE on pre-Ampere cards (it passed on a Kaggle P100, cc 6.0), after
+    # which the first bf16 op crashes with `CUDA error: no kernel image is
+    # available for execution on the device`. Gate on the hardware capability so
+    # T4 (7.5) and P100 (6.0) correctly drop to fp16. NOTE: this model's recipe
+    # really wants bf16 — pre-Ampere fp16 risks the NaN adapter described above,
+    # so an Ampere GPU (Lightning A10, Colab A100/L4) is the right target.
+    _cc = torch.cuda.get_device_capability()
+    use_bf16 = torch.cuda.is_bf16_supported() and _cc >= (8, 0)
     compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
-    print(f"precision: {'bf16' if use_bf16 else 'fp16'}")
+    print(f"precision: {'bf16' if use_bf16 else 'fp16'} (cc {_cc[0]}.{_cc[1]})")
 
     tok = AutoTokenizer.from_pretrained(a.base, trust_remote_code=True)
     if tok.pad_token is None:
@@ -95,9 +104,8 @@ def main():
     # `CUDA error: no kernel image is available for execution on the device`.
     # Ouro-1.4B is small enough to fit unquantized on a 16 GB card, so on older
     # GPUs we skip 4-bit and load in compute_dtype with plain (non-Q) LoRA.
-    cc_major, cc_minor = torch.cuda.get_device_capability()
-    use_4bit = (cc_major, cc_minor) >= (7, 5)
-    print(f"GPU cc: {cc_major}.{cc_minor} | 4-bit QLoRA: {use_4bit}")
+    use_4bit = _cc >= (7, 5)
+    print(f"GPU cc: {_cc[0]}.{_cc[1]} | 4-bit QLoRA: {use_4bit}")
 
     load_kwargs = dict(config=cfg, device_map="auto", trust_remote_code=True)
     if use_4bit:
