@@ -146,8 +146,58 @@ try {
   $needRestart = @($changed | Where-Object { $_ -match $codeRe }).Count -gt 0
   $depsChanged = @($changed | Where-Object { $_ -match 'package(-lock)?\.json$' }).Count -gt 0
 
-  # Move forward only (ff-only); untracked runtime data preserved, never overwrites local commits.
-  & git -C $STABLE merge --ff-only origin/master --quiet 2>&1 | Out-Null
+  # --- update the worktree to master (robust: reset --hard, cannot wedge) ---
+  # `merge --ff-only` STALLS whenever the live server has dirtied a TRACKED file (data/
+  # logs, manifests, *.csf/*.jsonl) -- the silent-stall bug where the deploy sat at
+  # $local forever while logging "deployed OK" and restarting stale code on disk.
+  # reset --hard always reaches master and preserves all UNTRACKED runtime data
+  # (conversations/, profiles/, queue/, ...). To ALSO keep runtime APPENDS to TRACKED
+  # data files that master is NOT changing this deploy, snapshot them aside and restore
+  # them after the reset; files master DOES change take master's version (authoritative
+  # for anything it commits).
+  $changedSet = @{}; foreach ($c in $changed) { if ($c) { $changedSet[$c] = $true } }
+  $dirty = @(& git -C $STABLE diff --name-only HEAD) | Where-Object { $_ }
+  $preserve = @()
+  foreach ($f in $dirty) {
+    $isData = ($f -match '^(data/|apps/data/)' -or $f -match '\.(csf|jsonl)$')
+    if ($isData -and -not $changedSet.ContainsKey($f)) { $preserve += $f }
+  }
+  # clear any skip-worktree flags left by earlier runs so reset --hard fully applies
+  $sw = @(& git -C $STABLE ls-files -v) | Where-Object { $_ -cmatch '^[Ss] ' } | ForEach-Object { $_.Substring(2) }
+  foreach ($f in $sw) {
+    & git -C $STABLE update-index --no-skip-worktree -- $f 2>&1 | Out-Null
+    $isData = ($f -match '^(data/|apps/data/)' -or $f -match '\.(csf|jsonl)$')
+    if ($isData -and -not $changedSet.ContainsKey($f) -and ($preserve -notcontains $f)) { $preserve += $f }
+  }
+  # snapshot preserved runtime files aside (binary-safe copy)
+  $tmp = Join-Path $env:TEMP ("deploy-preserve-" + $PID)
+  if ($preserve.Count -gt 0) { New-Item -ItemType Directory -Force -Path $tmp | Out-Null }
+  foreach ($f in $preserve) {
+    $src = Join-Path $STABLE $f
+    if (Test-Path $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $tmp ($f -replace '[\\/]', '__')) -Force -ErrorAction SilentlyContinue }
+  }
+
+  & git -C $STABLE reset --hard origin/master --quiet 2>&1 | Out-Null
+
+  # restore preserved runtime data (master did not change these this deploy)
+  foreach ($f in $preserve) {
+    $bak = Join-Path $tmp ($f -replace '[\\/]', '__')
+    if (Test-Path $bak) {
+      $src = Join-Path $STABLE $f
+      $dir = Split-Path $src -Parent
+      if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+      Copy-Item -LiteralPath $bak -Destination $src -Force -ErrorAction SilentlyContinue
+      Log "preserved runtime data across reset -> $f"
+    }
+  }
+  if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+
+  # --- HONEST VERIFICATION: never report success on a HEAD that did not move ---
+  $head = (& git -C $STABLE rev-parse HEAD).Trim()
+  if ($head -ne $remote) {
+    Log "DEPLOY FAILED: reset did not reach master ($($head.Substring(0,8)) != $($remote.Substring(0,8))) -- stable-server may have diverged from master. NOT restarting, NOT reporting OK. Investigate."
+    exit 1
+  }
 
   # --- PRE-SWAP VALIDATION: reject a syntax-broken commit with ZERO downtime ---
   $jsToCheck = @("$GARAGE/server.js")
