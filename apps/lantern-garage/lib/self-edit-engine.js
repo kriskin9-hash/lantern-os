@@ -434,6 +434,49 @@ function gitAddFiles(repoRoot, files) {
 // GitHub repo slug for API calls. Override with GH_REPO env if the remote moves.
 const GH_REPO = process.env.GH_REPO || "alex-place/lantern-os";
 
+// Derive a concise, conventional issue title from a free-form task instruction.
+// First non-empty line, stripped of a leading bang-command / list marker, capped.
+function taskTitle(task) {
+  const firstLine = String(task || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => l.length > 0) || "";
+  const cleaned = firstLine
+    // Strip a trigger ONLY in its command forms — `!work`/`!edit …` or `autowork: …` —
+    // never bare prose: "Edit the handler" / "Work on X" must keep their first word, and
+    // the digit/bullet strip below must not eat a semantic leading number ("3D", "2FA").
+    .replace(/^!\s*(?:work|autowork|edit)\b[:\s]*/i, "") // bang command: !work / !edit
+    .replace(/^(?:autowork|work|edit)\s*:\s*/i, "")       // label form:   "autowork: …"
+    .replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, "")              // a real list bullet / "1. " / "1) "
+    .trim();
+  // Default applied only as a final fallback (after the strips, so it can't be eaten).
+  return (cleaned || "Autowork task").slice(0, 120);
+}
+
+// Create a GitHub issue from a free-form chat instruction, so the issue-linked
+// autowork pipeline (which keys off a real issue number) can work it. Returns
+// { number, url, title }. Used by the suggest-then-confirm "Run as autowork"
+// path — a free-form coding request first becomes a tracked issue, then a PR.
+function createIssueFromTask(repoRoot, task) {
+  const text = String(task || "").trim();
+  if (!text) throw new Error("task_required");
+  const title = taskTitle(text);
+  const body =
+    `${text}\n\n---\n_Filed automatically from Keystone OS chat (autowork “run as task”). ` +
+    `A linked draft PR follows._`;
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" };
+  // `gh issue create` prints the new issue URL on stdout; parse the number from it.
+  const out = execFileSync(
+    "gh",
+    ["issue", "create", "--repo", GH_REPO, "--title", title, "--body", body.slice(0, 8000)],
+    { cwd: repoRoot, encoding: "utf8", timeout: 30000, windowsHide: true, env }
+  ).trim();
+  const url = (out.match(/https:\/\/github\.com\/[^\s]+\/issues\/(\d+)/) || [])[0] || out;
+  const number = parseInt((url.match(/\/issues\/(\d+)/) || [])[1], 10);
+  if (!number) throw new Error("issue_create_failed: " + out.slice(0, 200));
+  return { number, url, title };
+}
+
 function openDraftPr(repoRoot, branch, title, body) {
   if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
   const safeTitle = String(title || "Auto PR").slice(0, 256);
@@ -564,27 +607,37 @@ async function callLlm(system, user, providerHint = "auto", maxTokens = 4096) {
   const xaiKey = process.env.XAI_API_KEY;
   const messages = [{ role: "system", content: system }, { role: "user", content: user }];
 
+  // A provider that returns an empty/whitespace-only string is a FAILURE, not a
+  // success: Gemini safety-blocks, a finishReason cutoff, or the tiny local model
+  // all surface as "". Returning that stops the cascade and leaves the caller with
+  // `plan_parse_failed: empty response` — so treat empty as a throw and fall through.
+  const nonEmpty = async (label, p) => {
+    const out = await p;
+    if (!out || !String(out).trim()) throw new Error(`${label}_empty_response`);
+    return out;
+  };
+
   // When a specific provider is requested, try it directly (no cascade).
   if (providerHint !== "auto") {
-    if ((providerHint === "claude" || providerHint === "anthropic") && anthropicKey) return callClaude(system, user, maxTokens);
-    if (providerHint === "openai" && openaiKey) return callOpenAI(messages, maxTokens);
-    if (providerHint === "gemini" && geminiKey) return callGemini(system, user, maxTokens);
-    if ((providerHint === "grok" || providerHint === "xai") && xaiKey) return callGrok(messages, maxTokens);
-    if (providerHint === "ollama") return callOllama(messages);
+    if ((providerHint === "claude" || providerHint === "anthropic") && anthropicKey) return nonEmpty("claude", callClaude(system, user, maxTokens));
+    if (providerHint === "openai" && openaiKey) return nonEmpty("openai", callOpenAI(messages, maxTokens));
+    if (providerHint === "gemini" && geminiKey) return nonEmpty("gemini", callGemini(system, user, maxTokens));
+    if ((providerHint === "grok" || providerHint === "xai") && xaiKey) return nonEmpty("grok", callGrok(messages, maxTokens));
+    if (providerHint === "ollama") return nonEmpty("ollama", callOllama(messages));
     throw new Error("no_provider_available");
   }
 
   // Auto mode: try every provider that has a key, in cascade. Order favors
   // quality/cost and deprioritizes OpenAI (commonly the first to hit a quota
-  // cap); a provider that throws (quota, timeout, parse) falls through to the
-  // next rather than failing the whole run. Grok/XAI is included so a key the
-  // UI advertises as connected is actually usable here.
+  // cap); a provider that throws (quota, timeout, parse, OR an empty response)
+  // falls through to the next rather than failing the whole run. Grok/XAI is
+  // included so a key the UI advertises as connected is actually usable here.
   const queue = [
-    anthropicKey && (() => callClaude(system, user, maxTokens)),
-    geminiKey    && (() => callGemini(system, user, maxTokens)),
-    xaiKey       && (() => callGrok(messages, maxTokens)),
-    openaiKey    && (() => callOpenAI(messages, maxTokens)),
-    () => callOllama(messages),
+    anthropicKey && (() => nonEmpty("claude", callClaude(system, user, maxTokens))),
+    geminiKey    && (() => nonEmpty("gemini", callGemini(system, user, maxTokens))),
+    xaiKey       && (() => nonEmpty("grok",   callGrok(messages, maxTokens))),
+    openaiKey    && (() => nonEmpty("openai", callOpenAI(messages, maxTokens))),
+    () => nonEmpty("ollama", callOllama(messages)),
   ].filter(Boolean);
 
   const errs = [];
@@ -1057,6 +1110,8 @@ module.exports = {
   gitAddFiles,
   gitCurrentBranch,
   openDraftPr,
+  createIssueFromTask,
+  taskTitle,
   runTests,
   generatePlan,
   extractJson,
