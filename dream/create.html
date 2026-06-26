@@ -17,7 +17,7 @@
       }
     })();
   </script>
-  <title>Creator Dashboard — Keystone OS</title>
+  <title>Creator Dashboard — Lantern OS</title>
   <link rel="stylesheet" href="/css/site.css">
   <style>
     :root {
@@ -872,26 +872,7 @@
 </head>
 <body>
 
-<!-- Site nav -->
-<nav class="site-nav">
-  <a class="nav-brand" href="/">
-    <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
-    Keystone OS
-  </a>
-  <div class="nav-links">
-    <a href="/dream-chat.html">Chat</a>
-    <a href="/trader-dashboard.html">Trader</a>
-    <a href="/create.html" class="active">Create</a>
-    <a href="/calibration.html">Calibration</a>
-    <a href="/explore.html">Explore</a>
-    <a href="/knowledgecenter.html">Help</a>
-        <span class="sep" style="margin: 0 4px;">·</span>
-        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Keystone on Patreon</a>
-  </div>
-  <div class="nav-actions">
-    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">☀</button>
-  </div>
-</nav>
+<!-- Site nav injected by /js/site-chrome.js -->
 
 <div class="page">
   <!-- Compact dashboard banner — click to expand help -->
@@ -929,7 +910,7 @@
       <option>Webcam moves around</option>
       <option>No Facecam</option>
     </select>
-    <span style="flex-basis:100%; font-size:0.78rem; color:var(--muted); margin-top:2px;">Tell Keystone where your facecam usually appears if detection struggles.</span>
+    <span style="flex-basis:100%; font-size:0.78rem; color:var(--muted); margin-top:2px;">Tell Lantern where your facecam usually appears if detection struggles.</span>
   </div>
 
   <!-- Live upload progress (one row per file) -->
@@ -996,6 +977,7 @@
 </div>
 
 <script src="/js/theme-toggle.js"></script>
+<script src="/js/site-chrome.js" defer></script>
 <script>
 const uploadZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');

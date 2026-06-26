@@ -23,161 +23,577 @@
   <style>
     .explore-hero {
       text-align: center;
-      padding: 60px 20px 40px;
+      padding: 50px 20px 40px;
     }
     .explore-hero h1 {
       font-size: clamp(2rem, 5vw, 2.8rem);
       font-weight: 800;
       letter-spacing: -0.03em;
-      margin-bottom: 16px;
-      line-height: 1.15;
+      margin-bottom: 12px;
+      line-height: 1.1;
     }
     .explore-hero .subtitle {
-      font-size: 1.05rem;
+      font-size: 1rem;
       color: var(--muted);
       max-width: 560px;
-      margin: 0 auto 32px;
-      line-height: 1.6;
+      margin: 0 auto;
+      line-height: 1.5;
     }
 
-    .explore-section {
-      margin: 48px 0;
+    /* ── Single-pane ranked feed (#1217) ── */
+    .feed-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 auto 24px;
+      max-width: 920px;
     }
-    .explore-section-title {
-      font-size: 0.72rem;
+    .feed-chip {
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 7px 14px;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .feed-chip:hover { border-color: var(--accent); color: var(--text); }
+    .feed-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .feed-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .feed-stream {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+      max-width: 920px;
+      margin: 0 auto;
+    }
+    @media (min-width: 720px) { .feed-stream { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1100px) { .feed-stream { grid-template-columns: repeat(3, 1fr); } }
+
+    .feed-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 16px 16px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: inherit;
+      text-decoration: none;
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .feed-card:hover, .feed-card:focus-within {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: var(--shadow-hover);
+    }
+    .feed-card .fc-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .feed-card .fc-type { color: var(--accent); }
+    .feed-card .fc-date { color: var(--muted); margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; }
+    .feed-card .fc-title {
+      font-size: 0.98rem;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .feed-card .fc-title:hover { color: var(--accent); }
+    .feed-card .fc-why {
+      font-size: 0.74rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .feed-card .fc-why .fc-src { color: var(--accent); font-weight: 700; }
+    .feed-card .fc-dismiss {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s, background 0.15s, color 0.15s;
+    }
+    .feed-card:hover .fc-dismiss, .feed-card:focus-within .fc-dismiss { opacity: 1; }
+    .feed-card .fc-dismiss:hover { background: var(--surface2); color: var(--text); }
+    .feed-card .fc-dismiss:focus-visible { opacity: 1; outline: 2px solid var(--accent); }
+    .feed-status { max-width: 920px; margin: 0 auto; color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
+
+    .all-tools {
+      max-width: 920px;
+      margin: 48px auto 0;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+    .all-tools > summary {
+      cursor: pointer;
+      font-size: 0.7rem;
       font-weight: 700;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--accent);
-      margin-bottom: 20px;
+      padding: 14px 0;
+      list-style: none;
+    }
+    .all-tools > summary::-webkit-details-marker { display: none; }
+    .all-tools > summary::before { content: '▸ '; }
+    .all-tools[open] > summary::before { content: '▾ '; }
+
+    .explore-section {
+      margin: 40px 0;
+    }
+    .explore-section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
     }
     .explore-panels {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 16px;
+      gap: 14px;
     }
     @media (min-width: 740px) {
       .explore-panels {
         grid-template-columns: repeat(2, 1fr);
       }
     }
+    .panel {
+      position: relative;
+      padding: 20px 18px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+    .panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--accent);
+      border-radius: 12px 12px 0 0;
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.2s ease;
+    }
+    .panel:hover,
+    .panel:focus-visible {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-2px);
+    }
+    .panel:hover::before,
+    .panel:focus-visible::before {
+      transform: scaleX(1);
+    }
+    .panel:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .panel-icon {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .panel-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .panel h2 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 8px;
+      color: var(--text);
+    }
+    .panel p {
+      font-size: 0.9rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin: 0;
+    }
+    .panel-arrow {
+      display: inline-block;
+      font-size: 0.85rem;
+      color: var(--accent);
+      font-weight: 600;
+      margin-top: 8px;
+    }
+
     .explore-info-box {
       max-width: 880px;
       margin: 0 auto;
-      padding: 32px 24px;
+      padding: 28px 24px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border-radius: 12px;
       box-shadow: var(--shadow);
     }
     .explore-info-box h2 {
       margin-top: 0;
-      margin-bottom: 16px;
-      font-size: 1.1rem;
+      margin-bottom: 14px;
+      font-size: 1.05rem;
       font-weight: 700;
     }
     .explore-info-box p {
       color: var(--muted);
       line-height: 1.6;
       margin-bottom: 12px;
+      font-size: 0.95rem;
     }
     .explore-info-box p:last-of-type {
       margin-bottom: 0;
     }
 
-    /* ── Watch: YouTube embed + video carousel ── */
     .video-embed {
-      position: relative; width: 100%; aspect-ratio: 16 / 9;
-      border-radius: var(--radius); overflow: hidden;
-      background: #000; border: 1px solid var(--border); margin-bottom: 18px;
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #000;
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
     }
-    .video-embed iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .video-embed iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
     .video-carousel {
-      display: flex; gap: 12px; overflow-x: auto;
-      padding: 6px 2px 10px; scroll-snap-type: x mandatory;
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 0 0 8px;
       -webkit-overflow-scrolling: touch;
     }
     .video-thumb {
-      flex: 0 0 auto; width: 170px; cursor: pointer; padding: 0; text-align: left;
-      border-radius: 10px; overflow: hidden; background: var(--surface);
-      border: 1px solid var(--border); color: inherit; font: inherit;
-      scroll-snap-align: center;
-      transition: transform .15s, border-color .15s, box-shadow .15s;
+      flex: 0 0 auto;
+      width: 160px;
+      cursor: pointer;
+      padding: 0;
+      text-align: left;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: inherit;
+      font: inherit;
+      transition: transform 0.15s, border-color 0.15s;
     }
-    .video-thumb:hover { transform: translateY(-2px); }
-    .video-thumb.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-    .video-thumb img { width: 100%; height: 96px; object-fit: cover; display: block; background: #000; }
+    .video-thumb:hover,
+    .video-thumb:focus-visible {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+    .video-thumb:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .video-thumb.active {
+      border-color: var(--accent);
+    }
+    .video-thumb img {
+      width: 100%;
+      height: 90px;
+      object-fit: cover;
+      display: block;
+      background: #000;
+    }
     .video-thumb .vt-title {
-      padding: 7px 9px; font-size: .78rem; line-height: 1.3;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .video-thumb .vt-badge {
-      display: inline-block; font-size: .58rem; font-weight: 700;
-      letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
-    }
-    .video-thumb.placeholder {
-      display: flex; align-items: center; justify-content: center;
-      height: 130px; border-style: dashed; color: var(--muted); font-size: .8rem;
+      padding: 6px 8px;
+      font-size: 0.75rem;
+      line-height: 1.3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    /* ── Discover: news/RSS card grid ── */
     .discover-grid {
-      display: grid; gap: 12px; grid-template-columns: 1fr;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
     }
-    @media (min-width: 620px) { .discover-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (min-width: 920px) { .discover-grid { grid-template-columns: repeat(3, 1fr); } }
+    @media (min-width: 620px) {
+      .discover-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (min-width: 920px) {
+      .discover-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
     .discover-card {
-      display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
-      border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
-      color: inherit; text-decoration: none;
-      transition: transform .15s, border-color .15s, box-shadow .15s;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: inherit;
+      text-decoration: none;
+      transition: transform 0.15s, border-color 0.15s;
     }
-    .discover-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow); }
-    .discover-card .dc-title { font-size: .92rem; font-weight: 600; line-height: 1.35; }
-    .discover-card .dc-meta { font-size: .72rem; color: var(--muted); display: flex; gap: 8px; align-items: center; }
-    .discover-card .dc-source { color: var(--accent); font-weight: 700; }
-    .discover-loading, .gh-loading { color: var(--muted); font-size: .85rem; padding: 8px 2px; }
-    .discover-foot { font-size: .72rem; color: var(--muted); margin: 12px 0 0; }
+    .discover-card:hover,
+    .discover-card:focus-visible {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+    .discover-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .discover-card .dc-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .discover-card .dc-meta {
+      font-size: 0.7rem;
+      color: var(--muted);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .discover-card .dc-source {
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .discover-loading {
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 6px 0;
+    }
 
-    /* ── Build: GitHub activity ── */
-    .gh-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .gh-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
     .gh-stars {
-      display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: .85rem;
-      padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
     }
-    .gh-cta { font-size: .82rem; font-weight: 700; color: var(--accent); text-decoration: none; }
-    .gh-cta:hover { text-decoration: underline; }
-    .gh-grid { display: grid; gap: 24px; grid-template-columns: 1fr; }
-    @media (min-width: 700px) { .gh-grid { grid-template-columns: 1fr 1fr; } }
+    .gh-cta {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .gh-cta:hover {
+      text-decoration: underline;
+    }
+    .gh-grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 700px) {
+      .gh-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
     .gh-col h3 {
-      font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-      color: var(--muted); margin: 0 0 12px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 12px;
     }
-    .gh-list { display: flex; flex-direction: column; gap: 10px; }
-    .gh-item { display: flex; gap: 10px; align-items: baseline; color: inherit; text-decoration: none; }
-    .gh-item:hover .gh-item-text { color: var(--accent); }
+    .gh-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .gh-item {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      color: inherit;
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 4px 4px;
+      border-radius: 4px;
+      outline: none;
+      transition: background-color 0.15s ease;
+    }
+    .gh-item:hover .gh-item-text,
+    .gh-item:focus-visible .gh-item-text {
+      color: var(--accent);
+    }
+    .gh-item:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
     .gh-tag {
-      flex: 0 0 auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem;
-      font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--bg);
-      border: 1px solid var(--border); color: var(--accent);
+      flex: 0 0 auto;
+      font-family: ui-monospace, 'Courier New', monospace;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--accent);
     }
-    .gh-item-text { font-size: .85rem; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; }
-    .gh-item-date { display: block; font-size: .68rem; color: var(--muted); margin-top: 2px; }
+    .gh-item-text {
+      line-height: 1.4;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .gh-item-date {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .gh-loading {
+      color: var(--muted);
+      font-size: 0.85rem;
+      padding: 6px 0;
+    }
 
-    /* ── Support: Patreon tiers ── */
-    .support-tiers { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 18px; }
-    @media (min-width: 620px) { .support-tiers { grid-template-columns: repeat(3, 1fr); } }
-    .tier-card {
-      display: flex; flex-direction: column; gap: 6px; padding: 18px 16px;
-      border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
-      color: inherit; text-decoration: none; text-align: center;
-      transition: transform .15s, border-color .15s, box-shadow .15s;
+    .support-tiers {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr;
+      margin-top: 14px;
     }
-    .tier-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow); }
-    .tier-name { font-weight: 800; font-size: 1rem; }
-    .tier-price { font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; }
-    .tier-price span { font-size: .8rem; font-weight: 600; color: var(--muted); }
-    .tier-perk { font-size: .78rem; color: var(--muted); line-height: 1.4; }
+    @media (min-width: 620px) {
+      .support-tiers {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    .tier-card {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 16px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: inherit;
+      text-decoration: none;
+      text-align: center;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+    .tier-card:hover,
+    .tier-card:focus-visible {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+    .tier-card:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .tier-name {
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+    .tier-price {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .tier-price span {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .tier-perk {
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* ── Accessibility: Reduced Motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* ── Accessibility: High Contrast ── */
+    @media (prefers-contrast: more) {
+      .panel {
+        border-width: 2px;
+      }
+      .panel:focus-visible {
+        outline-width: 3px;
+      }
+      .discover-card:focus-visible,
+      .video-thumb:focus-visible,
+      .tier-card:focus-visible,
+      .gh-item:focus-visible {
+        outline-width: 3px;
+      }
+    }
+
+    /* ── Accessibility: Forced Colors ── */
+    @media (forced-colors: active) {
+      .panel,
+      .discover-card,
+      .video-thumb,
+      .tier-card {
+        border: 2px solid CanvasText;
+      }
+      .panel::before,
+      .discover-card::before,
+      .video-thumb::before,
+      .tier-card::before {
+        background: CanvasText;
+      }
+    }
   </style>
 </head>
 <body>
@@ -185,25 +601,7 @@
 <!-- ── Skip to content link ── -->
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<!-- ── Site nav ── -->
-<nav class="site-nav">
-  <a class="nav-brand" href="/">
-    <span class="brand-icon"><span class="mandala-icon spin-slow"></span></span>
-    Keystone OS
-  </a>
-  <div class="nav-links">
-    <a href="/dream-chat.html">Chat</a>
-    <a href="/trader-dashboard.html">Trader</a>
-    <a href="/create.html">Create</a>
-    <a href="/explore.html" class="active">Explore</a>
-    <a href="/knowledgecenter.html">Help</a>
-        <span class="sep" style="margin: 0 4px;">·</span>
-        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Keystone on Patreon</a>
-  </div>
-  <div class="nav-actions">
-    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">☀</button>
-  </div>
-</nav>
+<!-- Site nav injected by /js/site-chrome.js -->
 
 <div class="page">
 
@@ -215,119 +613,65 @@
 
   <main id="main-content">
 
-    <!-- ── Watch (lanternYT — all channel videos, Gage's canon piece centered) ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">🎬 Watch — <a href="https://www.youtube.com/@lantern1975" target="_blank" rel="noopener noreferrer" style="color:inherit">lanternYT ↗</a></p>
-      <div class="explore-info-box" style="max-width:920px">
-        <div class="video-embed">
-          <iframe id="ytPlayer"
-            src="https://www.youtube-nocookie.com/embed/_bjDjkQsTs0?rel=0"
-            title="lanternYT video"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            referrerpolicy="strict-origin-when-cross-origin"
-            allowfullscreen></iframe>
-        </div>
-        <div class="video-carousel" id="videoCarousel" role="list" aria-label="lanternYT videos — canon piece centered"></div>
-      </div>
+    <!-- ── Single ranked content pane (#1217) — /api/explore/feed ── -->
+    <div class="feed-chips" id="feedChips" role="tablist" aria-label="Filter feed by type">
+      <button type="button" class="feed-chip active" data-type="all" role="tab" aria-selected="true">All</button>
+      <button type="button" class="feed-chip" data-type="read" role="tab" aria-selected="false">📰 Read</button>
+      <button type="button" class="feed-chip" data-type="watch" role="tab" aria-selected="false">🎬 Watch</button>
+      <button type="button" class="feed-chip" data-type="build" role="tab" aria-selected="false">🛠️ Build</button>
+      <button type="button" class="feed-chip" data-type="doc" role="tab" aria-selected="false">📚 Docs</button>
+      <button type="button" class="feed-chip" data-type="belief" role="tab" aria-selected="false">🌍 Beliefs</button>
     </div>
+    <div class="feed-status" id="feedStatus" aria-live="polite">Loading your feed…</div>
+    <div class="feed-stream" id="feedStream" aria-label="Ranked content feed"></div>
 
-    <!-- ── Discover (curated RSS rail — /api/feeds/discover) ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">🧭 Discover — fresh reads on AI, local-first &amp; building</p>
-      <div class="explore-info-box" style="max-width:920px">
-        <div class="discover-grid" id="discoverGrid" aria-busy="true" aria-label="Curated discovery feed">
-          <div class="discover-loading">Loading fresh reads…</div>
-        </div>
-        <p class="discover-foot" id="discoverFoot"></p>
-      </div>
-    </div>
-
-    <!-- ── Build (GitHub activity — /api/github/activity) ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">🛠️ Build — <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer" style="color:inherit">alex-place/lantern-os ↗</a></p>
-      <div class="explore-info-box" style="max-width:920px">
-        <div class="gh-head">
-          <span class="gh-stars" id="ghStars" title="GitHub stars">★ —</span>
-          <a class="gh-cta" href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">Star &amp; contribute on GitHub ↗</a>
-        </div>
-        <div class="gh-grid">
-          <div class="gh-col">
-            <h3>Latest releases</h3>
-            <div class="gh-list" id="ghReleases"><div class="gh-loading">Loading…</div></div>
-          </div>
-          <div class="gh-col">
-            <h3>Recent commits</h3>
-            <div class="gh-list" id="ghCommits"><div class="gh-loading">Loading…</div></div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Dreams & Stories ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">🎭 Dreams & Stories</p>
-      <div class="explore-panels">
-        <a class="panel" href="/three-doors.html">
-          <span class="panel-icon">🏰</span>
-          <span class="panel-label">Adventure</span>
-          <h2>Kingdome of Hearts</h2>
-          <p>Navigate infinite chambers of the Kingdome through branching narratives. A game-like dream journey grounded in your memories.</p>
-          <span class="panel-arrow">Enter Kingdome →</span>
-        </a>
-
-        <a class="panel" href="/wish-door.html">
-          <span class="panel-icon">🚪</span>
-          <span class="panel-label">Story</span>
-          <h2>The Wish Door</h2>
-          <p>Step through the Wish Door for a guided, dreamlike encounter. A reflective interactive story that responds to what you bring it.</p>
-          <span class="panel-arrow">Open the Door →</span>
-        </a>
-      </div>
-    </div>
+    <!-- ── All tools & sections (demoted — nothing lost) ── -->
+    <details class="all-tools">
+      <summary>All tools &amp; sections</summary>
 
     <!-- ── Work & Operations ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">⚙️ Work & Operations</p>
+    <section class="explore-section" aria-labelledby="section-work">
+      <h2 id="section-work" class="explore-section-title">⚙️ Work & Operations</h2>
       <div class="explore-panels">
-        <a class="panel" href="/operations.html">
-          <span class="panel-icon">🤖</span>
+        <a class="panel" href="/operations.html" role="article" aria-label="Agent Operations: Monitor active agents and manage convergence-loop tasks">
+          <span class="panel-icon" aria-hidden="true">🤖</span>
           <span class="panel-label">Operations</span>
-          <h2>Agent Operations</h2>
+          <h3>Agent Operations</h3>
           <p>Monitor active agents, view the dispatch queue, and manage convergence-loop tasks. Real-time status on memory processing and reasoning chains.</p>
-          <span class="panel-arrow">View Operations →</span>
+          <span class="panel-arrow" aria-hidden="true">View Operations →</span>
         </a>
 
-        <a class="panel" href="/orchestration.html">
-          <span class="panel-icon">📋</span>
+        <a class="panel" href="/orchestration.html" role="article" aria-label="Work Dashboard: Track autonomous tasks and convergence records">
+          <span class="panel-icon" aria-hidden="true">📋</span>
           <span class="panel-label">Tasks</span>
-          <h2>Work Dashboard</h2>
+          <h3>Work Dashboard</h3>
           <p>Track autonomous tasks, streaming work sessions, and convergence records. See what's queued, in progress, and verified complete.</p>
-          <span class="panel-arrow">Open Dashboard →</span>
+          <span class="panel-arrow" aria-hidden="true">Open Dashboard →</span>
         </a>
       </div>
-    </div>
+    </section>
 
     <!-- ── Knowledge & Reference ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">📚 Knowledge & Reference</p>
+    <section class="explore-section" aria-labelledby="section-knowledge">
+      <h2 id="section-knowledge" class="explore-section-title">📚 Knowledge & Reference</h2>
       <div class="explore-panels">
-        <a class="panel" href="/knowledgecenter.html#library">
-          <span class="panel-icon">📚</span>
+        <a class="panel" href="/knowledgecenter.html#library" role="article" aria-label="Reference Library: Browse cross-industry knowledge base and master documents">
+          <span class="panel-icon" aria-hidden="true">📚</span>
           <span class="panel-label">Library</span>
-          <h2>Reference Library</h2>
+          <h3>Reference Library</h3>
           <p>Browse and read reference PDFs in-page — a cross-industry grounding knowledge base (aviation, maritime, medicine, energy, and more) plus the Comet-Leap master documents. Thumbnails, search, and an in-page viewer.</p>
-          <span class="panel-arrow">Open Library →</span>
+          <span class="panel-arrow" aria-hidden="true">Open Library →</span>
         </a>
 
-        <a class="panel" href="/knowledgecenter.html">
-          <span class="panel-icon">📖</span>
+        <a class="panel" href="/knowledgecenter.html" role="article" aria-label="Knowledge Center: Guides and reference for Keystone OS">
+          <span class="panel-icon" aria-hidden="true">📖</span>
           <span class="panel-label">Docs</span>
-          <h2>Knowledge Center</h2>
+          <h3>Knowledge Center</h3>
           <p>Guides, live tools, research, and reference for Keystone OS — getting started, theory, data &amp; memory, and project docs all in one place.</p>
-          <span class="panel-arrow">Open Knowledge Center →</span>
+          <span class="panel-arrow" aria-hidden="true">Open Knowledge Center →</span>
         </a>
       </div>
-    </div>
+    </section>
 
     <!-- ── Support (Patreon tiers — grounded in lib/patreon-auth.js tier map) ── -->
     <div class="explore-section">
@@ -356,48 +700,48 @@
     </div>
 
     <!-- ── Community & Support ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">🌍 Community & Support</p>
+    <section class="explore-section" aria-labelledby="section-community">
+      <h2 id="section-community" class="explore-section-title">🌍 Community & Support</h2>
       <div class="explore-panels">
-        <a class="panel" href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">
-          <span class="panel-icon">⭐</span>
+        <a class="panel" href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer" role="article" aria-label="GitHub Repository: Star the project and contribute (opens in new window)">
+          <span class="panel-icon" aria-hidden="true">⭐</span>
           <span class="panel-label">Open Source</span>
-          <h2>GitHub Repository</h2>
+          <h3>GitHub Repository</h3>
           <p>Star the project, report issues, or contribute improvements. Keystone OS is built in the open — join the community of dreamers and builders.</p>
-          <span class="panel-arrow">Visit GitHub ↗</span>
+          <span class="panel-arrow" aria-hidden="true">Visit GitHub ↗</span>
         </a>
 
-        <a class="panel" href="/knowledgecenter.html">
-          <span class="panel-icon">❓</span>
+        <a class="panel" href="/knowledgecenter.html" role="article" aria-label="Help & Documentation: Guides and FAQ for Keystone OS">
+          <span class="panel-icon" aria-hidden="true">❓</span>
           <span class="panel-label">Help</span>
-          <h2>Help & Documentation</h2>
+          <h3>Help & Documentation</h3>
           <p>Learn how to use every feature of Keystone OS. Guides, FAQ, troubleshooting, and best practices for journaling and trading.</p>
-          <span class="panel-arrow">Get Help →</span>
+          <span class="panel-arrow" aria-hidden="true">Get Help →</span>
         </a>
       </div>
-    </div>
+    </section>
 
     <!-- ── Settings & Configuration ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">⚡ Settings & Configuration</p>
+    <section class="explore-section" aria-labelledby="section-settings">
+      <h2 id="section-settings" class="explore-section-title">⚡ Settings & Configuration</h2>
       <div class="explore-panels">
-        <a class="panel" href="/api-keys-settings.html">
-          <span class="panel-icon">🔑</span>
+        <a class="panel" href="/api-keys-settings.html" role="article" aria-label="API Keys & Providers: Configure AI providers and manage API keys">
+          <span class="panel-icon" aria-hidden="true">🔑</span>
           <span class="panel-label">Settings</span>
-          <h2>API Keys & Providers</h2>
+          <h3>API Keys & Providers</h3>
           <p>Configure AI providers (Claude, OpenAI, Gemini) and manage your API keys. All optional — Keystone OS runs locally with or without keys.</p>
-          <span class="panel-arrow">Manage Keys →</span>
+          <span class="panel-arrow" aria-hidden="true">Manage Keys →</span>
         </a>
 
-        <a class="panel" href="/dashboard.html">
-          <span class="panel-icon">📊</span>
+        <a class="panel" href="/dashboard.html" role="article" aria-label="System Dashboard: View real-time system health and status">
+          <span class="panel-icon" aria-hidden="true">📊</span>
           <span class="panel-label">Status</span>
-          <h2>System Dashboard</h2>
+          <h3>System Dashboard</h3>
           <p>View real-time system health: kernel readiness, memory queries, convergence-record status, and validation results.</p>
-          <span class="panel-arrow">Open Dashboard →</span>
+          <span class="panel-arrow" aria-hidden="true">Open Dashboard →</span>
         </a>
       </div>
-    </div>
+    </section>
 
     <!-- ── Informational Section ── -->
     <div class="explore-section">
@@ -412,33 +756,17 @@
       </div>
     </div>
 
+    </details>
+
   </main>
 
 </div>
 
-<!-- ── Site footer ── -->
-<footer class="site-footer">
-  <div class="footer-inner">
-    <span class="footer-brand">
-      <span class="dot online" id="status-dot" title="Server status"></span>
-      <span class="mandala-icon spin-slow" aria-hidden="true"></span> Keystone OS
-    </span>
-    <span class="sep">·</span>
-    <a href="/">Home</a>
-    <a href="/dream-chat.html">Chat</a>
-    <a href="/trader-dashboard.html">Trader</a>
-    <a href="/create.html">Create</a>
-    <a href="/explore.html">Explore</a>
-    <a href="/knowledgecenter.html">Help</a>
-        <span class="sep" style="margin: 0 4px;">·</span>
-        <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Keystone on Patreon</a>
-    <span class="sep">·</span>
-    <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">GitHub</a>
-    <span class="visually-hidden" id="status-label">connecting…</span>
-  </div>
-</footer>
+<!-- Site footer injected by /js/site-chrome.js -->
 
 <script src="/js/theme-toggle.js"></script>
+<script src="/js/site-chrome.js" defer></script>
+<script src="/js/auth-gate.js" defer></script>
 <script>
 /* Theme toggle event listener */
 document.addEventListener('DOMContentLoaded', () => {
@@ -474,135 +802,113 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
-/* Watch panel — every video from the lanternYT channel, fetched live from
-   /api/youtube/lantern-videos (scraped + cached server-side). Gage's canon piece
-   is centered & featured. Falls back to the known videos if the API is down. */
+/* Single ranked content pane (#1217) — /api/explore/feed.
+   One PCSF-ranked stream of typed cards with filter chips. Every card carries a
+   "why surfaced" line (the Verify rule, made visible). Click = engagement,
+   ✕ = dismiss; both POST to /api/explore/interaction so the leaderboard learns. */
 (function () {
-  const FEATURED_ID = '_bjDjkQsTs0';
-  const FALLBACK = {
-    featured: FEATURED_ID,
-    videos: [
-      { id: '20t9zSUXhhw', title: 'learning Mario [lantern gaming]' },
-      { id: '_bjDjkQsTs0', title: 'playing doom 1 half playthrough [lantern gaming]', featured: true },
-    ],
-  };
-  const player = document.getElementById('ytPlayer');
-  const car = document.getElementById('videoCarousel');
-  if (!player || !car) return;
+  const stream = document.getElementById('feedStream');
+  const statusEl = document.getElementById('feedStatus');
+  const chips = document.getElementById('feedChips');
+  if (!stream) return;
 
-  const embed = (id, autoplay) =>
-    'https://www.youtube-nocookie.com/embed/' + id + '?rel=0' + (autoplay ? '&autoplay=1' : '');
-
-  function render(data) {
-    const featured = data.featured || FEATURED_ID;
-    const videos = (data.videos && data.videos.length) ? data.videos : FALLBACK.videos;
-    car.innerHTML = '';
-    videos.forEach(v => {
-      const isFeat = v.featured || v.id === featured;
-      const t = document.createElement('button');
-      t.type = 'button';
-      t.setAttribute('role', 'listitem');
-      t.className = 'video-thumb' + (isFeat ? ' active' : '');
-      t.setAttribute('aria-label', 'Play ' + (v.title || v.id));
-      t.innerHTML =
-        '<img loading="lazy" src="https://img.youtube.com/vi/' + v.id + '/hqdefault.jpg" alt="">' +
-        '<div class="vt-title">' + (isFeat ? '<span class="vt-badge">★ Canon</span> ' : '') +
-        (v.title || v.id) + '</div>';
-      t.addEventListener('click', () => {
-        player.src = embed(v.id, true);
-        car.querySelectorAll('.video-thumb').forEach(e => e.classList.remove('active'));
-        t.classList.add('active');
-      });
-      car.appendChild(t);
-    });
-    // load the featured video into the player and center its thumb
-    const featVid = videos.find(v => v.featured || v.id === featured) || videos[0];
-    if (featVid) player.src = embed(featVid.id, false);
-    const active = car.querySelector('.video-thumb.active') || car.querySelector('.video-thumb');
-    if (active) car.scrollLeft = Math.max(0, active.offsetLeft - (car.clientWidth - active.offsetWidth) / 2);
-  }
-
-  fetch('/api/youtube/lantern-videos', { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : Promise.reject(r.status))
-    .then(render)
-    .catch(() => render(FALLBACK));
-})();
-</script>
-
-<script>
-/* Discover rail + GitHub activity — both server-side cached with baked
-   fallbacks, so the sections always render even if a feed/API is down. */
-(function () {
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const ICON = { read: '📰', watch: '🎬', build: '🛠️', doc: '📚', belief: '🌍', action: '⚡' };
+
+  // Only http(s) and root-relative URLs are linkable. A card url is sourced from
+  // 3rd-party RSS/API data, so a `javascript:`/`data:` scheme must never reach an
+  // href (esc() escapes quotes but not the scheme). Anything else renders inert.
+  const safeUrl = u => (/^https?:\/\//i.test(u) || /^\/[^/]/.test(u)) ? u : '#';
 
   function shortDate(d) {
     if (!d) return '';
-    const t = Date.parse(d);
-    if (Number.isNaN(t)) return '';
+    const t = typeof d === 'number' ? (d > 1e12 ? d : d * 1000) : Date.parse(d);
+    if (!t || Number.isNaN(t)) return '';
     try { return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
     catch { return ''; }
   }
 
-  // ── Discover rail ──
-  const grid = document.getElementById('discoverGrid');
-  const foot = document.getElementById('discoverFoot');
-  if (grid) {
-    fetch('/api/feeds/discover', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => {
-        const items = (data && data.items) || [];
-        grid.removeAttribute('aria-busy');
-        if (!items.length) { grid.innerHTML = '<div class="discover-loading">No reads available right now.</div>'; return; }
-        grid.innerHTML = items.map(it => {
-          const ext = /^https?:/i.test(it.link);
-          const meta = [it.source ? '<span class="dc-source">' + esc(it.source) + '</span>' : '',
-                        shortDate(it.date) ? '<span>' + esc(shortDate(it.date)) + '</span>' : ''].filter(Boolean).join('');
-          return '<a class="discover-card" href="' + esc(it.link) + '"' +
-            (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' +
-            '<span class="dc-title">' + esc(it.title) + '</span>' +
-            (meta ? '<span class="dc-meta">' + meta + '</span>' : '') + '</a>';
-        }).join('');
-        if (foot && data.sources && data.sources.length) {
-          foot.textContent = 'Sources: ' + data.sources.map(s => s.name).join(' · ');
-        }
-      })
-      .catch(() => { grid.removeAttribute('aria-busy'); grid.innerHTML = '<div class="discover-loading">Discovery feed is offline right now.</div>'; });
+  function record(key, event, dwellMs) {
+    if (!key) return;
+    try {
+      navigator.sendBeacon
+        ? navigator.sendBeacon('/api/explore/interaction',
+            new Blob([JSON.stringify({ key, event, dwellMs })], { type: 'application/json' }))
+        : fetch('/api/explore/interaction', { method: 'POST', keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, event, dwellMs }) });
+    } catch (e) { /* non-blocking */ }
   }
 
-  // ── GitHub activity ──
-  const ghStars = document.getElementById('ghStars');
-  const ghReleases = document.getElementById('ghReleases');
-  const ghCommits = document.getElementById('ghCommits');
-  if (ghReleases || ghCommits) {
-    fetch('/api/github/activity', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => {
-        if (ghStars && typeof data.stars === 'number') ghStars.textContent = '★ ' + data.stars;
-        if (ghReleases) {
-          const rel = data.releases || [];
-          ghReleases.innerHTML = rel.length ? rel.map(r =>
-            '<a class="gh-item" href="' + esc(r.url) + '" target="_blank" rel="noopener noreferrer">' +
-            '<span class="gh-tag">' + esc(r.tag) + '</span>' +
-            '<span class="gh-item-text">' + esc(r.name) +
-            (shortDate(r.date) ? '<span class="gh-item-date">' + esc(shortDate(r.date)) + '</span>' : '') +
-            '</span></a>').join('') : '<div class="gh-loading">No releases yet.</div>';
-        }
-        if (ghCommits) {
-          const com = data.commits || [];
-          ghCommits.innerHTML = com.length ? com.map(c =>
-            '<a class="gh-item" href="' + esc(c.url) + '" target="_blank" rel="noopener noreferrer">' +
-            '<span class="gh-tag">' + esc(c.sha) + '</span>' +
-            '<span class="gh-item-text">' + esc(c.msg) +
-            (shortDate(c.date) ? '<span class="gh-item-date">' + esc(shortDate(c.date)) + '</span>' : '') +
-            '</span></a>').join('') : '<div class="gh-loading">No commits found.</div>';
-        }
-      })
-      .catch(() => {
-        if (ghReleases) ghReleases.innerHTML = '<div class="gh-loading">GitHub is unreachable right now.</div>';
-        if (ghCommits) ghCommits.innerHTML = '';
-      });
+  let allCards = [];
+  let filter = 'all';
+
+  function cardEl(c) {
+    const href = safeUrl(c.url);
+    const ext = /^https?:/i.test(href);
+    const el = document.createElement('div');
+    el.className = 'feed-card';
+    el.dataset.type = c.type;
+    const date = shortDate(c.published);
+    const why = c.evidence && c.evidence.why ? c.evidence.why : '';
+    el.innerHTML =
+      '<div class="fc-top"><span class="fc-type">' + (ICON[c.type] || '•') + ' ' + esc(c.type) + '</span>' +
+        (date ? '<span class="fc-date">' + esc(date) + '</span>' : '') + '</div>' +
+      '<a class="fc-title" href="' + esc(href) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' +
+        esc(c.title) + '</a>' +
+      '<div class="fc-why"><span class="fc-src">' + esc(c.source) + '</span>' + (why ? ' — ' + esc(why) : '') + '</div>' +
+      '<button type="button" class="fc-dismiss" aria-label="Dismiss this card" title="Show less like this">✕</button>';
+    el.querySelector('.fc-title').addEventListener('click', () => record(c.key, 'click', 0));
+    el.querySelector('.fc-dismiss').addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      record(c.key, 'dismiss', 0);
+      el.style.opacity = '0';
+      setTimeout(() => el.remove(), 150);
+    });
+    return el;
   }
+
+  function render() {
+    stream.innerHTML = '';
+    const shown = filter === 'all' ? allCards : allCards.filter(c => c.type === filter);
+    if (!shown.length) {
+      stream.innerHTML = '<div class="feed-status">No cards for this filter right now.</div>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    shown.forEach(c => frag.appendChild(cardEl(c)));
+    stream.appendChild(frag);
+  }
+
+  if (chips) {
+    chips.addEventListener('click', (e) => {
+      const btn = e.target.closest('.feed-chip');
+      if (!btn) return;
+      filter = btn.dataset.type;
+      chips.querySelectorAll('.feed-chip').forEach(b => {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      render();
+    });
+  }
+
+  fetch('/api/explore/feed', { cache: 'no-store' })
+    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+    .then(data => {
+      allCards = (data && data.cards) || [];
+      if (statusEl) {
+        statusEl.textContent = allCards.length
+          ? allCards.length + ' cards · ranked by your engagement (editorial order until you click)'
+          : 'No content available right now.';
+      }
+      render();
+    })
+    .catch(() => {
+      if (statusEl) statusEl.textContent = 'Feed is offline right now — open All tools below.';
+    });
 })();
 </script>
 </body>

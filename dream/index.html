@@ -52,69 +52,103 @@
       padding: 20px;
       overflow: hidden;
     }
-    /* Hero with the large Sigma-0 mandala as a background layer */
     .hero { position: relative; text-align: center; padding: 0; }
-    /* Full-bleed ambient Σ₀ mandala — a fixed background field behind all
-       content. The SVG has its own internal counter-rotating ring animations
-       (same principle as the nav icon); no CSS wrapper rotation is added so
-       the motion matches the header icon exactly. */
-    .ambient {
-      position: fixed; inset: 0;
-      z-index: 0; overflow: clip;
+    /* Hero mandala — the same self-contained animated SVG used in the header,
+       sized up and centered above the title. Renders reliably in Chrome
+       (replaces the masked full-bleed ambient background that did not). */
+    .hero__mandala {
+      display: block;
+      width: clamp(88px, 14vh, 148px);
+      height: auto; aspect-ratio: 1;
+      margin: 0 auto clamp(10px, 2vh, 20px);
       pointer-events: none; user-select: none;
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 80%, transparent 100%);
-              mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 80%, transparent 100%);
     }
-    /* Full-bleed ambient Σ₀ mandala — a fixed background field behind all
-       content. It is softly masked on every edge so it never hard-cuts against
-       the nav, footer, or viewport: a radial fade on the spinning art (rotation-
-       invariant) plus a vertical fade on the static container (handles the
-       top/bottom edges independent of the spin). Scales mobile → ultrawide. */
-    .ambient {
-      position: fixed; inset: 0;
-      z-index: 0; overflow: clip;
-      pointer-events: none; user-select: none;
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 80%, transparent 100%);
-              mask-image: linear-gradient(to bottom, transparent 0, #000 13%, #000 80%, transparent 100%);
-    }
-    .ambient__mandala {
-      position: absolute; left: 50%;
-      top: clamp(260px, 44vh, 500px);
-      transform: translate(-50%, -50%);
-      width: min(150vh, 132vw, 1500px);
-      aspect-ratio: 1 / 1;
-      background: url('/sigma0-mandala.svg') center / contain no-repeat;
-      opacity: 0.42;
-      -webkit-mask-image: radial-gradient(closest-side, #000 40%, rgba(0,0,0,.5) 64%, transparent 82%);
-              mask-image: radial-gradient(closest-side, #000 40%, rgba(0,0,0,.5) 64%, transparent 82%);
-      animation: hero-spin 300s linear infinite;
-    }
-    @media (prefers-reduced-motion: reduce) { .ambient__mandala { animation: none; } }
-    /* Lift real content above the ambient layer. z-index:0 (not -1) keeps the
-       mandala painting over the body's own opaque background. */
-    .site-nav, .home-main, .site-footer { position: relative; z-index: 1; }
-    .hero > h1, .hero > .tagline, .hero > .hero-cta-row, .hero > .sub { position: relative; z-index: 1; }
-    .hero h1 { margin-bottom: 12px; }
-    .hero .tagline { margin-bottom: 22px; }
-    /* Readability scrim behind the hero copy — sits above the mandala (all of
-       home-main is z-index:1) and below the text (z-index:1 within the hero),
-       so the copy stays crisp over the densest part of the spinning graphic. */
-    .hero::before {
-      content: "";
-      position: absolute; z-index: 0;
-      left: 50%; top: 50%;
-      transform: translate(-50%, -50%);
-      width: 150%; height: 152%;
-      pointer-events: none;
-      background: radial-gradient(ellipse at center,
-        color-mix(in srgb, var(--bg) 72%, transparent) 0%,
-        color-mix(in srgb, var(--bg) 38%, transparent) 46%,
-        transparent 72%);
-    }
-    /* Solid, high-contrast copy over the busy background */
-    .hero .tagline { color: var(--text); max-width: 600px; margin-left: auto; margin-right: auto; }
+    .hero h1 { margin-bottom: 6px; font-size: clamp(2rem, 6vw, 3.2rem); letter-spacing: -0.01em; }
+    .hero .motto { font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+    .hero .tagline { color: var(--text); max-width: 560px; margin: 0 auto 20px; font-size: 1rem; line-height: 1.55; }
     html[data-theme="dark"] .hero h1 { text-shadow: 0 2px 26px rgba(0,0,0,.5), 0 1px 2px rgba(0,0,0,.4); }
     html[data-theme="dark"] .hero .tagline { text-shadow: 0 1px 3px rgba(0,0,0,.55); }
+    /* ── Home chat bar ── */
+    .home-chat {
+      display: flex; gap: 8px;
+      max-width: 560px; width: 100%; margin: 0 auto;
+    }
+    .home-chat input {
+      flex: 1; padding: 12px 18px;
+      border: 1.5px solid var(--border);
+      border-radius: 9999px;
+      background: var(--bg); color: var(--text);
+      font-size: 1rem; outline: none;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .home-chat input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+    }
+    .home-chat select {
+      flex-shrink: 0;
+      padding: 0 12px; height: 46px;
+      border: 1.5px solid var(--border);
+      border-radius: 9999px;
+      background: var(--bg); color: var(--text);
+      font-size: 0.9rem; cursor: pointer; outline: none;
+      transition: border-color .18s, color .18s;
+    }
+    .home-chat select:hover { border-color: var(--accent); }
+    .home-chat select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+    @media (max-width: 520px) { .home-chat { flex-wrap: wrap; } .home-chat select { flex: 1; } }
+    .home-chat button[type="submit"] {
+      padding: 12px 22px;
+      border: none; border-radius: 9999px;
+      background: var(--accent); color: #fff;
+      font-size: 0.95rem; font-weight: 600;
+      cursor: pointer; white-space: nowrap;
+      transition: background .18s, transform .12s;
+    }
+    .home-chat button[type="submit"]:hover { transform: scale(1.03); }
+    .home-chat button[type="submit"]:active { transform: scale(0.97); }
+    /* ── "+" attach button ── */
+    .home-attach-btn {
+      flex-shrink: 0;
+      width: 46px; padding: 0;
+      border: 1.5px solid var(--border);
+      border-radius: 9999px;
+      background: var(--bg); color: var(--muted);
+      font-size: 22px; line-height: 1; cursor: pointer;
+      transition: border-color .18s, color .18s, background .18s;
+    }
+    .home-attach-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .home-attach-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .home-chat.drag-over { outline: 2px dashed var(--accent); outline-offset: 5px; }
+    /* ── Whole-screen file drop overlay ── */
+    #home-drop-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px;
+      background: color-mix(in srgb, var(--accent) 16%, rgba(0,0,0,.55));
+      color: #fff; font-size: 1.4rem; font-weight: 700; text-align: center;
+      -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+      pointer-events: none;
+    }
+    #home-drop-overlay.active { display: flex; }
+    #home-drop-overlay .drop-sub { font-size: 0.85rem; font-weight: 400; opacity: .82; }
+    .home-file-chip {
+      display: none; align-items: center; gap: 6px;
+      max-width: 560px; margin: -8px auto 0;
+      padding: 5px 12px 5px 10px;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+      border-radius: 9999px;
+      font-size: 0.8rem; color: var(--text);
+    }
+    .home-file-chip.visible { display: flex; }
+    .home-file-chip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .home-file-chip button {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 13px; line-height: 1; padding: 0;
+      flex-shrink: 0;
+    }
+    .home-file-chip button:hover { color: var(--text); }
     /* ── Secondary experiences — redesigned tiles ── */
     .home-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
     @media (max-width: 480px) { .home-tiles { grid-template-columns: 1fr; } }
@@ -138,8 +172,18 @@
       transform: scaleX(0); transform-origin: left;
       transition: transform .28s ease;
     }
-    .home-tiles .panel:hover { border-color: var(--tile); }
-    .home-tiles .panel:hover::before { transform: scaleX(1); }
+    .home-tiles .panel:hover,
+    .home-tiles .panel:focus-visible {
+      border-color: var(--tile);
+    }
+    .home-tiles .panel:hover::before,
+    .home-tiles .panel:focus-visible::before {
+      transform: scaleX(1);
+    }
+    .home-tiles .panel:focus-visible {
+      outline: 2px solid var(--tile);
+      outline-offset: 2px;
+    }
     /* icon in a tinted rounded chip */
     .home-tiles .panel-icon {
       display: inline-flex; align-items: center; justify-content: center;
@@ -164,18 +208,81 @@
     }
     .home-tiles .panel:hover .panel-arrow { transform: translateX(5px); }
     .site-footer { flex-shrink: 0; margin-top: 0; padding: 12px 20px; }
-    /* Fallback: allow scroll only on very short viewports */
-    @media (max-height: 560px) { body { overflow: auto; } .home-main { justify-content: flex-start; } }
+    /* Fallback: allow scroll whenever the one-screen shell can't fit its
+       content (short viewports, and typical phones where the stacked tiles
+       + footer exceed the viewport height and were being clipped). */
+    @media (max-height: 900px) { body { overflow: auto; } .home-main { justify-content: flex-start; } }
+
+    /* ── Accessibility: High Contrast ── */
+    @media (prefers-contrast: more) {
+      .home-tiles .panel {
+        border-width: 2px;
+      }
+      .home-tiles .panel:focus-visible {
+        outline-width: 3px;
+      }
+    }
+
+    /* ── Accessibility: Forced Colors ── */
+    @media (forced-colors: active) {
+      .home-tiles .panel {
+        border: 2px solid CanvasText;
+      }
+      .home-tiles .panel::before {
+        background: CanvasText;
+      }
+    }
+
+    /* ── Flourishing world-model panel (grounded from real yearly feeds) ── */
+    .flourish-panel {
+      --tile: var(--accent);
+      position: relative; overflow: hidden;
+      max-width: 900px; width: 100%; margin: 0 auto;
+      display: flex; flex-direction: column; gap: 11px;
+      padding: 18px 18px 16px;
+      transition: border-color .2s, box-shadow .2s, transform .15s;
+    }
+    /* match the home tiles: same top accent bar + hover treatment */
+    .flourish-panel::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--tile); transform-origin: left;
+    }
+    .flourish-panel:hover { border-color: var(--tile); box-shadow: var(--shadow-hover); }
+    .flourish-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .flourish-head .panel-label { color: var(--accent); font-size: 0.62rem; }
+    .flourish-head h2 { margin: 1px 0 0; font-size: 1.12rem; }
+    .flourish-more { font-size: 0.78rem; color: var(--accent); white-space: nowrap; align-self: center; }
+    .flourish-domains { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 20px; }
+    @media (max-width: 480px) { .flourish-domains { grid-template-columns: 1fr; } }
+    .fd-row { display: flex; flex-direction: column; gap: 4px; }
+    .fd-top { display: flex; justify-content: space-between; font-size: 0.8rem; }
+    .fd-name { text-transform: capitalize; color: var(--text); font-weight: 600; }
+    .fd-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .fd-bar { position: relative; height: 7px; border-radius: 9999px;
+              background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; }
+    .fd-ci { position: absolute; top: 0; bottom: 0;
+             background: color-mix(in srgb, var(--accent) 30%, transparent); }
+    .fd-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 9999px; background: var(--accent); }
+    .flourish-q { font-size: 0.82rem; color: var(--text); line-height: 1.45;
+                  background: color-mix(in srgb, var(--accent) 8%, transparent);
+                  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+                  border-radius: 10px; padding: 8px 11px; }
+    .flourish-q b { color: var(--accent); }
+    .flourish-pattern { font-size: 0.8rem; color: var(--text); line-height: 1.4;
+                        background: color-mix(in srgb, var(--accent) 9%, transparent);
+                        border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+                        border-radius: 10px; padding: 7px 11px; }
+    .flourish-pattern b { color: var(--accent); }
+    .flourish-pattern .fp-r { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .flourish-prov { font-size: 0.7rem; color: var(--muted); }
+    .flourish-prov a, .flourish-prov u { color: var(--muted); }
   </style>
   <title>Keystone OS</title>
 </head>
 <body>
 
-<!-- ── Ambient Σ₀ mandala — full-bleed background field, behind all content ── -->
-<div class="ambient" aria-hidden="true"><div class="ambient__mandala"></div></div>
-
-<!-- ── Skip to content link ── -->
-<a href="#main-content" class="skip-link">Skip to main content</a>
+<!-- ── Whole-screen file drop overlay ── -->
+<div id="home-drop-overlay" aria-hidden="true">📄 Drop to upload<span class="drop-sub">.pdf → Knowledge Center &nbsp;·&nbsp; .docx → improve &amp; rewrite</span></div>
 
 <!-- ── Site nav ── -->
 <nav class="site-nav">
@@ -189,8 +296,7 @@
     <a href="/create.html">Create</a>
     <a href="/explore.html">Explore</a>
     <a href="/knowledgecenter.html">Help</a>
-    <span class="sep" style="margin: 0 4px;">·</span>
-    <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Support Keystone on Patreon</a>
+    <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Patreon ♥</a>
   </div>
   <div class="nav-actions">
     <a href="/profile.html" class="nav-btn" id="profile-btn" title="Your profile" aria-label="View your profile">👤</a>
@@ -203,38 +309,73 @@
 
   <!-- ── Hero ── -->
   <div class="hero">
-    <h1>Observe. Remember. Reason. Act. Verify. Converge.</h1>
-    <p class="tagline" id="hero-tagline">Your AI that actually remembers you — runs on your own machine, works with any model, and never sells your conversations. Just type like you're texting a friend.</p>
-    <div class="hero-cta-row">
-      <a class="btn-primary" href="/dream-chat.html">✦ Keystone Chat</a>
-    </div>
-    <p class="sub"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">v—</span> · <span id="hero-git"></span></p>
+    <img class="hero__mandala" src="/mandala.svg" alt="" aria-hidden="true" width="148" height="148">
+    <h1>Keystone OS</h1>
+    <p class="motto">Observe · Remember · Reason · Act · Verify · Converge</p>
+    <p class="tagline">Your AI that actually remembers you — local, private, and free.</p>
   </div>
+
+  <!-- ── Home chat bar ── -->
+  <form class="home-chat" id="home-chat-form" onsubmit="homeChat(event)" role="search" aria-label="Start a chat">
+    <button type="button" class="home-attach-btn" id="home-attach-btn" onclick="homeAttachPick()" aria-label="Attach a file (PDF or Word .docx)" title="Attach a file — PDF or .docx">+</button>
+    <input id="home-chat-input" type="text" placeholder="Ask Keystone anything…" autocomplete="off" aria-label="Chat message">
+    <select id="home-provider-pin" aria-label="Pin AI provider" title="Pin which AI provider answers (Auto = best-ranked)">
+      <option value="">Auto</option>
+      <option value="claude">Claude</option>
+      <option value="openai">ChatGPT</option>
+      <option value="gemini">Gemini</option>
+      <option value="grok">Grok</option>
+      <option value="ollama">Local Σ₀</option>
+      <option value="keystone-ft">Keystone FT</option>
+    </select>
+    <button type="submit">Chat ✦</button>
+  </form>
+  <input type="file" id="home-file-input" accept=".pdf,.docx" multiple style="display:none">
+  <div class="home-file-chip" id="home-file-chip">
+    <span id="home-file-chip-name">📄 file.docx</span>
+    <button type="button" onclick="clearHomeDocx()" aria-label="Remove file">✕</button>
+  </div>
+  <p class="sub" style="text-align:center;margin-top:-4px;"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">v—</span> · <span id="hero-git">—</span></p>
 
   <!-- ── Secondary experiences ── -->
   <div class="home-tiles">
     <a class="panel tile-trader" href="/trader-dashboard.html">
-      <span class="panel-icon" aria-hidden="true">📈</span>
+      <span class="panel-icon" aria-hidden="true" style="font-size:20px;font-weight:700;color:var(--tile)">▲</span>
       <span class="panel-label">Markets</span>
       <h2>Trader</h2>
-      <p>Live markets, prediction trading, and the news that moves them.</p>
-      <span class="panel-arrow">Open Trader →</span>
+      <p>Live prediction markets, swipe-deck entries, and signal history.</p>
+      <span class="panel-arrow">Open →</span>
     </a>
     <a class="panel tile-create" href="/create.html">
-      <span class="panel-icon" aria-hidden="true">✏️</span>
+      <span class="panel-icon" aria-hidden="true" style="font-size:20px;font-weight:700;color:var(--tile)">✦</span>
       <span class="panel-label">Studio</span>
       <h2>Create</h2>
       <p>Write, upload, and organize your creative projects.</p>
-      <span class="panel-arrow">Open Create →</span>
+      <span class="panel-arrow">Open →</span>
     </a>
     <a class="panel tile-explore" href="/explore.html">
-      <span class="panel-icon" aria-hidden="true">🧭</span>
-      <span class="panel-label">Convergence</span>
+      <span class="panel-icon" aria-hidden="true" style="font-size:20px;font-weight:700;color:var(--tile)">◎</span>
+      <span class="panel-label">Archive</span>
       <h2>Explore</h2>
-      <p>Games, tools, your personal archive, and settings.</p>
-      <span class="panel-arrow">Open Explore →</span>
+      <p>Your personal archive, tools, games, and settings.</p>
+      <span class="panel-arrow">Open →</span>
     </a>
   </div>
+
+  <!-- ── Flourishing world-model panel — grounded from real yearly feeds ── -->
+  <section class="panel flourish-panel" id="flourish-panel" aria-label="Flourishing world model" hidden>
+    <div class="flourish-head">
+      <div>
+        <span class="panel-label">World Model</span>
+        <h2>Flourishing — the Bayesian world model</h2>
+      </div>
+      <a class="flourish-more" href="/flourishing.html">Full dashboard →</a>
+    </div>
+    <div class="flourish-domains" id="flourish-domains"></div>
+    <div class="flourish-q" id="flourish-q" hidden></div>
+    <div class="flourish-pattern" id="flourish-pattern" hidden></div>
+    <div class="flourish-prov" id="flourish-prov"></div>
+  </section>
 
 </main>
 
@@ -243,7 +384,7 @@
   <div class="footer-inner">
     <span class="footer-brand">
       <span class="dot online" id="status-dot" title="Server status"></span>
-      <span class="mandala-icon spin-slow" aria-hidden="true"></span> Keystone OS
+      Keystone OS
     </span>
     <span class="sep">·</span>
     <a href="/">Home</a>
@@ -319,26 +460,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // dreamer, readiness, recent entries — was removed, so its loader and the
     // 8 endpoints it polled (incl. /api/nodes/mesh, /api/agents/workers and
     // /api/nodes/this, which 404'd every cycle) are gone with it.
-    const [health, version, git] = await Promise.all([
+    const [health, version, git, serving] = await Promise.all([
       fetchJson('/api/health'),
       fetchJson('/version.json'),
       fetchJson('/api/version'),
+      fetchJson('/api/serving/status'),
     ]);
 
-    // Server status (footer dot + label)
+    // Server + local model status (footer dot)
     const serverOnline = !!(health && health.ok);
-    $('status-dot').className = serverOnline ? 'dot online' : 'dot';
+    const lm = serving?.local_model;
+    const modelUp = !!(lm && lm.pinned_served);
+    const modelNote = lm ? ` · local model ${modelUp ? 'up (' + (lm.active_model || lm.pinned) + ')' : 'offline'}` : '';
+    const dotEl = $('status-dot');
+    dotEl.className = serverOnline ? 'dot online' : 'dot';
+    dotEl.title = (serverOnline ? 'Server online' : 'Server unreachable') + modelNote;
     $('status-label').textContent = serverOnline ? 'server online' : 'server unreachable';
 
     // Version + git (hero sub-line + clickable version badges)
-    const v = version?.version || 'unknown';
+    // /version.json can 500 in some checkouts; fall back to the git
+    // endpoint's semver (already fetched below) before giving up.
     const g = git?.version;
-    const branch = g?.branch || 'unknown';
+    const v = version?.version || g?.semver || 'unknown';
+    const branch = g?.branch || '';
     const shortCommit = g?.commit ? g.commit.slice(0, 7) : '—';
     const commitDate = g?.date ? fmtDate(g.date) : '';
 
-    $('hero-edition').textContent = 'Orion Edition · ' + branch;
-    $('hero-git').textContent = shortCommit + (commitDate ? ' · ' + commitDate : '');
+    $('hero-edition').textContent = 'Orion Edition';
+    $('hero-git').textContent = [branch, shortCommit, commitDate].filter(Boolean).join(' · ');
 
     document.querySelectorAll('[data-version-badge]').forEach(el => {
       const prefix = el.dataset.versionBadge || '';
@@ -371,7 +520,173 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
+<script>
+/* Flourishing world-model panel — fetches grounded yearly feeds + the Question Machine's
+   next-to-ground question. Hidden until data loads, so feed/network failures degrade to
+   nothing rather than a broken card. */
+(async function loadFlourishing() {
+  const panel = document.getElementById('flourish-panel');
+  if (!panel) return;
+  try {
+    const r = await fetch('/api/flourishing/panel', { cache: 'no-store', signal: AbortSignal.timeout(25000) });
+    if (!r.ok) return;
+    const p = await r.json();
+    if (!p || !p.ok || !Array.isArray(p.domains) || !p.domains.length) return;
+
+    document.getElementById('flourish-domains').innerHTML = p.domains.map(d => {
+      const pct = Math.round(d.score * 100), u = Math.round(d.uncertainty * 100);
+      const lo = Math.max(0, pct - u), hi = Math.min(100, pct + u);
+      return `<div class="fd-row">
+        <div class="fd-top"><span class="fd-name">${d.domain}</span>
+          <span class="fd-val">${pct}% ±${u}% · ${d.n} belief${d.n === 1 ? '' : 's'} · ${d.n_sources || d.n} src</span></div>
+        <div class="fd-bar"><span class="fd-ci" style="left:${lo}%;width:${hi - lo}%"></span>
+          <span class="fd-fill" style="width:${pct}%"></span></div>
+      </div>`;
+    }).join('');
+
+    const q = p.questions && p.questions[0];
+    const qEl = document.getElementById('flourish-q');
+    if (q) {
+      qEl.innerHTML = `<b>Question Machine →</b> next to ground: <b>${q.entity}</b> ` +
+        `(±${Math.round(q.uncertainty * 100)}%, ${q.n_sources || 1} source${(q.n_sources || 1) === 1 ? '' : 's'}${q.agreement ? ' · ' + q.agreement : ''})`;
+      qEl.hidden = false;
+    }
+
+    const upd = p.updated_at ? new Date(p.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'now';
+    const ung = (p.ungrounded_domains || []).join(', ');
+    const corr = p.corroboration || {};
+    document.getElementById('flourish-prov').innerHTML =
+      `${(p.sources || ['World Bank']).join(' · ')} · ` +
+      `<u title="beliefs grounded by ≥2 independent sources — agreement tightens uncertainty">` +
+      `${corr.multi_source || 0}/${corr.beliefs || 0} corroborated</u> · updated ${upd}` +
+      (ung ? ` · <u title="no live feed for this domain">${ung} not live-grounded</u>` : '');
+
+    panel.hidden = false;
+
+    // Cross-domain patterns load separately — the per-country correlation fetch is heavier,
+    // so it must not block the belief panel. Populates the pattern line when it arrives.
+    fetch('/api/flourishing/correlations', { cache: 'no-store', signal: AbortSignal.timeout(45000) })
+      .then(r => (r.ok ? r.json() : null))
+      .then(c => {
+        const top = c && c.correlations && c.correlations[0];
+        if (!top) return;
+        const pe = document.getElementById('flourish-pattern');
+        const sign = top.r >= 0 ? '+' : '';
+        pe.innerHTML = `<b>Pattern →</b> ${top.label} ` +
+          `<span class="fp-r">(r=${sign}${top.r}, ${top.strength} ${top.direction}, n=${top.n} countries)</span>`;
+        pe.hidden = false;
+      })
+      .catch(() => {});
+  } catch (_) { /* leave hidden */ }
+})();
+</script>
 <script src="/js/update-checker.js" defer></script>
 <script src="/js/auth-gate.js" defer></script>
+<script>
+(function () {
+  let pendingDocx = null;
+
+  function setDocxChip(file) {
+    pendingDocx = file;
+    const chip = document.getElementById('home-file-chip');
+    document.getElementById('home-file-chip-name').textContent = '📄 ' + file.name;
+    chip.classList.add('visible');
+    const input = document.getElementById('home-chat-input');
+    input.placeholder = 'Add an instruction (or leave blank to polish)…';
+    input.focus();
+  }
+
+  window.clearHomeDocx = function () {
+    pendingDocx = null;
+    document.getElementById('home-file-chip').classList.remove('visible');
+    document.getElementById('home-chat-input').placeholder = 'Ask Keystone anything…';
+  };
+
+  // ── Provider pin: sticky choice forwarded to dream-chat via ?provider= ──────
+  // dream-chat-ui.js reads ?provider= and routes the turn to that provider
+  // (empty = Auto, i.e. the live PCSF-ranked pick). Persisted in localStorage so
+  // the pin survives reloads.
+  const providerPin = document.getElementById('home-provider-pin');
+  if (providerPin) {
+    try { providerPin.value = localStorage.getItem('keystone.providerPin') || ''; } catch {}
+    providerPin.addEventListener('change', () => {
+      try { localStorage.setItem('keystone.providerPin', providerPin.value); } catch {}
+    });
+  }
+  function pinnedProviderQS() {
+    const v = providerPin && providerPin.value;
+    return v ? '&provider=' + encodeURIComponent(v) : '';
+  }
+
+  window.homeChat = function (e) {
+    e.preventDefault();
+    const q = document.getElementById('home-chat-input').value.trim();
+    if (pendingDocx) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        try {
+          sessionStorage.setItem('pendingDocx', JSON.stringify({
+            name: pendingDocx.name,
+            data: reader.result,
+            instruction: q || null,
+          }));
+        } catch { /* storage full — skip, dream-chat will prompt */ }
+        window.location.href = '/dream-chat.html?autoprocess=docx';
+      };
+      reader.readAsDataURL(pendingDocx);
+      return;
+    }
+    if (!q) { document.getElementById('home-chat-input').focus(); return; }
+    window.location.href = '/dream-chat.html?q=' + encodeURIComponent(q) + pinnedProviderQS();
+  };
+
+  /* Route picked/dropped files: .docx → chip (improve flow on submit),
+     .pdf → forward to the chat's Knowledge Center upload. Mirrors the
+     dream-chat.html drop handler so both pages behave the same. */
+  function forwardPdf(file) {
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        sessionStorage.setItem('pendingPdf', JSON.stringify({ name: file.name, data: reader.result }));
+      } catch { /* storage full — chat will fall back to its own picker */ }
+      window.location.href = '/dream-chat.html?autoprocess=pdf';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleHomeFiles(fileList) {
+    const files = [...(fileList || [])];
+    if (!files.length) return;
+    const docx = files.find(f => f.name.toLowerCase().endsWith('.docx'));
+    const pdf  = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (docx) setDocxChip(docx);
+    else if (pdf) forwardPdf(pdf);
+    else document.getElementById('home-chat-input').placeholder = 'Please choose a PDF or Word (.docx) file…';
+  }
+
+  /* "+" attach button → native file picker */
+  const fileInput = document.getElementById('home-file-input');
+  window.homeAttachPick = function () { fileInput.click(); };
+  fileInput.addEventListener('change', () => { handleHomeFiles(fileInput.files); fileInput.value = ''; });
+
+  /* Whole-screen drag-and-drop — drop a file anywhere on the page */
+  const overlay = document.getElementById('home-drop-overlay');
+  let dragDepth = 0;
+  document.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    if (![...(e.dataTransfer.types || [])].includes('Files')) return;
+    if (++dragDepth === 1) overlay.classList.add('active');
+  });
+  document.addEventListener('dragleave', () => {
+    if (--dragDepth <= 0) { dragDepth = 0; overlay.classList.remove('active'); }
+  });
+  document.addEventListener('dragover', (e) => e.preventDefault());
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragDepth = 0; overlay.classList.remove('active');
+    handleHomeFiles(e.dataTransfer.files);
+  });
+})();
+</script>
 </body>
 </html>
