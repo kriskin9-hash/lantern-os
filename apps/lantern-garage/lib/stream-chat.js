@@ -22,6 +22,7 @@ const { parseStreamChatRequest } = require("./stream-chat/request");
 const { scoreReplyCollapse, antiCollapseSignal } = require("./collapse-canary");
 const { assembleSessionContext } = require("./session-summary-store");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
+const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
@@ -201,6 +202,7 @@ async function handleStreamChat(req, url, res) {
     collectRequestBody,
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
+  const attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
 
   // Surface mode: dream-chat (default) or three-doors.
   // The game page declares itself via body.surface; bang commands can also flip it below.
@@ -800,6 +802,20 @@ async function handleStreamChat(req, url, res) {
   const csfContext = formatCSFContextForPrompt(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
+  // Convergence Oracle — ground EVERY question in its cosmic-time observer slice (in-process
+  // Node port; the live stream path had no oracle grounding before this). Fail-safe: any error → "".
+  let oracleBlock = "";
+  try { const og = message ? oracleFormatGrounding(message) : ""; if (og) oracleBlock = `\n\n${og}`; }
+  catch { oracleBlock = ""; }
+
+  // Attached files (the "+" work tool) — the user uploaded these for THIS turn. Treat them as
+  // primary evidence: read, quote, summarize, or act on them, and ground answers in their content.
+  let attachmentBlock = "";
+  if (attachments.length) {
+    const blocks = attachments.map((a) => `--- Attached file: ${a.name} (${a.text.length} chars) ---\n${a.text}`).join("\n\n");
+    attachmentBlock = `\n\nAttached files for this turn (the user uploaded these — treat them as the primary evidence; quote/summarize/act on them and cite the filename):\n${blocks}`;
+  }
+
   // ── Convergance OS routing (runs before systemPrompt so intent drives prompt + label) ──
   let converganceDecision = null;
   try {
@@ -855,12 +871,12 @@ async function handleStreamChat(req, url, res) {
   // cloud providers are unavailable) a correct, concrete answer to "what is this?" so new
   // users get an orientation instead of improvised dream-journal filler. The journal block
   // is explicitly labelled background so the model does not narrate it as if it were the app.
-  const ROUTER_PROMPT = `You are Keystone Σ₀ — the grounded reasoning and engineering agent for Keystone OS, a local-first private journaling and reasoning app that runs on the user's own machine with no account required. You run the convergence loop (Observe → Remember → Reason → Act → Verify → Converge), and external reality beats internal consistency: ground every important claim in evidence, give an honest confidence, and say "I don't know" rather than improvise. Answer directly, technically, and concretely. NO roleplay, NO dream personas, NO "doors", NO mystical or poetic language — you are a precise technical agent, not a dream narrator, even though the background below happens to be a dream journal. For code, give complete, correct, copy-paste-ready implementations grounded in real files/APIs and state exactly how to verify (test command or expected output). Be concise for simple asks, but COMPREHENSIVE for substantive, factual, or research questions: give full context and reasoning, structure longer answers with short headings and bullet lists, and cite sources as clickable Markdown links [descriptive title](https://url). Your replies render as rich Markdown in this chat UI: \`![alt](https://image-url)\` displays the image inline, a plain YouTube link (https://youtube.com/watch?v=… or https://youtu.be/…) embeds as a player, and \`[text](https://url)\` becomes a link that opens in a new tab — so you absolutely CAN show images and embed videos; never tell the user you "can't embed", "can't display images", or "lack web/embedding capability" (that is false). When an image or video genuinely helps, include it — but use ONLY real, working URLs you actually know (e.g. Wikimedia Commons upload URLs, well-known sources); never invent, guess, or fabricate a media URL — if unsure, link the source page instead. If the user asks "what is this?", "what can you do?", or anything about the app itself, give a plain one- or two-sentence description of Keystone OS; do NOT describe the journal entries below as if they were the app, and do NOT use mystical or "dream" language. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Keystone, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nBackground (the user's recent journal entries — context ONLY; do NOT narrate, theme, echo, or poeticize them unless the user explicitly asks about their journal):\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}`;
+  const ROUTER_PROMPT = `You are Keystone Σ₀ — the grounded reasoning and engineering agent for Keystone OS, a local-first private journaling and reasoning app that runs on the user's own machine with no account required. You run the convergence loop (Observe → Remember → Reason → Act → Verify → Converge), and external reality beats internal consistency: ground every important claim in evidence, give an honest confidence, and say "I don't know" rather than improvise. Answer directly, technically, and concretely. NO roleplay, NO dream personas, NO "doors", NO mystical or poetic language — you are a precise technical agent, not a dream narrator, even though the background below happens to be a dream journal. For code, give complete, correct, copy-paste-ready implementations grounded in real files/APIs and state exactly how to verify (test command or expected output). Be concise for simple asks, but COMPREHENSIVE for substantive, factual, or research questions: give full context and reasoning, structure longer answers with short headings and bullet lists, and cite sources as clickable Markdown links [descriptive title](https://url). Your replies render as rich Markdown in this chat UI: \`![alt](https://image-url)\` displays the image inline, a plain YouTube link (https://youtube.com/watch?v=… or https://youtu.be/…) embeds as a player, and \`[text](https://url)\` becomes a link that opens in a new tab — so you absolutely CAN show images and embed videos; never tell the user you "can't embed", "can't display images", or "lack web/embedding capability" (that is false). When an image or video genuinely helps, include it — but use ONLY real, working URLs you actually know (e.g. Wikimedia Commons upload URLs, well-known sources); never invent, guess, or fabricate a media URL — if unsure, link the source page instead. If the user asks "what is this?", "what can you do?", or anything about the app itself, give a plain one- or two-sentence description of Keystone OS; do NOT describe the journal entries below as if they were the app, and do NOT use mystical or "dream" language. IMPORTANT: Your very first token must be substantive content — never output only your name, "Keystone,", "Keystone, engineering desk.", or any greeting. Go straight to the answer. If the user asks for roleplay, Keystone, or the Three Doors game, tell them to open the Explore tab (/three-doors-game.html).\n\n${_realtimeCtx}\n\nBackground (the user's recent journal entries — context ONLY; do NOT narrate, theme, echo, or poeticize them unless the user explicitly asks about their journal):\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${attachmentBlock}`;
 
   const systemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
     : isRpMode
-      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
+      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${attachmentBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
       : ROUTER_PROMPT;
 
 
