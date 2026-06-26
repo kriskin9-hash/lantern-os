@@ -345,12 +345,19 @@ async function handleStreamChat(req, url, res) {
           kernelEscalationChain, runKernelWithEscalation, recordEscalation, recordLanded,
         } = require("./keystone-escalation");
         const runId = `kernel-${Date.now()}`;
-        const providers = rolloverMode === "default"
+        // #1197 verify-gated local-first: run Ouro(local) → … → Claude and escalate
+        // when the local result isn't VERIFIED (tests pass), not when the local model
+        // merely "returns something" (#1167). Enabled by rolloverMode=default or the
+        // KEYSTONE_LOCAL_FIRST opt-in; kept off by default while the local student is
+        // a 1.4B (flip on once a stronger student lands — see #1199). Shadow stays Claude-only.
+        const localFirst = rolloverMode === "default" || process.env.KEYSTONE_LOCAL_FIRST === "1";
+        const providers = localFirst
           ? kernelEscalationChain()
           : [{ provider, model: kernelModel || "claude-opus-4-8" }];
 
-        const { result, providerUsed, escalations } = await runKernelWithEscalation({
+        const { result, providerUsed, escalations, landedBy, verified } = await runKernelWithEscalation({
           providers,
+          requireVerified: localFirst,
           runOne: async (prov, mdl, i) => {
             if (i > 0) sendToken(`\n↪ Escalating to ${prov}/${mdl}…\n`);
             return keystoneRun(issue, repoRoot, async (opts) => {
@@ -388,6 +395,9 @@ async function handleStreamChat(req, url, res) {
             agent: "Keystone", provider: used.provider, model: used.model, rolloverMode,
             status: "success", filesChanged: Array.isArray(result.applied) ? result.applied.length : 0,
             testsRun: !!result.tests, escalations: escalations.length,
+            // #1197 parity metric: who actually landed it (local vs cloud teacher) + verified.
+            landed_by: landedBy || (used.provider === "ollama" ? "local" : "cloud"),
+            verified: !!verified,
           });
         } else {
           sendToken(`\n❌ Keystone failed after ${escalations.length + 1} attempt(s): ${result ? result.error : "unknown"}\n`);

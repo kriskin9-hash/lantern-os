@@ -33,14 +33,39 @@ function kernelEscalationChain(chain = PROVIDER_CHAINS.kernel) {
   return out;
 }
 
+/** "local" if the landing provider is the on-box server (ollama/ouro), else "cloud". */
+function landedByOf(providerUsed) {
+  if (!providerUsed) return null;
+  return providerUsed.provider === "ollama" ? "local" : "cloud";
+}
+
+/**
+ * Did this attempt actually LAND the work? Plain mode: any SUCCESS_STATUSES status.
+ * Verify-gated mode (requireVerified, the #1197 local-first gate): an
+ * `applied_unverified` result does NOT count as landed *when verification was
+ * possible and did not pass* — so a weak local model that "always returns
+ * something" (the #1167 hazard) escalates to the cloud teacher instead of silently
+ * winning. When tests could not run at all (no `result.tests`), we accept the
+ * unverified result rather than loop forever — but the caller still sees verified=false.
+ */
+function _landed(result, requireVerified) {
+  if (!result || !SUCCESS_STATUSES.has(result.status)) return false;
+  if (requireVerified && result.status === "applied_unverified" && result.tests) {
+    return !!result.tests.success;
+  }
+  return true;
+}
+
 /**
  * Run the kernel across `providers`, escalating to the next on failure.
  * @param providers ordered [{provider, model}]
  * @param runOne async (provider, model, index) -> keystoneRun result ({status,...})
  * @param onEscalate async (escalationRecord, result) -> void  (per failed attempt)
- * @returns { result, providerUsed|null, attempts, escalations[] }
+ * @param requireVerified when true, unverified-but-applied local results escalate
+ *        (verify-gated local-first, #1197). Default false = legacy fleet behavior.
+ * @returns { result, providerUsed|null, attempts, escalations[], landedBy, verified }
  */
-async function runKernelWithEscalation({ providers, runOne, onEscalate = async () => {} }) {
+async function runKernelWithEscalation({ providers, runOne, onEscalate = async () => {}, requireVerified = false }) {
   const escalations = [];
   let lastResult = null;
   const list = providers || [];
@@ -48,8 +73,13 @@ async function runKernelWithEscalation({ providers, runOne, onEscalate = async (
     const { provider, model } = list[i];
     const result = await runOne(provider, model, i);
     lastResult = result;
-    if (result && SUCCESS_STATUSES.has(result.status)) {
-      return { result, providerUsed: { provider, model }, attempts: i + 1, escalations };
+    if (_landed(result, requireVerified)) {
+      const providerUsed = { provider, model };
+      return {
+        result, providerUsed, attempts: i + 1, escalations,
+        landedBy: landedByOf(providerUsed),
+        verified: !!(result.tests && result.tests.success),
+      };
     }
     const next = list[i + 1] || null;
     const rec = {
@@ -60,7 +90,10 @@ async function runKernelWithEscalation({ providers, runOne, onEscalate = async (
     await onEscalate(rec, result);
     if (!next) break; // chain exhausted
   }
-  return { result: lastResult, providerUsed: null, attempts: list.length, escalations };
+  return {
+    result: lastResult, providerUsed: null, attempts: list.length, escalations,
+    landedBy: null, verified: false,
+  };
 }
 
 /** Persist one escalation as a convergence record + a hard task for distillation. */
@@ -142,5 +175,5 @@ function readRolloverShare(records, { sinceTs = 0 } = {}) {
 
 module.exports = {
   kernelEscalationChain, runKernelWithEscalation, recordEscalation, recordLanded,
-  readRolloverShare, KERNEL_REASONER, SUCCESS_STATUSES,
+  readRolloverShare, landedByOf, KERNEL_REASONER, SUCCESS_STATUSES,
 };
