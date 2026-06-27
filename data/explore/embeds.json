@@ -65,6 +65,58 @@
       "why": "Musopen copyright-free recording (Columbia University Orchestra)",
       "evidence_source": "archive.org · Mozart_Symphony_40 (Musopen)",
       "embed": { "provider": "archive.org", "src": "https://archive.org/embed/Mozart_Symphony_40", "height": 240, "interactive": true }
+    },
+    {
+      "slug": "pac-man",
+      "title": "Pac-Man (1983)",
+      "kind": "game",
+      "url": "https://archive.org/details/msdos_Pac-Man_1983",
+      "source": "Internet Archive",
+      "published": "1983-01-01",
+      "topics": ["game", "lore", "arcade"],
+      "lore": "Namco, 1983. A yellow circle, four ghosts, and a maze that taught the whole world the words 'high score.'",
+      "why": "Emulated in-browser by the Internet Archive's MS-DOS library",
+      "evidence_source": "archive.org · msdos_Pac-Man_1983",
+      "embed": { "provider": "archive.org", "src": "https://archive.org/embed/msdos_Pac-Man_1983", "height": 480, "interactive": true }
+    },
+    {
+      "slug": "2048",
+      "title": "2048",
+      "kind": "game",
+      "url": "https://github.com/gabrielecirulli/2048",
+      "source": "Open Source · GitHub",
+      "published": "2014-03-09",
+      "topics": ["game", "open-source", "github"],
+      "lore": "Gabriele Cirulli built it in a single weekend and dropped it on GitHub under the MIT license. The internet lost the next month sliding tiles; it's been forked ten thousand times since.",
+      "why": "MIT-licensed open-source game, served from its own GitHub Pages",
+      "evidence_source": "github.com/gabrielecirulli/2048 (MIT)",
+      "embed": { "provider": "github.io", "src": "https://gabrielecirulli.github.io/2048/", "height": 540, "interactive": true }
+    },
+    {
+      "slug": "night-of-the-living-dead",
+      "title": "Night of the Living Dead (1968)",
+      "kind": "watch",
+      "url": "https://archive.org/details/night-of-the-living-dead-1968-english",
+      "source": "Internet Archive",
+      "published": "1968-10-01",
+      "topics": ["watch", "lore", "film"],
+      "lore": "Romero shot it for $114,000 in rural Pennsylvania. A missing copyright notice dropped the print into the public domain, where it quietly became everyone's nightmare.",
+      "why": "Public-domain film, streamable in-page from the Internet Archive",
+      "evidence_source": "archive.org · night-of-the-living-dead-1968-english (Public Domain)",
+      "embed": { "provider": "archive.org", "src": "https://archive.org/embed/night-of-the-living-dead-1968-english", "height": 420, "interactive": true }
+    },
+    {
+      "slug": "jazz-classics",
+      "title": "Jazz Classics — Armstrong · Ellington · Fitzgerald",
+      "kind": "listen",
+      "url": "https://archive.org/details/JazzClassics",
+      "source": "Internet Archive",
+      "published": "1930-01-01",
+      "topics": ["listen", "lore", "jazz"],
+      "lore": "Tight Like This, The Mooche, Basin Street Blues — the early recordings that aged into the public domain and never once stopped swinging.",
+      "why": "Public-domain jazz, streamable in-page from the Internet Archive",
+      "evidence_source": "archive.org · JazzClassics (Public Domain)",
+      "embed": { "provider": "archive.org", "src": "https://archive.org/embed/JazzClassics", "height": 240, "interactive": true }
     }
   ]
 }
