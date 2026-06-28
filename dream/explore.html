@@ -79,18 +79,88 @@
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      padding: 16px 16px 14px;
+      gap: 9px;
+      padding: 18px 18px 16px;
+      overflow: hidden;
       border: 1.5px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       background: var(--surface);
       color: inherit;
       text-decoration: none;
       transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
     }
+    /* Lead image — bleeds to the card edges, clipped by the card's radius. */
+    .feed-card .fc-thumb {
+      width: calc(100% + 36px);
+      height: 172px;
+      object-fit: cover;
+      display: block;
+      margin: -18px -18px 1px;
+      background: var(--surface2);
+    }
+    /* Generated lead thumbnail for cards with no (or a broken) source image —
+       docs, image-less reads, beliefs. A type-tinted gradient block with the type
+       glyph, so EVERY card has a consistent lead visual instead of reading as a
+       bare, thumbnail-less "?" tile. */
+    .feed-card .fc-thumb-ph {
+      width: calc(100% + 36px);
+      height: 150px;
+      margin: -18px -18px 1px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border);
+      background:
+        radial-gradient(circle at 32% 28%,
+          color-mix(in srgb, var(--tile) 40%, var(--surface)) 0%,
+          color-mix(in srgb, var(--tile) 14%, var(--surface)) 55%,
+          var(--surface) 100%);
+    }
+    .feed-card .fc-thumb-ph .fc-ph-icon {
+      font-size: 46px;
+      line-height: 1;
+      opacity: 0.92;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
+    }
+    /* Preview excerpt (reads) / good-news frame (beliefs) — clamped to 3 lines. */
+    .feed-card .fc-summary {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.5;
+      margin: 0;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    /* Per-type accent identity + top accent-bar wipe-in on hover — mirrors the
+       index.html home tiles, so Explore reads as the same product surface. */
+    .feed-card { --tile: var(--accent); }
+    .feed-card[data-type="watch"]  { --tile: #a78bfa; }
+    .feed-card[data-type="build"]  { --tile: #10b981; }
+    .feed-card[data-type="doc"]    { --tile: #f59e0b; }
+    .feed-card[data-type="belief"] { --tile: #22c55e; }
+    .feed-card[data-type="read"]   { --tile: #06b6d4; }
+    .feed-card[data-type="embed"]  { --tile: #06b6d4; }
+    .feed-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--tile);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.25s ease;
+      z-index: 2;
+    }
+    .feed-card.is-embed::before { display: none; }
+    .feed-card:hover::before,
+    .feed-card:focus-within::before { transform: scaleX(1); }
     .feed-card:hover, .feed-card:focus-within {
       transform: translateY(-2px);
-      border-color: var(--accent);
+      border-color: var(--tile);
       box-shadow: var(--shadow-hover);
     }
     .feed-card .fc-top {
@@ -102,12 +172,12 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
     }
-    .feed-card .fc-type { color: var(--accent); }
+    .feed-card .fc-type { color: var(--tile); }
     .feed-card .fc-date { color: var(--muted); margin-left: auto; font-weight: 600; letter-spacing: 0; text-transform: none; }
     .feed-card .fc-title {
-      font-size: 0.98rem;
+      font-size: 1.06rem;
       font-weight: 700;
-      line-height: 1.35;
+      line-height: 1.32;
       color: var(--text);
       text-decoration: none;
     }
@@ -117,27 +187,174 @@
       color: var(--muted);
       line-height: 1.4;
     }
-    .feed-card .fc-why .fc-src { color: var(--accent); font-weight: 700; }
+    .feed-card .fc-why .fc-src { color: var(--tile); font-weight: 700; }
+    /* WCAG 2.5.8 (Target Size, AA) — interactive controls are ≥24×24 CSS px. */
     .feed-card .fc-dismiss {
       position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 22px;
-      height: 22px;
+      top: 6px;
+      right: 6px;
+      width: 28px;
+      height: 28px;
       border: none;
       border-radius: 6px;
       background: transparent;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 15px;
       line-height: 1;
       cursor: pointer;
       opacity: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       transition: opacity 0.15s, background 0.15s, color 0.15s;
     }
     .feed-card:hover .fc-dismiss, .feed-card:focus-within .fc-dismiss { opacity: 1; }
     .feed-card .fc-dismiss:hover { background: var(--surface2); color: var(--text); }
     .feed-card .fc-dismiss:focus-visible { opacity: 1; outline: 2px solid var(--accent); }
     .feed-status { max-width: 920px; margin: 0 auto; color: var(--muted); font-size: 0.85rem; padding: 8px 0; }
+
+    /* ── Infinite-scroll loading sentinel (endless feed) ── */
+    .feed-sentinel {
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 28px;
+      padding: 22px 0 40px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .feed-sentinel::before {
+      content: '';
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .feed-sentinel.is-loading::before { opacity: 1; animation: feed-spin 0.7s linear infinite; }
+    @keyframes feed-spin { to { transform: rotate(360deg); } }
+
+    /* ── Embed cards (#1217) — open-archive games + listening, rendered inline.
+       Full-width "panels" with a small retro window chrome (a nod to the CSF/XP
+       door) so an emulated DOS game or a public-domain record reads as a thing
+       you operate, not a link you leave for. ── */
+    .feed-card.is-embed {
+      grid-column: 1 / -1;
+      padding: 0;
+      overflow: hidden;
+      border-width: 2px;
+    }
+    .feed-card.is-embed:hover, .feed-card.is-embed:focus-within { transform: none; }
+    .fc-embed-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      background: linear-gradient(180deg,
+        color-mix(in srgb, var(--accent) 22%, var(--surface)) 0%,
+        var(--surface) 100%);
+      border-bottom: 1.5px solid var(--border);
+    }
+    .fc-embed-bar .fc-dots { display: flex; gap: 5px; }
+    .fc-embed-bar .fc-dots i {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border); display: inline-block;
+    }
+    .fc-embed-bar .fc-dots i:nth-child(1) { background: #ff5f57; }
+    .fc-embed-bar .fc-dots i:nth-child(2) { background: #febc2e; }
+    .fc-embed-bar .fc-dots i:nth-child(3) { background: #28c840; }
+    .fc-embed-bar .fc-embed-title {
+      font-size: 0.85rem; font-weight: 700; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .fc-embed-bar .fc-embed-src {
+      margin-left: auto; font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent);
+      white-space: nowrap;
+    }
+    .feed-card.is-embed .fc-frame { background: #000; line-height: 0; }
+    .feed-card.is-embed iframe { width: 100%; border: 0; display: block; }
+    .feed-card.is-embed .fc-foot {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 11px 14px 13px;
+    }
+    .feed-card.is-embed .fc-lore {
+      font-size: 0.82rem; line-height: 1.5; color: var(--muted);
+      font-style: italic; margin: 0; flex: 1;
+    }
+    .feed-card.is-embed .fc-why { padding: 0 14px 12px; }
+
+    /* ── Single-active embed player: fullscreen control + click-to-play poster ── */
+    /* The embed controls (⛶ fullscreen + ✕ dismiss) live INLINE in the title bar,
+       grouped and spaced away from the source label. The base .fc-dismiss is
+       position:absolute (pinned to the card corner), which made the ✕ overlap the
+       ⛶ button — reset it to static here so the group lays out in flow. */
+    .fc-embed-bar .fc-embed-ctl {
+      display: flex; align-items: center; gap: 4px; margin-left: 12px;
+    }
+    .feed-card.is-embed .fc-dismiss {
+      position: static; opacity: 0.75;
+      width: 30px; height: 30px; font-size: 15px;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .feed-card.is-embed .fc-dismiss:hover { opacity: 1; }
+    .fc-embed-bar .fc-fullscreen {
+      border: none; background: transparent; color: var(--muted);
+      font-size: 16px; line-height: 1; cursor: pointer;
+      width: 30px; height: 30px; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .fc-embed-bar .fc-fullscreen:hover { background: var(--surface2); color: var(--text); }
+    .fc-embed-bar .fc-fullscreen:focus-visible { outline: 2px solid var(--accent); }
+    .fc-embed-bar .fc-fullscreen[aria-pressed="true"] { color: var(--accent); background: var(--surface2); }
+    .feed-card.is-embed .fc-poster {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; width: 100%; border: 0; cursor: pointer; font: inherit; color: #fff;
+      padding: 30px 16px;
+      background: radial-gradient(circle at 50% 38%,
+        color-mix(in srgb, var(--accent) 20%, #000) 0%, #000 78%);
+    }
+    .feed-card.is-embed .fc-poster .fc-play {
+      width: 58px; height: 58px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 23px; padding-left: 4px;
+      background: color-mix(in srgb, var(--accent) 88%, #000);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.45);
+      transition: transform 0.15s ease;
+    }
+    .feed-card.is-embed .fc-poster:hover .fc-play,
+    .feed-card.is-embed .fc-poster:focus-visible .fc-play { transform: scale(1.09); }
+    .feed-card.is-embed .fc-poster .fc-playlabel {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+      opacity: 0.92;
+    }
+    .feed-card.is-embed .fc-poster:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: -4px;
+    }
+    .feed-card.is-embed.is-playing .fc-embed-bar {
+      background: linear-gradient(180deg,
+        color-mix(in srgb, var(--accent) 36%, var(--surface)) 0%, var(--surface) 100%);
+    }
+
+    /* ── Slim quick-links row — replaces the old static panel grid. ── */
+    .quick-links {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 6px 18px;
+      max-width: 920px; margin: 40px auto 0;
+      padding: 18px 16px 4px;
+      border-top: 1px solid var(--border);
+    }
+    .quick-links a {
+      font-size: 0.8rem; font-weight: 600; color: var(--muted);
+      text-decoration: none; transition: color 0.15s;
+    }
+    .quick-links a:hover { color: var(--accent); }
+    .quick-links a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 
     .all-tools {
       max-width: 920px;
@@ -565,7 +782,8 @@
 
     /* ── Accessibility: High Contrast ── */
     @media (prefers-contrast: more) {
-      .panel {
+      .panel,
+      .feed-card {
         border-width: 2px;
       }
       .panel:focus-visible {
@@ -574,7 +792,12 @@
       .discover-card:focus-visible,
       .video-thumb:focus-visible,
       .tier-card:focus-visible,
-      .gh-item:focus-visible {
+      .gh-item:focus-visible,
+      .feed-chip:focus-visible,
+      .feed-card:focus-within,
+      .fc-embed-bar .fc-fullscreen:focus-visible,
+      .feed-card .fc-dismiss:focus-visible,
+      .feed-card.is-embed .fc-poster:focus-visible {
         outline-width: 3px;
       }
     }
@@ -584,15 +807,18 @@
       .panel,
       .discover-card,
       .video-thumb,
-      .tier-card {
+      .tier-card,
+      .feed-card {
         border: 2px solid CanvasText;
       }
       .panel::before,
       .discover-card::before,
       .video-thumb::before,
-      .tier-card::before {
+      .tier-card::before,
+      .feed-card::before {
         background: CanvasText;
       }
+      .feed-card .fc-thumb-ph { border: 1px solid CanvasText; }
     }
   </style>
 </head>
@@ -613,150 +839,36 @@
 
   <main id="main-content">
 
-    <!-- ── Single ranked content pane (#1217) — /api/explore/feed ── -->
-    <div class="feed-chips" id="feedChips" role="tablist" aria-label="Filter feed by type">
-      <button type="button" class="feed-chip active" data-type="all" role="tab" aria-selected="true">All</button>
-      <button type="button" class="feed-chip" data-type="read" role="tab" aria-selected="false">📰 Read</button>
-      <button type="button" class="feed-chip" data-type="watch" role="tab" aria-selected="false">🎬 Watch</button>
-      <button type="button" class="feed-chip" data-type="build" role="tab" aria-selected="false">🛠️ Build</button>
-      <button type="button" class="feed-chip" data-type="doc" role="tab" aria-selected="false">📚 Docs</button>
-      <button type="button" class="feed-chip" data-type="belief" role="tab" aria-selected="false">🌍 Beliefs</button>
+    <!-- ── Single ranked content pane (#1217) — /api/explore/feed ──
+         Filters are toggle buttons (aria-pressed), NOT an ARIA tablist: there are
+         no separate tabpanels and the feed stays in place, so the tab pattern would
+         have promised keyboard semantics (arrow-key roving, tabpanel) we don't
+         implement. A labelled button group is the honest, accessible model. -->
+    <div class="feed-chips" id="feedChips" role="group" aria-label="Filter feed by type">
+      <button type="button" class="feed-chip active" data-type="all" aria-pressed="true">All</button>
+      <button type="button" class="feed-chip" data-type="embed" aria-pressed="false"><span aria-hidden="true">🕹️</span> Play</button>
+      <button type="button" class="feed-chip" data-type="read" aria-pressed="false"><span aria-hidden="true">📰</span> Read</button>
+      <button type="button" class="feed-chip" data-type="watch" aria-pressed="false"><span aria-hidden="true">🎬</span> Watch</button>
+      <button type="button" class="feed-chip" data-type="build" aria-pressed="false"><span aria-hidden="true">🛠️</span> Build</button>
+      <button type="button" class="feed-chip" data-type="doc" aria-pressed="false"><span aria-hidden="true">📚</span> Docs</button>
+      <button type="button" class="feed-chip" data-type="belief" aria-pressed="false"><span aria-hidden="true">🌍</span> Beliefs</button>
     </div>
-    <div class="feed-status" id="feedStatus" aria-live="polite">Loading your feed…</div>
-    <div class="feed-stream" id="feedStream" aria-label="Ranked content feed"></div>
+    <div class="feed-status" id="feedStatus" role="status" aria-live="polite">Loading your feed…</div>
+    <div class="feed-stream" id="feedStream" role="feed" aria-busy="true" aria-label="Ranked content feed"></div>
 
-    <!-- ── All tools & sections (demoted — nothing lost) ── -->
-    <details class="all-tools">
-      <summary>All tools &amp; sections</summary>
-
-    <!-- ── Work & Operations ── -->
-    <section class="explore-section" aria-labelledby="section-work">
-      <h2 id="section-work" class="explore-section-title">⚙️ Work & Operations</h2>
-      <div class="explore-panels">
-        <a class="panel" href="/operations.html" role="article" aria-label="Agent Operations: Monitor active agents and manage convergence-loop tasks">
-          <span class="panel-icon" aria-hidden="true">🤖</span>
-          <span class="panel-label">Operations</span>
-          <h3>Agent Operations</h3>
-          <p>Monitor active agents, view the dispatch queue, and manage convergence-loop tasks. Real-time status on memory processing and reasoning chains.</p>
-          <span class="panel-arrow" aria-hidden="true">View Operations →</span>
-        </a>
-
-        <a class="panel" href="/orchestration.html" role="article" aria-label="Work Dashboard: Track autonomous tasks and convergence records">
-          <span class="panel-icon" aria-hidden="true">📋</span>
-          <span class="panel-label">Tasks</span>
-          <h3>Work Dashboard</h3>
-          <p>Track autonomous tasks, streaming work sessions, and convergence records. See what's queued, in progress, and verified complete.</p>
-          <span class="panel-arrow" aria-hidden="true">Open Dashboard →</span>
-        </a>
-      </div>
-    </section>
-
-    <!-- ── Knowledge & Reference ── -->
-    <section class="explore-section" aria-labelledby="section-knowledge">
-      <h2 id="section-knowledge" class="explore-section-title">📚 Knowledge & Reference</h2>
-      <div class="explore-panels">
-        <a class="panel" href="/knowledgecenter.html#library" role="article" aria-label="Reference Library: Browse cross-industry knowledge base and master documents">
-          <span class="panel-icon" aria-hidden="true">📚</span>
-          <span class="panel-label">Library</span>
-          <h3>Reference Library</h3>
-          <p>Browse and read reference PDFs in-page — a cross-industry grounding knowledge base (aviation, maritime, medicine, energy, and more) plus the Comet-Leap master documents. Thumbnails, search, and an in-page viewer.</p>
-          <span class="panel-arrow" aria-hidden="true">Open Library →</span>
-        </a>
-
-        <a class="panel" href="/knowledgecenter.html" role="article" aria-label="Knowledge Center: Guides and reference for Keystone OS">
-          <span class="panel-icon" aria-hidden="true">📖</span>
-          <span class="panel-label">Docs</span>
-          <h3>Knowledge Center</h3>
-          <p>Guides, live tools, research, and reference for Keystone OS — getting started, theory, data &amp; memory, and project docs all in one place.</p>
-          <span class="panel-arrow" aria-hidden="true">Open Knowledge Center →</span>
-        </a>
-      </div>
-    </section>
-
-    <!-- ── Support (Patreon tiers — grounded in lib/patreon-auth.js tier map) ── -->
-    <div class="explore-section">
-      <p class="explore-section-title">♥ Support — <a href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer" style="color:inherit">Patreon ↗</a></p>
-      <div class="explore-info-box" style="max-width:920px">
-        <h2 style="margin-top:0">Keep Keystone local, private &amp; free</h2>
-        <p>Keystone OS is built in the open by one person. Patreon support funds development — and unlocks a member role on the platform.</p>
-        <div class="support-tiers">
-          <a class="tier-card" href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer">
-            <span class="tier-name">Wanderer</span>
-            <span class="tier-price">$5<span>/mo</span></span>
-            <span class="tier-perk">Unlocks the Supporter role</span>
-          </a>
-          <a class="tier-card" href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer">
-            <span class="tier-name">Deep Dreamer</span>
-            <span class="tier-price">$20<span>/mo</span></span>
-            <span class="tier-perk">Unlocks the Deep Dreamer role</span>
-          </a>
-          <a class="tier-card" href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer">
-            <span class="tier-name">Synthesasia Guild</span>
-            <span class="tier-price">$200<span>/mo</span></span>
-            <span class="tier-perk">Unlocks the Guild (admin) role</span>
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Community & Support ── -->
-    <section class="explore-section" aria-labelledby="section-community">
-      <h2 id="section-community" class="explore-section-title">🌍 Community & Support</h2>
-      <div class="explore-panels">
-        <a class="panel" href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer" role="article" aria-label="GitHub Repository: Star the project and contribute (opens in new window)">
-          <span class="panel-icon" aria-hidden="true">⭐</span>
-          <span class="panel-label">Open Source</span>
-          <h3>GitHub Repository</h3>
-          <p>Star the project, report issues, or contribute improvements. Keystone OS is built in the open — join the community of dreamers and builders.</p>
-          <span class="panel-arrow" aria-hidden="true">Visit GitHub ↗</span>
-        </a>
-
-        <a class="panel" href="/knowledgecenter.html" role="article" aria-label="Help & Documentation: Guides and FAQ for Keystone OS">
-          <span class="panel-icon" aria-hidden="true">❓</span>
-          <span class="panel-label">Help</span>
-          <h3>Help & Documentation</h3>
-          <p>Learn how to use every feature of Keystone OS. Guides, FAQ, troubleshooting, and best practices for journaling and trading.</p>
-          <span class="panel-arrow" aria-hidden="true">Get Help →</span>
-        </a>
-      </div>
-    </section>
-
-    <!-- ── Settings & Configuration ── -->
-    <section class="explore-section" aria-labelledby="section-settings">
-      <h2 id="section-settings" class="explore-section-title">⚡ Settings & Configuration</h2>
-      <div class="explore-panels">
-        <a class="panel" href="/api-keys-settings.html" role="article" aria-label="API Keys & Providers: Configure AI providers and manage API keys">
-          <span class="panel-icon" aria-hidden="true">🔑</span>
-          <span class="panel-label">Settings</span>
-          <h3>API Keys & Providers</h3>
-          <p>Configure AI providers (Claude, OpenAI, Gemini) and manage your API keys. All optional — Keystone OS runs locally with or without keys.</p>
-          <span class="panel-arrow" aria-hidden="true">Manage Keys →</span>
-        </a>
-
-        <a class="panel" href="/dashboard.html" role="article" aria-label="System Dashboard: View real-time system health and status">
-          <span class="panel-icon" aria-hidden="true">📊</span>
-          <span class="panel-label">Status</span>
-          <h3>System Dashboard</h3>
-          <p>View real-time system health: kernel readiness, memory queries, convergence-record status, and validation results.</p>
-          <span class="panel-arrow" aria-hidden="true">Open Dashboard →</span>
-        </a>
-      </div>
-    </section>
-
-    <!-- ── Informational Section ── -->
-    <div class="explore-section">
-      <div class="explore-info-box">
-        <h2>About This Navigation</h2>
-        <p>
-          Keystone OS is organized around three core experiences: <strong>Dream Chat</strong> for journaling and reflection, <strong>Keystone Trader</strong> for market intelligence and trading, and <strong>Content Creator</strong> for sharing your work.
-        </p>
-        <p>
-          This page provides access to advanced features, community resources, and system tools. Everything runs locally on your device — no cloud sync, no account required, complete privacy.
-        </p>
-      </div>
-    </div>
-
-    </details>
+    <!-- ── Single slim quick-links row — the feed is the page; everything else
+         is a text link, not an engagement-less panel (#1217 single-pane). ── -->
+    <nav class="quick-links" aria-label="Jump to Keystone tools">
+      <a href="/fallout-radio.html">📻 Radio</a>
+      <a href="/operations.html">Operations</a>
+      <a href="/orchestration.html">Work board</a>
+      <a href="/knowledgecenter.html#library">Library</a>
+      <a href="/knowledgecenter.html">Knowledge Center</a>
+      <a href="/api-keys-settings.html">Settings</a>
+      <a href="/dashboard.html">Status</a>
+      <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+      <a href="https://www.patreon.com/lanternos" target="_blank" rel="noopener noreferrer">♥ Patreon ↗</a>
+    </nav>
 
   </main>
 
@@ -814,12 +926,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const ICON = { read: '📰', watch: '🎬', build: '🛠️', doc: '📚', belief: '🌍', action: '⚡' };
+  const ICON = { embed: '🕹️', read: '📰', watch: '🎬', build: '🛠️', doc: '📚', belief: '🌍', action: '⚡' };
 
   // Only http(s) and root-relative URLs are linkable. A card url is sourced from
   // 3rd-party RSS/API data, so a `javascript:`/`data:` scheme must never reach an
   // href (esc() escapes quotes but not the scheme). Anything else renders inert.
   const safeUrl = u => (/^https?:\/\//i.test(u) || /^\/[^/]/.test(u)) ? u : '#';
+
+  // Lead-image src guard — only https or root-relative URLs render as an <img>.
+  const safeImg = u => (/^https:\/\//i.test(u) || /^\/[^/]/.test(u)) ? u : '';
+
+  // An embed src may only be a root-relative path (our own /t-rex/) or an https
+  // archive.org/youtube embed URL. Anything else is dropped — never framed.
+  const EMBED_HOSTS = /^https:\/\/(archive\.org|[a-z0-9-]+\.github\.io|www\.youtube(?:-nocookie)?\.com|player\.vimeo\.com)\//i;
+  const safeEmbedSrc = u => (/^\/[^/]/.test(u) || EMBED_HOSTS.test(u)) ? u : '';
 
   function shortDate(d) {
     if (!d) return '';
@@ -841,74 +961,286 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) { /* non-blocking */ }
   }
 
-  let allCards = [];
   let filter = 'all';
+  const seen = new Set();            // stable card ids already shown (dedup across pages)
+  let loading = false, totalShown = 0, cycles = 0;
 
-  function cardEl(c) {
-    const href = safeUrl(c.url);
-    const ext = /^https?:/i.test(href);
+  // ── Single-active embed player (YouTube / TikTok-style) ──
+  // Game / film / radio iframes are heavy: a live frame keeps emulating or
+  // playing audio forever. With an endless scroll that means many run at once —
+  // overlapping sound, no keyboard focus, a melted CPU. So an embed renders as a
+  // POSTER until you press Play. Activating one tears DOWN every other active
+  // iframe (only ONE plays at a time), focuses it so the keyboard drives the
+  // game, and exposes fullscreen. Scrolling an active embed fully off-screen
+  // unloads it (no audio from off-screen panels). Activation = the engagement
+  // signal (a real "played it", stronger than passive dwell).
+  let activeEmbed = null;
+
+  // Stop an active embed once it scrolls fully out of view. Re-entry needs another
+  // Play click — never auto-blasts audio.
+  const playObserver = ('IntersectionObserver' in window) ? new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting && entry.target === activeEmbed) deactivateEmbed(entry.target);
+    });
+  }, { threshold: 0 }) : null;
+
+  function deactivateEmbed(el) {
+    if (!el) return;
+    const frame = el.querySelector('.fc-frame');
+    if (frame && el._posterHTML != null) frame.innerHTML = el._posterHTML; // unload → stops audio/emulation
+    el.classList.remove('is-playing');
+    if (playObserver) playObserver.unobserve(el);
+    if (activeEmbed === el) activeEmbed = null;
+  }
+
+  function activateEmbed(el) {
+    const e = el._embed; if (!e) return;
+    if (activeEmbed && activeEmbed !== el) deactivateEmbed(activeEmbed); // enforce single active
+    const frame = el.querySelector('.fc-frame');
+    frame.innerHTML =
+      '<iframe src="' + esc(e.src) + '" style="height:' + e.h + 'px" ' +
+        'title="' + esc(e.title) + '" allow="autoplay; fullscreen; gamepad" ' +
+        'referrerpolicy="no-referrer" ' +
+        'sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-pointer-lock"></iframe>';
+    el.classList.add('is-playing');
+    activeEmbed = el;
+    record(e.key, 'click', 0);                       // activation = engagement
+    const iframe = frame.querySelector('iframe');
+    const focusIt = () => { try { iframe.focus(); } catch (_) {} };
+    iframe.addEventListener('load', focusIt);
+    setTimeout(focusIt, 60);
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (playObserver) playObserver.observe(el);      // stop it when scrolled away
+  }
+
+  function toggleFullscreen(el) {
+    if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); return; }
+    const node = el.querySelector('.fc-frame iframe') || el.querySelector('.fc-frame') || el;
+    const req = node.requestFullscreen || node.webkitRequestFullscreen || node.msRequestFullscreen;
+    if (req) { try { req.call(node); } catch (_) {} }
+  }
+
+  // Keep the ⛶ button's aria-pressed in sync with real fullscreen state — including
+  // when the user exits via Esc / the browser chrome (not just our button).
+  document.addEventListener('fullscreenchange', () => {
+    stream.querySelectorAll('.fc-fullscreen[aria-pressed="true"]')
+      .forEach(b => b.setAttribute('aria-pressed', 'false'));
+    const fsEl = document.fullscreenElement;
+    const card = fsEl && fsEl.closest ? fsEl.closest('.feed-card.is-embed') : null;
+    const btn = card && card.querySelector('.fc-fullscreen');
+    if (btn) btn.setAttribute('aria-pressed', 'true');
+  });
+
+  // Generated lead thumbnail for cards with no (or a broken) source image. The
+  // type glyph is decorative (aria-hidden) — the card already exposes its type via
+  // the fc-type eyebrow and its title via the article label.
+  function placeholderThumb(type) {
+    const ph = document.createElement('div');
+    ph.className = 'fc-thumb-ph';
+    ph.setAttribute('aria-hidden', 'true');
+    ph.innerHTML = '<span class="fc-ph-icon">' + (ICON[type] || '◈') + '</span>';
+    return ph;
+  }
+
+  function cardEl(c, posinset) {
     const el = document.createElement('div');
-    el.className = 'feed-card';
     el.dataset.type = c.type;
-    const date = shortDate(c.published);
+    el.dataset.key = c.key || '';
+    // ARIA feed pattern: each card is an article with an accessible name (the
+    // title) and a position. The feed is endless, so set size is unknown (-1).
+    el.setAttribute('role', 'article');
+    if (c.title) el.setAttribute('aria-label', String(c.title));
+    if (posinset) { el.setAttribute('aria-posinset', String(posinset)); el.setAttribute('aria-setsize', '-1'); }
     const why = c.evidence && c.evidence.why ? c.evidence.why : '';
-    el.innerHTML =
-      '<div class="fc-top"><span class="fc-type">' + (ICON[c.type] || '•') + ' ' + esc(c.type) + '</span>' +
-        (date ? '<span class="fc-date">' + esc(date) + '</span>' : '') + '</div>' +
-      '<a class="fc-title" href="' + esc(href) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' +
-        esc(c.title) + '</a>' +
-      '<div class="fc-why"><span class="fc-src">' + esc(c.source) + '</span>' + (why ? ' — ' + esc(why) : '') + '</div>' +
-      '<button type="button" class="fc-dismiss" aria-label="Dismiss this card" title="Show less like this">✕</button>';
-    el.querySelector('.fc-title').addEventListener('click', () => record(c.key, 'click', 0));
+    const embedSrc = (c.embed && c.embed.src) ? safeEmbedSrc(c.embed.src) : '';
+
+    if (embedSrc) {
+      // Open-archive game / film / listening panel. The heavy iframe does NOT
+      // load until the user presses Play — it renders as a poster and the
+      // single-active player (activateEmbed) injects + focuses the frame, tearing
+      // down whatever was playing before. archive.org runs in its own sandbox.
+      el.className = 'feed-card is-embed';
+      const h = Math.max(120, Math.min(720, (+c.embed.height) || 360));
+      const openHref = safeUrl(c.url);
+      const verb = (c.topics || []).includes('listen') ? 'Listen'
+        : (c.topics || []).some(t => t === 'watch' || t === 'film') ? 'Watch' : 'Play';
+      el._embed = { src: embedSrc, h: h, title: c.title || '', key: c.key };
+      el._posterHTML =
+        '<button type="button" class="fc-poster" aria-label="' + esc(verb + ' — ' + (c.title || '')) + '" ' +
+          'style="min-height:' + Math.min(h, 240) + 'px">' +
+          '<span class="fc-play" aria-hidden="true">▶</span>' +
+          '<span class="fc-playlabel">' + verb + '</span>' +
+        '</button>';
+      el.innerHTML =
+        '<div class="fc-embed-bar">' +
+          '<span class="fc-dots" aria-hidden="true"><i></i><i></i><i></i></span>' +
+          '<span class="fc-embed-title"><span aria-hidden="true">' + (ICON[c.type] || '🕹️') + '</span> ' + esc(c.title) + '</span>' +
+          '<span class="fc-embed-src">' + esc(c.source) + '</span>' +
+          '<span class="fc-embed-ctl">' +
+            '<button type="button" class="fc-fullscreen" aria-label="Fullscreen" aria-pressed="false" title="Fullscreen">⛶</button>' +
+            '<button type="button" class="fc-dismiss" aria-label="Dismiss this card" title="Show less like this">✕</button>' +
+          '</span>' +
+        '</div>' +
+        '<div class="fc-frame">' + el._posterHTML + '</div>' +
+        (c.lore ? '<div class="fc-foot"><p class="fc-lore">' + esc(c.lore) + '</p></div>' : '') +
+        '<div class="fc-why"><span class="fc-src">' + esc(c.source) + '</span>' + (why ? ' — ' + esc(why) : '') +
+          (openHref !== '#' ? ' · <a class="fc-open" href="' + esc(openHref) + '" target="_blank" rel="noopener noreferrer">open ↗</a>' : '') +
+        '</div>';
+      // Delegate on the frame so the poster still works after deactivate re-renders it.
+      el.querySelector('.fc-frame').addEventListener('click', (ev) => {
+        if (ev.target.closest('.fc-poster')) activateEmbed(el);
+      });
+      el.querySelector('.fc-fullscreen').addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        if (!el.classList.contains('is-playing')) activateEmbed(el);
+        toggleFullscreen(el);
+      });
+      const open = el.querySelector('.fc-open');
+      if (open) open.addEventListener('click', () => record(c.key, 'click', 0));
+    } else {
+      el.className = 'feed-card';
+      const href = safeUrl(c.url);
+      const ext = /^https?:/i.test(href);
+      const date = shortDate(c.published);
+      const img = safeImg(c.image || '');
+      const summary = c.summary ? esc(c.summary) : '';
+      el.innerHTML =
+        '<div class="fc-top"><span class="fc-type"><span aria-hidden="true">' + (ICON[c.type] || '•') + '</span> ' + esc(c.type) + '</span>' +
+          (date ? '<span class="fc-date">' + esc(date) + '</span>' : '') + '</div>' +
+        '<a class="fc-title" href="' + esc(href) + '"' + (ext ? ' target="_blank" rel="noopener noreferrer"' : '') + '>' +
+          esc(c.title) + '</a>' +
+        (summary ? '<p class="fc-summary">' + summary + '</p>' : '') +
+        '<div class="fc-why"><span class="fc-src">' + esc(c.source) + '</span>' + (why ? ' — ' + esc(why) : '') + '</div>' +
+        '<button type="button" class="fc-dismiss" aria-label="Dismiss this card" title="Show less like this">✕</button>';
+      // Lead thumbnail: the source image when we have one, otherwise a generated
+      // type-tinted placeholder — so every card carries a lead visual (docs and
+      // image-less reads no longer render as bare "?" tiles). Prepended as a node
+      // so a broken hotlink can swap to the SAME placeholder on error rather than
+      // leaving a broken-image glyph or an empty gap.
+      if (img) {
+        const thumb = document.createElement('img');
+        thumb.className = 'fc-thumb';
+        thumb.src = img; thumb.alt = '';
+        thumb.loading = 'lazy'; thumb.referrerPolicy = 'no-referrer';
+        thumb.addEventListener('error', () => thumb.replaceWith(placeholderThumb(c.type)));
+        el.insertBefore(thumb, el.firstChild);
+      } else {
+        el.insertBefore(placeholderThumb(c.type), el.firstChild);
+      }
+      el.querySelector('.fc-title').addEventListener('click', () => record(c.key, 'click', 0));
+    }
+
     el.querySelector('.fc-dismiss').addEventListener('click', (e) => {
       e.preventDefault(); e.stopPropagation();
       record(c.key, 'dismiss', 0);
+      if (el.classList.contains('is-playing')) deactivateEmbed(el);
       el.style.opacity = '0';
       setTimeout(() => el.remove(), 150);
     });
     return el;
   }
 
-  function render() {
-    stream.innerHTML = '';
-    const shown = filter === 'all' ? allCards : allCards.filter(c => c.type === filter);
-    if (!shown.length) {
-      stream.innerHTML = '<div class="feed-status">No cards for this filter right now.</div>';
-      return;
-    }
+  // ── Endless scroll (TikTok / YouTube-Shorts-style) ──
+  // The feed never loads all at once. Each page is a FRESH server re-rank that
+  // already reflects the dwell/click/dismiss recorded on the cards above it — so
+  // your engagement steers what loads next. When the bounded catalog is
+  // exhausted the server cycles, so the scroll never ends. We append (never
+  // rebuild) and dedupe by stable card id; a bottom sentinel pulls the next page
+  // as it nears the viewport. /api/explore/feed/page → lib/explore-feed pagedFeed.
+  let filterEpoch = 0;        // bumped on filter change to cancel in-flight pages
+  const PAGE = 9;
+  const MAX_CYCLES = 2;       // after looping the catalog this many times, stop auto-loading
+
+  // Sentinel below the stream — when it nears view, pull the next page.
+  const sentinel = document.createElement('div');
+  sentinel.className = 'feed-sentinel';
+  sentinel.setAttribute('aria-hidden', 'true');
+  stream.after(sentinel);
+
+  function appendCards(cards) {
     const frag = document.createDocumentFragment();
-    shown.forEach(c => frag.appendChild(cardEl(c)));
+    cards.forEach((c, i) => { seen.add(c.id || c.key); frag.appendChild(cardEl(c, totalShown + i + 1)); });
     stream.appendChild(frag);
+    totalShown += cards.length;
+  }
+
+  async function loadPage() {
+    if (loading) return;
+    loading = true;
+    const epoch = filterEpoch;
+    sentinel.classList.add('is-loading');
+    stream.setAttribute('aria-busy', 'true');
+    if (statusEl && !totalShown) statusEl.textContent = 'Loading your feed…';
+    try {
+      const r = await fetch('/api/explore/feed/page', {
+        method: 'POST', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seen: [...seen], limit: PAGE, type: filter === 'all' ? null : filter }),
+      });
+      const data = r.ok ? await r.json() : null;
+      if (epoch !== filterEpoch) return;                 // a filter change superseded this page
+      const cards = (data && data.cards) || [];
+      if (data && data.cycled) { cycles++; seen.clear(); } // endless: re-serve a fresh cycle
+      if (!cards.length) {
+        if (io) io.unobserve(sentinel);
+        if (statusEl) statusEl.textContent = totalShown ? '' : 'No content available right now.';
+        return;
+      }
+      appendCards(cards);
+      if (cycles >= MAX_CYCLES) {                          // looped the catalog enough — stop pulling
+        if (io) io.unobserve(sentinel);
+        if (statusEl) statusEl.textContent = totalShown + " loaded · you're all caught up";
+      } else if (statusEl) {
+        statusEl.textContent = (filter === 'all'
+          ? totalShown + ' loaded · ranked by your engagement'
+          : totalShown + ' ' + filter) + ' — keep scrolling';
+      }
+    } catch (e) {
+      if (statusEl) statusEl.textContent = totalShown ? '' : 'Feed is offline right now — use the quick links below.';
+    } finally {
+      if (epoch === filterEpoch) loading = false;
+      sentinel.classList.remove('is-loading');
+      stream.setAttribute('aria-busy', 'false');
+    }
+  }
+
+  const io = ('IntersectionObserver' in window)
+    ? new IntersectionObserver((entries) => {
+        if (entries.some(e => e.isIntersecting)) loadPage();
+      }, { rootMargin: '700px 0px' })
+    : null;
+
+  function reset() {
+    filterEpoch++;
+    loading = false; totalShown = 0; cycles = 0;
+    seen.clear();
+    if (activeEmbed) deactivateEmbed(activeEmbed);   // stop any playing game/film/radio
+    if (playObserver) playObserver.disconnect();
+    stream.innerHTML = '';
+    if (io) { io.unobserve(sentinel); io.observe(sentinel); }
+    loadPage();
   }
 
   if (chips) {
     chips.addEventListener('click', (e) => {
       const btn = e.target.closest('.feed-chip');
-      if (!btn) return;
+      if (!btn || btn.dataset.type === filter) return;
       filter = btn.dataset.type;
       chips.querySelectorAll('.feed-chip').forEach(b => {
         const on = b === btn;
         b.classList.toggle('active', on);
-        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-      render();
+      reset();
     });
   }
 
-  fetch('/api/explore/feed', { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : Promise.reject(r.status))
-    .then(data => {
-      allCards = (data && data.cards) || [];
-      if (statusEl) {
-        statusEl.textContent = allCards.length
-          ? allCards.length + ' cards · ranked by your engagement (editorial order until you click)'
-          : 'No content available right now.';
-      }
-      render();
-    })
-    .catch(() => {
-      if (statusEl) statusEl.textContent = 'Feed is offline right now — open All tools below.';
-    });
+  // Kick off, then keep the sentinel observed. Fallback for no IntersectionObserver.
+  loadPage();
+  if (io) io.observe(sentinel);
+  else window.addEventListener('scroll', () => {
+    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 700) loadPage();
+  }, { passive: true });
 })();
 </script>
 </body>
