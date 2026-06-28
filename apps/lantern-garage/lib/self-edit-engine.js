@@ -477,11 +477,34 @@ function createIssueFromTask(repoRoot, task) {
   return { number, url, title };
 }
 
+// Synchronous sleep (ms) without spawning `sleep` (not portable on Windows). Used to
+// ride out GitHub's brief PR-list eventual-consistency lag right after PR creation.
+function _sleepSync(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); }
+  catch { /* SharedArrayBuffer unavailable — skip the wait */ }
+}
+
 function openDraftPr(repoRoot, branch, title, body) {
   if (!branch.startsWith("auto/")) throw new Error("invalid_branch_prefix");
   const safeTitle = String(title || "Auto PR").slice(0, 256);
   const safeBody = String(body || "").slice(0, 4000);
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0", SKIP_MONOWORKSTREAM: "1" };
+  const owner = GH_REPO.split("/")[0];
+
+  // Look up an already-open PR for this head branch; returns the URL or "". `// empty`
+  // keeps jq from throwing when no PR matches yet (the array is empty), so a momentary
+  // empty result is just "" rather than an exception that aborts recovery.
+  const findExistingPr = () => {
+    try {
+      const out = execFileSync(
+        "gh",
+        ["api", `repos/${GH_REPO}/pulls?head=${owner}:${branch}&state=open`, "--jq", ".[0].html_url // empty"],
+        { cwd: repoRoot, encoding: "utf8", timeout: 15000, env }
+      ).trim();
+      return out.startsWith("https://") ? out : "";
+    } catch { return ""; }
+  };
+
   // `gh pr create` is broken on this repo — use the REST API via `gh api`.
   // execFileSync with an args array avoids all shell-quoting issues with title/body.
   try {
@@ -505,17 +528,21 @@ function openDraftPr(repoRoot, branch, title, body) {
     if (m) return m[1];
     throw new Error("pr_url_not_returned");
   } catch (e) {
-    // PR already exists (422) — query the open PR for this head branch and reuse its URL.
-    try {
-      const owner = GH_REPO.split("/")[0];
-      const existing = execFileSync(
-        "gh",
-        ["api", `repos/${GH_REPO}/pulls?head=${owner}:${branch}&state=open`, "--jq", ".[0].html_url"],
-        { cwd: repoRoot, encoding: "utf8", timeout: 15000, env }
-      ).trim();
-      if (existing.startsWith("https://")) return existing;
-    } catch (_e) { /* fall through */ }
-    const fromErr = (e.stderr || e.stdout || e.message || "").match(/(https:\/\/github\.com\/[^\s\n]+)/);
+    // #1358: a 422 "A pull request already exists" is a SUCCESS in disguise — the PR is
+    // there (created by a prior attempt / double-run), we just need its URL. Treating it
+    // as a hard failure made autowork report "✗ Open PR" even though the PR existed and
+    // all the real work (patch + tests + commit + push) had succeeded. GitHub's PR-list
+    // index can lag a beat behind creation, so retry the lookup a few times before giving
+    // up. The single execFileSync+jq lookup used to throw on an empty array and abort.
+    const errText = String(e.stderr || e.stdout || e.message || "");
+    const alreadyExists = /already exists/i.test(errText) || /HTTP 422/.test(errText);
+    const attempts = alreadyExists ? 5 : 1;
+    for (let i = 0; i < attempts; i++) {
+      const existing = findExistingPr();
+      if (existing) return existing;
+      if (i < attempts - 1) _sleepSync(1000);
+    }
+    const fromErr = errText.match(/(https:\/\/github\.com\/[^\s\n]+)/);
     if (fromErr) return fromErr[1];
     throw e;
   }
