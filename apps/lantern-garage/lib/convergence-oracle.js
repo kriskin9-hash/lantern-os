@@ -75,7 +75,11 @@ const KEYMAP = [
   [["nucleosynthesis", "helium", "abundance", "antimatter", "baryogenesis"], "Nucleosynthesis (BBN)"],
   [["cmb", "microwave background", "recombination", "transparent"], "Recombination / CMB"],
   [["first star", "reionization", "population iii", "first galax"], "First stars → reionization"],
-  [["how old", "age of the universe", "dark energy", "dark matter", "now", "today", "current"], NOW],
+  // NOW band: real cosmology anchors only. The bare words "now"/"today"/"current"
+  // were removed (#1275) — they are not cosmology keywords and matched everyday
+  // requests ("fix this bug now", "my schedule today"), grounding them in dark
+  // energy. The no-match case already returns no grounding (#1268, sliceFor→null).
+  [["how old", "age of the universe", "dark energy", "dark matter"], NOW],
   [["proton decay", "white dwarf", "remnant", "stars stop", "star formation end"], "Degenerate era"],
   [["black hole", "hawking", "evaporat"], "Black hole era"],
   [["heat death", "end of the universe", "ultimate fate", "fate of the universe", "fate of everything",
@@ -88,12 +92,17 @@ function sliceFor(question) {
   for (const [keys, band] of KEYMAP) {
     if (keys.some((k) => q.includes(k))) return Object.assign({ band }, BANDS[band]);
   }
-  return Object.assign({ band: NOW }, BANDS[NOW]);   // best-grounded slice fallback
+  return null;   // not a cosmology/deep-time question — no slice, no forced grounding
 }
 
-// The grounding block injected into the prompt for every question.
+// The grounding block injected into the prompt — only for questions that actually
+// match a cosmic-time band. Earlier this defaulted every unmatched question to the
+// NOW band, so unrelated chat turns ("give me a picture of X") got a cosmology
+// grounding block prepended, and the model would respond to that injected context
+// instead of (or alongside) the real question. #1268
 function formatGrounding(question) {
   const s = sliceFor(question);
+  if (!s) return "";
   const lines = [
     "Convergence Oracle — time-banded grounding for this question. Cite the KNOWN facts (with " +
     "their sources) as evidence and be honest about the UNKNOWNs; never bluff the boundaries " +

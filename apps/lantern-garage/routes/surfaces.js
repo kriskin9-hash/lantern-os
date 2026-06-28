@@ -27,6 +27,6 @@ module.exports = async function surfaceRoutes(req, res, url, deps) {
   if (staticPath.endsWith("/")) staticPath += "index.html";
   const target = path.resolve(publicRoot, staticPath);
   if (!target.startsWith(publicRoot)) { sendJson(res, { error: "forbidden" }, 403); return true; }
-  sendFile(res, target);
+  sendFile(res, target, req); // pass req so media (e.g. /radio/*.mp3) supports Range/seek + HEAD
   return true;
 };

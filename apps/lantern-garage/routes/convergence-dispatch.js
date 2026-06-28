@@ -171,21 +171,36 @@ module.exports = async (req, res, url, deps) => {
       // autonomous-work run (the real reason the Auto-Pull loop kept killing 4177).
       let workRoot = null, cleanupWorktree = null;
       try {
-        const { issue } = JSON.parse(body || "{}");
-        const issueNumber = parseInt(issue, 10);
-        
-        if (!issueNumber) {
-          sendJson(res, { ok: false, error: "issue_number_required" }, 400);
-          return;
-        }
+        const opts = JSON.parse(body || "{}");
+        let issueNumber = parseInt(opts.issue, 10);
+        const task = typeof opts.task === "string" ? opts.task.trim() : "";
 
         // Import self-edit functions
-        const { generatePlan, generatePatch, applyPatch, runTests, gitAddFiles, gitCommit, gitPush, openDraftPr } = require("../lib/self-edit-engine");
+        const { generatePlan, generatePatch, applyPatch, runTests, gitAddFiles, gitCommit, gitPush, openDraftPr, createIssueFromTask } = require("../lib/self-edit-engine");
         const { createIssueWorktree, worktreeTestEnv } = require("../lib/autowork-worktree");
         const { execFile } = require("child_process");
         const path = require("path");
         const REPO_ROOT = path.resolve(__dirname, "../../..");
         const GH_REPO = "alex-place/lantern-os";
+
+        // Task-mode (parity with the stream route): a free-form { task } and no
+        // issue number → file a real GitHub issue first, then work it like an
+        // `!work #N` run. Keeps every PR issue-linked.
+        if (!issueNumber && task) {
+          try {
+            const created = createIssueFromTask(REPO_ROOT, task);
+            issueNumber = created.number;
+          } catch (e) {
+            sendJson(res, { ok: false, error: "issue_create_failed", message: `Could not file an issue for the task: ${e && e.message}` }, 502);
+            return;
+          }
+        }
+
+        if (!issueNumber) {
+          sendJson(res, { ok: false, error: "issue_number_or_task_required" }, 400);
+          return;
+        }
+
         // Code-mutating git ops run in `workRoot` (an isolated worktree), not the
         // live serving checkout (REPO_ROOT). Torn down in `finally`. (Declared above
         // the try; assigned here once REPO_ROOT exists.)
@@ -245,8 +260,27 @@ module.exports = async (req, res, url, deps) => {
           return;
         }
 
-        // Step 1: Generate plan
-        const plan = await generatePlan(workRoot, issueDetails.title + "\n\n" + issueDetails.body, [], []);
+        // Step 1: Generate plan — guard the model call so an out-of-credits/quota
+        // failure across all providers returns an actionable 502 (not a generic 500
+        // that leaks err.stack). Mirrors the stream route's no-cloud handling.
+        let plan;
+        try {
+          plan = await generatePlan(workRoot, issueDetails.title + "\n\n" + issueDetails.body, [], []);
+        } catch (planErr) {
+          const raw = String(planErr && planErr.message || planErr);
+          const noCloud = /all_providers_failed|empty response|credit|quota|billing|spending limit/i.test(raw);
+          if (noCloud) {
+            sendJson(res, {
+              ok: false,
+              error: "no_cloud_model",
+              message: "Autowork needs a working cloud model, but every provider is unavailable " +
+                "(out of credits/quota) and the local model returned nothing. Add credits to a " +
+                "provider (Anthropic/OpenAI/Gemini/xAI) or set a usable key, then retry.",
+            }, 502);
+            return;
+          }
+          throw planErr; // unexpected — bubble to the outer catch
+        }
 
         // Steps 2-3: generate patch → apply, with a feedback retry loop. LLM diffs
         // routinely miss exact hunk context/counts; on failure we feed the apply
@@ -378,7 +412,8 @@ module.exports = async (req, res, url, deps) => {
           testResults
         });
       } catch (err) {
-        sendJson(res, { ok: false, error: err.message, stack: err.stack }, 500);
+        // Don't leak err.stack in the response body (parity with the stream route).
+        sendJson(res, { ok: false, error: err.message }, 500);
       } finally {
         // Always tear down the worktree — the branch (and any push) survives.
         if (cleanupWorktree) { try { cleanupWorktree(); } catch (_e) { /* best effort */ } }
@@ -424,7 +459,7 @@ module.exports = async (req, res, url, deps) => {
       const GH_REPO = "alex-place/lantern-os";
       const {
         generatePlan, generatePatch, applyPatch, runTests,
-        gitAddFiles, gitCommit, gitPush, openDraftPr,
+        gitAddFiles, gitCommit, gitPush, openDraftPr, createIssueFromTask,
       } = require("../lib/self-edit-engine");
       const { createIssueWorktree, worktreeTestEnv } = require("../lib/autowork-worktree");
 
@@ -442,15 +477,34 @@ module.exports = async (req, res, url, deps) => {
 
       try {
         const opts = JSON.parse(body || "{}");
-        const issueNumber = parseInt(opts.issue, 10);
+        let issueNumber = parseInt(opts.issue, 10);
+        const task = typeof opts.task === "string" ? opts.task.trim() : "";
         const dryRun = opts.dryRun === true;
         // Σ₀ autonomous: default to commit+push for fully-verified work (research + tests passed)
         // Can opt-out with { commit:false } or { push:false } for safety gates
         const autoPush = opts.push !== false;  // default true (changed from === true)
         const autoCommit = autoPush || opts.commit !== false;  // default true
 
+        // ── 0. create issue from a free-form task (suggest-then-confirm path) ──
+        // A free-form coding request has no issue number. We keep the pipeline
+        // issue-linked (every PR references a tracked issue), so file the task as
+        // a GitHub issue first, then work it exactly like an `!work #N` run.
+        if (!issueNumber && task) {
+          step("create_issue", "start");
+          try {
+            const created = createIssueFromTask(REPO_ROOT, task);
+            issueNumber = created.number;
+            step("create_issue", "done", { issue: issueNumber, url: created.url, title: created.title });
+          } catch (e) {
+            step("create_issue", "error", { error: String(e && e.message || e) });
+            send("done", { ok: false, ...receipt, stoppedAt: "create_issue", message: `Could not file an issue for the task: ${e && e.message}` });
+            res.end();
+            return;
+          }
+        }
+
         if (!issueNumber) {
-          send("error", { error: "issue_number_required" });
+          send("error", { error: "issue_number_or_task_required" });
           res.end();
           return;
         }
@@ -586,8 +640,29 @@ module.exports = async (req, res, url, deps) => {
 
         // ── 4. plan (with research context as Σ₀ evidence) ───────────────
         step("plan", "start");
-        const plan = await generatePlan(
-          workRoot, issueFullText, scopeFiles.slice(0, 5), [researchContext]);
+        let plan;
+        try {
+          plan = await generatePlan(
+            workRoot, issueFullText, scopeFiles.slice(0, 5), [researchContext]);
+        } catch (planErr) {
+          // The most common real failure here is "no cloud model available" —
+          // every provider out of credits/quota, with the tiny local model
+          // returning empty. Surface that as an honest, actionable plan-step
+          // error instead of a generic exception blob (autowork needs a working
+          // cloud model; a 1.4B local model can't plan a code change).
+          const raw = String(planErr && planErr.message || planErr);
+          const noCloud = /all_providers_failed|empty response|credit|quota|billing|spending limit/i.test(raw);
+          const msg = noCloud
+            ? "Autowork needs a working cloud model, but every provider is unavailable " +
+              "(out of credits/quota) and the local model returned nothing. Add credits to a " +
+              "provider (Anthropic/OpenAI/Gemini/xAI) or set a usable key, then retry."
+            : `Plan generation failed: ${raw.slice(0, 300)}`;
+          step("plan", "error", { error: raw.slice(0, 500), noCloud });
+          receipt.stoppedAt = "plan_failed";
+          send("done", { ok: false, ...receipt, stoppedAt: "plan_failed", message: msg });
+          res.end();
+          return;
+        }
         step("plan", "done", {
           plan,
           confidence: {
@@ -621,6 +696,11 @@ module.exports = async (req, res, url, deps) => {
           diffText = gen.diffText;
           const affected = (gen.files || []).map((f) => (f.newFile || f.oldFile || "").replace(/^[ab]\//, ""));
           send("diff", { diffText, files: affected, attempt });
+          // The patch was generated successfully (a parseable diff exists). Mark the
+          // 'patch' phase done now — the apply step that follows is tracked separately.
+          // Without this the panel's "Generate patch" row stays stuck on ◐ forever,
+          // since the loop only ever emits patch start/retry/error, never done.
+          step("patch", "done", { files: affected, attempt });
 
           if (dryRun) {
             receipt.stoppedAt = "dry_run";

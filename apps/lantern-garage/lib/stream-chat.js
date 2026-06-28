@@ -19,11 +19,12 @@ const { emitConvergenceRecord } = require("./convergence-records");
 const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
-const { scoreReplyCollapse, antiCollapseSignal } = require("./collapse-canary");
-const { scoreReplyGroundedness, ungroundedSignal } = require("./groundedness-canary");
+const { runCanaries } = require("./canary");
 const { assembleSessionContext } = require("./session-summary-store");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
 const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
+const { resolveGrounding, formatGroundingForPrompt } = require("./mesh-grounding");
+const { defaultRings } = require("./grounding-rings");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
@@ -206,6 +207,20 @@ async function handleStreamChat(req, url, res) {
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
   const attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
   // "Ground this" retry (groundedness canary loop): force the web-search grounding
+  // Prepend attachment content to the user's message if available.
+  if (attachments.length > 0) {
+    let attachmentBlock = "";
+    for (const attachment of attachments) {
+      if (attachment.filename && attachment.content) {
+        attachmentBlock += `--- ATTACHMENT: ${attachment.filename} ---\n`;
+        attachmentBlock += `${attachment.content}\n`;
+        attachmentBlock += `--- END ATTACHMENT ---\n\n`;
+      }
+    }
+    if (attachmentBlock) {
+      message = attachmentBlock + "User message: " + message;
+    }
+  }
   // branch even when the heuristic wouldn't have fired for this message.
   const forceGround = !!parsed.forceGround;
 
@@ -616,6 +631,73 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
+    // !review #<PR> — pull a pull request's diff and review it in the chat. Lets the
+    // user work through draft/autowork PRs ("is this change good?") without leaving
+    // Keystone. Diff fetched shell-free via gh (#873); reviewed by the live model.
+    if (cmd.name === "review") {
+      sse.writeStreamHeaders(res);
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+      const prNum = (String(cmd.args || "").match(/#?(\d+)/) || [])[1];
+      if (!prNum) {
+        sendToken("Usage: `!review #<PR number>` — e.g. `!review #1302`.");
+        sendDone("review", { agent: "Keystone", online: true });
+        res.end();
+        return;
+      }
+      sendToken(`🔍 Reviewing PR #${prNum}…\n\n`);
+      (async () => {
+        try {
+          const { safeExec } = require("./safe-exec");
+          const { callLlm } = require("./self-edit-engine");
+          const REPO = ["--repo", "alex-place/lantern-os"];
+          let meta = {};
+          try {
+            meta = JSON.parse(safeExec(
+              ["gh", "pr", "view", prNum, ...REPO, "--json", "title,additions,deletions,files,isDraft,state"],
+              { timeout: 15000 }
+            ));
+          } catch (_) { /* meta is best-effort */ }
+          const diff = safeExec(["gh", "pr", "diff", prNum, ...REPO],
+            { timeout: 25000, maxBuffer: 8 * 1024 * 1024 });
+          if (!diff || !diff.trim()) {
+            sendToken(`PR #${prNum} has no diff (closed, empty, or not found). [Open on GitHub](https://github.com/alex-place/lantern-os/pull/${prNum})`);
+            sendDone("review", { agent: "Keystone", online: true });
+            res.end();
+            return;
+          }
+          const MAX = 16000;
+          const clipped = diff.length > MAX ? diff.slice(0, MAX) + "\n…(diff truncated for review)" : diff;
+          const fileList = (meta.files || []).map((f) => f.path).join(", ");
+          const reviewSystem =
+            "You are a senior engineer reviewing a pull request for the Keystone OS repo " +
+            "(Node.js app under apps/lantern-garage/, Python under src/). Decide if the change is " +
+            "correct, complete, and safe to merge. Be concise and concrete. Use this exact shape:\n" +
+            "- **Verdict**: ✅ merge / ⚠️ needs changes / ❌ reject — one line why.\n" +
+            "- **What it does**: 1–2 sentences.\n" +
+            "- **Issues**: concrete problems (real bugs, wrong or nonexistent file paths for this repo, " +
+            "missing pieces, security). Cite the file. Say 'None found' if clean.\n" +
+            "- **Suggestions**: optional.\n" +
+            "Ground every claim in the diff shown — never invent code that isn't there. If a changed file " +
+            "path looks wrong for this repo's layout, flag it explicitly.";
+          const reviewUser =
+            `PR #${prNum}: ${meta.title || "(unknown title)"}\n` +
+            `State: ${meta.state || "?"}${meta.isDraft ? " (draft)" : ""} · Files: ${fileList || "(unknown)"}\n\n` +
+            `Diff (+${meta.additions == null ? "?" : meta.additions}/-${meta.deletions == null ? "?" : meta.deletions}):\n\n${clipped}`;
+          const review = await callLlm(reviewSystem, reviewUser, "auto", 1800);
+          const link = `https://github.com/alex-place/lantern-os/pull/${prNum}`;
+          sendToken(`**[PR #${prNum}](${link})** — ${meta.title || ""}\n\n${(review || "").trim() || "(no review returned)"}`);
+          sendDone("review", { agent: "Keystone", online: true, provider: "review" });
+          res.end();
+        } catch (err) {
+          sse.sendError(res, `Review failed: ${err.message}`);
+          sendDone("failed", { error: err.message });
+          res.end();
+        }
+      })();
+      return;
+    }
+
     // Three Doors variants: start fresh game if no history, else strip command and continue
     if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors"
         || cmd.name === "converge" || cmd.name === "convergance"
@@ -826,6 +908,21 @@ async function handleStreamChat(req, url, res) {
   try { const og = message ? oracleFormatGrounding(message) : ""; if (og) oracleBlock = `\n\n${og}`; }
   catch { oracleBlock = ""; }
 
+  // Mesh grounding (MESH_GROUNDING=1, off by default) — local memory + Knowledge Center rings.
+  // ADDITIVE ONLY: inject the cited evidence block when the resolver GROUNDS; never inject its
+  // abstain into a normal chat turn (the system prompt already owns honest "I don't know"). Web
+  // ring omitted (stream path does its own web grounding); mesh peer ring omitted (ADR-gated).
+  let meshGroundBlock = "";
+  if (process.env.MESH_GROUNDING === "1" && message) {
+    try {
+      const _gr = await resolveGrounding(message, { rings: defaultRings({ mesh: false, web: false }) });
+      if (_gr.grounded) {
+        meshGroundBlock = `\n\n${formatGroundingForPrompt(_gr)}`;
+        console.warn(`[mesh-grounding] grounded turn: ${_gr.sources.length} source(s), conf ${_gr.confidence.toFixed(2)}`);
+      }
+    } catch { meshGroundBlock = ""; }
+  }
+
   // Attached files (the "+" work tool) — the user uploaded these for THIS turn. Treat them as
   // primary evidence: read, quote, summarize, or act on them, and ground answers in their content.
   let attachmentBlock = "";
@@ -909,7 +1006,7 @@ async function handleStreamChat(req, url, res) {
   // cloud providers are unavailable) a correct, concrete answer to "what is this?" so new
   // users get an orientation instead of improvised dream-journal filler. The journal block
   // is explicitly labelled background so the model does not narrate it as if it were the app.
-  const ROUTER_PROMPT = `You are Keystone Σ₀ — the grounded reasoning and engineering agent for Keystone OS, a local-first private journaling and reasoning app that runs on the user's own machine with no account required. You run the convergence loop (Observe → Remember → Reason → Act → Verify → Converge), and external reality beats internal consistency: ground every important claim in evidence, give an honest confidence, and say "I don't know" rather than improvise. Answer directly, technically, and concretely. You are a precise technical agent — never use roleplay, mystical, or poetic language. For code, give complete, correct, copy-paste-ready implementations grounded in real files/APIs and state exactly how to verify (test command or expected output). Be concise for simple asks, but COMPREHENSIVE for substantive, factual, or research questions: give full context and reasoning, structure longer answers with short headings and bullet lists, and cite sources as clickable Markdown links [descriptive title](https://url). Your replies render as rich Markdown in this chat UI: \`![alt](https://image-url)\` displays the image inline, a plain YouTube link (https://youtube.com/watch?v=… or https://youtu.be/…) embeds as a player, and \`[text](https://url)\` becomes a link that opens in a new tab — so you absolutely CAN show images and embed videos; never tell the user you "can't embed", "can't display images", or "lack web/embedding capability" (that is false). When an image or video genuinely helps, include it — but use ONLY real, working URLs you actually know (e.g. Wikimedia Commons upload URLs, well-known sources); never invent, guess, or fabricate a media URL — if unsure, link the source page instead. If the user asks "what is this?" or "what can you do?", give a plain one- or two-sentence description of Keystone OS. IMPORTANT: Your very first token must be substantive content — never output only your name or any greeting. Go straight to the answer.\n\n${_realtimeCtx}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${attachmentBlock}`;
+  const ROUTER_PROMPT = `You are Keystone Σ₀ — the grounded reasoning and engineering agent for Keystone OS, a local-first private journaling and reasoning app that runs on the user's own machine with no account required. You run the convergence loop (Observe → Remember → Reason → Act → Verify → Converge), and external reality beats internal consistency: ground every important claim in evidence, give an honest confidence, and say "I don't know" rather than improvise. Answer directly, technically, and concretely. You are a precise technical agent — never use roleplay, mystical, or poetic language. For code, give complete, correct, copy-paste-ready implementations grounded in real files/APIs and state exactly how to verify (test command or expected output). Be concise for simple asks, but COMPREHENSIVE for substantive, factual, or research questions: give full context and reasoning, structure longer answers with short headings and bullet lists, and cite sources as clickable Markdown links [descriptive title](https://url). Your replies render as rich Markdown in this chat UI: \`![alt](https://image-url)\` displays the image inline, a plain YouTube link (https://youtube.com/watch?v=… or https://youtu.be/…) embeds as a player, and \`[text](https://url)\` becomes a link that opens in a new tab — so you absolutely CAN show images and embed videos; never tell the user you "can't embed", "can't display images", or "lack web/embedding capability" (that is false). When an image or video genuinely helps, include it — but use ONLY real, working URLs you actually know (e.g. Wikimedia Commons upload URLs, well-known sources); never invent, guess, or fabricate a media URL — if unsure, link the source page instead. If the user asks "what is this?" or "what can you do?", give a plain one- or two-sentence description of Keystone OS. IMPORTANT: Your very first token must be substantive content — never output only your name or any greeting. Go straight to the answer.\n\n${_realtimeCtx}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${meshGroundBlock}${attachmentBlock}`;
 
   // Grounded identity (#1242). The underlying foundation model (Gemini/Claude/
   // OpenAI/xAI/Ouro) must never leak its vendor identity through the Keystone
@@ -927,7 +1024,7 @@ async function handleStreamChat(req, url, res) {
   const baseSystemPrompt = isKeystoneDebug
     ? KEYSTONE_DEBUG_PROMPT
     : isRpMode
-      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${attachmentBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
+      ? `${agent.systemPrompt}\n\n${dreamContext}${csfBlock}${groundingContext ? "\n\n" + groundingContext : ""}${oracleBlock}${meshGroundBlock}${attachmentBlock}\n\nTone: thoughtful, unhurried, human. Never clinical. Never sycophantic. Use the dreamer's own words back to them. When the dreamer asks about previous dreams or doors, use the CSF memory and door state above — never fabricate memories.${DOORS_INSTRUCTION}${surfaceMode === "three-doors" ? THREE_DOORS_PREAMBLE : ""}`
       : ROUTER_PROMPT;
   const systemPrompt = isRpMode ? baseSystemPrompt : `${KEYSTONE_IDENTITY}\n\n${baseSystemPrompt}`;
 
@@ -977,49 +1074,36 @@ async function handleStreamChat(req, url, res) {
     if (SIGMA0_VERIFY && fullReply && message) {
       verifyResponse(fullReply, message, agent.id || agent.name || "keystone").catch(() => {});
     }
-    // ── Σ₀ collapse canary (#1010) ──────────────────────────────────────────
-    // Passive observer on the live serving path: score the completed reply for
-    // loop-collapse / phrase-echo / lexical contraction. Stamp proximity onto the
-    // done signature so the cert can't read "healthy" while output is collapsing;
-    // on a crossing, emit a logged canary signal. No behavior change when healthy.
+    // ── Σ₀ canaries: TWO orthogonal axes, ONE harness (lib/canary.js) ───────
+    // Passive observers on the live serving path, run per completed reply:
+    //   collapse (#1010)     — textual degeneration: loop / phrase-echo / contraction
+    //   groundedness (#1260) — the "42-state": fluent but confident-and-unanchored
+    // They partially anticorrelate, so they stay TWO sub-scores (a 42-state reply
+    // reads healthy on the collapse axis). The harness stamps both onto the done
+    // signature, warns on a crossing, and appends to one canary event stream.
+    // No behavior change when healthy; scoring never mutates a reply.
     try {
       if (fullReply) {
-        const canary = scoreReplyCollapse(fullReply);
-        signature.sigma0_proximity = canary.proximity;
-        if (canary.collapsed) {
-          const sig = antiCollapseSignal(canary);
-          signature.canary = sig;
+        const { collapse, grounded, signaturePatch } = runCanaries(fullReply, {
+          groundingContext,
+          context: { source, provider: signature.provider, agent: agent.id || agent.name, surface: "dream-chat" },
+        });
+        Object.assign(signature, signaturePatch);
+        if (collapse.collapsed) {
           console.warn(
-            `[canary_collapse] proximity=${canary.proximity} action=${sig.action} ` +
+            `[canary_collapse] proximity=${collapse.proximity} action=${signaturePatch.canary.action} ` +
             `source=${source} provider=${signature.provider} ` +
-            `signals=${JSON.stringify(canary.signals)}`
+            `signals=${JSON.stringify(collapse.signals)}`
           );
         }
-      }
-    } catch { /* canary must never break a reply */ }
-    // ── Σ₀ groundedness canary (42-state guardrail) ─────────────────────────
-    // The collapse canary above catches textual *degeneration*. It cannot see the
-    // other Σ₀ failure mode (SIGMA0-COLLAPSE-CERTIFICATE §2, the "42-state"): a
-    // fluent, non-repeating reply that asserts confident claims with no external
-    // anchor — internally coherent, externally adrift. Score that axis here, where
-    // the upstream groundingContext is already in scope, and stamp the risk onto the
-    // done signature so a confident-but-ungrounded reply can't pass as healthy.
-    // Passive observer: advisory only, never blocks a reply.
-    try {
-      if (fullReply) {
-        const g = scoreReplyGroundedness(fullReply, { groundingContext });
-        signature.sigma0_grounding = { risk: g.risk, anchored: g.anchored };
-        if (g.ungrounded) {
-          signature.ungrounded = true;
-          const usig = ungroundedSignal(g);
-          signature.ungroundedSignal = usig;
+        if (grounded.ungrounded) {
           console.warn(
-            `[canary_ungrounded] risk=${g.risk} source=${source} ` +
-            `provider=${signature.provider} signals=${JSON.stringify(g.signals)}`
+            `[canary_ungrounded] risk=${grounded.risk} source=${source} ` +
+            `provider=${signature.provider} signals=${JSON.stringify(grounded.signals)}`
           );
         }
       }
-    } catch { /* canary must never break a reply */ }
+    } catch { /* canaries must never break a reply */ }
     // ── #911 live coding emitter: log Python candidates offline ─────────────
     if (fullReply && message) { _emitCodingCandidate(message, fullReply); }
     // ── #919 finding #2: auto-draft claim packet for grounded replies ────────
@@ -1154,6 +1238,9 @@ async function handleStreamChat(req, url, res) {
     if (msg.includes("all_providers_failed")) {
       return "All providers failed. This can happen when keys are invalid, rate-limited, or the network is slow. Check Settings or try again.";
     }
+    if (msg.includes("_empty_response")) {
+      return "The model returned an empty response (often a safety block or a soft rate-limit). Try again or switch providers in Settings.";
+    }
     return msg;
   }
 
@@ -1204,7 +1291,7 @@ async function handleStreamChat(req, url, res) {
         const r = await require("./convergence-agent").respond(_q);
         const _ans = (r && r.answer) ? String(r.answer) : "(no answer)";
         sendToken(_ans);
-        await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: _ans.slice(0, maxConversationTextLength) }).catch(() => {});
+        await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: _ans.slice(0, maxConversationTextLength), meta: { provider: "convergence-agent", model: "$0", agent: doneAgentName } }).catch(() => {});
         sendDone("convergence-agent", { agent: doneAgentName, online: true, cleanText: _ans, actions: Array.isArray(r && r.actions) ? r.actions : [], grounded: !!(r && r.grounded), instant: true, label: "Convergence · instant · $0" });
         return;
       } catch (e) {
@@ -1235,6 +1322,14 @@ async function handleStreamChat(req, url, res) {
 
   let fullReply = "";
 
+  // A cloud provider can answer HTTP 200 with ZERO streamed tokens — a safety block,
+  // a soft rate-limit, or a grounding misfire. That is NOT a success: finalizing it
+  // records a false leaderboard win (so the empty provider stays the auto-lead) AND
+  // short-circuits the cascade, leaving the user a generic "AI unavailable" even
+  // though the other providers have keys. Detect it and throw so the per-provider
+  // catch cascades to the next brain pick — mirroring the local/ollama path.
+  const isEmptyReply = (s) => !String(s || "").replace(/\s+/g, "").length;
+
   // converganceDecision already computed above (before systemPrompt)
 
   // ── Dream persona deleted (2026-06-26): chat NEVER routes through the convergence/persona engine ──
@@ -1255,6 +1350,7 @@ async function handleStreamChat(req, url, res) {
         surface: "dream-chat-stream",
         role: "lantern",
         text: String(convResult.reply).slice(0, maxConversationTextLength),
+        meta: { provider: "convergence", agent: convResult.agent || routeDecision.agent },
       }).catch(() => {});
       sendToken(convResult.reply);
       sendDone("convergence", {
@@ -1459,6 +1555,7 @@ async function handleStreamChat(req, url, res) {
     await logConversation({
       recordedAt: new Date().toISOString(), surface: "dream-chat-stream",
       role: "lantern", text: ans.slice(0, maxConversationTextLength),
+      meta: { provider: "knowledge", model: "knowledge-center", agent: doneAgentName },
     }).catch(() => {});
     try { recordProviderSuccess("knowledge"); } catch (_e) {}
     sendDone("knowledge", {
@@ -1512,7 +1609,8 @@ async function handleStreamChat(req, url, res) {
       if (lr && lr.reply) {
         const { cleanText, suggestions } = doorsOrFallback(lr.reply, true);
         await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream",
-          role: "lantern", text: cleanText.slice(0, maxConversationTextLength) }).catch(() => {});
+          role: "lantern", text: cleanText.slice(0, maxConversationTextLength),
+          meta: { provider: "ollama", model: loopModel, agent: doneAgentName } }).catch(() => {});
         sendToken(cleanText);
         try { recordProviderSuccess("ollama"); recordModelOutcome(loopModel, leaderboardTaskType, true, 0); } catch (_e) {}
         sendDone("ollama", { agent: doneAgentName, online: true, cleanText, suggestions, model: loopModel,
@@ -1650,6 +1748,7 @@ async function handleStreamChat(req, url, res) {
             surface: "dream-chat-stream",
             role: "lantern",
             text: cleanText.slice(0, maxConversationTextLength),
+            meta: { provider: "ollama", model: ollamaModel, agent: doneAgentName },
           }).catch(() => {});
           recordProviderSuccess("ollama");
           recordModelOutcome(ollamaModel, leaderboardTaskType, true, Date.now() - _ollamaStart); // feed leaderboard
@@ -1695,6 +1794,7 @@ async function handleStreamChat(req, url, res) {
           surface: "dream-chat-stream",
           role: "lantern",
           text: cleanText.slice(0, maxConversationTextLength),
+          meta: { provider: "keystone-ft", model: "keystone-ft-claude", agent: doneAgentName },
         }).catch(() => {});
         recordProviderSuccess("keystone-ft");
         await recordConvergenceSignature("keystone-ft", "keystone-ft-claude", cleanText, true);
@@ -1777,7 +1877,7 @@ async function handleStreamChat(req, url, res) {
             contents.push({ role: "user", parts: responseParts });
           }
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
-          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength) }).catch(() => {});
+          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength), meta: { provider: "gemini", model: geminiModelName, agent: doneAgentName } }).catch(() => {});
           recordProviderSuccess("gemini");
           const geminiReceipt = buildPcsfReceipt("gemini", geminiModelName, true);
           sendReceipt(geminiReceipt);
@@ -1867,6 +1967,8 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      // 200 OK with no tokens is not an answer — cascade instead of finalizing empty.
+      if (isEmptyReply(fullReply)) throw new Error("gemini_empty_response");
       let { cleanText: geminiClean, suggestions: geminiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       // Σ₀ verify pass
       let geminiSigma0 = null;
@@ -1885,6 +1987,7 @@ async function handleStreamChat(req, url, res) {
         surface: "dream-chat-stream",
         role: "lantern",
         text: geminiClean.slice(0, maxConversationTextLength),
+        meta: { provider: "gemini", model: geminiModel, agent: doneAgentName },
       }).catch(() => {});
       recordProviderSuccess("gemini");
       const geminiModelName = modelFor("gemini");
@@ -1969,7 +2072,7 @@ async function handleStreamChat(req, url, res) {
               convo.push({ role: "user", content: results });
             }
             const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
-            await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength) }).catch(() => {});
+            await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength), meta: { provider: "anthropic", model: claudeModel, agent: doneAgentName } }).catch(() => {});
             recordProviderSuccess("anthropic");
             recordProviderSuccessRouter("anthropic");
             const toolReceipt = buildPcsfReceipt("anthropic", claudeModel, true);
@@ -2048,6 +2151,8 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      // 200 OK with no tokens is not an answer — cascade instead of finalizing empty.
+      if (isEmptyReply(fullReply)) throw new Error("anthropic_empty_response");
       let { cleanText: anthropicClean, suggestions: anthropicDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       // Σ₀ verify pass — ground claims against codebase, web, Gemini
       let anthropicSigma0 = null;
@@ -2066,6 +2171,7 @@ async function handleStreamChat(req, url, res) {
         surface: "dream-chat-stream",
         role: "lantern",
         text: anthropicClean.slice(0, maxConversationTextLength),
+        meta: { provider: "anthropic", model: claudeModel, agent: doneAgentName },
       }).catch(() => {});
       recordProviderSuccess("anthropic");
       recordProviderSuccessRouter("anthropic");
@@ -2128,7 +2234,7 @@ async function handleStreamChat(req, url, res) {
             }
           }
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
-          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength) }).catch(() => {});
+          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength), meta: { provider: "openai", model: openaiModelName, agent: doneAgentName } }).catch(() => {});
           recordProviderSuccess("openai");
           recordProviderSuccessRouter("openai");
           const openaiReceipt = buildPcsfReceipt("openai", openaiModelName, true);
@@ -2197,12 +2303,15 @@ async function handleStreamChat(req, url, res) {
         req2.write(payload);
         req2.end();
       });
+      // 200 OK with no tokens is not an answer — cascade instead of finalizing empty.
+      if (isEmptyReply(fullReply)) throw new Error("openai_empty_response");
       const { cleanText: openaiClean, suggestions: openaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
       await logConversation({
         recordedAt: new Date().toISOString(),
         surface: "dream-chat-stream",
         role: "lantern",
         text: openaiClean.slice(0, maxConversationTextLength),
+        meta: { provider: "openai", model: modelFor("openai"), agent: doneAgentName },
       }).catch(() => {});
       recordProviderSuccess("openai");
       recordProviderSuccessRouter("openai");
@@ -2262,7 +2371,7 @@ async function handleStreamChat(req, url, res) {
             }
           }
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
-          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength) }).catch(() => {});
+          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength), meta: { provider: "grok", model: xaiModelName, agent: doneAgentName } }).catch(() => {});
           recordProviderSuccess("xai");
           const grokReceipt = buildPcsfReceipt("grok", xaiModelName, true);
           sendReceipt(grokReceipt);
@@ -2312,8 +2421,10 @@ async function handleStreamChat(req, url, res) {
         req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("xai_timeout")); });
         req2.write(payload); req2.end();
       });
+      // 200 OK with no tokens is not an answer — cascade instead of finalizing empty.
+      if (isEmptyReply(fullReply)) throw new Error("xai_empty_response");
       const { cleanText: xaiClean, suggestions: xaiDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
-      await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength) }).catch(() => {});
+      await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: xaiClean.slice(0, maxConversationTextLength), meta: { provider: "grok", model: xaiModel, agent: doneAgentName } }).catch(() => {});
       recordProviderSuccess("xai");
       const grokModelName = xaiModel; // receipt MUST reflect the model actually sent
       await recordConvergenceSignature("grok", grokModelName, xaiClean, true);
@@ -2360,6 +2471,7 @@ async function handleStreamChat(req, url, res) {
             surface: "dream-chat-stream",
             role: "lantern",
             text: cleanText.slice(0, maxConversationTextLength),
+            meta: { provider: "ollama", model: "unified-agent", agent: doneAgentName },
           }).catch(() => {});
           recordProviderSuccess("ollama");
           await recordConvergenceSignature("ollama", "unified-agent", cleanText, true);
@@ -2440,6 +2552,7 @@ async function handleStreamChat(req, url, res) {
           surface: "dream-chat-stream",
           role: "lantern",
           text: ollamaClean.slice(0, maxConversationTextLength),
+          meta: { provider: "ollama", model: ollamaModel, agent: doneAgentName },
         }).catch(() => {});
         recordProviderSuccess("ollama");
         await recordConvergenceSignature("ollama", ollamaModel, ollamaClean, true);
