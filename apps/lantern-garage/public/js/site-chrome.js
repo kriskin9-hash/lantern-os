@@ -44,6 +44,7 @@
       '  <div class="nav-actions">\n' +
       '    <a href="/profile.html" class="nav-btn" id="profile-btn" title="Your profile" aria-label="View your profile">👤</a>\n' +
       '    <button class="nav-btn" id="logout-btn" onclick="logoutUser()" title="Logout" aria-label="Logout" style="display:none;">🚪</button>\n' +
+      '    <button class="nav-btn" id="screenshot-btn" type="button" onclick="if(window.issueReporter)window.issueReporter.open()" title="Report an issue (screenshot → GitHub)" aria-label="Report an issue with a screenshot">📷</button>\n' +
       '    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">☀</button>\n' +
       "  </div>\n" +
       "</nav>"
@@ -115,6 +116,16 @@
     if (btn) {
       btn.textContent =
         document.documentElement.getAttribute("data-theme") === "dark" ? "☀️" : "🌙";
+    }
+
+    // The 📷 button needs window.issueReporter (modal + capture). It's hardcoded
+    // only on the home/chat pages; load it once here so EVERY global-header page
+    // (explore, create, trader, …) gets a working screenshot → GitHub reporter.
+    if (!document.querySelector('script[src*="issue-reporter.js"]')) {
+      var ir = document.createElement("script");
+      ir.src = "/js/issue-reporter.js";
+      ir.defer = true;
+      document.body.appendChild(ir);
     }
   }
 
