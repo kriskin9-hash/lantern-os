@@ -22,29 +22,6 @@ const THEME = {
   finance:["\u{1F4C8}", "#22c55e"],
 };
 
-// Deterministic "stock chart" polyline from a seed string, so an image-less
-// finance card still gets a distinct, market-looking cover (not a bare glyph).
-// Same seed → same line; different tickers → different lines. Spans the lower
-// band of the 600×340 canvas.
-function sparkPath(seed) {
-  let h = 2166136261;
-  for (let i = 0; i < String(seed).length; i++) {
-    h ^= String(seed).charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  const pts = [];
-  const N = 14;
-  let y = 210;
-  for (let i = 0; i < N; i++) {
-    h = Math.imul(h ^ (h >>> 15), 2246822519);
-    const step = ((h >>> 8) % 60) - 26; // pseudo-random walk, slight upward bias
-    y = Math.max(150, Math.min(250, y + step));
-    const x = 40 + i * (520 / (N - 1));
-    pts.push(x.toFixed(0) + "," + y.toFixed(0));
-  }
-  return pts.join(" ");
-}
-
 const xml = (s) =>
   String(s == null ? "" : s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" }[c]));
@@ -75,19 +52,16 @@ function wrap(title, maxChars, maxLines) {
 
 function renderThumb({ type, title, source } = {}) {
   const [glyph, accent] = THEME[type] || ["◈", "#06b6d4"];
-  const lines = wrap(title || type || "", 26, 3);
+  // Finance covers are intentionally minimal: a clean tinted panel with just the
+  // glyph + source, no headline. So an empty title stays empty (don't fall back to
+  // the type name, which would print "finance").
+  const lines = (type === "finance" && !title) ? [] : wrap(title || type || "", 26, 3);
   const startY = 196 - (lines.length - 1) * 17;
   const titleSvg = lines
     .map((ln, i) => `<text x="40" y="${startY + i * 34}" class="t">${xml(ln)}</text>`)
     .join("");
   const srcSvg = source
     ? `<text x="40" y="296" class="s">${xml(String(source).toUpperCase())}</text>`
-    : "";
-  // Finance cards render a market-chart motif instead of a plain panel — the
-  // `title` here is the ticker label (e.g. "MSFT · AAPL"), never the headline,
-  // so the card never shows its title twice.
-  const motif = type === "finance"
-    ? `<polyline points="${sparkPath(title || source || "mkt")}" fill="none" stroke="${accent}" stroke-width="3" stroke-opacity="0.85" stroke-linejoin="round" stroke-linecap="round"/>`
     : "";
   // Dark, type-tinted gradient panel — reads as a designed cover, not a glyph block.
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340" width="600" height="340" role="img" aria-label="${xml(title || type || "")}">
@@ -107,7 +81,6 @@ function renderThumb({ type, title, source } = {}) {
   <rect width="600" height="340" fill="url(#g)"/>
   <rect x="0" y="0" width="600" height="5" fill="${accent}"/>
   <text x="40" y="92" class="g">${glyph}</text>
-  ${motif}
   ${titleSvg}
   ${srcSvg}
 </svg>`;

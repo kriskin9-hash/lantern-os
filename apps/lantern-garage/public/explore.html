@@ -98,6 +98,18 @@
       margin: -18px -18px 1px;
       background: var(--surface2);
     }
+    /* Company-logo lead (finance cards with no source photo): CONTAIN the brand
+       mark on a dark tile that blends with the feed (not cropped to a wide cover).
+       Generous padding keeps the logo from reading as "zoomed in". Falls back to
+       the minimal generated cover (object-fit:cover) if the logo 404s — the
+       .is-logo class is removed on error before the swap. */
+    .feed-card .fc-thumb.is-logo {
+      object-fit: contain;
+      padding: 46px;
+      box-sizing: border-box;
+      background: #0f1722;
+      border-bottom: 1px solid var(--border);
+    }
     /* Generated lead thumbnail for cards with no (or a broken) source image —
        docs, image-less reads, beliefs. A type-tinted gradient block with the type
        glyph, so EVERY card has a consistent lead visual instead of reading as a
@@ -1526,14 +1538,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // leaving a broken-image glyph or an empty gap.
       if (img) {
         const thumb = document.createElement('img');
-        thumb.className = 'fc-thumb';
+        thumb.className = 'fc-thumb' + (c.imageFit === 'contain' ? ' is-logo' : '');
         thumb.src = img; thumb.alt = '';
         thumb.loading = 'lazy'; thumb.referrerPolicy = 'no-referrer';
-        // A broken external cover (archive art / GitHub OG / OWID chart) swaps to
-        // the same-origin generated thumbnail; if THAT fails, the glyph block.
+        // A broken external cover (archive art / GitHub OG / OWID chart / a missing
+        // company logo) swaps to the same-origin generated thumbnail; if THAT
+        // fails, the glyph block. Drop .is-logo first so the fallback fills the tile.
         const fb = safeImg(c.imageFallback || '');
         thumb.addEventListener('error', () => {
-          if (fb && thumb.src.indexOf('/api/explore/thumb.svg') === -1) { thumb.src = fb; }
+          if (fb && thumb.src.indexOf('/api/explore/thumb.svg') === -1) { thumb.classList.remove('is-logo'); thumb.src = fb; }
           else thumb.replaceWith(placeholderThumb(c.type));
         });
         el.insertBefore(thumb, el.firstChild);

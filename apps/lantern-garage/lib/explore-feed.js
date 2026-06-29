@@ -337,14 +337,19 @@ function financeCards(ctx) {
           "market news",
         ]
     ).filter(Boolean).join(" · ");
-    // Lead image: the REAL article cover from the source when we have one. When
-    // we don't, generate a finance-themed cover (ticker label + chart motif) —
-    // crucially NOT genThumb of the headline, which baked the title into the image
-    // and rendered it twice. The generated cover shows the TICKERS, never the
-    // headline, so it's a distinct visual with no title repeat.
+    // Lead image, in preference order (never the headline — that would render the
+    // title twice): (1) the REAL article cover from the source; (2) the primary
+    // ticker's company logo; (3) a clean minimal finance cover (glyph + source).
+    // The browser loads (1)/(2) directly — same-origin TLS interception doesn't
+    // affect <img>. A broken logo falls back to the minimal cover via imageFallback.
     const realImg = r.image && /^https:\/\//i.test(r.image) ? r.image : "";
-    const tickerLabel = symbols.length ? symbols.slice(0, 3).map((s) => s.toUpperCase()).join(" · ") : "MARKETS";
-    const genFinance = genThumb("finance", tickerLabel, src);
+    const primary = (symbols[0] || "").toUpperCase();
+    // Only A–Z tickers have a stock logo (skip crypto/FX like BTCUSD, indices stay
+    // best-effort). Company-logo-by-ticker via Financial Modeling Prep (no key).
+    const logoUrl = /^[A-Z]{1,5}$/.test(primary)
+      ? "https://financialmodelingprep.com/image-stock/" + primary + ".png"
+      : "";
+    const minimalCover = genThumb("finance", "", src);
     const card = {
       id: "finance:" + (r.news_id || r.memory_id || r.url || headline),
       type: "read",
@@ -354,8 +359,10 @@ function financeCards(ctx) {
       published: r.published || r.recorded_at || null,
       topics: ["finance", ...symbols],
       summary: r.summary || "",
-      image: realImg || genFinance,
-      imageFallback: genFinance,
+      image: realImg || logoUrl || minimalCover,
+      imageFallback: minimalCover,
+      // A logo (not a real photo) renders CONTAINED on a tile, not cropped.
+      imageFit: !realImg && logoUrl ? "contain" : undefined,
       evidence: { why, source: src },
     };
     if (Number.isFinite(r.relevance)) card.relevance = r.relevance;
