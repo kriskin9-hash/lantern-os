@@ -1641,7 +1641,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (playObserver) playObserver.disconnect();
     stream.innerHTML = '';
     if (io) { io.unobserve(sentinel); io.observe(sentinel); }
+    syncShowcases();
     loadPage();
+  }
+
+  // The static showcase galleries (Kingdome of Hearts, Pencil Guy art) are
+  // "All"-context discovery sections, not feed cards. When a specific chip is
+  // active (Finance, Read, …) they read as a wall of unrelated images glued to
+  // the bottom of that feed — so show them only on the unfiltered "All" view.
+  function syncShowcases() {
+    var on = filter === 'all';
+    document.querySelectorAll('.showcase').forEach(function (s) {
+      s.style.display = on ? '' : 'none';
+    });
   }
 
   if (chips) {
@@ -1688,6 +1700,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Kick off, then keep the sentinel observed. Fallback for no IntersectionObserver.
+  syncShowcases();   // honor a deep-linked filter on first paint
   loadPage();
   if (io) io.observe(sentinel);
   else window.addEventListener('scroll', () => {

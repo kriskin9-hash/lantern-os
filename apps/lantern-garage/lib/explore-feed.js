@@ -337,11 +337,14 @@ function financeCards(ctx) {
           "market news",
         ]
     ).filter(Boolean).join(" · ");
-    // Lead image: the REAL article cover from the source when we have one. We do
-    // NOT fall back to genThumb here — that SVG bakes the headline INTO the image,
-    // so it rendered the title twice (once on the thumbnail, once as .fc-title).
-    // No image → empty, and the card draws a clean type-glyph placeholder instead.
+    // Lead image: the REAL article cover from the source when we have one. When
+    // we don't, generate a finance-themed cover (ticker label + chart motif) —
+    // crucially NOT genThumb of the headline, which baked the title into the image
+    // and rendered it twice. The generated cover shows the TICKERS, never the
+    // headline, so it's a distinct visual with no title repeat.
     const realImg = r.image && /^https:\/\//i.test(r.image) ? r.image : "";
+    const tickerLabel = symbols.length ? symbols.slice(0, 3).map((s) => s.toUpperCase()).join(" · ") : "MARKETS";
+    const genFinance = genThumb("finance", tickerLabel, src);
     const card = {
       id: "finance:" + (r.news_id || r.memory_id || r.url || headline),
       type: "read",
@@ -351,7 +354,8 @@ function financeCards(ctx) {
       published: r.published || r.recorded_at || null,
       topics: ["finance", ...symbols],
       summary: r.summary || "",
-      image: realImg,
+      image: realImg || genFinance,
+      imageFallback: genFinance,
       evidence: { why, source: src },
     };
     if (Number.isFinite(r.relevance)) card.relevance = r.relevance;
