@@ -270,6 +270,58 @@
   }
 
   // ── Auto-capture the current page (no picker, no permission) ────────────────
+  // html2canvas 1.4.1 (the latest release) can't parse modern CSS color syntax:
+  // `color-mix()` and the `color(srgb …)` serialization Chrome emits for it throw
+  // "unsupported color function". The home page leans on color-mix() heavily, so
+  // capture would fail outright. We resolve those tokens to rgba() in the cloned
+  // DOM (see onclone below) before html2canvas ever reads them.
+  function colorSrgbToRgba(token) {
+    // token: "color(srgb 0.1 0.2 0.3 / 0.5)" — only the srgb form Chrome emits here.
+    var inner = token.slice(token.indexOf("srgb") + 4, token.lastIndexOf(")")).trim();
+    var parts = inner.split("/");
+    var rgb = parts[0].trim().split(/\s+/).map(Number);
+    var a = parts[1] !== undefined ? parseFloat(parts[1]) : 1;
+    var to255 = function (n) { return Math.max(0, Math.min(255, Math.round((n || 0) * 255))); };
+    return "rgba(" + to255(rgb[0]) + "," + to255(rgb[1]) + "," + to255(rgb[2]) + "," + (isNaN(a) ? 1 : a) + ")";
+  }
+  function resolveMix(token) {
+    // Let the live browser resolve color-mix() to a concrete rgb via a throwaway node.
+    try {
+      var d = document.createElement("span");
+      d.style.backgroundColor = token;
+      d.style.position = "fixed"; d.style.left = "-9999px";
+      document.body.appendChild(d);
+      var v = getComputedStyle(d).backgroundColor;
+      document.body.removeChild(d);
+      if (v && v.indexOf("color") === -1) return v;          // got plain rgb(a)
+      if (v && v.indexOf("color(srgb") > -1) return colorSrgbToRgba(v);
+    } catch (e) { /* fall through */ }
+    return "rgba(0,0,0,0)";
+  }
+  function sanitizeColorValue(v) {
+    return v
+      .replace(/color-mix\([^)]*\)/g, resolveMix)
+      .replace(/color\(srgb[^)]*\)/g, colorSrgbToRgba);
+  }
+  var CAPTURE_COLOR_PROPS = ["color", "background-color", "box-shadow",
+    "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+    "outline-color"];
+  function sanitizeCloneColors(clonedDoc) {
+    try {
+      var win = clonedDoc.defaultView || window;
+      var els = clonedDoc.querySelectorAll("*");
+      for (var i = 0; i < els.length; i++) {
+        var cs = win.getComputedStyle(els[i]);
+        for (var p = 0; p < CAPTURE_COLOR_PROPS.length; p++) {
+          var v = cs.getPropertyValue(CAPTURE_COLOR_PROPS[p]);
+          if (v && (v.indexOf("color-mix") > -1 || v.indexOf("color(") > -1)) {
+            els[i].style.setProperty(CAPTURE_COLOR_PROPS[p], sanitizeColorValue(v));
+          }
+        }
+      }
+    } catch (e) { /* best-effort: capture still falls back on hard failure */ }
+  }
+
   // Renders the live DOM to an image with html2canvas, so the user never has to
   // pick a screen/window/tab — clicking 📷 (or opening the modal) just screenshots
   // the page they're looking at. Our own modal + overlays are excluded.
@@ -298,7 +350,8 @@
       scrollY: -window.scrollY,
       ignoreElements: function (el) {
         return el.id === "issue-modal" || el.id === "drop-overlay";
-      }
+      },
+      onclone: function (clonedDoc) { sanitizeCloneColors(clonedDoc); }
     }).then(function (canvas) {
       canvas.toBlob(function (blob) {
         if (blob) acceptBlob(blob);
