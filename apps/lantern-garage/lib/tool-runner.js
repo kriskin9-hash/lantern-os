@@ -32,6 +32,8 @@ const { webSearch } = require("./web-search-client");
 const { workspaceWrite, workspaceRead, workspaceList, getWorkspaceRoot } = require("./user-workspace");
 const { createDocument, listTemplates } = require("./doc-generator");
 const toolLogger = require("./tool-logger");
+const entryStore = require("./entry-store");
+const { getCreatorRuntime } = require("./creator-runtime");
 
 const REPO = path.resolve(__dirname, "..", "..", "..");
 // User workspace: outside the repo, for user artifacts (resumes, exports, generated docs).
@@ -178,7 +180,30 @@ function _htmlToText(html) {
     .replace(/[ \t]+/g, " ").replace(/\n\s*\n\s*\n+/g, "\n\n").trim();
 }
 
-// ── canonical registry (names/schemas == training == Claude Code) ───────────────
+// ── Creator Suite helpers (video tools) ─────────────────────────────────────────
+// These let dream-chat drive the same pipeline as create.html: list projects,
+// kick off highlight analysis, and poll a job — all on the server's LIVE JobQueue
+// singleton (via creator-runtime) so the JobWorker actually processes them.
+function _creatorCtx() {
+  const { jobQueue, repoRoot } = getCreatorRuntime();
+  if (!jobQueue || !repoRoot) {
+    throw _codedError("creator runtime unavailable (server not initialized)", "creator_runtime_unavailable");
+  }
+  return { jobQueue, repoRoot };
+}
+
+// Thumbnails are served by routes/media at /media/<path>; renderMarkdown in the
+// chat (safeUrl allows site-absolute paths) renders `![alt](/media/…)` inline.
+// Return a markdown image for an entry that has a thumbnail, else null.
+function _thumbMarkdown(entry) {
+  const t = entry && entry.thumbnail;
+  if (!t) return null;
+  const rel = String(t).replace(/\\/g, "/"); // Windows store → URL separators
+  const url = rel.startsWith("/") ? rel : "/media/" + rel.replace(/^\/+/, "");
+  const alt = String(entry.title || "thumbnail").replace(/[\[\]]/g, "");
+  return `![${alt}](${encodeURI(url)})`;
+}
+
 const REGISTRY = {
   Read: {
     policy: "read", desc: "Read a file from the filesystem (repo-relative).",
@@ -658,6 +683,105 @@ const REGISTRY = {
         accuracy_by_difficulty: leaderboardRow ? leaderboardRow.accuracy_by_difficulty || null : null,
         ts: new Date().toISOString(),
       }, null, 2);
+    },
+  },
+
+  // ── Creator Suite: short-form video pipeline in chat (mirrors create.html) ──
+  list_creator_projects: {
+    policy: "read", desc: "List the user's Creator video projects as a markdown gallery (title, status, thumbnail image, id). Relay the markdown to the user so the thumbnails render; use the `id` for analyze_video.",
+    schema: { type: "object", properties: { limit: { type: "integer", description: "max projects (default 20)" } } },
+    run(i) {
+      const { repoRoot } = _creatorCtx();
+      const entries = entryStore.listEntries(repoRoot) || [];
+      const sorted = [...entries].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      const limit = Math.max(1, Math.min(50, parseInt(i.limit, 10) || 20));
+      const shown = sorted.slice(0, limit);
+      if (!shown.length) return "No Creator projects yet. Upload a video on /create.html or pass a filePath to analyze_video to start one.";
+      // Markdown so the chat renders each thumbnail inline (renderMarkdown → <img>).
+      const blocks = shown.map((e, n) => {
+        const title = e.title || "Untitled";
+        const status = e.status || "uploaded";
+        const thumb = _thumbMarkdown(e);
+        return `${n + 1}. **${title}** — status: ${status} · \`${e.id}\`\n` +
+          (thumb ? thumb : "_(no thumbnail yet — run analyze_video)_");
+      });
+      const header = `Found ${shown.length}${entries.length > shown.length ? " of " + entries.length : ""} Creator project${shown.length === 1 ? "" : "s"} (most recent first):`;
+      return header + "\n\n" + blocks.join("\n\n");
+    },
+  },
+
+  analyze_video: {
+    policy: "action", desc: "Start highlight analysis (motion/scene/audio) on a Creator project. Pass entryId of an existing project, OR filePath (repo-relative video) to create one. Returns a jobId — poll it with creator_job_status.",
+    schema: { type: "object", properties: {
+      entryId: { type: "string", description: "existing project id (from list_creator_projects)" },
+      filePath: { type: "string", description: "repo-relative path to an uploaded video; creates a new project" },
+      title: { type: "string", description: "title for a new project (optional)" },
+    } },
+    run(i) {
+      const { jobQueue, repoRoot } = _creatorCtx();
+      let entryId = (i.entryId || "").trim() || null;
+      let entry = null;
+
+      if (entryId) {
+        entry = entryStore.getEntry(repoRoot, entryId);
+        if (!entry) return JSON.stringify({ error: `project not found: ${entryId}` });
+      } else if (i.filePath) {
+        const abs = _safe(i.filePath); // repo-sandboxed
+        if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+          return JSON.stringify({ error: `video file not found: ${i.filePath}` });
+        }
+        const base = path.basename(i.filePath).replace(/\.[^.]+$/, "").replace(/[_\-]+/g, " ").trim();
+        entry = entryStore.createEntry(repoRoot, {
+          title: (i.title || "").trim() || (base ? base.replace(/\b\w/g, (c) => c.toUpperCase()) : "Video Project"),
+          type: "video",
+          filePath: String(i.filePath).replace(/\\/g, "/"),
+        });
+        entryId = entry.id;
+      } else {
+        return JSON.stringify({ error: "provide entryId or filePath" });
+      }
+
+      const videoPath = entry.filePath;
+      if (!videoPath) return JSON.stringify({ error: `project ${entryId} has no source video` });
+      if (!fs.existsSync(path.join(repoRoot, videoPath))) {
+        return JSON.stringify({ error: `source video missing on disk: ${videoPath}` });
+      }
+
+      const job = jobQueue.enqueue("analyze", { videoPath, entryId, options: {} });
+      return JSON.stringify({
+        ok: true, jobId: job.id, entryId, status: job.status,
+        message: "Analysis queued. Poll creator_job_status with this jobId.",
+      }, null, 2);
+    },
+  },
+
+  creator_job_status: {
+    policy: "read", desc: "Check a Creator analysis/render job by jobId. Returns status, progress, and (when complete) highlight count + the project thumbnail (markdown image — relay it so it renders inline).",
+    schema: { type: "object", properties: { jobId: { type: "string" } }, required: ["jobId"] },
+    run(i) {
+      const { jobQueue, repoRoot } = _creatorCtx();
+      const job = jobQueue.getJob((i.jobId || "").trim());
+      if (!job) return JSON.stringify({ error: `job not found: ${i.jobId}` });
+      const ls = job.liveStats || {};
+      const out = {
+        jobId: job.id, type: job.type, status: job.status,
+        progress: job.progress, message: job.progressMessage,
+        etaSeconds: job.etaSeconds, error: job.error || null,
+      };
+      if (ls.highlightsFound != null) out.highlightsFound = ls.highlightsFound;
+      if (ls.topScore != null) out.topScore = ls.topScore;
+      if (job.status === "complete" && job.result && job.result.timeline) {
+        const hl = job.result.timeline.highlights;
+        out.highlights = Array.isArray(hl) ? hl.length : 0;
+        if (job.input && job.input.entryId) {
+          out.openProject = `/entry.html?id=${job.input.entryId}`;
+          // Surface the (possibly render-derived) thumbnail so chat shows the result visually.
+          const entry = entryStore.getEntry(repoRoot, job.input.entryId);
+          const thumb = _thumbMarkdown(entry);
+          if (thumb) out.thumbnail = thumb;
+        }
+      }
+      return JSON.stringify(out, null, 2);
     },
   },
 };

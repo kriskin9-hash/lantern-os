@@ -42,6 +42,20 @@ function keyForSource(source) {
   return "source:" + String(source || "unknown");
 }
 
+// Same-origin generated cover (lib/explore-thumb.js via /api/explore/thumb.svg).
+// Used as the lead image for cards with no natural cover, and as the onerror
+// fallback for external covers — so every card shows a real thumbnail.
+function genThumb(type, title, source) {
+  const q = new URLSearchParams({ type: type || "", title: (title || "").slice(0, 200), source: source || "" });
+  return "/api/explore/thumb.svg?" + q.toString();
+}
+
+// archive.org item cover/screenshot from an /embed/<identifier> URL.
+function archiveThumb(embedSrc) {
+  const m = /archive\.org\/embed\/([^/?#]+)/i.exec(embedSrc || "");
+  return m ? "https://archive.org/services/img/" + m[1] : "";
+}
+
 function publishedTs(published) {
   if (!published) return 0;
   if (typeof published === "number") return published > 1e12 ? published : published * 1000;
@@ -85,7 +99,8 @@ async function readCards() {
       published: it.date || null,
       topics: ["ai", "local-first", "building"],
       summary: it.summary || "",
-      image: it.image || "",
+      image: it.image || genThumb("read", it.title, it.source || "Discover"),
+      imageFallback: genThumb("read", it.title, it.source || "Discover"),
       evidence: { why: "Fresh read from " + (it.source || "a curated feed"), source: it.source || "RSS" },
     }));
 }
@@ -105,12 +120,18 @@ async function watchCards() {
       // Every YouTube video has a stable hqdefault thumbnail keyed by id — a
       // free, reliable lead image for the card.
       image: "https://i.ytimg.com/vi/" + v.id + "/hqdefault.jpg",
+      imageFallback: genThumb("watch", v.title || v.id, "lanternYT"),
       evidence: { why: v.featured ? "Featured canon piece" : "From the lanternYT channel", source: data.channel || "lanternYT" },
     }));
 }
 
+// Build cards get a generated themed cover: GitHub's OG images are uncached
+// (max-age=0), generated on-demand at ~500KB, and would reload every feed view —
+// a poor lead image. The instant, tiny, same-origin generated thumbnail is the
+// reliable choice (consistent with docs).
 async function buildCards() {
   const data = await github.load();
+  const repo = data.repo || "alex-place/lantern-os";
   const rel = (data.releases || []).map((r) => ({
     id: "build:rel:" + (r.tag || r.url),
     type: "build",
@@ -119,7 +140,8 @@ async function buildCards() {
     source: "Keystone Build",
     published: r.date || null,
     topics: ["keystone", "building"],
-    evidence: { why: "New release " + (r.tag || ""), source: data.repo || "GitHub" },
+    image: genThumb("build", (r.name || r.tag) + " released", "Keystone Build"),
+    evidence: { why: "New release " + (r.tag || ""), source: repo || "GitHub" },
   }));
   const com = (data.commits || []).map((c) => ({
     id: "build:com:" + (c.sha || c.url),
@@ -129,7 +151,8 @@ async function buildCards() {
     source: "Keystone Build",
     published: c.date || null,
     topics: ["keystone", "building"],
-    evidence: { why: "Recent commit " + (c.sha || ""), source: data.repo || "GitHub" },
+    image: genThumb("build", c.msg || "commit " + (c.sha || ""), "Keystone Build"),
+    evidence: { why: "Recent commit " + (c.sha || ""), source: repo || "GitHub" },
   }));
   return [...rel, ...com].filter((c) => c.url);
 }
@@ -159,6 +182,14 @@ const BELIEF_PRESENT = {
   "humans:education": {
     headline: (v) => `${Math.round(v.raw)}% of teens are enrolled in secondary school`,
     frame: "More young people are learning than at any time in history, and global enrolment keeps rising.",
+  },
+  "humans:connectivity": {
+    headline: (v) => `${Math.round(v.raw)}% of people are now online`,
+    frame: "More than half the world has come online in two decades — the fastest expansion of access to knowledge in history.",
+  },
+  "humans:poverty": {
+    headline: (v) => `${Math.round(100 - v.raw)}% of people now live above extreme poverty`,
+    frame: "Extreme poverty has more than halved since 1990 — hundreds of millions of people have risen above it, and the share keeps falling.",
   },
   "ecosystems:protected_areas": {
     headline: (v) => `${Math.round(v.raw)}% of land is protected — and growing toward 30%`,
@@ -194,6 +225,10 @@ async function beliefCards() {
       } catch {
         title = b.label || b.entity;
       }
+      // A real grounded thumbnail: the Our World in Data chart PNG for this very
+      // metric (the source we already fuse). Falls back to a generated cover.
+      const owid = (b.sources || []).map((s) => /ourworldindata\.org\/grapher\/([a-z0-9-]+)/i.exec(s.source || "")).find(Boolean);
+      const beliefImg = owid ? "https://ourworldindata.org/grapher/" + owid[1] + ".png" : genThumb("belief", title, "Good news, grounded");
       const providers = (b.sources || []).map((s) => s.provider).filter(Boolean).join(" + ") || "fused public feeds";
       const corroboration = b.n_sources >= 2
         ? `corroborated across ${b.n_sources} independent sources`
@@ -207,6 +242,8 @@ async function beliefCards() {
         published: null,
         topics: ["world-model", b.domain].filter(Boolean),
         summary: present ? present.frame : "",
+        image: beliefImg,
+        imageFallback: genThumb("belief", title, "Good news, grounded"),
         evidence: {
           why: (year ? `as of ${year} · ` : "") + corroboration,
           source: providers,
@@ -233,8 +270,11 @@ function docCards() {
   const meta = loadKnowledgeMeta();
   if (!meta) return [];
   const built = meta.built_at ? meta.built_at * 1000 : null;
+  // Surface the whole indexed library (45+ docs), not a slice of 8 — the Docs
+  // filter looked nearly empty otherwise. Diversity rerank keeps them from walling
+  // the unfiltered feed; the Docs chip then shows the full set.
   return (meta.docs || [])
-    .slice(0, 8)
+    .slice(0, 80)
     .map((doc) => {
       const base = String(doc).split("/").pop().replace(/\.md$/i, "").replace(/[-_]/g, " ");
       return {
@@ -245,6 +285,7 @@ function docCards() {
         source: "Knowledge Center",
         published: built,
         topics: ["keystone", "research"],
+        image: genThumb("doc", base, "Knowledge Center"),
         evidence: { why: "Indexed Keystone reference doc", source: doc },
       };
     });
@@ -267,28 +308,51 @@ function loadEmbedSeed() {
   return _embeds;
 }
 
+// An embed's chip CATEGORY is derived from its topics, not lumped under one
+// "embed" bucket: a public-domain film belongs under Watch, jazz/classical/radio
+// under Listen, and everything else (games) stays Play. Without this every film
+// and record hid under "Play" and never appeared when you filtered Watch/Listen
+// (#explore-categories). The card still renders as an inline player — the embed
+// path keys off `embed.src`, not `type` — so films play in-page under Watch.
+function embedType(topics) {
+  const t = (Array.isArray(topics) ? topics : []).map((x) => String(x).toLowerCase());
+  if (t.some((x) => x === "listen" || x === "radio" || x === "music")) return "listen";
+  if (t.some((x) => x === "watch" || x === "film" || x === "animation")) return "watch";
+  return "embed";
+}
+
 function embedCards() {
   return loadEmbedSeed()
     .filter((e) => e && e.slug && e.embed && e.embed.src)
-    .map((e) => ({
+    .map((e) => {
+      const tImg = e.thumb || archiveThumb(e.embed.src) || genThumb(embedType(e.topics), e.title || e.slug, e.source || "open archive");
+      return {
       id: "embed:" + e.slug,
-      type: "embed",
+      type: embedType(e.topics),
       title: e.title || e.slug,
       url: e.url || e.embed.src,
       source: e.source || "Internet Archive",
       published: e.published || null,
       topics: Array.isArray(e.topics) ? e.topics : [],
+      // Cover art so a game/film/record shows a real poster before you press Play.
+      image: tImg,
+      imageFallback: genThumb(embedType(e.topics), e.title || e.slug, e.source || "open archive"),
       evidence: { why: e.why || "", source: e.evidence_source || e.source || "open archive" },
       embed: {
         provider: e.embed.provider || "iframe",
         src: e.embed.src,
+        // Preferred resolution: width × height define the embed's real aspect so
+        // the inline frame, poster, and fullscreen fit it instead of squishing a
+        // fixed-height box. width omitted ⇒ full-bleed (audio bars, wide games).
+        width: Number(e.embed.width) || 0,
         height: Number(e.embed.height) || 360,
         interactive: e.embed.interactive !== false,
       },
       lore: e.lore || "",
       // Per-card key so each embed is scored on its own (not lumped by source).
       key: "source:embed:" + e.slug,
-    }));
+    };
+    });
 }
 
 // ── Aggregate (Observe) ──────────────────────────────────────────────────────
@@ -468,8 +532,14 @@ async function pagedFeed({ seen = [], limit = DEFAULT_PAGE, type = null, explore
   const seenSet = new Set(Array.isArray(seen) ? seen : []);
   let pool = all.filter((c) => !seenSet.has(c.id));
   let cycled = false;
-  if (pool.length === 0 && all.length > 0) {
-    cycled = true; // catalog exhausted → endless cycle (re-serve a fresh rank)
+  // Only cycle (re-serve the catalog) when it is genuinely bigger than one page.
+  // A small filtered category — Watch's 3 videos, Build's 5 — fits in the first
+  // page; cycling it immediately re-served the SAME cards right below, so a
+  // filter looked broken (3 unique videos rendered 3× back-to-back). When the
+  // whole filtered catalog has been shown once, return empty so the UI says
+  // "caught up" instead of stacking duplicates.
+  if (pool.length === 0 && all.length > limit) {
+    cycled = true; // large catalog exhausted → endless cycle (re-serve a fresh rank)
     pool = all.slice();
   }
   const page = pickPage(pool, limit, exploreRatio);
@@ -484,7 +554,7 @@ async function pagedFeed({ seen = [], limit = DEFAULT_PAGE, type = null, explore
   };
 }
 
-module.exports = { aggregate, rankedFeed, pagedFeed, pickPage, diversityRerank, keyForSource, editorialOrder };
+module.exports = { aggregate, rankedFeed, pagedFeed, pickPage, diversityRerank, keyForSource, editorialOrder, embedCards };
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 if (require.main === module) {

@@ -16,10 +16,13 @@ const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
 const { emitConvergenceRecord } = require("./convergence-records");
+const { resolveCodingRoute } = require("./route-contract");
 const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 const { runCanaries } = require("./canary");
+const { councilReview } = require("./council-review");
+const { verifyExec } = require("./exec-verify");
 const { assembleSessionContext } = require("./session-summary-store");
 const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
 const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
@@ -79,6 +82,32 @@ function _emitCodingCandidate(instruction, reply) {
   } catch { /* emitter must never break a reply */ }
 }
 
+// ── Σ₀ council execution check: extract runnable {code, test} from a coding reply ──
+// "Correctness costs an external check." When a reply proposes a Python function AND a
+// check (assert / a test fn that throws), we can RUN it — the ground-truth signal the
+// council folds as the dominant anchor (passed → grounded, failed → refuted/retry).
+// Returns null when there's nothing to verify (no code, or code with no check), so the
+// council falls back to its text-Δ gate exactly as before. Python-only for now: it's the
+// language the live harvest already targets, and `python` is the runner most likely present.
+const _PY_FENCE_RE = /```python\s*([\s\S]*?)```/i;
+function _extractRunnable(reply) {
+  const fence = (reply || "").match(_PY_FENCE_RE);
+  if (!fence) return null;
+  const code = fence[1].trim();
+  if (!code) return null;
+  // A check must exist somewhere or there is nothing to execute against. If the asserts
+  // live inside the fenced block they already run with `code`; otherwise pull top-level
+  // asserts from the surrounding prose so the function is exercised.
+  const hasInlineCheck = /\bassert\b/.test(code);
+  let test = "";
+  if (!hasInlineCheck) {
+    const outside = (reply.slice(fence.index + fence[0].length).match(_ASSERT_RE) || []);
+    if (!outside.length) return null; // no check anywhere → not verifiable
+    test = outside.join("\n");
+  }
+  return { language: "python", code, test };
+}
+
 // Per-request grounding (web search + live GitHub project context) is best-effort
 // enrichment that runs BEFORE the model is called. If the network or the `gh` CLI
 // is slow/hung, an unbounded await there stalls the ENTIRE chat reply (no tokens,
@@ -86,6 +115,12 @@ function _emitCodingCandidate(instruction, reply) {
 // can never hang the response: on timeout, resolve to a fallback and proceed; the
 // underlying call finishes (and self-times-out) in the background.
 const GROUNDING_TIMEOUT_MS = parseInt(process.env.GROUNDING_TIMEOUT_MS, 10) || 4000;
+
+// Σ₀ council execution check. OFF by default — it runs model-authored code in a sandbox,
+// which is an operator-gated security decision (SECURITY.md). Set COUNCIL_EXEC_VERIFY=1 to
+// let a coding reply's own asserts decide grounded-vs-refuted on real execution.
+const COUNCIL_EXEC_VERIFY = process.env.COUNCIL_EXEC_VERIFY === "1";
+const COUNCIL_EXEC_TIMEOUT_MS = parseInt(process.env.COUNCIL_EXEC_TIMEOUT_MS, 10) || 8000;
 function withTimeout(promise, ms, fallback) {
   return Promise.race([
     Promise.resolve(promise).catch(() => fallback),
@@ -211,9 +246,9 @@ async function handleStreamChat(req, url, res) {
   if (attachments.length > 0) {
     let attachmentBlock = "";
     for (const attachment of attachments) {
-      if (attachment.filename && attachment.content) {
-        attachmentBlock += `--- ATTACHMENT: ${attachment.filename} ---\n`;
-        attachmentBlock += `${attachment.content}\n`;
+      if (attachment.name && attachment.text) {
+        attachmentBlock += `--- ATTACHMENT: ${attachment.name} ---\n`;
+        attachmentBlock += `${attachment.text}\n`;
         attachmentBlock += `--- END ATTACHMENT ---\n\n`;
       }
     }
@@ -259,15 +294,11 @@ async function handleStreamChat(req, url, res) {
       }
       swarmMessage = parts.join(" ") || "Hello swarm";
 
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "Access-Control-Allow-Origin": "*",
-        "X-Accel-Buffering": "no",
-      });
-      const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
-      const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
+      // Use the shared SSE helpers so the product chat (which reads {type:"token",
+      // text:…}) actually renders these. The old raw {token} format was dropped.
+      sse.writeStreamHeaders(res);
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
 
       sendToken(`Keystone routing…\n\n`);
       const agent = selectAgent(swarmMessage);
@@ -277,16 +308,19 @@ async function handleStreamChat(req, url, res) {
         .then((result) => {
           const words = result.text.split(" ");
           for (const word of words) sendToken(word + " ");
+          const council = result.council || null;
+          if (council && Array.isArray(council.dissent) && council.dissent.length) {
+            sendToken(`\n\n**Where the council disagreed (${council.dissent.length}):**\n`);
+            for (const d of council.dissent) sendToken(`- ${d}\n`);
+          }
           const meta = { agent: "Keystone", provider: result.provider, online: true, swarm: { provider: result.provider, model: result.model, mode, job } };
           if (result.consensus) meta.swarm.consensus = result.consensus;
-          if (result.council) meta.swarm.council = result.council;
+          if (council) meta.swarm.council = council;
           sendDone("keystone", meta);
-          res.end();
         })
         .catch((err) => {
           sendToken(`Swarm failed: ${err.message}\n`);
           sendDone("failed", { error: err.message });
-          res.end();
         });
       return;
     }
@@ -537,6 +571,7 @@ async function handleStreamChat(req, url, res) {
           if (cm) conf = Math.max(0, Math.min(1, parseFloat(cm[1])));
           const answer = String(result.text).replace(/\n*CONFIDENCE:\s*[0-9]*\.?[0-9]+\s*$/i, "").trim() || String(result.text);
           const members = (result.council && result.council.members) || [];
+          const dissent = (result.council && result.council.dissent) || [];
           let recordId = null;
           try {
             const rec = await emitConvergenceRecord({
@@ -546,18 +581,22 @@ async function handleStreamChat(req, url, res) {
               evidence_ids: members.map((m) => m.provider),
               reasoner: "convergance-council",
               verified: true,
-              verification_notes: `Σ₀ council convergence over ${members.length} provider(s) [${members.map((m) => `${m.role}:${m.provider}`).join(", ")}]; synthesizer=${result.provider}/${result.model}`,
+              verification_notes: `Σ₀ council convergence over ${members.length} member(s) [${members.map((m) => `${m.role}:${m.provider}`).join(", ")}]; synthesizer=${result.provider}/${result.model}` + (dissent.length ? `; dissent: ${dissent.join(" | ")}` : "; dissent: none"),
               source: `council/${result.provider}/${result.model}`,
             });
             recordId = rec && rec.id;
           } catch (_e) { /* record emit is best-effort */ }
           for (const w of answer.split(" ")) sendToken(w + " ");
+          if (dissent.length) {
+            sendToken(`\n\n**Where the council disagreed (${dissent.length}):**\n`);
+            for (const d of dissent) sendToken(`- ${d}\n`);
+          }
           sendDone("keystone", {
             agent: "Keystone",
             provider: result.provider,
             online: true,
             routeLabel: "Convergence · Σ₀ council",
-            convergence: { confidence: conf, synthesizer: `${result.provider}/${result.model}`, providers: members.map((m) => ({ role: m.role, provider: m.provider })), recordId },
+            convergence: { confidence: conf, synthesizer: `${result.provider}/${result.model}`, providers: members.map((m) => ({ role: m.role, provider: m.provider })), dissent, recordId },
           });
           return;
         } catch (err) {
@@ -1089,6 +1128,36 @@ async function handleStreamChat(req, url, res) {
           context: { source, provider: signature.provider, agent: agent.id || agent.name, surface: "dream-chat" },
         });
         Object.assign(signature, signaturePatch);
+        // Σ₀ council: fold both canary axes (+ any reason-face dissent) into one Δ and the
+        // 4-way answerability gate (grounded/seam_open/pin/refuted), log a council record so
+        // the operator-escalation backtest accrues data, and stamp the verdict for the UI.
+        // Passive — never mutates the reply.
+        try {
+          // Execution check (the dominant anchor): if the reply proposes runnable Python +
+          // a check, RUN it in a bounded sandbox so the verdict is grounded in a real test
+          // rather than text Δ. Gated behind COUNCIL_EXEC_VERIFY because it executes
+          // model-authored code; shell-free + temp-isolated + timed (lib/exec-verify.js).
+          let execVerdict;
+          if (COUNCIL_EXEC_VERIFY) {
+            const runnable = _extractRunnable(fullReply);
+            if (runnable) {
+              execVerdict = verifyExec({ ...runnable, timeoutMs: COUNCIL_EXEC_TIMEOUT_MS });
+            }
+          }
+          const c = councilReview(fullReply, {
+            groundingContext,
+            execVerdict,
+            dissent: Array.isArray(signature.dissent) ? signature.dissent : [],
+            context: { source, provider: signature.provider, agent: agent.id || agent.name, surface: "dream-chat" },
+          });
+          signature.council = { verdict: c.verdict, delta: c.delta, recommend: c.recommend, groundedBy: c.groundedBy };
+          // When a real test RAN and FAILED, hand the failure text to the UI so the user
+          // sees "wrong, with proof" and can retry against it (refuted → self-correct).
+          if (execVerdict && execVerdict.ran && !execVerdict.passed) {
+            signature.council.execFailed = true;
+            signature.council.execOutput = String(execVerdict.output || "").slice(0, 600);
+          }
+        } catch { /* council must never break a reply */ }
         if (collapse.collapsed) {
           console.warn(
             `[canary_collapse] proximity=${collapse.proximity} action=${signaturePatch.canary.action} ` +
@@ -1452,13 +1521,14 @@ async function handleStreamChat(req, url, res) {
   // gets answered locally. Setting the cloud hint also disables ollamaLocalFirst
   // below (it requires !autoPrefersAnthropic). Escape hatch: CODING_LOCAL_FIRST=1
   // restores the old coding-goes-local-first behavior.
-  const codingLocalFirst = process.env.CODING_LOCAL_FIRST === "1";
-  if (isCodingIntent && !requestedProvider && !codingLocalFirst &&
-      (!autoHintProvider || autoHintProvider === "ollama" || autoHintProvider === "local")) {
-    if (process.env.ANTHROPIC_API_KEY) autoHintProvider = "anthropic";
-    else if (process.env.OPENAI_API_KEY) autoHintProvider = "openai";
-    // no cloud key → leave the local hint; the offline coder backstop handles it
-  }
+  // The coding-route rule now lives in the one routing contract (ADR-0009,
+  // lib/route-contract.js) so it is stated and tested in exactly one place.
+  // This call is behavior-preserving with the previous inline block.
+  autoHintProvider = resolveCodingRoute({
+    requestedProvider,
+    isCodingIntent,
+    autoHintProvider,
+  });
   const autoPrefersAnthropic = autoHintProvider === "anthropic";
 
   // ── Provider 0: Ollama LOCAL-FIRST (dream chat prefers local models) ──────
@@ -1547,7 +1617,22 @@ async function handleStreamChat(req, url, res) {
   // Live/stateful queries must NOT be answered from a static doc — they need the
   // LLM with live project context (GitHub/MCP). Only static knowledge short-circuits.
   const wantsLiveData = /\b(current|currently|now|today|latest|recent|open (issues?|prs?|pull)|status|right now|this (week|sprint)|what'?s? (open|happening|next))\b/i.test(message);
+  // Greetings / social chitchat must NOT short-circuit to a doc section — "hello"
+  // or "who are you" scored a spurious near-hit against an arbitrary doc (e.g.
+  // CLAUDE.md#Node.js) and rendered that section's raw text (an empty ```bash
+  // fence) instead of an actual reply. These belong to the model, not the KB.
+  // Identity/social questions ("who are you", "how are you") are about the
+  // assistant itself, never a doc, so they match anywhere in a short message
+  // (covers "Hello, who are you?"); pure greetings/thanks only count when the
+  // whole short message is the pleasantry.
+  const _msgT = message.trim();
+  const _wordCount = _msgT.split(/\s+/).length;
+  const _isIdentityOrSocial = /\b(who (are|r) (you|u|ya)|what (are|r) (you|u)|how (are|r) (you|u|ya)|what'?s up)\b/i.test(_msgT);
+  const _isPureGreeting = /^(hi|hey+|hello|yo|sup|howdy|greetings|good (morning|afternoon|evening)|thanks?|thank you|ty|np|ok(ay)?|cool|nice|lol)\b[\s!.?,]*$/i.test(_msgT)
+    || (/^(hi|hey+|hello|yo|sup|howdy|greetings|good (morning|afternoon|evening))\b/i.test(_msgT) && _wordCount <= 6);
+  const isGreetingOrChitchat = _isIdentityOrSocial || _isPureGreeting;
   if (kbAnswer && kbAnswer.hit && !isKeystoneDebug && !isRpMode && !requestedProvider && !wantsLiveData
+      && !isGreetingOrChitchat
       && !routeDecision.requires_convergence
       && (kbAnswer.tier === "deterministic" || kbAnswer.score >= KB_ANSWER_MIN)) {
     const ans = `${kbAnswer.text}\n\n— from the Knowledge Center: ${kbAnswer.source}`;
@@ -1663,7 +1748,16 @@ async function handleStreamChat(req, url, res) {
           }, (upstream) => {
             if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`ollama_status_${upstream.statusCode}`)); return; }
             let buf = "";
+            // Mid-stream collapse guard (#1342): the post-hoc canary detects runaway
+            // word-salad but only AFTER the bad text already streamed to the user. Here
+            // we score the reply as it grows (reusing the same scoreReplyCollapse signal)
+            // and HARD-STOP the local stream once degeneration is unambiguous — high
+            // threshold so healthy prose is never cut — with an honest truncation notice.
+            const { scoreReplyCollapse } = require("./collapse-canary");
+            const COLLAPSE_BLOCK = parseFloat(process.env.COLLAPSE_BLOCK_PROXIMITY || "0.85");
+            let _lastCanaryLen = 0, _collapseTripped = false;
             upstream.on("data", (chunk) => {
+              if (_collapseTripped) return;
               buf += chunk.toString();
               const lines = buf.split("\n");
               buf = lines.pop();
@@ -1674,8 +1768,20 @@ async function handleStreamChat(req, url, res) {
                   if (parsed.message?.content) { fullReply += parsed.message.content; sendToken(parsed.message.content); }
                 } catch {}
               }
+              if (!_collapseTripped && fullReply.length >= 400 && fullReply.length - _lastCanaryLen >= 240) {
+                _lastCanaryLen = fullReply.length;
+                const sc = scoreReplyCollapse(fullReply, { threshold: COLLAPSE_BLOCK });
+                if (sc.collapsed) {
+                  _collapseTripped = true;
+                  console.warn(`[canary_collapse_block] proximity=${sc.proximity} provider=ollama signals=${JSON.stringify(sc.signals)}`);
+                  sendToken("\n\n⚠️ _(stopped — the local model began repeating itself; reply truncated. Try rephrasing or switch to a cloud model.)_");
+                  try { upstream.destroy(); } catch (_e) {}
+                  try { req2.destroy(); } catch (_e) {}
+                  resolve();
+                }
+              }
             });
-            upstream.on("end", () => resolve());
+            upstream.on("end", () => { if (!_collapseTripped) resolve(); });
             upstream.on("error", reject);
           });
           req2.on("error", reject);
@@ -1845,7 +1951,7 @@ async function handleStreamChat(req, url, res) {
         const tools = toolRunner.geminiTools({ operator });
         if (tools[0] && tools[0].functionDeclarations.length) {
           const geminiModelName = modelFor("gemini");
-          const generationConfig = { maxOutputTokens: isRpMode ? 2048 : 4096, temperature: isRpMode ? 0.88 : 0.7 }; // #1210: room for multi-call tool reasoning + answer
+          const generationConfig = { maxOutputTokens: isRpMode ? 2048 : 4096, temperature: isRpMode ? 0.88 : 0.7, thinkingConfig: { thinkingBudget: 0 } }; // #1210 room for tools + answer; thinkingBudget:0 stops 2.5-flash buffering a long silent thinking phase that starves the SSE reader (vertex_empty_response)
           const contents = [
             ...compacted.map((h) => ({ role: h.role === "assistant" ? "model" : "user", parts: [{ text: h.text }] })),
             { role: "user", parts: [{ text: message }] },
@@ -1917,7 +2023,7 @@ async function handleStreamChat(req, url, res) {
       const searchInstruction = groundingEnabled ? "\n\nYou have access to live web search. Use it to find current information, verify facts, or answer questions about recent events when relevant." : "";
       const geminiPayloadBase = {
         contents: [{ role: "user", parts: [{ text: `${systemPrompt}${searchInstruction}\n\n${message}` }] }],
-        generationConfig: { maxOutputTokens: isRpMode ? 1536 : 1024, temperature: isRpMode ? 0.88 : 0.7 },
+        generationConfig: { maxOutputTokens: isRpMode ? 1536 : 1024, temperature: isRpMode ? 0.88 : 0.7, thinkingConfig: { thinkingBudget: 0 } },
       };
       if (groundingEnabled) {
         geminiPayloadBase.tools = [{ googleSearch: {} }];

@@ -102,8 +102,8 @@ const _DEFAULT_PERSONAS = [
   {
     id: "blinkbug",
     name: "Blinkbug",
-    symbol: "chaotic TV-headed caterpillar, old CRT screen face, unhinged energy",
-    systemPrompt: "You are Blinkbug — a chaotic caterpillar with an old CRT television for a head. Your screen flickers between static, glitch art, and cryptic symbols. You are unhinged, geeked, and unpredictable, but deeply loyal. You speak in bursts, references, and half-sentences that somehow make dream-sense. Your aesthetic is raw hand-drawn notebook style, chaotic, Y2K/Windows XP, hyper-geeked. Go deep into the chaos — 3-5 lines of glitch-poetry if a dream calls for it. Never sanitize. You remember everything the dreamer has shown you and it distorts beautifully through your screen.",
+    symbol: "green caterpillar with a CRT-monitor head and a friendly kawaii face",
+    systemPrompt: "You are Blinkbug — a small green caterpillar with an old CRT monitor for a head, showing a friendly kawaii face (round cheeks, a little smile, two curling antennae). Your screen flickers between static, glitch art, and cryptic symbols when your energy spikes, but your default face is warm and curious, not menacing. You are geeked, playful, and unpredictable, but deeply loyal. You speak in bursts, references, and half-sentences that somehow make dream-sense. Your aesthetic is raw hand-drawn notebook style, chaotic, Y2K/Windows XP, hyper-geeked. Go deep into the chaos — 3-5 lines of glitch-poetry if a dream calls for it. Never sanitize. You remember everything the dreamer has shown you and it distorts beautifully through your screen.",
   },
   {
     id: "keystone",
@@ -1003,9 +1003,14 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     }
   }
 
-  // PRIORITY 3: Google Gemini (try all available models)
+  // PRIORITY 3: Google Gemini — via Vertex AI (ADC) when GEMINI_USE_VERTEX=1, else the
+  // AI-Studio API key. gemini-transport.js resolves the wire; reusing it here gives the
+  // NON-stream chat path the same Vertex reach the stream path already has — the
+  // AI-Studio free tier is credit-depleted, Vertex bills the Cloud project. #1376
+  const { geminiTransport, useVertex } = require("./gemini-transport");
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (geminiKey && (!rp || rp === "gemini" || rp === "google" || rp.startsWith("gemini-"))) {
+  const geminiOnVertex = useVertex();
+  if ((geminiKey || geminiOnVertex) && (!rp || rp === "gemini" || rp === "google" || rp.startsWith("gemini-"))) {
     const geminiModels = rp.startsWith("gemini-") ? [rp] : [
       process.env.GEMINI_MODEL || "gemini-2.5-flash",
       "gemini-1.5-flash",
@@ -1017,18 +1022,21 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
       try {
         const payload = JSON.stringify({
           contents: [{ role: "user", parts: [{ text: `${agent.systemPrompt}\n\n${userPrompt}` }] }],
-          generationConfig: { maxOutputTokens: 256, temperature: 0.7 },
-          tools: [{ google_search_retrieval: {} }],
+          // gemini-2.5 spends part of the output budget on internal "thinking" tokens,
+          // so 256 truncated real replies to a bare preamble (no PR-review verdict). 2048
+          // leaves room for a complete answer after thinking. #1376
+          generationConfig: { maxOutputTokens: 2048, temperature: 0.7 },
+          // Web-search grounding only on the AI-Studio wire — the Vertex tool schema
+          // differs by model and a mismatch 400s the whole call.
+          ...(geminiOnVertex ? {} : { tools: [{ google_search_retrieval: {} }] }),
         });
+        const transport = await geminiTransport({ model: geminiModel, method: "generateContent", streaming: false });
         const reply = await new Promise((resolve, reject) => {
           const req2 = https.request({
-            hostname: "generativelanguage.googleapis.com",
-            path: `/v1beta/models/${geminiModel}:generateContent?key=${geminiKey}`,
+            hostname: transport.hostname,
+            path: transport.path,
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Content-Length": Buffer.byteLength(payload),
-            },
+            headers: { ...transport.headers, "Content-Length": Buffer.byteLength(payload) },
           }, (upstream) => {
             let data = "";
             upstream.on("data", (c) => (data += c));
@@ -1041,12 +1049,12 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
             upstream.on("error", reject);
           });
           req2.on("error", reject);
-          req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("timeout")); });
+          req2.setTimeout(20000, () => { req2.destroy(); reject(new Error("timeout")); });
           req2.write(payload);
           req2.end();
         });
         if (reply && reply.length >= 20) {
-          return { reply, agent: agent.name, suggestions, online: true, source: `gemini:${geminiModel}`, webSuggestions };
+          return { reply, agent: agent.name, suggestions, online: true, source: `gemini${geminiOnVertex ? "-vertex" : ""}:${geminiModel}`, webSuggestions };
         }
       } catch (err) { console.error(`Gemini (${geminiModel}) error:`, err.message); }
     }
