@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.7.101] - 2026-06-29
+- fix(explore): correct the Explore feed categories. Public-domain films and music were all typed `embed`, so every game, film, and record hid under the **Play** chip — films never reached **Watch** and music had no filter at all; `embedCards()` now derives the chip category from each embed's topics (film/animation -> Watch, jazz/classical/radio -> a new **Listen** filter). The **Docs** filter showed 8 of 45 indexed docs (raised the cap). A small filtered category (e.g. Watch = 3 videos) cycled the endless feed and re-stacked the same cards back-to-back; `pagedFeed` now only cycles a catalog larger than one page and the UI shows "that's everything". **2048** was the lone cross-origin `github.io` embed (blockable by the production frame policy) and is now self-hosted MIT-licensed at `/games/2048/`, same-origin like the bundled T-Rex. Fixed a mojibake (`Â·`) in the 2048 source label. Verified in the dev preview through the real filter chips.
+
 ## [1.7.100] - 2026-06-29
 - perf(home): persist the Flourishing world-model cache to disk so cold loads stay fast. The panel + correlations caches were in-memory only with a 24h TTL, but the stable host auto-redeploys often — so the first visitor after every restart paid the full live World Bank fetch (the 25s/45s the home page budgets for). Both caches now round-trip through `data/flourishing-cache.json` (gitignored), so a restart reuses a still-fresh snapshot. Also: the hero version now prefers the live git semver over the committed-and-stale `/version.json`, and `site-chrome.js` sets `aria-current="page"` on the active nav link for assistive tech (it already set the `.active` class). `node --check` clean.
 
