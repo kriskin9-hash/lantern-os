@@ -1016,6 +1016,7 @@
       <button type="button" class="feed-chip active" data-type="all" aria-pressed="true">All</button>
       <button type="button" class="feed-chip" data-type="embed" aria-pressed="false"><span aria-hidden="true">🕹️</span> Play</button>
       <button type="button" class="feed-chip" data-type="read" aria-pressed="false"><span aria-hidden="true">📰</span> Read</button>
+      <button type="button" class="feed-chip" data-topic="finance" aria-pressed="false"><span aria-hidden="true">📈</span> Finance</button>
       <button type="button" class="feed-chip" data-type="watch" aria-pressed="false"><span aria-hidden="true">🎬</span> Watch</button>
       <button type="button" class="feed-chip" data-type="listen" aria-pressed="false"><span aria-hidden="true">🎵</span> Listen</button>
       <button type="button" class="feed-chip" data-type="build" aria-pressed="false"><span aria-hidden="true">🛠️</span> Build</button>
@@ -1355,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }, { threshold: 0.5 }) : null;
 
   let filter = 'all';
+  let filterKind = 'type';           // 'type' (media type chip) | 'topic' (cross-cutting, e.g. finance)
   const seen = new Set();            // stable card ids already shown (dedup across pages)
   let loading = false, totalShown = 0, cycles = 0;
 
@@ -1588,7 +1590,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const r = await fetch('/api/explore/feed/page', {
         method: 'POST', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seen: [...seen], limit: PAGE, type: filter === 'all' ? null : filter }),
+        body: JSON.stringify({
+          seen: [...seen], limit: PAGE,
+          type: (filterKind === 'type' && filter !== 'all') ? filter : null,
+          topic: filterKind === 'topic' ? filter : null,
+        }),
       });
       const data = r.ok ? await r.json() : null;
       if (epoch !== filterEpoch) return;                 // a filter change superseded this page
@@ -1641,8 +1647,11 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chips) {
     chips.addEventListener('click', (e) => {
       const btn = e.target.closest('.feed-chip');
-      if (!btn || btn.dataset.type === filter) return;
-      filter = btn.dataset.type;
+      if (!btn) return;
+      const val = btn.dataset.topic || btn.dataset.type || 'all';
+      const kind = btn.dataset.topic ? 'topic' : 'type';
+      if (val === filter && kind === filterKind) return;
+      filter = val; filterKind = kind;
       chips.querySelectorAll('.feed-chip').forEach(b => {
         const on = b === btn;
         b.classList.toggle('active', on);
@@ -1650,6 +1659,32 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       reset();
     });
+  }
+
+  // Deep-link preselect (#1581): /explore.html?topic=finance (or ?filter=finance)
+  // opens straight on that chip — e.g. the trader page "News →" link. Falls back to
+  // the default 'all' feed when the param names no real chip.
+  if (chips) {
+    const params = new URLSearchParams(location.search);
+    const want = (params.get('topic') || params.get('filter') || '').toLowerCase();
+    const wantType = (params.get('type') || '').toLowerCase();
+    let preBtn = null, preKind = 'type';
+    if (want) {
+      preBtn = chips.querySelector('.feed-chip[data-topic="' + (window.CSS && CSS.escape ? CSS.escape(want) : want) + '"]');
+      if (preBtn) { filter = want; preKind = 'topic'; }
+      else { const t = chips.querySelector('.feed-chip[data-type="' + want + '"]'); if (t) { preBtn = t; filter = want; preKind = 'type'; } }
+    } else if (wantType) {
+      preBtn = chips.querySelector('.feed-chip[data-type="' + wantType + '"]');
+      if (preBtn) { filter = wantType; preKind = 'type'; }
+    }
+    if (preBtn) {
+      filterKind = preKind;
+      chips.querySelectorAll('.feed-chip').forEach(b => {
+        const on = b === preBtn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
   }
 
   // Kick off, then keep the sentinel observed. Fallback for no IntersectionObserver.

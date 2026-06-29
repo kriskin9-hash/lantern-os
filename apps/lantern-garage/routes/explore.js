@@ -100,8 +100,9 @@ module.exports = async function exploreRoute(req, res, url, deps) {
     }
     const seen = Array.isArray(body.seen) ? body.seen.slice(0, 1000).map(String) : [];
     const type = body.type && body.type !== "all" ? String(body.type) : null;
+    const topic = body.topic ? String(body.topic).slice(0, 40).toLowerCase() : null;
     try {
-      const feed = await pagedFeed({ seen, limit: body.limit, type });
+      const feed = await pagedFeed({ seen, limit: body.limit, type, topic });
       sendJson(res, feed, 200);
     } catch (e) {
       sendJson(res, { cards: [], count: 0, error: e.message }, 200);

@@ -28,6 +28,7 @@ const discover = require("../routes/discover-feeds");
 const youtube = require("../routes/youtube");
 const github = require("../routes/github-activity");
 const flourishing = require("./flourishing-feeds");
+const tradingNews = require("./trading-news");
 const { rankCandidates } = require("./model-leaderboard");
 
 const REPO_ROOT = path.resolve(__dirname, "../../..");
@@ -291,6 +292,47 @@ function docCards() {
     });
 }
 
+// Market news as feed cards (#1582/#1583). Reuses the local-first trading-news
+// CSF registry (lib/trading-news.js → free Yahoo Finance RSS via news-collector),
+// so Explore surfaces the SAME grounded headlines the trader page does — no new
+// ingestion path. Each card is a `read` (📰) typed card tagged topics:["finance",
+// <symbols…>] so the Finance chip and /explore.html?topic=finance can filter to it
+// while it still flows through the one ranked feed. A headline with no source/url
+// is dropped (External-Reality Rule: no card without a source).
+function financeCards() {
+  let records = [];
+  try {
+    records = tradingNews.queryRecentNews({ limit: 40 });
+  } catch {
+    return [];
+  }
+  return (records || [])
+    .filter((r) => r && (r.headline || r.title) && (r.url || r.source))
+    .map((r) => {
+      const headline = r.headline || r.title;
+      const symbols = (Array.isArray(r.symbols) ? r.symbols : []).map((s) => String(s).toLowerCase());
+      const src = r.source || "Market News";
+      const why = [
+        r.impact ? `impact ${r.impact}` : "",
+        symbols.length ? symbols.map((s) => s.toUpperCase()).join(", ") : "",
+        "market news",
+      ].filter(Boolean).join(" · ");
+      return {
+        id: "finance:" + (r.news_id || r.memory_id || r.url || headline),
+        type: "read",
+        title: headline,
+        url: r.url || "",
+        source: src,
+        published: r.published || r.recorded_at || null,
+        topics: ["finance", ...symbols],
+        summary: r.summary || "",
+        image: genThumb("read", headline, src),
+        imageFallback: genThumb("read", headline, src),
+        evidence: { why, source: src },
+      };
+    });
+}
+
 // Curated open-archive embeds (games + listening). Data-driven from
 // data/explore/embeds.json so adding content is a JSON edit, not a code change.
 // Cached like the other static reads — the seed only changes on deploy. Each
@@ -366,6 +408,7 @@ async function aggregate() {
     ["build", buildCards],
     ["belief", beliefCards],
     ["doc", () => Promise.resolve(docCards())],
+    ["finance", () => Promise.resolve(financeCards())],
   ];
   const settled = await Promise.allSettled(
     producers.map(([label, fn]) => withTimeout(fn(), PER_SOURCE_TIMEOUT_MS, label).catch(() => [])),
@@ -525,10 +568,13 @@ function pickPage(pool, limit, exploreRatio) {
   return page.slice(0, limit);
 }
 
-async function pagedFeed({ seen = [], limit = DEFAULT_PAGE, type = null, exploreRatio = 0.22 } = {}) {
+async function pagedFeed({ seen = [], limit = DEFAULT_PAGE, type = null, topic = null, exploreRatio = 0.22 } = {}) {
   limit = Math.max(1, Math.min(30, Number(limit) || DEFAULT_PAGE));
   const { cards } = await rankedFeed();
-  const all = type ? cards.filter((c) => c.type === type) : cards;
+  // A chip filters by media TYPE (read/watch/…) OR by TOPIC (finance) — topics are
+  // the cross-cutting dimension (e.g. finance news is a `read` tagged "finance").
+  let all = type ? cards.filter((c) => c.type === type) : cards;
+  if (topic) all = all.filter((c) => Array.isArray(c.topics) && c.topics.includes(topic));
   const seenSet = new Set(Array.isArray(seen) ? seen : []);
   let pool = all.filter((c) => !seenSet.has(c.id));
   let cycled = false;
