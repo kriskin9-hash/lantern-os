@@ -176,6 +176,7 @@ class NewsCollector {
         symbols: Array.isArray(it.symbols) ? it.symbols : [],
         impact: typeof it.impact === "number" ? it.impact : scoreImpact(it.headline),
         summary: it.summary || "",
+        image: it.image || "",
       }).catch((e) => {
         console.error("[NewsCollector] Dashboard record error:", e.message);
         return null;

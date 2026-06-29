@@ -45,6 +45,7 @@ function _csfEntityRecord(item, memoryId) {
       headline: item.headline || item.title || "",
       source: item.source || "",
       url: item.url || "",
+      image: item.image || "",
       published: item.published || item.date || now,
       date: item.date || (item.published ? item.published.slice(0, 10) : now.slice(0, 10)),
       symbols,
