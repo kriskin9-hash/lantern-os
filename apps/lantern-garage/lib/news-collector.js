@@ -15,10 +15,19 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
+const http = require("http");
 const tradingNews = require("./trading-news");
 
 const WATCHLIST_PATH = path.resolve(__dirname, "..", "..", "..", "data", "lantern-garage", "trading", "watchlist.json");
 const BROAD_MARKET_SYMBOLS = ["^GSPC", "^DJI", "^IXIC", "^VIX"];
+
+// Primary source: the locally-running AI Trader dashboard (dashboard.py), whose
+// /api/news-feed serves REAL Alpaca news per watchlist ticker. Plain localhost
+// HTTP — no TLS so it's immune to the machine's HTTPS interception that starves
+// the Yahoo RSS path. Configurable; defaults to the dashboard's port 5000.
+// When the dashboard is offline the fetch degrades gracefully (records nothing).
+const DASHBOARD_NEWS_URL =
+  process.env.DASHBOARD_NEWS_URL || "http://127.0.0.1:5000/api/news-feed";
 
 const HIGH_IMPACT_KEYWORDS = [
   "fed", "rate hike", "rate cut", "inflation", "cpi", "jobs report",
@@ -88,6 +97,23 @@ function fetchRss(symbols) {
   });
 }
 
+// Fetch the dashboard's news JSON over localhost HTTP. Resolves to a parsed
+// object (or null on any failure — offline dashboard, bad JSON, timeout).
+function fetchDashboardNews() {
+  return new Promise((resolve) => {
+    const req = http.get(DASHBOARD_NEWS_URL, { timeout: 6000 }, (res) => {
+      let body = "";
+      res.on("data", (chunk) => (body += chunk));
+      res.on("end", () => {
+        try { resolve(JSON.parse(body)); }
+        catch { resolve(null); }
+      });
+    });
+    req.on("error", () => resolve(null));      // dashboard not running → silent
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+  });
+}
+
 function loadWatchlist() {
   try {
     const raw = fs.readFileSync(WATCHLIST_PATH, "utf8");
@@ -124,13 +150,52 @@ class NewsCollector {
     return recorded;
   }
 
+  // Primary source — the dashboard's real Alpaca news. Each item already carries
+  // id/headline/source/url/symbols/impact; map straight onto the CSF registry
+  // (recordNewsItem dedups by id/url so repeated polls don't pile up). Returns
+  // the number of NEW headlines recorded; 0 when the dashboard is offline.
+  async _collectFromDashboard() {
+    const data = await fetchDashboardNews();
+    if (!data) return 0;
+    const items = [
+      ...(Array.isArray(data.ticker_news) ? data.ticker_news : []),
+      ...(Array.isArray(data.broad_news) ? data.broad_news : []),
+    ];
+    let recorded = 0;
+    for (const it of items) {
+      if (!it || !it.headline) continue;
+      const rec = await tradingNews.recordNewsItem({
+        id: it.id,
+        headline: it.headline,
+        source: it.source || "Alpaca",
+        url: it.url || "",
+        // it.date is "YYYY-MM-DD" (parseable); the human "published" string lacks
+        // a year, so prefer date for a sortable/renderable timestamp.
+        published: it.date || it.published || "",
+        date: it.date || "",
+        symbols: Array.isArray(it.symbols) ? it.symbols : [],
+        impact: typeof it.impact === "number" ? it.impact : scoreImpact(it.headline),
+        summary: it.summary || "",
+      }).catch((e) => {
+        console.error("[NewsCollector] Dashboard record error:", e.message);
+        return null;
+      });
+      if (rec && rec.tier === "entity") recorded++;
+    }
+    if (recorded > 0) console.log(`[NewsCollector] Recorded ${recorded} headline(s) from dashboard`);
+    return recorded;
+  }
+
   async collectOnce() {
+    // Real Alpaca news from the local dashboard is the primary source.
+    let total = await this._collectFromDashboard();
+
     // Stock-style tickers only (e.g. excludes BTCUSD/ETHUSD/SOLUSD, which
     // don't have Yahoo Finance equity RSS feeds — crypto news is handled by
     // crypto-collector.js).
     const tickers = loadWatchlist().filter((t) => /^[A-Z]{1,5}$/.test(t));
 
-    let total = await this._collectFor(BROAD_MARKET_SYMBOLS, "broad");
+    total += await this._collectFor(BROAD_MARKET_SYMBOLS, "broad");
     for (const ticker of tickers) {
       total += await this._collectFor([ticker], ticker);
       // Be polite to Yahoo's free RSS endpoint
