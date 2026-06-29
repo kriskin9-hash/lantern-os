@@ -303,7 +303,7 @@ function docCards() {
 function financeCards(ctx) {
   let records = [];
   try {
-    records = tradingNews.queryRecentNews({ limit: 40 });
+    records = tradingNews.queryRecentNews({ limit: 200 });
   } catch {
     return [];
   }

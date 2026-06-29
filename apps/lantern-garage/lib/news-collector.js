@@ -101,7 +101,7 @@ function fetchRss(symbols) {
 // object (or null on any failure — offline dashboard, bad JSON, timeout).
 function fetchDashboardNews() {
   return new Promise((resolve) => {
-    const req = http.get(DASHBOARD_NEWS_URL, { timeout: 6000 }, (res) => {
+    const req = http.get(DASHBOARD_NEWS_URL, { timeout: 20000 }, (res) => {
       let body = "";
       res.on("data", (chunk) => (body += chunk));
       res.on("end", () => {
