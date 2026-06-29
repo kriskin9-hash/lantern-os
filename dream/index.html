@@ -282,7 +282,7 @@
 <body>
 
 <!-- ── Whole-screen file drop overlay ── -->
-<div id="home-drop-overlay" aria-hidden="true">📄 Drop to upload<span class="drop-sub">.pdf → Knowledge Center &nbsp;·&nbsp; .docx → improve &amp; rewrite</span></div>
+<div id="home-drop-overlay" aria-hidden="true">📄 Drop to upload<span class="drop-sub">files → attached to chat &nbsp;·&nbsp; .docx → improve &amp; rewrite</span></div>
 
 <!-- ── Site nav ── -->
 <nav class="site-nav">
@@ -292,16 +292,17 @@
   </a>
   <div class="nav-links">
     <a href="/dream-chat.html">Chat</a>
-    <a href="/trader-dashboard.html">Trader</a>
+    <a href="/stock-trader.html">Trader</a>
     <a href="/create.html">Create</a>
     <a href="/explore.html">Explore</a>
     <a href="/knowledgecenter.html">Help</a>
-    <a href="https://www.patreon.com/lanternos" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Patreon ♥</a>
+    <a href="https://www.patreon.com/c/lanterndreamjournal" class="nav-support" target="_blank" rel="noopener noreferrer">♥ Patreon ♥</a>
   </div>
   <div class="nav-actions">
     <a href="/profile.html" class="nav-btn" id="profile-btn" title="Your profile" aria-label="View your profile">👤</a>
     <button class="nav-btn" id="logout-btn" onclick="logoutUser()" title="Logout" aria-label="Logout" style="display:none;">🚪</button>
     <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">☀</button>
+    <button class="nav-btn" id="screenshot-btn" type="button" aria-label="Report an issue with a screenshot" title="Report an issue (screenshot → GitHub)" onclick="if(window.issueReporter)window.issueReporter.open()">📷</button>
   </div>
 </nav>
 
@@ -320,17 +321,13 @@
     <button type="button" class="home-attach-btn" id="home-attach-btn" onclick="homeAttachPick()" aria-label="Attach a file (PDF or Word .docx)" title="Attach a file — PDF or .docx">+</button>
     <input id="home-chat-input" type="text" placeholder="Ask Keystone anything…" autocomplete="off" aria-label="Chat message">
     <select id="home-provider-pin" aria-label="Pin AI provider" title="Pin which AI provider answers (Auto = best-ranked)">
+      <!-- Auto is the only static option; the live providers are loaded
+           dynamically from /api/providers/status by buildProviderPin(). -->
       <option value="">Auto</option>
-      <option value="claude">Claude</option>
-      <option value="openai">ChatGPT</option>
-      <option value="gemini">Gemini</option>
-      <option value="grok">Grok</option>
-      <option value="ollama">Local Σ₀</option>
-      <option value="keystone-ft">Keystone FT</option>
     </select>
     <button type="submit">Chat ✦</button>
   </form>
-  <input type="file" id="home-file-input" accept=".pdf,.docx" multiple style="display:none">
+  <input type="file" id="home-file-input" multiple style="display:none">
   <div class="home-file-chip" id="home-file-chip">
     <span id="home-file-chip-name">📄 file.docx</span>
     <button type="button" onclick="clearHomeDocx()" aria-label="Remove file">✕</button>
@@ -339,7 +336,7 @@
 
   <!-- ── Secondary experiences ── -->
   <div class="home-tiles">
-    <a class="panel tile-trader" href="/trader-dashboard.html">
+    <a class="panel tile-trader" href="/stock-trader.html">
       <span class="panel-icon" aria-hidden="true" style="font-size:20px;font-weight:700;color:var(--tile)">▲</span>
       <span class="panel-label">Markets</span>
       <h2>Trader</h2>
@@ -389,7 +386,7 @@
     <span class="sep">·</span>
     <a href="/">Home</a>
     <a href="/dream-chat.html">Chat</a>
-    <a href="/trader-dashboard.html">Trader</a>
+    <a href="/stock-trader.html">Trader</a>
     <a href="/create.html">Create</a>
     <a href="/explore.html">Explore</a>
     <a href="/knowledgecenter.html">Help</a>
@@ -481,7 +478,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // /version.json can 500 in some checkouts; fall back to the git
     // endpoint's semver (already fetched below) before giving up.
     const g = git?.version;
-    const v = version?.version || g?.semver || 'unknown';
+    // Prefer the live git semver (reflects the running commit) over the static
+    // /version.json file, which is committed and routinely lags the real build.
+    const v = g?.semver || version?.version || 'unknown';
     const branch = g?.branch || '';
     const shortCommit = g?.commit ? g.commit.slice(0, 7) : '—';
     const commitDate = g?.date ? fmtDate(g.date) : '';
@@ -582,6 +581,9 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 <script src="/js/update-checker.js" defer></script>
 <script src="/js/auth-gate.js" defer></script>
+<!-- Screenshot → GitHub issue reporter (📷 in the header). Modal + styles self-inject; report includes the page URL + captured DOM/console errors. -->
+<script src="/vendor/html2canvas/html2canvas.min.js" defer></script>
+<script src="/js/issue-reporter.js?v=20260628f-autoattach" defer></script>
 <script>
 (function () {
   let pendingDocx = null;
@@ -608,10 +610,73 @@ document.addEventListener('DOMContentLoaded', () => {
   // the pin survives reloads.
   const providerPin = document.getElementById('home-provider-pin');
   if (providerPin) {
-    try { providerPin.value = localStorage.getItem('keystone.providerPin') || ''; } catch {}
     providerPin.addEventListener('change', () => {
       try { localStorage.setItem('keystone.providerPin', providerPin.value); } catch {}
     });
+
+    // Build the pin dropdown dynamically from the providers the running server
+    // can actually dispatch to, instead of advertising a hardcoded list and
+    // greying the dead ones out. /api/providers/status reports per-provider
+    // `available` (from process.env) + the default `model`. We list only the
+    // live providers; Auto (the live PCSF-ranked pick) is always present and is
+    // the default. Option VALUES stay in the vocabulary dream-chat understands
+    // (claude/openai/gemini/grok/ollama/keystone-ft) since they forward via
+    // ?provider= and are matched against #provider-select there.
+    //
+    // catalog: dropdown value → { label, bucket } where bucket is the
+    // /api/providers/status key. keystone-ft is the local fine-tune, served
+    // through ollama, so it shares the ollama bucket.
+    const PROVIDER_CATALOG = [
+      { value: 'claude',      label: 'Claude',      bucket: 'anthropic' },
+      { value: 'openai',      label: 'ChatGPT',     bucket: 'openai'    },
+      { value: 'gemini',      label: 'Gemini',      bucket: 'gemini'    },
+      { value: 'grok',        label: 'Grok',        bucket: 'xai'       },
+      { value: 'ollama',      label: 'Local Σ₀',    bucket: 'ollama'    },
+      { value: 'keystone-ft', label: 'Keystone FT', bucket: 'ollama'    },
+    ];
+
+    function addPinOption(entry, model) {
+      const opt = document.createElement('option');
+      opt.value = entry.value;
+      opt.textContent = entry.label;
+      // Surface the concrete model id on hover (skip the placeholder "auto").
+      if (model && model !== 'auto') opt.title = model;
+      providerPin.appendChild(opt);
+    }
+
+    function restorePin(available) {
+      let saved = '';
+      try { saved = localStorage.getItem('keystone.providerPin') || ''; } catch {}
+      // Keep the saved pin only if it's still a live option; otherwise a
+      // previously-pinned-but-now-offline provider would dispatch-fail, so we
+      // fall back to Auto and clear it.
+      if (saved && available.has(saved)) {
+        providerPin.value = saved;
+      } else {
+        providerPin.value = '';
+        if (saved) { try { localStorage.setItem('keystone.providerPin', ''); } catch {} }
+      }
+    }
+
+    (async function buildProviderPin() {
+      let providers = null;
+      try {
+        const r = await fetch('/api/providers/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (r.ok) providers = (await r.json()).providers;
+      } catch { /* status unreachable — fall back to the full catalog below */ }
+
+      const available = new Set(['']); // Auto is always available
+      for (const entry of PROVIDER_CATALOG) {
+        // If status is unreachable we can't tell what's live, so show the whole
+        // catalog (better a pin that may fall back than an Auto-only dropdown).
+        const p = providers && providers[entry.bucket];
+        const isLive = providers ? !!(p && p.available) : true;
+        if (!isLive) continue;
+        addPinOption(entry, p && p.model);
+        available.add(entry.value);
+      }
+      restorePin(available);
+    })();
   }
   function pinnedProviderQS() {
     const v = providerPin && providerPin.value;
@@ -641,27 +706,31 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /* Route picked/dropped files: .docx → chip (improve flow on submit),
-     .pdf → forward to the chat's Knowledge Center upload. Mirrors the
-     dream-chat.html drop handler so both pages behave the same. */
-  function forwardPdf(file) {
-    const reader = new FileReader();
-    reader.onload = function () {
+     everything else (.pdf, images, text, code…) → forward to the chat as an
+     attachment so the LLM can read it directly. Mirrors dream-chat.html. */
+  function forwardAttach(files) {
+    const q = (document.getElementById('home-chat-input').value || '').trim();
+    Promise.all(files.map(f => new Promise(res => {
+      const r = new FileReader();
+      r.onload = () => res({ name: f.name, data: r.result });
+      r.onerror = () => res(null);
+      r.readAsDataURL(f);
+    }))).then(items => {
       try {
-        sessionStorage.setItem('pendingPdf', JSON.stringify({ name: file.name, data: reader.result }));
+        sessionStorage.setItem('pendingAttach', JSON.stringify({ q, files: items.filter(Boolean) }));
       } catch { /* storage full — chat will fall back to its own picker */ }
-      window.location.href = '/dream-chat.html?autoprocess=pdf';
-    };
-    reader.readAsDataURL(file);
+      const qs = pinnedProviderQS(); // '&provider=…' or ''
+      window.location.href = '/dream-chat.html' + (qs ? ('?' + qs.slice(1)) : '');
+    });
   }
 
   function handleHomeFiles(fileList) {
     const files = [...(fileList || [])];
     if (!files.length) return;
     const docx = files.find(f => f.name.toLowerCase().endsWith('.docx'));
-    const pdf  = files.find(f => f.name.toLowerCase().endsWith('.pdf'));
+    const rest = files.filter(f => !f.name.toLowerCase().endsWith('.docx'));
     if (docx) setDocxChip(docx);
-    else if (pdf) forwardPdf(pdf);
-    else document.getElementById('home-chat-input').placeholder = 'Please choose a PDF or Word (.docx) file…';
+    if (rest.length) forwardAttach(rest);
   }
 
   /* "+" attach button → native file picker */
