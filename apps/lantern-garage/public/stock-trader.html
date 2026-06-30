@@ -110,10 +110,10 @@
   .wi-px{font-family:var(--mono);font-size:13px;font-weight:600;margin-top:5px}
   .wi-meta{font-family:var(--mono);font-size:8.5px;color:var(--text2);margin-top:4px;display:flex;flex-wrap:wrap;gap:2px 10px}
   .wi-meta b{color:var(--text1);font-weight:600}
-  .wl-add{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}
-  .wl-add input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:4px 6px;border-radius:3px}
-  .wl-add button{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
-  .wl-add button:hover{color:var(--text0)}
+  .wl-add{display:flex;padding:8px 12px;border-bottom:1px solid var(--border)}
+  /* #1709: single full-width "Add symbol" button → opens the search popup */
+  .wl-add-btn{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:7px 8px;border-radius:4px;cursor:pointer;letter-spacing:.03em}
+  .wl-add-btn:hover{color:var(--text0);background:var(--bg3);border-color:var(--blue)}
   .wl-remove{font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;padding:0 4px;background:none;border:0;line-height:1}
   .wl-remove:hover{color:var(--red)}
   /* ── Ticker cards grid ── */
@@ -304,6 +304,12 @@
   .s0-lvl{font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);margin-top:2px}
   .s0-why{font-size:10px;color:var(--tv-text-secondary);margin-top:3px;font-style:italic}
   .s0-empty{font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);padding:4px 0}
+  /* #1710: "watching" narration lines */
+  .s0-watchhdr{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--tv-text-secondary);margin:8px 0 4px;border-top:1px solid var(--tv-border);padding-top:7px}
+  .s0-watch{font-family:var(--mono);font-size:10px;color:var(--tv-text);padding:4px 8px;margin-bottom:4px;border-left:3px solid var(--blue);border-radius:3px;background:rgba(74,158,255,.06);line-height:1.4}
+  .s0-watch.short{border-left-color:var(--red);background:rgba(255,95,109,.05)}
+  .s0-watch b{color:var(--tv-text);font-weight:700}
+  .s0-eye{margin-right:2px}
   .s0-status{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);padding:2px 0 7px;margin-bottom:6px;border-bottom:1px solid var(--tv-border)}
   .s0-status .pos{color:var(--green)} .s0-status .neg{color:var(--red)}
   /* Agent log */
@@ -374,8 +380,7 @@
 <!-- Sidebar -->
 <div class="sidebar" role="complementary" aria-label="Watchlist">
   <div class="wl-add">
-    <input type="text" id="wlAddInput" aria-label="Add symbol to watchlist" placeholder="Add symbol" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
-    <button onclick="openSymbolSearch(addWatchlistSymbol,{})" aria-label="Search and add a symbol" title="Search symbols">+</button>
+    <button class="wl-add-btn" onclick="openSymbolSearch(addWatchlistSymbol,{})" aria-label="Search and add a symbol" title="Search symbols">+ Add symbol</button>
   </div>
   <div id="wlList"></div>
   <div id="wlInfo" class="wl-info"></div>
@@ -1972,13 +1977,43 @@ function renderSigma0Signals(){
     });
   });
   enters.sort((a,b)=> (b.ev||0)-(a.ev||0));
-  if(!enters.length){ el.innerHTML = statusHtml + '<div class="s0-empty">No actionable entries — scanning every minute.</div>'; return; }
-  el.innerHTML = statusHtml + enters.slice(0,6).map(i=>`
+
+  // #1710: narrate what the agent is actively WATCHING — tickers with a direction
+  // that reached the EV gate (SKIP) or are sitting in a zone, so the panel shows
+  // live activity ("Looking for a LONG on TSLA …") even when nothing has fired.
+  const enterSet = new Set(enters.map(e=>e.ticker));
+  // Parse the latest Σ₀ decision lines from the agent feed (newest-first) — each
+  // SKIP line carries direction + p_win + why, so we narrate what's being evaluated.
+  const watching = [];
+  const seenW = new Set();
+  for(const l of (window._sigLogs || [])){
+    const body = String(l.body || l.action || '');
+    const m = body.match(/^([A-Z][\w.\/]*)\s+(LONG|SHORT)\s+EV\s+([+-]?\d+(?:\.\d+)?)R\s+p_win\s+(\d+(?:\.\d+)?)\b[^|]*?\bSKIP\b\s*\|?\s*(.*)$/);
+    if(!m) continue;
+    const tk = m[1];
+    if(seenW.has(tk) || enterSet.has(tk)) continue;
+    seenW.add(tk);
+    watching.push({ ticker:tk, isShort:m[2]==='SHORT', label:m[2], p:Math.round(parseFloat(m[4])*100), why:(m[5]||'').trim().slice(0,42) });
+  }
+  watching.sort((a,b)=> (b.p||0)-(a.p||0));
+
+  const entersHtml = enters.slice(0,6).map(i=>`
     <div class="s0-sig${i.isShort?' short':''}">
       <div class="s0-head">${i.label} ${newsEsc(i.ticker)} — ENTER @ $${i.entry}</div>
       <div class="s0-lvl">stop $${i.stop} · target $${i.target} · R:R ${i.rr} · EV ${i.ev>=0?'+':''}${i.ev}R · win ${Math.round((i.p||0)*100)}%</div>
       <div class="s0-why">${newsEsc(i.why)}</div>
     </div>`).join('');
+  const watchHtml = watching.slice(0,6).map(w=>`
+    <div class="s0-watch${w.isShort?' short':''}">
+      <span class="s0-eye">👀</span> Looking for a <b>${w.label}</b> on <b>${newsEsc(w.ticker)}</b>${w.why?` — ${newsEsc(w.why)}`:''} · ${w.p}%
+    </div>`).join('');
+
+  if(!enters.length && !watching.length){
+    el.innerHTML = statusHtml + '<div class="s0-empty">Scanning every minute — no setups forming yet.</div>';
+    return;
+  }
+  el.innerHTML = statusHtml + entersHtml
+    + (watching.length ? `<div class="s0-watchhdr">Watching ${watching.length} setup${watching.length===1?'':'s'}</div>` + watchHtml : '');
 }
 
 let pricesLoading = false;
@@ -2102,8 +2137,10 @@ async function loadAgentLog(){
   try{
     const r = await fetch('/api/trading/agent-log');
     const logs = await r.json();
-    if(!Array.isArray(logs)||logs.length===lastLogLen) return;
+    window._sigLogs = Array.isArray(logs) ? logs : [];   // #1710: feed the watching narration
+    if(!Array.isArray(logs)||logs.length===lastLogLen){ renderSigma0Signals(); return; }
     lastLogLen = logs.length;
+    renderSigma0Signals();
     const cls = {grok:'log-grok',claude:'log-claude',risk:'log-risk',system:'log-system',trail:'log-trail'};
     // Newest first (#1626): the API returns newest-first, so render as-is (the old
     // .reverse() put the latest scans at the BOTTOM, forcing a scroll to see them).

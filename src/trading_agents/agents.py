@@ -7927,8 +7927,10 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             "rr":     round(_tr, 2),
         }
         analysis["sigma0"] = _ev
+        _side = analysis.get("direction", "NEUTRAL")
+        _sidelbl = "LONG" if _side == "BULLISH" else "SHORT" if _side == "BEARISH" else "FLAT"
         log_agent("system", "SIGMA0",
-            f"{ticker} EV {_ev['ev_r']:+.2f}R p_win {_ev['p_win']:.2f} → {_ev['decision']} "
+            f"{ticker} {_sidelbl} EV {_ev['ev_r']:+.2f}R p_win {_ev['p_win']:.2f} → {_ev['decision']} "
             f"| {', '.join(_ev['why'])}")
         if os.getenv("SIGMA0_EV", "1") != "0":
             if _ev["decision"] == "SKIP":
