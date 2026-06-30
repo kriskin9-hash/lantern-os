@@ -420,3 +420,6 @@ apps/lantern-garage/public/assets/gage/**/*.mp4
 apps/lantern-garage/public/assets/gage/**/*.webp
 apps/lantern-garage/public/assets/gage/**/*.png
 apps/lantern-garage/public/assets/gage/**/*.gif
+
+# Σ₀ scan cache (runtime state — reuses LLM reads across scans)
+data/lantern-garage/trading/scan-llm-cache.json

@@ -8660,6 +8660,72 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             result["sigma0"] = analysis["sigma0"]
     return result
 
+# ── Σ₀ scan cache (Remember-stage retrieval) ──────────────────────────────────
+# The batch Grok read is the recurring per-scan cost: it runs for every ticker
+# every minute, even when nothing moved. When a ticker's price is essentially
+# unchanged since its last read, the directional analysis is too — so reuse it
+# instead of paying for the model again. This is the convergence-router pattern:
+# retrieve the prior decision rather than recompute it. SAFE because the grounding
+# signals (zone / 1-min structure / pattern / EV) are still recomputed fresh
+# downstream every scan, and ENTER requires fresh grounding
+# (convergence_ev.has_evidence) — a reused read can never manufacture a trade. The
+# model is spent only when price actually moves. Kill-switch: SIGMA0_SCAN_CACHE=0.
+_SCAN_CACHE_ON   = os.getenv("SIGMA0_SCAN_CACHE", "1") != "0"
+_SCAN_CACHE_BAND = float(os.getenv("SIGMA0_SCAN_CACHE_BAND", "0.0015"))  # 0.15% price move = "unchanged"
+_SCAN_CACHE_TTL  = float(os.getenv("SIGMA0_SCAN_CACHE_TTL", "600"))      # re-read at least every 10 min
+# The engine is spawned as a fresh process per scan (see lib/trader-agent.js), so
+# module memory won't survive between scans — the cache lives on disk.
+_SCAN_CACHE_FILE = os.path.join(os.path.dirname(__file__), "..", "..",
+                                "data", "lantern-garage", "trading", "scan-llm-cache.json")
+
+
+def _scan_cache_load() -> dict:
+    """ticker -> [price, analysis, ts]. Missing/corrupt file → empty."""
+    if not _SCAN_CACHE_ON:
+        return {}
+    try:
+        with open(_SCAN_CACHE_FILE) as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
+def _scan_cache_save(cache: dict):
+    """Persist atomically, dropping entries older than 3×TTL to bound the file."""
+    if not _SCAN_CACHE_ON:
+        return
+    try:
+        now = datetime.now().timestamp()
+        cache = {t: v for t, v in cache.items()
+                 if isinstance(v, (list, tuple)) and len(v) == 3 and (now - v[2]) < _SCAN_CACHE_TTL * 3}
+        os.makedirs(os.path.dirname(_SCAN_CACHE_FILE), exist_ok=True)
+        tmp = _SCAN_CACHE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(cache, f)
+        os.replace(tmp, _SCAN_CACHE_FILE)
+    except Exception:
+        pass
+
+
+def _scan_cache_partition(targets: list, prices: dict, cache: dict):
+    """Split targets into (fresh, cached_results). A ticker is served from cache
+    when its price moved < BAND since its cached read AND it is younger than TTL."""
+    if not _SCAN_CACHE_ON:
+        return list(targets), {}
+    now = datetime.now().timestamp()
+    fresh, cached = [], {}
+    for t in targets:
+        px = prices.get(t, 0) or 0
+        ent = cache.get(t)
+        if (ent and len(ent) == 3 and px > 0 and ent[0] > 0
+                and (now - ent[2]) < _SCAN_CACHE_TTL
+                and abs(px / ent[0] - 1.0) < _SCAN_CACHE_BAND):
+            cached[t] = dict(ent[1])       # reuse the prior directional read
+        else:
+            fresh.append(t)
+    return fresh, cached
+
+
 # ── Main scan ─────────────────────────────────────────────────────────────────
 
 def scan_all(watchlist: list, notify_fn=None) -> list:
@@ -8812,7 +8878,21 @@ def scan_all(watchlist: list, notify_fn=None) -> list:
         # Filter to tickers with valid prices
         valid_targets = [t for t in scan_targets if prices.get(t, 0) > 0]
         if valid_targets:
-            grok_results = batch_grok_analysis(valid_targets, prices)
+            # Σ₀ cache: only re-read tickers whose price actually moved; reuse the
+            # rest. The expensive batch shrinks (or skips) when the tape is quiet.
+            _cache = _scan_cache_load()
+            fresh_targets, cached_results = _scan_cache_partition(valid_targets, prices, _cache)
+            grok_results = batch_grok_analysis(fresh_targets, prices) if fresh_targets else {}
+            _now_ts = datetime.now().timestamp()
+            for _t, _a in list(grok_results.items()):           # cache raw, pre-rotation
+                if prices.get(_t, 0) > 0 and isinstance(_a, dict):
+                    _cache[_t] = [prices[_t], _a, _now_ts]
+            _scan_cache_save(_cache)
+            grok_results.update(cached_results)
+            if cached_results:
+                log_agent("system", "SCANNER",
+                    f"Σ₀ cache: reused {len(cached_results)}/{len(valid_targets)} LLM "
+                    f"reads (price unchanged), {len(fresh_targets)} re-analyzed")
         else:
             grok_results = {}
 

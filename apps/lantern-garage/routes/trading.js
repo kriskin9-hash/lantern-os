@@ -41,6 +41,18 @@ try {
 // The shared cache means page polls in the same minute reuse this scan rather
 // than triggering a second one. Kill-switch: TRADER_AUTOSCAN=0.
 const AUTOSCAN_MS = parseInt(process.env.TRADER_AUTOSCAN_MS || '60000');
+// Off-hours the only thing scanning is crypto (stocks are market-gated in the
+// engine) and it moves slowly — so back the cadence off to save API spend. The
+// engine still uses the authoritative Alpaca clock to decide what to trade; this
+// is cadence only. Kill-switch: set TRADER_AUTOSCAN_CLOSED_MS=60000 to disable.
+const AUTOSCAN_CLOSED_MS = parseInt(process.env.TRADER_AUTOSCAN_CLOSED_MS || '300000'); // 5 min
+function _isUsMarketHours() {
+  const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const day = et.getDay();                       // 0 Sun .. 6 Sat
+  if (day === 0 || day === 6) return false;
+  const mins = et.getHours() * 60 + et.getMinutes();
+  return mins >= 570 && mins < 960;              // 09:30 (570) .. 16:00 (960) ET
+}
 let _autoscanStopped = false;
 async function _autoscanTick() {
   if (_autoscanStopped || !traderAgent) return;
@@ -52,7 +64,7 @@ async function _autoscanTick() {
   } catch (e) {
     console.error('[Trading] autoscan failed:', e.message);
   } finally {
-    if (!_autoscanStopped) setTimeout(_autoscanTick, AUTOSCAN_MS);
+    if (!_autoscanStopped) setTimeout(_autoscanTick, _isUsMarketHours() ? AUTOSCAN_MS : AUTOSCAN_CLOSED_MS);
   }
 }
 if (traderAgent && process.env.TRADER_AUTOSCAN !== '0') {
