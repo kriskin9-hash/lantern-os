@@ -118,6 +118,28 @@ module.exports = async (req, res, url, deps) => {
     return true;
   }
 
+  // POST /api/convergence/pr-action — in-chat review of an autowork draft PR (#1503).
+  // Body: { prUrl } (or { repo, pr }) + { action: "approve" | "discard" }.
+  //   approve → mark ready + squash-merge (the verified, tests-passed path)
+  //   discard → close the PR + delete its branch
+  // Rework is handled client-side (it just re-runs autowork on the same issue).
+  if (pathname === "/api/convergence/pr-action" && req.method === "POST") {
+    try {
+      const body = JSON.parse((await collectRequestBody(req)) || "{}");
+      const action = String(body.action || "").toLowerCase();
+      if (action !== "approve" && action !== "discard") {
+        sendJson(res, { ok: false, error: "action must be 'approve' or 'discard'" }, 400);
+        return true;
+      }
+      const { runPrAction } = require("../lib/pr-actions");
+      const result = await runPrAction({ prUrl: body.prUrl, repo: body.repo, pr: body.pr }, action);
+      sendJson(res, result, result.ok ? 200 : (result.error === "bad_target" ? 400 : 502));
+    } catch (err) {
+      sendJson(res, { ok: false, error: err.message }, 500);
+    }
+    return true;
+  }
+
   // GET /api/convergence/status — live loop state (Converge stage) for the chat UX
   if (pathname === "/api/convergence/status" && req.method === "GET") {
     try {

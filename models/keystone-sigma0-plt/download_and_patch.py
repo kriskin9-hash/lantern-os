@@ -55,7 +55,12 @@ def main() -> int:
         local_dir=str(out),
         allow_patterns=[
             "*.safetensors", "*.safetensors.index.json",
-            "tokenizer*", "*.model", "special_tokens_map.json",
+            # "tokenizer*" misses the custom tokenizer CLASS file (tokenization_*.py),
+            # which tokenizer_config.json's auto_map needs under trust_remote_code —
+            # without it AutoTokenizer.from_pretrained raises "does not appear to have a
+            # file named tokenization_iquestcoder.py". We reuse the vendor tokenizer
+            # (only config + modeling are ours), so it must be downloaded.
+            "tokenizer*", "tokenization_*.py", "*.model", "special_tokens_map.json",
             "added_tokens.json", "chat_template.jinja", "generation_config.json",
             "config.json",
         ],

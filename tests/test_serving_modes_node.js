@@ -47,32 +47,44 @@ ok("OURO_NATIVE=1/true/yes opts into DEEP mode", () => {
   delete process.env.OURO_NATIVE;
 });
 
-ok("FAST decode params match issue #729", () => {
+ok("FAST decode params strengthened for anti-collapse (#1609)", () => {
   const dp = serving.getDecodeParams(serving.FAST_MODE);
-  assert.strictEqual(dp.top_p, 0.95);
-  assert.strictEqual(dp.frequency_penalty, 0.5);
-  assert.strictEqual(dp.repetition_penalty, 1.1);
-  assert.strictEqual(dp.repeat_last_n, 64);
+  assert.strictEqual(dp.top_p, 0.92);
+  assert.strictEqual(dp.frequency_penalty, 0.6);
+  assert.strictEqual(dp.repetition_penalty, 1.18);
+  assert.strictEqual(dp.repeat_last_n, 256);
 });
 
-ok("DEEP decode params are gentler", () => {
+// The local-Ollama degraded path is where small models spiral into repetition (#1609);
+// lock in a minimum anti-repetition signal so this can't silently regress to the weak
+// 1.1 / 64 that let the loops through.
+ok("FAST anti-repetition meets the minimum strength bar (#1609)", () => {
+  const dp = serving.getDecodeParams(serving.FAST_MODE);
+  assert.ok(dp.repetition_penalty >= 1.15, `repeat_penalty ${dp.repetition_penalty} too weak`);
+  assert.ok(dp.repeat_last_n >= 256, `repeat_last_n ${dp.repeat_last_n} window too short`);
+  assert.ok(dp.top_p <= 0.95, `top_p ${dp.top_p} too loose`);
+});
+
+ok("DEEP decode params are gentler than FAST but still widened", () => {
   const dp = serving.getDecodeParams(serving.DEEP_MODE);
+  const fast = serving.getDecodeParams(serving.FAST_MODE);
   assert.strictEqual(dp.top_p, 0.98);
-  assert.strictEqual(dp.frequency_penalty, 0.2);
+  assert.ok(dp.repetition_penalty < fast.repetition_penalty, "DEEP must be gentler than FAST");
+  assert.ok(dp.repeat_last_n >= 256);
 });
 
 ok("Ollama gets repeat_penalty form (no OpenAI frequency_penalty)", () => {
   const opts = serving.applyOllamaDecodeParams({});
-  assert.strictEqual(opts.top_p, 0.95);
-  assert.strictEqual(opts.repeat_penalty, 1.1);
-  assert.strictEqual(opts.repeat_last_n, 64);
+  assert.strictEqual(opts.top_p, 0.92);
+  assert.strictEqual(opts.repeat_penalty, 1.18);
+  assert.strictEqual(opts.repeat_last_n, 256);
   assert.ok(!("frequency_penalty" in opts), "Ollama must not receive frequency_penalty");
 });
 
 ok("OpenAI-compatible providers get top_p + frequency_penalty", () => {
   const body = serving.applyOpenAIDecodeParams({ model: "m", messages: [] });
-  assert.strictEqual(body.top_p, 0.95);
-  assert.strictEqual(body.frequency_penalty, 0.5);
+  assert.strictEqual(body.top_p, 0.92);
+  assert.strictEqual(body.frequency_penalty, 0.6);
   assert.strictEqual(body.model, "m"); // existing fields preserved
 });
 
@@ -80,7 +92,7 @@ ok("DEEP mode flows through the apply helpers", () => {
   process.env.OURO_NATIVE = "1";
   const body = serving.applyOpenAIDecodeParams({});
   assert.strictEqual(body.top_p, 0.98);
-  assert.strictEqual(body.frequency_penalty, 0.2);
+  assert.strictEqual(body.frequency_penalty, 0.3);
   delete process.env.OURO_NATIVE;
 });
 

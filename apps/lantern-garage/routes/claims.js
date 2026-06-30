@@ -39,6 +39,15 @@ module.exports = async function claimsRoutes(req, res, url, deps) {
         reviewed_at: p.review?.reviewed_at,
         signed: !!(p.signature?.signature),
         exportable: canExportClaim(p),
+        // Evidence tuple surfaced for the Grounding Diff viewer (#1420) so the
+        // [claim · evidence · source · confidence] grid renders in one call instead
+        // of an N+1 fetch per packet. Additive — existing consumers ignore these.
+        safe_wording: p.claim?.safe_wording || "",
+        confidence: typeof p.evidence?.confidence === "number" ? p.evidence.confidence : null,
+        grounded_at: p.evidence?.grounded_at || null,
+        sources: Array.isArray(p.evidence?.sources)
+          ? p.evidence.sources.map((s) => ({ type: s.type || "unknown", excerpt: String(s.excerpt || "").slice(0, 400) }))
+          : [],
       })),
     });
     return true;

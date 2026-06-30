@@ -17,7 +17,7 @@ WSL/Docker env that already grades the result. That integration is the next step
 """
 from __future__ import annotations
 
-import argparse, http.client, json, subprocess, sys, time
+import argparse, http.client, json, re, subprocess, sys, time
 
 MAX_FEEDBACK = 1200  # cap the failure text fed back into the next attempt
 
@@ -83,10 +83,68 @@ def ollama_propose(model, num_ctx, timeout, host="127.0.0.1", port=11434):
     return propose
 
 
+def _patch_target_paths(patch):
+    """Yield the file paths a unified/git diff would write to, with a/ b/ prefixes stripped.
+
+    Looks at the authoritative apply targets (--- / +++ hunk headers) plus the git
+    extended headers (diff --git, rename to, copy to). /dev/null (new/deleted file
+    sentinel) is skipped. Trailing tab+timestamp on ---/+++ lines is trimmed."""
+    for raw in patch.splitlines():
+        path = None
+        if raw.startswith("--- ") or raw.startswith("+++ "):
+            path = raw[4:].split("\t", 1)[0].strip()
+        elif raw.startswith("diff --git "):
+            # "diff --git a/x b/y" — best-effort; the ---/+++ lines are the real targets,
+            # this is a belt-and-suspenders catch for malformed patches.
+            for tok in raw[len("diff --git "):].split():
+                yield from _strip_ab(tok)
+            continue
+        elif raw.startswith(("rename to ", "copy to ", "rename from ", "copy from ")):
+            path = raw.split(" ", 2)[2].strip()
+        if path is None:
+            continue
+        # git quotes paths with special chars: "..\\evil"
+        if len(path) >= 2 and path[0] == '"' and path[-1] == '"':
+            path = path[1:-1]
+        if path in ("/dev/null", ""):
+            continue
+        yield from _strip_ab(path)
+
+
+def _strip_ab(path):
+    """Strip a single leading a/ or b/ diff prefix and yield the remainder (if any)."""
+    if path.startswith(("a/", "b/")):
+        path = path[2:]
+    if path and path not in ("/dev/null",):
+        yield path
+
+
+def patch_escapes_repo(patch):
+    """True if any diff target path is absolute or escapes the repo via parent traversal.
+
+    A crafted unified diff with `../` components or an absolute/drive-letter path could
+    make `git apply` write outside the cloned repo. Reject those before applying (#1592)."""
+    if not isinstance(patch, str):
+        return False
+    for path in _patch_target_paths(patch):
+        norm = path.replace("\\", "/")
+        # absolute: POSIX (/x), Windows drive (C:/x), or UNC (//host)
+        if norm.startswith("/") or re.match(r"^[A-Za-z]:/", norm):
+            return True
+        # parent-directory traversal in any component
+        if ".." in norm.split("/"):
+            return True
+    return False
+
+
 def git_apply_and_test(repo_dir, test_cmd):
     """Build an `apply_and_test` that applies a patch in a cloned repo and runs the test command.
     Run this INSIDE the instance's env (the swebench container) so the deps exist."""
     def apply_and_test(patch):
+        # Security (#1592): a model-proposed patch is untrusted. Reject path traversal /
+        # absolute targets before `git apply` so it can't write outside repo_dir.
+        if patch_escapes_repo(patch):
+            return {"applied": False, "passed": False, "output": "patch rejected: path traversal"}
         ap = subprocess.run(["git", "apply", "-"], cwd=repo_dir, input=patch,
                             capture_output=True, text=True)
         if ap.returncode != 0:
@@ -148,6 +206,24 @@ def selftest():
     r = run_agent_loop("p", "c", lambda p, c, h: "", test_good_only, max_attempts=2)
     ok = (not r["resolved"]) and r["verdict"] == "no_patch"
     print(f"[selftest] empty proposals -> no_patch     -> {ok}"); fails += 0 if ok else 1
+
+    # 6) path-traversal / absolute patches are rejected BEFORE git apply runs (#1592).
+    # repo_dir is a path that does not exist: the guard must return first, so subprocess
+    # is never reached. A benign in-repo patch must NOT be falsely rejected by the guard.
+    guard = git_apply_and_test("/nonexistent-repo-dir-xyz", "true")
+    evil_traversal = "--- a/../../etc/passwd\n+++ b/../../etc/passwd\n@@ -1 +1 @@\n-x\n+y\n"
+    evil_absolute  = "--- a/x\n+++ /etc/cron.d/evil\n@@ -0,0 +1 @@\n+pwned\n"
+    evil_winabs    = "diff --git a/x b/x\n--- a/x\n+++ b/C:/Windows/System32/evil.dll\n@@ -1 +1 @@\n-x\n+y\n"
+    benign         = "--- a/src/app.py\n+++ b/src/app.py\n@@ -1 +1 @@\n-x\n+y\n"
+    new_file       = "--- /dev/null\n+++ b/src/new.py\n@@ -0,0 +1 @@\n+ok\n"
+    r1 = guard(evil_traversal); r2 = guard(evil_absolute); r3 = guard(evil_winabs)
+    ok = (r1 == {"applied": False, "passed": False, "output": "patch rejected: path traversal"}
+          and r2["output"] == "patch rejected: path traversal"
+          and r3["output"] == "patch rejected: path traversal"
+          and patch_escapes_repo(evil_traversal) and patch_escapes_repo(evil_absolute)
+          and patch_escapes_repo(evil_winabs)
+          and not patch_escapes_repo(benign) and not patch_escapes_repo(new_file))
+    print(f"[selftest] path-traversal patch rejected   -> {ok}"); fails += 0 if ok else 1
 
     print("SELFTEST:", "PASS" if fails == 0 else f"FAIL ({fails})")
     sys.exit(0 if fails == 0 else 1)
