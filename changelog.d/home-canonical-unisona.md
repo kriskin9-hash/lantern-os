@@ -1,0 +1,1 @@
+- feat(home): home now branded **unisona.ai** — visible header/title/hero/footer read unisona.ai, plus canonical + Open Graph/Twitter meta pointing at https://www.unisona.ai/.
