@@ -65,7 +65,25 @@ def test_every_decision_carries_an_auditable_record():
     r = _ev(in_zone=True, zone_strength=80, structure_shifted=True, pattern_grade="A")
     rec = r["record"]
     assert rec["type"] == "convergence_record"
-    assert set(rec["evidence"]) == {"llm", "zone", "structure", "pattern", "trend", "news"}
+    assert set(rec["evidence"]) == {"grok", "claude", "zone", "structure", "pattern", "trend", "news"}
     assert rec["confidence"]["p_win"] == r["p_win"]
     assert rec["result"] is None  # filled on close (Verify/Converge)
     assert len(r["why"]) >= 1
+
+
+def test_grok_and_claude_are_separate_graded_signals():
+    # The Grok/Claude council is absorbed: each is its own signal, not a merged
+    # `llm` blob. A confirming Claude raises p_win over a neutral one, holding
+    # Grok fixed — so the council can grade each model's realized edge separately.
+    neutral_claude = _ev(grok_conf=60, claude_conf=50, in_zone=True, zone_strength=70)
+    strong_claude  = _ev(grok_conf=60, claude_conf=85, in_zone=True, zone_strength=70)
+    assert "grok" in neutral_claude["signals"] and "claude" in neutral_claude["signals"]
+    assert "llm" not in neutral_claude["signals"]
+    assert strong_claude["p_win"] > neutral_claude["p_win"]
+
+
+def test_llm_conf_is_backcompat_alias_for_grok():
+    # Legacy callers passing llm_conf still work — it maps to grok, claude neutral.
+    r = _ev(llm_conf=80, in_zone=True, zone_strength=70)
+    assert r["signals"]["grok"] == 0.8
+    assert r["signals"]["claude"] == 0.5
