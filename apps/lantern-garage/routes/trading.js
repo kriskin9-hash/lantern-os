@@ -548,6 +548,34 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/logo?symbol=SPY — brand-logo proxy. Prefers logo.dev (crisp,
+  // icon-style, high-res) when LOGODEV_TOKEN is set, else falls back to FMP. Served
+  // same-origin so the page can sample luminance without CORS taint. (#1713)
+  if (url.pathname === '/api/trading/logo' && req.method === 'GET') {
+    const sym = (url.searchParams.get('symbol') || '').trim().toUpperCase();
+    if (!sym || !/^[A-Z0-9.\-]{1,12}$/.test(sym)) { res.writeHead(400); res.end('bad symbol'); return true; }
+    const https = require('https');
+    const token = process.env.LOGODEV_TOKEN || '';
+    const fmpUrl = `https://financialmodelingprep.com/image-stock/${encodeURIComponent(sym)}.png`;
+    const ldUrl = token
+      ? `https://img.logo.dev/ticker/${encodeURIComponent(sym)}?token=${encodeURIComponent(token)}&size=128&format=png&retina=true`
+      : '';
+    const pipeFrom = (srcUrl, onFail) => {
+      const rq = https.get(srcUrl, (up) => {
+        const ct = up.headers['content-type'] || '';
+        if (up.statusCode >= 200 && up.statusCode < 300 && ct.startsWith('image')) {
+          res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*' });
+          up.pipe(res);
+        } else { up.resume(); onFail(); }
+      });
+      rq.on('error', onFail);
+      rq.setTimeout(8000, () => { rq.destroy(); onFail(); });
+    };
+    const sendFmp = () => pipeFrom(fmpUrl, () => { if (!res.headersSent) { res.writeHead(404); res.end(); } });
+    if (ldUrl) pipeFrom(ldUrl, sendFmp); else sendFmp();
+    return true;
+  }
+
   // GET /api/trading/symbol-stats?ticker= — returns/volume/technicals from Yahoo
   // daily bars, for the expanded info panel (#1711).
   if (url.pathname === '/api/trading/symbol-stats' && req.method === 'GET') {

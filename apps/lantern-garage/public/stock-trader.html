@@ -133,7 +133,7 @@
   /* Circular brand badge (TradingView-style). Background is chosen adaptively per
      logo (adaptLogoBg): dark by default so colour logos pop, light only for
      dark-monochrome marks (e.g. Intel) that would vanish on dark. */
-  .wl-logo{width:22px;height:22px;border-radius:50%;flex:0 0 auto;object-fit:contain;padding:2px;box-sizing:border-box;background:#11161d;border:1px solid rgba(255,255,255,.10)}
+  .wl-logo{width:24px;height:24px;border-radius:50%;flex:0 0 auto;object-fit:contain;padding:3px;box-sizing:border-box;background:#11161d;border:1px solid rgba(255,255,255,.10);image-rendering:auto}
   .wl-logo.on-light{background:#eef1f4;border-color:rgba(0,0,0,.12)}
   .wl-logo.ph{display:flex;align-items:center;justify-content:center;object-fit:none;padding:0;background:linear-gradient(135deg,#2b3340,#1a2029);color:var(--text1);font-family:var(--mono);font-size:7px;font-weight:700;border-color:rgba(255,255,255,.08)}
   .wl-item:hover,.wl-item.active{background:var(--bg2)}
@@ -1428,7 +1428,7 @@ function renderSymResults(){
     const esc=s=>String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
     const ph=`<div class='sym-logo ph'>${esc(a.symbol).slice(0,3)}</div>`;
     const logo = cr ? ph
-      : `<img class="sym-logo${_logoBg[a.symbol]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${esc(a.symbol)}" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(a.symbol)}.png" alt="" onload="adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph.replace(/"/g,'&quot;')}&quot;">`;
+      : `<img class="sym-logo${_logoBg[a.symbol]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${esc(a.symbol)}" src="/api/trading/logo?symbol=${encodeURIComponent(a.symbol)}" alt="" onload="adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph.replace(/"/g,'&quot;')}&quot;">`;
     return `<div class="sym-row${i===_symSel?' sel':''}" data-i="${i}" onclick="pickSym(${i})">
       ${logo}<span class="sym-sym">${esc(a.symbol)}</span>
       <span class="sym-name">${esc(a.name)}</span>
@@ -1628,7 +1628,7 @@ const _wlIsCrypto = (tk)=> /USD$/.test(tk) && tk.length>=6;
 function tickerLogoHtml(ticker){
   const ph = `<span class='wl-logo ph'>${(ticker||'').slice(0,3)}</span>`;
   if(_wlIsCrypto(ticker)) return ph;
-  return `<img class="wl-logo${_logoBg[ticker]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${ticker}" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png" alt="" onload="adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph}&quot;">`;
+  return `<img class="wl-logo${_logoBg[ticker]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${ticker}" src="/api/trading/logo?symbol=${encodeURIComponent(ticker)}" alt="" onload="adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph}&quot;">`;
 }
 // Pick the badge background per logo by sampling its luminance (FMP sends CORS, so
 // the canvas isn't tainted). Dark-monochrome marks (Intel) get a light badge;
