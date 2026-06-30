@@ -58,7 +58,12 @@
   .site-footer{display:none}         /* full-screen app has its own footer; suppress the injected global one (#1579) */
   /* ── Layout ── */
   /* Leave room for the injected global site-nav (52px sticky bar, #1579). */
-  .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px minmax(0,1fr) clamp(220px,34vh,460px);height:calc(100vh - 52px)}
+  .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px minmax(0,1fr) var(--footer-h, clamp(220px,34vh,460px));height:calc(100vh - 52px)}
+  /* Draggable divider to resize the bottom panel section (#1630) */
+  .footer-resize{position:absolute;top:-4px;left:0;right:0;height:8px;cursor:ns-resize;z-index:30}
+  .footer-resize::before{content:"";position:absolute;left:50%;top:3px;transform:translateX(-50%);width:46px;height:3px;border-radius:3px;background:var(--tv-border)}
+  .footer-resize:hover::before{background:var(--tv-text-secondary)}
+  body.resizing-footer{cursor:ns-resize;user-select:none}
   .header{grid-column:1/-1;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
   .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow-y:auto;padding:8px 0}
   .main{overflow-y:auto;padding:12px;background:var(--bg0)}
@@ -328,7 +333,8 @@
 </div>
 
 <!-- Footer -->
-<div class="footer">
+<div class="footer" style="position:relative">
+  <div class="footer-resize" id="footerResize" title="Drag to resize"></div>
   <div class="fpanel">
     <div class="panel-title">⚡ Σ₀ Signals — when to enter</div>
     <div id="sigma0Signals"></div>
@@ -1973,8 +1979,39 @@ async function fullRefresh(){
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Drag-to-resize the bottom panel section (#1630). The footer row height is a CSS
+// var on .layout; the handle drags it between 120px and 75vh, and it persists.
+function initFooterResize(){
+  const handle = document.getElementById('footerResize');
+  const layout = document.querySelector('.layout');
+  if(!handle || !layout) return;
+  const saved = parseInt(localStorage.getItem('trader.footerH')||'',10);
+  if(saved>0) layout.style.setProperty('--footer-h', saved+'px');
+  let dragging=false;
+  const onMove=(e)=>{
+    if(!dragging) return;
+    const y = (e.touches&&e.touches[0]) ? e.touches[0].clientY : e.clientY;
+    const h = Math.max(120, Math.min(window.innerHeight*0.75, window.innerHeight - y));
+    layout.style.setProperty('--footer-h', h+'px');
+  };
+  const onUp=()=>{
+    if(!dragging) return;
+    dragging=false; document.body.classList.remove('resizing-footer');
+    const px = parseInt(layout.style.getPropertyValue('--footer-h'),10);
+    if(px>0){ try{ localStorage.setItem('trader.footerH', String(px)); }catch(e){} }
+    window.removeEventListener('mousemove',onMove); window.removeEventListener('mouseup',onUp);
+    window.removeEventListener('touchmove',onMove); window.removeEventListener('touchend',onUp);
+  };
+  const start=(e)=>{ e.preventDefault(); dragging=true; document.body.classList.add('resizing-footer');
+    window.addEventListener('mousemove',onMove); window.addEventListener('mouseup',onUp);
+    window.addEventListener('touchmove',onMove,{passive:false}); window.addEventListener('touchend',onUp); };
+  handle.addEventListener('mousedown',start);
+  handle.addEventListener('touchstart',start,{passive:false});
+}
+
 function startDashboard(){
   syncRangeButtons(chartTimeframe);
+  initFooterResize();
   // Restore the saved chart-grid layout (#1628).
   const ls = document.getElementById('chartLayoutSelect');
   if(ls){ ls.value = String(slotCount); }
