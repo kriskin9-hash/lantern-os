@@ -125,8 +125,13 @@
   .card-ticker:hover{border-bottom-color:var(--tv-text-secondary)}
   /* Per-slot symbol editor input (#1628) */
   .slot-sym{font-family:var(--mono);font-size:14px;font-weight:600;width:84px;background:var(--bg0);color:var(--tv-text);border:1px solid var(--tv-accent);border-radius:3px;padding:1px 5px;text-transform:uppercase;outline:none}
-  /* 1-chart layout (#1628 + zoom #1629): a single tall chart filling the grid */
-  .cards-grid.grid-single .card .zone-ladder{height:calc(100vh - 340px);min-height:380px}
+  /* Fixed N-slot layouts (#1628/#1629): the grid fills the .main area exactly and
+     every chart flexes to fill its cell — no fixed-height cards leaving empty
+     space below, and no chart bleeding under the footer. Rows/cols set in JS. */
+  .main.main-fixed{overflow:hidden}
+  .cards-grid.grid-fixed{height:100%;gap:8px}
+  .cards-grid.grid-fixed .card{display:flex;flex-direction:column;min-height:0;grid-column:auto!important;opacity:1}
+  .cards-grid.grid-fixed .card .zone-ladder{flex:1 1 auto;height:auto!important;min-height:0;margin-bottom:6px}
   .card-price{font-family:var(--mono);font-size:12px;color:var(--text1)}
   /* Tick-flash (#1627): on each price change, flash green/red for ~1s then fade
      back to the normal colour. Normal state is untouched. */
@@ -1221,10 +1226,21 @@ function visibleTickers(){
 function applyGridCols(){
   const grid = document.getElementById('cardsGrid');
   if(!grid) return;
-  grid.style.gridTemplateColumns = slotCount
-    ? `repeat(${SLOT_COLS[slotCount] || Math.ceil(Math.sqrt(slotCount))},1fr)`
-    : 'repeat(auto-fill,minmax(340px,1fr))';
-  grid.classList.toggle('grid-single', slotCount === 1);   // 1 chart → tall (also serves zoom #1629)
+  const main = document.querySelector('.main');
+  if(slotCount){
+    const cols = SLOT_COLS[slotCount] || Math.ceil(Math.sqrt(slotCount));
+    const rows = Math.ceil(slotCount / cols);
+    grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+    grid.style.gridTemplateRows    = `repeat(${rows},1fr)`;   // rows fill the height equally
+    grid.classList.add('grid-fixed');
+    grid.classList.toggle('grid-single', slotCount === 1);
+    if(main) main.classList.add('main-fixed');
+  } else {
+    grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(340px,1fr))';
+    grid.style.gridTemplateRows    = '';
+    grid.classList.remove('grid-fixed','grid-single');
+    if(main) main.classList.remove('main-fixed');
+  }
 }
 function persistSlots(){
   try{ localStorage.setItem('trader.slotCount', String(slotCount)); localStorage.setItem('trader.chartSlots', JSON.stringify(chartSlots)); }catch(e){}
