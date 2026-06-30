@@ -189,6 +189,27 @@
   .btn-sell.sig-on{background:rgba(255,95,109,.30);border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset,0 0 10px rgba(255,95,109,.25)}
   /* #1696: buttons stay vibrant — Σ₀ no longer mutes them (sig-off is a no-op). */
   .order-ticket button.sig-off{opacity:1;filter:none}
+  /* ── Symbol-search popup (#1692) ── */
+  .sym-bg{position:fixed;inset:0;z-index:1200;display:flex;align-items:flex-start;justify-content:center;background:rgba(5,6,8,.62);padding-top:8vh}
+  .sym-bg.hidden{display:none}
+  .sym-modal{width:min(700px,93vw);max-height:78vh;background:var(--bg1);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.55)}
+  .sym-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border)}
+  .sym-head input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-size:15px;padding:9px 12px;border-radius:8px;outline:none}
+  .sym-head input:focus{border-color:var(--blue)}
+  .sym-close{cursor:pointer;color:var(--text2);font-size:16px;padding:4px 8px;border-radius:4px}
+  .sym-close:hover{color:var(--text0);background:var(--bg2)}
+  .sym-chips{display:flex;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .sym-chip{font-family:var(--mono);font-size:10px;padding:4px 11px;border-radius:14px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);cursor:pointer}
+  .sym-chip.active{background:var(--blue);color:#04121a;border-color:var(--blue);font-weight:600}
+  .sym-results{overflow-y:auto;flex:1}
+  .sym-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03)}
+  .sym-row:hover,.sym-row.sel{background:var(--bg2)}
+  .sym-logo{width:28px;height:28px;border-radius:6px;object-fit:contain;background:#fff;flex:0 0 auto}
+  .sym-logo.ph{display:flex;align-items:center;justify-content:center;background:var(--bg3);color:var(--text2);font-family:var(--mono);font-size:9px;font-weight:700}
+  .sym-sym{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--text0);min-width:62px}
+  .sym-name{flex:1;color:var(--text1);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sym-ex{font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:.05em}
+  .sym-empty{padding:22px;text-align:center;color:var(--text2);font-size:12px}
   @media (prefers-reduced-motion: reduce){ .order-ticket button{transition:none} }
   /* Chart canvas + overlay — canvas covers the full ladder and draws its own
      right-side price axis (52px) + bottom time axis (16px); the HTML overlay
@@ -354,7 +375,7 @@
 <div class="sidebar" role="complementary" aria-label="Watchlist">
   <div class="wl-add">
     <input type="text" id="wlAddInput" aria-label="Add symbol to watchlist" placeholder="Add symbol" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
-    <button onclick="addWatchlistTicker()" aria-label="Add symbol to watchlist">+</button>
+    <button onclick="openSymbolSearch(addWatchlistSymbol,{})" aria-label="Search and add a symbol" title="Search symbols">+</button>
   </div>
   <div id="wlList"></div>
   <div id="wlInfo" class="wl-info"></div>
@@ -427,6 +448,23 @@
 </div>
 
 <!-- Order ticket -->
+<!-- Symbol-search popup (#1692) -->
+<div class="sym-bg hidden" id="symSearchBg" onclick="if(event.target===this)closeSymbolSearch()">
+  <div class="sym-modal" role="dialog" aria-modal="true" aria-label="Symbol search">
+    <div class="sym-head">
+      <span aria-hidden="true">🔍</span>
+      <input id="symSearchInput" type="text" placeholder="Search symbol or company…" autocomplete="off" oninput="onSymSearchInput()" onkeydown="symSearchKey(event)" aria-label="Search symbol or company">
+      <span class="sym-close" role="button" tabindex="0" onclick="closeSymbolSearch()" onkeydown="if(event.key==='Enter')closeSymbolSearch()" title="Close">✕</span>
+    </div>
+    <div class="sym-chips" id="symChips">
+      <button type="button" class="sym-chip active" data-class="" onclick="setSymClass('',this)">All</button>
+      <button type="button" class="sym-chip" data-class="us_equity" onclick="setSymClass('us_equity',this)">Stocks</button>
+      <button type="button" class="sym-chip" data-class="crypto" onclick="setSymClass('crypto',this)">Crypto</button>
+    </div>
+    <div class="sym-results" id="symResults"></div>
+  </div>
+</div>
+
 <div class="ot-bg hidden" id="otBg" onclick="if(event.target===this)closeOrderTicket()">
   <div class="ot-modal">
     <div class="ot-header">
@@ -1289,26 +1327,61 @@ function renderCards(){
 
 // Per-slot symbol editor (#1628): click a chart's ticker to retype it. Validates +
 // resolves via the same Alpaca-backed watchlist endpoint (#1624), then swaps the slot.
+// Clicking a chart's ticker opens the symbol-search popup (#1692) to switch it.
 function editSlot(oldTicker){
-  const span = document.querySelector('#card-'+oldTicker+' .card-ticker');
-  if(!span || span.dataset.editing) return;
-  span.dataset.editing = '1';
-  span.innerHTML = `<input class="slot-sym" placeholder="${oldTicker}" maxlength="10" autocomplete="off"
-     onkeydown="if(event.key==='Enter'){commitSlot('${oldTicker}',this.value)}else if(event.key==='Escape'){renderCards()}"
-     onblur="setTimeout(()=>{try{renderCards()}catch(e){}},150)">`;
-  const inp = span.querySelector('input'); if(inp) inp.focus();
+  openSymbolSearch((sym)=>commitSlotSymbol(oldTicker, sym), { title: 'Change chart symbol' });
 }
-async function commitSlot(oldTicker, raw){
-  const sym = String(raw||'').trim().toUpperCase();
-  if(!sym || sym===oldTicker){ renderCards(); return; }
+async function commitSlotSymbol(oldTicker, sym){
+  if(!sym || sym===oldTicker) return;
+  if(slotCount){ const i = chartSlots.indexOf(oldTicker); if(i>=0) chartSlots[i]=sym; else chartSlots.push(sym); persistSlots(); }
+  // The symbol is already Alpaca-validated by the search; add it to the watchlist
+  // so price/zone data flows, then re-render.
+  try{ await fetch('/api/trading/watchlist', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker:sym})}); }catch(e){}
+  lastCardOrder=''; await loadWatchlistPrices(); await loadZones(); renderCards();
+}
+
+// ── Symbol-search popup (#1692) — TradingView-style search over all Alpaca assets ──
+let _symPick=null, _symClass='', _symDebounce=null, _symSel=0, _symRows=[], _symEpoch=0;
+function openSymbolSearch(onPick, opts){
+  _symPick = onPick; opts = opts || {}; _symClass = opts.class || '';
+  document.querySelectorAll('#symChips .sym-chip').forEach(c=>c.classList.toggle('active',(c.dataset.class||'')===_symClass));
+  document.getElementById('symSearchBg').classList.remove('hidden');
+  const inp=document.getElementById('symSearchInput'); inp.value=''; setTimeout(()=>inp.focus(),30);
+  runSymSearch('');
+}
+function closeSymbolSearch(){ document.getElementById('symSearchBg').classList.add('hidden'); _symPick=null; }
+function setSymClass(c, btn){ _symClass=c; document.querySelectorAll('#symChips .sym-chip').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); runSymSearch(document.getElementById('symSearchInput').value); }
+function onSymSearchInput(){ clearTimeout(_symDebounce); _symDebounce=setTimeout(()=>runSymSearch(document.getElementById('symSearchInput').value), 170); }
+async function runSymSearch(q){
+  const ep = ++_symEpoch;   // ignore stale responses (a faster/earlier query resolving late)
   try{
-    const r = await fetch('/api/trading/watchlist', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker:sym})});
-    const d = await r.json();
-    if(!r.ok || d.valid===false){ alert(d.error || `"${sym}" isn't a tradable symbol`); renderCards(); return; }
-    const resolved = (d.resolved && d.resolved.symbol) || sym;
-    if(slotCount){ const i = chartSlots.indexOf(oldTicker); if(i>=0) chartSlots[i]=resolved; else chartSlots.push(resolved); persistSlots(); }
-    lastCardOrder=''; await loadWatchlistPrices(); await loadZones(); renderCards();
-  }catch(e){ renderCards(); }
+    const url='/api/trading/symbols/search?limit=40&q='+encodeURIComponent(q)+(_symClass?'&class='+_symClass:'');
+    const r=await fetch(url); const d=await r.json();
+    if(ep!==_symEpoch) return;
+    _symRows=d.results||[]; _symSel=0; renderSymResults();
+  }catch(e){ if(ep===_symEpoch) document.getElementById('symResults').innerHTML='<div class="sym-empty">Search unavailable</div>'; }
+}
+function renderSymResults(){
+  const el=document.getElementById('symResults');
+  if(!_symRows.length){ el.innerHTML='<div class="sym-empty">No matching symbols</div>'; return; }
+  el.innerHTML=_symRows.map((a,i)=>{
+    const cr=a.class==='crypto';
+    const esc=s=>String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+    const ph=`<div class='sym-logo ph'>${esc(a.symbol).slice(0,3)}</div>`;
+    const logo = cr ? ph
+      : `<img class="sym-logo" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(a.symbol)}.png" alt="" onerror="this.outerHTML=&quot;${ph.replace(/"/g,'&quot;')}&quot;">`;
+    return `<div class="sym-row${i===_symSel?' sel':''}" data-i="${i}" onclick="pickSym(${i})">
+      ${logo}<span class="sym-sym">${esc(a.symbol)}</span>
+      <span class="sym-name">${esc(a.name)}</span>
+      <span class="sym-ex">${esc(a.exchange)||(cr?'CRYPTO':'')}</span></div>`;
+  }).join('');
+}
+function pickSym(i){ const a=_symRows[i]; if(!a) return; const cb=_symPick; closeSymbolSearch(); if(cb) cb(a.symbol); }
+function symSearchKey(e){
+  if(e.key==='Escape'){ closeSymbolSearch(); }
+  else if(e.key==='ArrowDown'){ e.preventDefault(); _symSel=Math.min(_symRows.length-1,_symSel+1); renderSymResults(); const r=document.querySelector('.sym-row.sel'); if(r)r.scrollIntoView({block:'nearest'}); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); _symSel=Math.max(0,_symSel-1); renderSymResults(); const r=document.querySelector('.sym-row.sel'); if(r)r.scrollIntoView({block:'nearest'}); }
+  else if(e.key==='Enter'){ e.preventDefault(); pickSym(_symSel); }
 }
 
 // ── Order ticket ──────────────────────────────────────────────────────────────
@@ -1812,6 +1885,16 @@ async function addWatchlistTicker(){
   }catch(e){
     alert('Failed to add ticker: ' + e.message);
   }
+}
+
+// Add a pre-validated symbol (chosen from the search popup, #1692) to the watchlist.
+async function addWatchlistSymbol(sym){
+  if(!sym) return;
+  try{
+    await fetch('/api/trading/watchlist', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker:sym})});
+    await Promise.all([loadWatchlistPrices(), loadZones()]);
+    renderCards();
+  }catch(e){}
 }
 
 async function removeWatchlistTicker(ticker, evt){

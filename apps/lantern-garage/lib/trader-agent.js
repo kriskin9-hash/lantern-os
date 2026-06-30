@@ -173,6 +173,19 @@ class TraderAgent {
     return this._callPython('validate_symbol', { ticker }, this.fastTimeout);
   }
 
+  // All tradable Alpaca assets for the symbol-search popup (#1692). Big list, so
+  // cache it for an hour and filter per query in the route (not per-call Python).
+  async getAllAssets() {
+    const cacheKey = 'all_assets';
+    if (this.cache[cacheKey] && Date.now() - this.cache[cacheKey].time < 3600000) {
+      return this.cache[cacheKey].data;
+    }
+    const result = await this._callPython('list_assets', {}, 45000); // big call
+    const assets = (result && Array.isArray(result.assets)) ? result.assets : [];
+    if (assets.length) this.cache[cacheKey] = { data: assets, time: Date.now() };
+    return assets;
+  }
+
   /**
    * Analyze a specific signal (enrich with ticker, confidence scoring)
    * Returns: { symbol, action, reason, confidence, timestamp }

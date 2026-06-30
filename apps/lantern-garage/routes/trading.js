@@ -512,6 +512,42 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/symbols/search?q=SP — symbol-search popup (#1692). Filters the
+  // cached all-Alpaca-assets list by symbol/name, ranked (exact > prefix > contains).
+  if (url.pathname === '/api/trading/symbols/search' && req.method === 'GET') {
+    if (!traderAgent) { sendJson(res, { results: [], error: 'TraderAgent not initialized' }, 503); return true; }
+    const q = (url.searchParams.get('q') || '').trim().toUpperCase();
+    const klass = (url.searchParams.get('class') || '').trim();   // optional filter: us_equity | crypto
+    const limit = Math.min(60, parseInt(url.searchParams.get('limit'), 10) || 30);
+    try {
+      const assets = await traderAgent.getAllAssets();
+      let pool = klass ? assets.filter((a) => a.class === klass) : assets;
+      let results;
+      if (!q) {
+        results = pool.slice(0, limit);
+      } else {
+        const scored = [];
+        for (const a of pool) {
+          const sym = (a.symbol || '').toUpperCase();
+          const name = (a.name || '').toUpperCase();
+          let score = -1;
+          if (sym === q) score = 0;
+          else if (sym.startsWith(q)) score = 1;
+          else if (name.startsWith(q)) score = 2;
+          else if (sym.includes(q)) score = 3;
+          else if (name.includes(q)) score = 4;
+          if (score >= 0) scored.push([score, sym.length, a]);
+        }
+        scored.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+        results = scored.slice(0, limit).map((s) => s[2]);
+      }
+      sendJson(res, { results, total: pool.length, query: q }, 200);
+    } catch (error) {
+      sendJson(res, { results: [], error: error.message }, 200);
+    }
+    return true;
+  }
+
   // GET /api/trading/symbol-info?ticker=AAPL — name/exchange/asset_class for the
   // watchlist info panel (#1631). Read-only; reuses the Alpaca-backed validator.
   if (url.pathname === '/api/trading/symbol-info' && req.method === 'GET') {

@@ -656,6 +656,35 @@ def action_get_bars_multi(args):
     return {'bars': result, 'timeframe': timeframe}
 
 
+def action_list_assets(args):
+    """All active, tradable Alpaca assets for the symbol-search popup (#1692).
+    Big list (~11k equities + crypto) — the Node bridge caches it and filters
+    per query, so this only runs ~once an hour."""
+    try:
+        raw = list(alpaca.list_assets(status='active'))
+        try:
+            raw += list(alpaca.list_assets(status='active', asset_class='crypto'))
+        except Exception:
+            pass
+        out = []
+        seen = set()
+        for a in raw:
+            sym = getattr(a, 'symbol', '')
+            if not sym or sym in seen or not getattr(a, 'tradable', False):
+                continue
+            seen.add(sym)
+            klass = a._raw.get('class', 'us_equity') if hasattr(a, '_raw') else 'us_equity'
+            out.append({
+                'symbol': sym,
+                'name': (getattr(a, 'name', '') or '')[:80],
+                'exchange': getattr(a, 'exchange', '') or '',
+                'class': klass,
+            })
+        return {'assets': out, 'count': len(out)}
+    except Exception as e:
+        log.error("list_assets failed: %s", e)
+        return {'assets': [], 'error': str(e)}
+
 
 def main():
     """Main CLI entry point"""
@@ -700,6 +729,7 @@ def main():
         'evaluate_asset': action_evaluate_asset,
         'evaluate_watchlist': action_evaluate_watchlist,
         'validate_symbol': action_validate_symbol,
+        'list_assets': action_list_assets,
     }
 
     if action not in handlers:
