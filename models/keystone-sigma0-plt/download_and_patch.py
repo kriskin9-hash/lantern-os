@@ -20,12 +20,6 @@ import shutil
 import sys
 from pathlib import Path
 
-# Windows consoles default to cp1252 and choke on the ↓/→/✓ status glyphs below.
-try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-except (AttributeError, ValueError):
-    pass
-
 HERE = Path(__file__).resolve().parent
 UPSTREAM = "Multilingual-Multimodal-NLP/LoopCoder-V2"
 
@@ -61,7 +55,12 @@ def main() -> int:
         local_dir=str(out),
         allow_patterns=[
             "*.safetensors", "*.safetensors.index.json",
-            "tokenizer*", "*.model", "special_tokens_map.json",
+            # "tokenizer*" misses the custom tokenizer CLASS file (tokenization_*.py),
+            # which tokenizer_config.json's auto_map needs under trust_remote_code —
+            # without it AutoTokenizer.from_pretrained raises "does not appear to have a
+            # file named tokenization_iquestcoder.py". We reuse the vendor tokenizer
+            # (only config + modeling are ours), so it must be downloaded.
+            "tokenizer*", "tokenization_*.py", "*.model", "special_tokens_map.json",
             "added_tokens.json", "chat_template.jinja", "generation_config.json",
             "config.json",
         ],
@@ -90,17 +89,6 @@ def main() -> int:
     cfg["use_cache"] = False                        # PLT incremental decode is a later stage
     cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     print("  ✎ patched config.json (model_type, architectures, auto_map, use_cache)")
-
-    # Patch tokenizer_config.json: drop the vendor custom-tokenizer auto_map and
-    # use the self-contained fast tokenizer (tokenizer.json) — keeps us off vendor
-    # python and avoids a missing tokenization_*.py at load time.
-    tok_path = out / "tokenizer_config.json"
-    if tok_path.exists():
-        tcfg = json.loads(tok_path.read_text(encoding="utf-8"))
-        tcfg.pop("auto_map", None)
-        tcfg["tokenizer_class"] = "PreTrainedTokenizerFast"
-        tok_path.write_text(json.dumps(tcfg, indent=2), encoding="utf-8")
-        print("  ✎ patched tokenizer_config.json (→ PreTrainedTokenizerFast)")
 
     print(f"\n✓ ready: {out}")
     print("  next:  python check_parity.py --model", out)
