@@ -76,7 +76,31 @@
   .sidebar{background:var(--bg1);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0}
   #wlList{flex:1 1 auto;overflow-y:auto;min-height:0;padding:8px 0}
   .main{overflow-y:auto;padding:12px;background:var(--bg0)}
-  .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:grid;grid-template-columns:1.2fr 1fr 260px 1fr;gap:8px;padding:8px;height:100%;min-height:0;box-sizing:border-box}
+  /* #1712: TradingView-style trading panel — summary row + tabs + table body */
+  .footer{grid-column:1/-1;background:var(--bg1);border-top:1px solid var(--border);display:flex;flex-direction:column;min-height:0;height:100%;box-sizing:border-box;padding:0}
+  .tp-summary{display:flex;flex-wrap:wrap;gap:6px 26px;padding:10px 16px 9px;border-bottom:1px solid var(--border)}
+  .tp-stat{display:flex;flex-direction:column;gap:1px}
+  .tp-stat .l{font-family:var(--mono);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--text2)}
+  .tp-stat .v{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text0)}
+  .tp-stat .v.pos{color:var(--green)} .tp-stat .v.neg{color:var(--red)}
+  .tp-tabs{display:flex;gap:2px;padding:6px 12px 0;border-bottom:1px solid var(--border);overflow-x:auto}
+  .tp-tab{font-family:var(--mono);font-size:11px;color:var(--text2);background:none;border:none;border-bottom:2px solid transparent;padding:6px 12px 8px;cursor:pointer;white-space:nowrap}
+  .tp-tab:hover{color:var(--text1)}
+  .tp-tab.active{color:var(--text0);border-bottom-color:var(--blue)}
+  .tp-badge{font-size:9px;color:var(--text2);background:var(--bg3);border-radius:8px;padding:0 5px;margin-left:2px}
+  .tp-body{flex:1;min-height:0;overflow-y:auto;padding:6px 12px 10px}
+  .tp-pane{display:none}
+  .tp-pane.active{display:block}
+  /* positions / orders table */
+  .tp-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+  .tp-table th{text-align:right;font-weight:500;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--text2);padding:5px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+  .tp-table th:first-child,.tp-table td:first-child{text-align:left}
+  .tp-table td{text-align:right;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--text1);white-space:nowrap}
+  .tp-table tr:hover td{background:var(--bg2)}
+  .tp-side{font-weight:700} .tp-side.long{color:var(--green)} .tp-side.short{color:var(--red)}
+  .tp-sym{font-weight:700;color:var(--text0);cursor:pointer}
+  .tp-sym:hover{color:var(--blue)}
+  .tp-empty{font-family:var(--mono);font-size:11px;color:var(--text2);padding:24px;text-align:center}
   /* ── Header ── */
   .logo{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);letter-spacing:.08em;white-space:nowrap}
   .logo span{color:var(--text1);font-weight:400}
@@ -403,21 +427,23 @@
 <!-- Footer -->
 <div class="footer" style="position:relative">
   <div class="footer-resize" id="footerResize" role="separator" aria-label="Resize the panel section" tabindex="0" title="Drag to resize"></div>
-  <div class="fpanel">
-    <div class="panel-title">⚡ Σ₀ Signals — when to enter</div>
-    <div id="sigma0Signals"></div>
+  <!-- Account summary row (#1712) -->
+  <div class="tp-summary" id="tpSummary"></div>
+  <!-- Tabs -->
+  <div class="tp-tabs" role="tablist">
+    <button class="tp-tab active" role="tab" data-tab="positions" onclick="tpTab('positions')">Positions <span class="tp-badge" id="tpPosCount">0</span></button>
+    <button class="tp-tab" role="tab" data-tab="orders" onclick="tpTab('orders')">Orders</button>
+    <button class="tp-tab" role="tab" data-tab="history" onclick="tpTab('history')">Order history</button>
+    <button class="tp-tab" role="tab" data-tab="signals" onclick="tpTab('signals')">⚡ Σ₀ Signals</button>
+    <button class="tp-tab" role="tab" data-tab="feed" onclick="tpTab('feed')">Agent Feed</button>
   </div>
-  <div class="fpanel">
-    <div class="panel-title">Agent Feed</div>
-    <div id="agentLog"></div>
-  </div>
-  <div class="fpanel">
-    <div class="panel-title">Recent Orders</div>
-    <div id="orders"></div>
-  </div>
-  <div class="fpanel">
-    <div class="panel-title">Market Status</div>
-    <div id="mktStatus"></div>
+  <!-- Tab bodies -->
+  <div class="tp-body">
+    <div class="tp-pane active" id="tp-positions"></div>
+    <div class="tp-pane" id="tp-orders"></div>
+    <div class="tp-pane" id="tp-history"></div>
+    <div class="tp-pane" id="tp-signals"><div id="sigma0Signals"></div></div>
+    <div class="tp-pane" id="tp-feed"><div id="agentLog"></div></div>
   </div>
 </div>
 
@@ -2123,6 +2149,60 @@ function syncRangeButtons(tf){
   });
 }
 
+// ── TradingView-style trading panel (#1712) ───────────────────────────────────
+function tpTab(name){
+  document.querySelectorAll('.tp-tab').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.tp-pane').forEach(p=>p.classList.toggle('active', p.id==='tp-'+name));
+}
+function renderTpSummary(a){
+  const el=document.getElementById('tpSummary'); if(!el) return;
+  a=a||{};
+  const cell=(l,v,cls)=>`<div class="tp-stat"><div class="l">${l}</div><div class="v ${cls||''}">${v}</div></div>`;
+  const money=(v)=> v==null?'—':'$'+fmt(v,2);
+  const signed=(v)=> v==null?'—':(v>=0?'+':'-')+'$'+fmt(Math.abs(v),2);
+  const cls=(v)=> v>0?'pos':v<0?'neg':'';
+  el.innerHTML =
+    cell('Account balance', money(a.cash)) +
+    cell('Equity', money(a.equity)) +
+    cell('Realized P&L', signed(a.realized_today), cls(a.realized_today)) +
+    cell('Unrealized P&L', signed(a.unrealized), cls(a.unrealized)) +
+    cell('Day P&L', signed(a.pnl_today), cls(a.pnl_today)) +
+    cell('Buying power', money(a.buying_power));
+}
+function renderPositionsTable(positions){
+  const el=document.getElementById('tp-positions'); if(!el) return;
+  const pc=document.getElementById('tpPosCount'); if(pc) pc.textContent=(positions||[]).length;
+  if(!positions || !positions.length){ el.innerHTML='<div class="tp-empty">No open positions</div>'; return; }
+  el.innerHTML = `<table class="tp-table"><thead><tr>
+    <th>Symbol</th><th>Side</th><th>Qty</th><th>Avg fill</th><th>Last</th><th>Unrealized P&L</th><th>P&L %</th><th>Trade value</th><th>Market value</th></tr></thead><tbody>`+
+    positions.map(p=>{
+      const side=(p.side||'long').toLowerCase();
+      const pnl=p.unrealized_pl||0, pct=p.pnl_pct||0;
+      const c=pnl>=0?'var(--green)':'var(--red)';
+      return `<tr>
+        <td><span class="tp-sym" onclick="focusTicker('${p.symbol}')">${p.symbol}</span></td>
+        <td class="tp-side ${side==='short'?'short':'long'}">${side==='short'?'Short':'Long'}</td>
+        <td>${p.qty}</td><td>$${fmt(p.avg_entry_price,2)}</td><td>$${fmt(p.current_price,2)}</td>
+        <td style="color:${c}">${pnl>=0?'+':''}${fmt(pnl,2)}</td>
+        <td style="color:${c}">${pct>=0?'+':''}${fmt(pct,2)}%</td>
+        <td>$${fmt((p.avg_entry_price||0)*Math.abs(p.qty||0),2)}</td><td>$${fmt(p.market_value,2)}</td></tr>`;
+    }).join('') + '</tbody></table>';
+}
+function renderOrders(orders){
+  const openEl=document.getElementById('tp-orders'), histEl=document.getElementById('tp-history');
+  const arr=Array.isArray(orders)?orders:[];
+  const row=(o)=>`<tr>
+    <td><span class="tp-sym" onclick="focusTicker('${o.symbol}')">${o.symbol}</span></td>
+    <td class="tp-side ${o.side==='buy'?'long':'short'}">${(o.side||'').toUpperCase()}</td>
+    <td>${o.qty}</td><td>${o.type||'market'}</td><td>${o.limit_price?'$'+fmt(o.limit_price,2):'—'}</td>
+    <td style="color:${o.status==='filled'?'var(--green)':o.status==='canceled'?'var(--red)':'var(--amber)'}">${o.status||''}</td>
+    <td style="color:var(--text2)">${o.filled_at||o.created_at||'—'}</td></tr>`;
+  const tbl=(rows)=> rows.length ? `<table class="tp-table"><thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Limit</th><th>Status</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="tp-empty">None</div>';
+  const isOpen=(o)=>['new','accepted','pending','open','partially_filled'].includes((o.status||'').toLowerCase());
+  if(openEl) openEl.innerHTML = tbl(arr.filter(isOpen).map(row).join(''));
+  if(histEl) histEl.innerHTML = tbl(arr.filter(o=>!isOpen(o)).slice(0,30).map(row).join(''));
+}
+
 async function loadPortfolio(){
   try{
     const r  = await fetch('/api/trading/positions');
@@ -2136,6 +2216,8 @@ async function loadPortfolio(){
     document.getElementById('hPos').textContent = (d.positions||[]).length;
     s0Status.equity = a.equity; s0Status.pnl = pnl; s0Status.positions = (d.positions||[]).length;
     renderSigma0Signals();
+    renderTpSummary(a);                     // #1712
+    renderPositionsTable(d.positions||[]);
   }catch(e){}
 }
 
@@ -2147,7 +2229,7 @@ async function loadMarketStatus(){
     document.getElementById('hMkt').textContent = d.market||'—';
     s0Status.market = d.market; s0Status.marketOpen = d.market_open; renderSigma0Signals();
     const ms = document.getElementById('mktStatus');
-    ms.innerHTML = `
+    if(ms) ms.innerHTML = `
       <div class="mkt-row"><span class="mkt-label">VIX</span><span class="mkt-val">${d.vix||'—'} (${d.vix_regime||'—'})</span></div>
       <div class="mkt-row"><span class="mkt-label">Market</span><span class="mkt-val">${d.market||'—'}</span></div>
       <div class="mkt-row"><span class="mkt-label">SPY 1D</span><span class="mkt-val" style="color:${(d.spy_1d||0)>=0?'var(--green)':'var(--red)'}">${fmtPct(d.spy_1d)}</span></div>
@@ -2182,18 +2264,7 @@ async function loadOrders(){
   try{
     const r = await fetch('/api/trading/orders');
     const orders = await r.json();
-    if(!Array.isArray(orders)||!orders.length){
-      document.getElementById('orders').innerHTML = '<div style="font-family:var(--mono);font-size:9px;color:var(--text2)">No recent orders</div>';
-      return;
-    }
-    document.getElementById('orders').innerHTML = orders.slice(0,8).map(o=>`
-      <div class="order-row">
-        <span style="color:${o.side==='buy'?'var(--green)':'var(--red)'}">${o.side.toUpperCase()}</span>
-        <span>${o.symbol}</span>
-        <span style="color:var(--text2)">${o.qty}</span>
-        <span style="color:${o.status==='filled'?'var(--green)':o.status==='canceled'?'var(--red)':'var(--amber)'}">${o.status}</span>
-        <span style="color:var(--text2)">${o.filled_at||'—'}</span>
-      </div>`).join('');
+    renderOrders(orders);                   // #1712: Orders + Order history tabs
   }catch(e){}
 }
 
