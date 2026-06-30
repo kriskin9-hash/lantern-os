@@ -7659,6 +7659,53 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             f"{ticker} sector {_sector_label} ({_sig_dir}) — "
             f"conf {old_conf}% → {conf}% ({_eff_adj:+d})")
 
+    # ── Σ₀ expected-value gate (convergence_ev) ───────────────────────────────
+    # Riley's detectors above (zone, 1-min structure, pattern, trend) become
+    # WEIGHTED EVIDENCE; the ENTER/SKIP call is made on expected value instead of
+    # the WAIT/GOOD/PERFECT discipline tiers Riley used for human error control.
+    # The convergence record is stashed on `analysis["sigma0"]` so the API/page
+    # can show the reasoning + a concrete entry/stop/target instruction. Active
+    # unless SIGMA0_EV=0 (kill-switch); when active a SKIP vetoes the trade and an
+    # ENTER is not allowed to be blocked by the legacy confidence threshold.
+    try:
+        from convergence_ev import score_convergence as _score_ev
+    except Exception:
+        _score_ev = None
+    if _score_ev:
+        _zone   = (riley.get("zone") or {}).get("nearest_zone") or {}
+        _struct = riley.get("structure") or {}
+        _pat    = {"PERFECT": "A", "GOOD": "B"}.get(riley.get("entry_quality"))
+        _tr     = abs(float(profile.get("tp", 8)) / float(profile.get("stop", -4) or -4))
+        _ev = _score_ev({
+            "direction":         analysis.get("direction", "NEUTRAL"),
+            "llm_conf":          conf,
+            "in_zone":           bool((riley.get("zone") or {}).get("in_zone")),
+            "zone_strength":     _zone.get("strength", 0),
+            "zone_touches":      _zone.get("touches", 0),
+            "structure_shifted": bool(_struct.get("structure_shifted")),
+            "structure_conf":    _struct.get("confidence", 0),
+            "pattern_grade":     _pat,
+            "target_r":          _tr,
+        })
+        _ev["instruction"] = {
+            "ticker": ticker, "direction": analysis.get("direction"),
+            "entry":  round(price, 4),
+            "stop":   round(price * (1 + float(profile.get("stop", -4)) / 100.0), 4),
+            "target": round(price * (1 + float(profile.get("tp", 8)) / 100.0), 4),
+            "rr":     round(_tr, 2),
+        }
+        analysis["sigma0"] = _ev
+        log_agent("system", "SIGMA0",
+            f"{ticker} EV {_ev['ev_r']:+.2f}R p_win {_ev['p_win']:.2f} → {_ev['decision']} "
+            f"| {', '.join(_ev['why'])}")
+        if os.getenv("SIGMA0_EV", "1") != "0":
+            if _ev["decision"] == "SKIP":
+                return {"status": "skipped", "ticker": ticker,
+                        "reason": f"Σ₀ EV {_ev['ev_r']:+.2f}R / p_win {_ev['p_win']:.2f} below entry bar",
+                        "confidence": conf, "direction": analysis.get("direction"),
+                        "sigma0": _ev}
+            threshold = min(threshold, conf)   # EV approved → conf bar can't veto it
+
     if conf < threshold:
         reason = f"Confidence {conf}% < threshold {threshold}%"
         if threshold != base_threshold:
@@ -8358,6 +8405,13 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         except Exception as e:
             log.warning("Telegram notify failed: %s", e)
 
+    # Carry the Σ₀ convergence record + entry/stop/target instruction onto the
+    # executed signal so the API/page can show WHAT was entered and why.
+    if isinstance(result, dict):
+        result.setdefault("ticker", ticker)
+        result.setdefault("direction", analysis.get("direction"))
+        if analysis.get("sigma0"):
+            result["sigma0"] = analysis["sigma0"]
     return result
 
 # ── Main scan ─────────────────────────────────────────────────────────────────

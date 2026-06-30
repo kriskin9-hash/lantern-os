@@ -227,6 +227,12 @@
   /* ── Footer panels ── */
   .fpanel{padding:10px 14px;overflow-y:auto;max-height:180px;background:rgba(15,18,28,.95);border:1px solid rgba(255,255,255,.06);border-radius:12px}
   .panel-title{font-family:var(--mono);font-size:9px;color:var(--tv-text-secondary);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
+  .s0-sig{border:1px solid var(--tv-border);border-left:3px solid var(--green);border-radius:4px;padding:7px 9px;margin-bottom:6px;background:rgba(0,212,170,.05)}
+  .s0-sig.short{border-left-color:var(--red);background:rgba(255,95,109,.05)}
+  .s0-head{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--tv-text)}
+  .s0-lvl{font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);margin-top:2px}
+  .s0-why{font-size:10px;color:var(--tv-text-secondary);margin-top:3px;font-style:italic}
+  .s0-empty{font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);padding:4px 0}
   /* Agent log */
   .log-item{font-family:var(--mono);font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:grid;grid-template-columns:45px 55px 1fr;gap:4px;align-items:start}
   .log-time{color:var(--text2)}.log-agent{font-weight:600}
@@ -295,6 +301,10 @@
 
 <!-- Footer -->
 <div class="footer">
+  <div class="fpanel">
+    <div class="panel-title">⚡ Σ₀ Signals — when to enter</div>
+    <div id="sigma0Signals"></div>
+  </div>
   <div class="fpanel">
     <div class="panel-title">Agent Feed</div>
     <div id="agentLog"></div>
@@ -1637,8 +1647,40 @@ async function loadZones(){
     });
     updateRegimeBadges();
     renderFullscreenChart();
+    renderSigma0Signals();
   }catch(e){ console.warn('zones load failed',e); }
   finally{ zonesLoading = false; }
+}
+
+// ── Σ₀ Signals: explicit "when to enter" instructions from the EV decision ────
+// Reads each ticker's last_signal.sigma0 (convergence_ev) and renders an
+// actionable entry instruction — direction, entry/stop/target, R:R, EV, p_win,
+// and the evidence — instead of merely tinting a BUY/SELL button. The engine
+// auto-executes ENTER signals; this is the human-readable narration of that.
+function renderSigma0Signals(){
+  const el = document.getElementById('sigma0Signals');
+  if(!el) return;
+  const enters = [];
+  Object.keys(zonesData||{}).forEach(t=>{
+    const s0 = (zonesData[t]&&zonesData[t].last_signal&&zonesData[t].last_signal.sigma0) || null;
+    if(!s0 || s0.decision !== 'ENTER') return;
+    const ins = s0.instruction || {};
+    const dir = String(ins.direction || zonesData[t].direction || '').toUpperCase();
+    enters.push({
+      ticker:t, isShort: dir==='BEARISH',
+      label: dir==='BULLISH'?'LONG':dir==='BEARISH'?'SHORT':'—',
+      entry:ins.entry, stop:ins.stop, target:ins.target, rr:ins.rr,
+      ev:s0.ev_r, p:s0.p_win, why:(s0.why||[]).join(', ')
+    });
+  });
+  enters.sort((a,b)=> (b.ev||0)-(a.ev||0));
+  if(!enters.length){ el.innerHTML = '<div class="s0-empty">No actionable entries — scanning every minute.</div>'; return; }
+  el.innerHTML = enters.slice(0,6).map(i=>`
+    <div class="s0-sig${i.isShort?' short':''}">
+      <div class="s0-head">${i.label} ${newsEsc(i.ticker)} — ENTER @ $${i.entry}</div>
+      <div class="s0-lvl">stop $${i.stop} · target $${i.target} · R:R ${i.rr} · EV ${i.ev>=0?'+':''}${i.ev}R · win ${Math.round((i.p||0)*100)}%</div>
+      <div class="s0-why">${newsEsc(i.why)}</div>
+    </div>`).join('');
 }
 
 let pricesLoading = false;
