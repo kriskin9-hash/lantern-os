@@ -2257,6 +2257,17 @@ function renderPositionsTable(positions){
         <td>$${fmt((p.avg_entry_price||0)*Math.abs(p.qty||0),2)}</td><td>$${fmt(p.market_value,2)}</td></tr>`;
     }).join('') + '</tbody></table>';
 }
+// Broker timestamps arrive in UTC ("2026-06-30 13:33:19+00:00"); show them in ET
+// so they line up with the agent feed. Time-only for today, +date for older.
+function _fmtOrderTime(s){
+  if(!s) return '—';
+  const d=new Date(String(s).replace(' ','T'));
+  if(isNaN(d)) return s;
+  const tz={timeZone:'America/New_York'};
+  const time=d.toLocaleTimeString('en-US',{...tz,hour:'numeric',minute:'2-digit',second:'2-digit'});
+  const day=d.toLocaleDateString('en-US',tz), today=new Date().toLocaleDateString('en-US',tz);
+  return day===today ? time : d.toLocaleDateString('en-US',{...tz,month:'short',day:'numeric'})+' '+time;
+}
 function renderOrders(orders){
   const openEl=document.getElementById('tp-orders'), histEl=document.getElementById('tp-history');
   const arr=Array.isArray(orders)?orders:[];
@@ -2265,7 +2276,7 @@ function renderOrders(orders){
     <td class="tp-side ${o.side==='buy'?'long':'short'}">${(o.side||'').toUpperCase()}</td>
     <td>${o.qty}</td><td>${o.type||'market'}</td><td>${o.limit_price?'$'+fmt(o.limit_price,2):'—'}</td>
     <td style="color:${o.status==='filled'?'var(--green)':o.status==='canceled'?'var(--red)':'var(--amber)'}">${o.status||''}</td>
-    <td style="color:var(--text2)">${o.filled_at||o.created_at||'—'}</td></tr>`;
+    <td style="color:var(--text2)">${_fmtOrderTime(o.filled_at||o.created_at)}</td></tr>`;
   const tbl=(rows)=> rows.length ? `<table class="tp-table"><thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Limit</th><th>Status</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="tp-empty">None</div>';
   const isOpen=(o)=>['new','accepted','pending','open','partially_filled'].includes((o.status||'').toLowerCase());
   if(openEl) openEl.innerHTML = tbl(arr.filter(isOpen).map(row).join(''));
