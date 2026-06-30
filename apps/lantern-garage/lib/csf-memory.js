@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { readFileViaMcp } = require("./mcp-resource-client");
+const csfWriter = require("./csf-memory-writer");
 
 const repoRoot = path.resolve(__dirname, "..", "..", "..");
 
@@ -23,6 +24,39 @@ function _readText(filePath) {
   try { return fs.readFileSync(filePath, "utf8"); } catch { return ""; }
 }
 
+// Read-path integrity verification (#1663 follow-up — promotes the dormant
+// MemoryRecord.verify() onto the read path so corrupt/tampered memory cannot be
+// injected into a prompt). CSF_VERIFY_ON_READ:
+//   "off"     — no verification, zero cost, legacy behavior
+//   "warn"    — recompute each checksum, log mismatches, keep the records (default)
+//   "enforce" — additionally DROP mismatching records from retrieval
+// Records with no checksum are always kept (legacy/unstamped). JS and Python use
+// different canonical forms, so a Python-stamped record will not verify under the
+// JS scheme — keep "warn" until every writer/record shares one runtime's stamp.
+function _verifyMode() {
+  return (process.env.CSF_VERIFY_ON_READ || "warn").toLowerCase();
+}
+
+function _verifyRecords(records, file = "") {
+  const mode = _verifyMode();
+  if (mode === "off" || !records || !records.length) return records || [];
+  const bad = [];
+  const kept = [];
+  for (const r of records) {
+    if (r && r.checksum && !csfWriter.verifyRecord(r)) {
+      bad.push(r.memory_id || "(no id)");
+      if (mode === "enforce") continue; // drop tampered/corrupt record
+    }
+    kept.push(r);
+  }
+  if (bad.length) {
+    const action = mode === "enforce" ? "dropped" : "kept (warn)";
+    const shown = bad.slice(0, 5).join(", ") + (bad.length > 5 ? " …" : "");
+    console.warn(`[csf-memory] ${bad.length} record(s) failed checksum in ${file} — ${action}: ${shown}`);
+  }
+  return kept;
+}
+
 function readMemoryRecords(limit = 20) {
   const records = [];
   if (!fs.existsSync(CSF_MEMORY_PATH)) return records;
@@ -31,9 +65,11 @@ function readMemoryRecords(limit = 20) {
   for (const file of files) {
     const text = _readText(path.join(CSF_MEMORY_PATH, file));
     const lines = text.trim().split("\n").filter(Boolean);
+    const parsed = [];
     for (const line of lines) {
-      try { records.push(JSON.parse(line)); } catch {}
+      try { parsed.push(JSON.parse(line)); } catch {}
     }
+    records.push(..._verifyRecords(parsed, String(file)));
     if (records.length >= limit) break;
   }
   return records.slice(0, limit);
@@ -451,6 +487,7 @@ module.exports = {
   relevanceScore,
   distinctiveHitCount,
   readMemoryRecords,
+  _verifyRecords,
   readIngestDocs,
   queryMemories,
   queryMemoriesSemantic,
