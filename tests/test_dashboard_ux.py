@@ -20,8 +20,8 @@ def read(path: str) -> str:
 
 def test_landing_page_is_clean_sales_page() -> None:
     html = read("apps/lantern-garage/public/index.html")
-    # Title and branding
-    assert "Keystone OS" in html
+    # Title and branding (rebranded to unisona.ai — #1661)
+    assert "unisona.ai" in html
     # CTA panels
     assert "dream-chat.html" in html
     assert "patreon.com" in html

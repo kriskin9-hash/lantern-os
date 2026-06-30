@@ -168,7 +168,7 @@ class TestDreamChatIntegration:
 
     def test_agent_personas_defined(self):
         """Verify all 6 agent personas are defined."""
-        dream_chat_file = Path("apps/lantern-garage/lib/dream-chat.js")
+        dream_chat_file = Path("apps/lantern-garage/public/js/dream-chat.js")
         if not dream_chat_file.exists():
             pytest.skip("Dream Chat file not found")
 
@@ -186,7 +186,7 @@ class TestDreamChatIntegration:
 
     def test_system_prompts_non_empty(self):
         """Verify agent system prompts are defined."""
-        dream_chat_file = Path("apps/lantern-garage/lib/dream-chat.js")
+        dream_chat_file = Path("apps/lantern-garage/public/js/dream-chat.js")
         if not dream_chat_file.exists():
             pytest.skip("Dream Chat file not found")
 
@@ -203,7 +203,7 @@ class TestDreamChatIntegration:
 
     def test_provider_routing_configured(self):
         """Verify LLM provider routing is configured."""
-        dream_chat_file = Path("apps/lantern-garage/lib/dream-chat.js")
+        dream_chat_file = Path("apps/lantern-garage/public/js/dream-chat.js")
         if not dream_chat_file.exists():
             pytest.skip("Dream Chat file not found")
 
