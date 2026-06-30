@@ -226,7 +226,10 @@
   .ot-submit.sell:hover{background:rgba(255,95,109,.28)}
   /* ── Footer panels ── */
   .fpanel{padding:10px 14px;overflow-y:auto;min-height:0;background:rgba(15,18,28,.95);border:1px solid rgba(255,255,255,.06);border-radius:12px}
-  .panel-title{font-family:var(--mono);font-size:9px;color:var(--tv-text-secondary);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px}
+  /* Sticky within the scrolling .fpanel (#1626): the section title stays pinned at
+     the top while the feed scrolls under it. Opaque bg + the panel's own padding
+     reclaimed via negative margins so nothing peeks above it. */
+  .panel-title{font-family:var(--mono);font-size:9px;color:var(--tv-text-secondary);letter-spacing:.15em;text-transform:uppercase;position:sticky;top:-10px;z-index:3;background:var(--bg1);margin:-10px -14px 8px;padding:10px 14px 6px}
   .s0-sig{border:1px solid var(--tv-border);border-left:3px solid var(--green);border-radius:4px;padding:7px 9px;margin-bottom:6px;background:rgba(0,212,170,.05)}
   .s0-sig.short{border-left-color:var(--red);background:rgba(255,95,109,.05)}
   .s0-head{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--tv-text)}
@@ -1809,7 +1812,9 @@ async function loadAgentLog(){
     if(!Array.isArray(logs)||logs.length===lastLogLen) return;
     lastLogLen = logs.length;
     const cls = {grok:'log-grok',claude:'log-claude',risk:'log-risk',system:'log-system',trail:'log-trail'};
-    document.getElementById('agentLog').innerHTML = [...logs].reverse().map(l=>`
+    // Newest first (#1626): the API returns newest-first, so render as-is (the old
+    // .reverse() put the latest scans at the BOTTOM, forcing a scroll to see them).
+    document.getElementById('agentLog').innerHTML = [...logs].map(l=>`
       <div class="log-item">
         <span class="log-time">${l.time||''}</span>
         <span class="log-agent ${cls[l.type]||'log-system'}">${(l.agent||'').slice(0,8)}</span>
