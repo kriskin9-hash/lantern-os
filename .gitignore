@@ -87,6 +87,7 @@ data/convergence/council-reviews.jsonl
 #   data/contexts/personas.json (hand-edited config, read-only in code).
 data/convergence/records.jsonl
 data/convergence/issue-work-records.jsonl
+data/convergence/trader-outcomes.jsonl
 data/convergence-autonomous-work.jsonl
 data/convergence-records.jsonl
 data/agi-benchmark.jsonl
