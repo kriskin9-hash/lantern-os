@@ -26,7 +26,8 @@ from __future__ import annotations
 # weight is how many probability-points a fully-confirming signal (1.0) adds.
 # Tunable via the engine; they need not sum to 1 (p_win is clamped).
 WEIGHTS = {
-    "llm":       0.18,   # Grok/Claude directional conviction
+    "grok":      0.09,   # Grok analyst directional conviction (council member)
+    "claude":    0.09,   # Claude decision conviction (council member, was a gate)
     "zone":      0.14,   # at a real S/R zone, scaled by strength/touches
     "structure": 0.16,   # 1-min structure shift confirmed (the key Riley trigger)
     "pattern":   0.12,   # A/B/C candle pattern grade
@@ -52,7 +53,9 @@ def score_convergence(ev: dict) -> dict:
     """
     Score one candidate trade. `ev` (all optional, neutral defaults):
       direction:        "BULLISH" | "BEARISH"
-      llm_conf:         0..100   Grok/Claude confidence
+      grok_conf:        0..100   Grok analyst directional confidence
+      claude_conf:      0..100   Claude decision conviction (neutral 50 pre-Claude)
+      llm_conf:         0..100   DEPRECATED alias → grok_conf (back-compat)
       in_zone:          bool
       zone_strength:    0..100
       zone_touches:     int
@@ -71,7 +74,11 @@ def score_convergence(ev: dict) -> dict:
     target_r = float(ev.get("target_r") or 2.0)
 
     # ── Normalise each piece of evidence to [0,1] (0.5 = neutral) ──────────────
-    llm = _clamp((float(ev.get("llm_conf", 50)) / 100.0), 0.0, 1.0)
+    # Grok and Claude are now SEPARATE council members, each graded on realized
+    # edge. `llm_conf` stays a back-compat alias for grok_conf; claude defaults to
+    # neutral (50) so the cheap pre-Claude screen runs Grok-only without penalty.
+    grok = _clamp((float(ev.get("grok_conf", ev.get("llm_conf", 50))) / 100.0), 0.0, 1.0)
+    claude = _clamp((float(ev.get("claude_conf", 50)) / 100.0), 0.0, 1.0)
 
     if ev.get("in_zone"):
         strength = _clamp(float(ev.get("zone_strength", 50)) / 100.0, 0.0, 1.0)
@@ -100,7 +107,7 @@ def score_convergence(ev: dict) -> dict:
     signed = raw_news if direction == "BULLISH" else -raw_news if direction == "BEARISH" else 0.0
     news = _clamp(0.5 + 0.5 * signed, 0.0, 1.0)
 
-    signals = {"llm": llm, "zone": zone, "structure": structure,
+    signals = {"grok": grok, "claude": claude, "zone": zone, "structure": structure,
                "pattern": pattern, "trend": trend, "news": news}
 
     # ── p_win = base_rate + Σ wᵢ·(signalᵢ − 0.5) ──────────────────────────────
@@ -131,7 +138,8 @@ def score_convergence(ev: dict) -> dict:
         ((k, WEIGHTS.get(k, 0.0) * (s - 0.5)) for k, s in signals.items()),
         key=lambda kv: abs(kv[1]), reverse=True,
     )
-    label = {"llm": "LLM conviction", "zone": "zone", "structure": "1-min structure",
+    label = {"grok": "Grok conviction", "claude": "Claude conviction",
+             "zone": "zone", "structure": "1-min structure",
              "pattern": "pattern", "trend": "trend", "news": "news"}
     why = []
     for k, c in contrib:

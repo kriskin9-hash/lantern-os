@@ -7904,9 +7904,11 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         _news   = _ev_news_sentiment(ticker)
         _consec = locals().get("_consec") or {}
         _hl, _lh = _consec.get("higher_lows", 0), _consec.get("lower_highs", 0)
-        _ev = _score_ev({
+        # Council input — saved on `analysis` so the post-Claude re-score (below)
+        # can fold Claude's conviction in as a graded signal without rebuilding it.
+        _ev_input = {
             "direction":         _dir,
-            "llm_conf":          conf,
+            "grok_conf":         conf,   # Grok analyst — Claude folded in after its call
             "in_zone":           bool((riley.get("zone") or {}).get("in_zone")),
             "zone_strength":     _zone.get("strength", 0),
             "zone_touches":      _zone.get("touches", 0),
@@ -7918,7 +7920,9 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             "news_sentiment":    _news,
             "backtest_winrate":  _wr if _wr is not None else 0.5,
             "target_r":          _tr,
-        })
+        }
+        analysis["_sigma0_ev_input"] = _ev_input
+        _ev = _score_ev(_ev_input)
         _ev["instruction"] = {
             "ticker": ticker, "direction": analysis.get("direction"),
             "entry":  round(price, 4),
@@ -8496,7 +8500,46 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         log_agent("system", "CLAUDE", f"Error {ticker}: {e}")
         return {"status": "skipped", "ticker": ticker, "reason": f"Claude error: {e}"}
 
-    if not decision.get("execute") or decision.get("action") == "HOLD":
+    # ── Σ₀ council final decision — Grok + Claude folded in as graded evidence ──
+    # Claude is no longer a hard gate. Its directional conviction becomes the
+    # `claude` council signal and the Σ₀ EV re-scores with BOTH grok + claude; the
+    # combined EV is the sole ENTER/SKIP authority (portfolio risk stays enforced
+    # downstream by agent_risk_manager — Claude's HOLD was redundant with it). Set
+    # SIGMA0_EV=0 to restore the legacy Claude-veto behavior.
+    _ev_input = analysis.get("_sigma0_ev_input")
+    if os.getenv("SIGMA0_EV", "1") != "0" and _ev_input and _score_ev:
+        _cl_action = (decision.get("action") or "HOLD").upper()
+        _cl_dir = {"BUY": "BULLISH", "SELL": "BEARISH"}.get(_cl_action, "NEUTRAL")
+        if _cl_dir == "NEUTRAL":
+            _claude_conf = 35            # HOLD — a lean against, not a veto
+        elif _cl_dir == analysis.get("direction"):
+            _claude_conf = 78            # confirms the trade direction
+        else:
+            _claude_conf = 15            # opposes the trade direction
+        _ev2_input = dict(_ev_input); _ev2_input["claude_conf"] = _claude_conf
+        _ev2 = _score_ev(_ev2_input)
+        _ev2["instruction"] = (analysis.get("sigma0") or {}).get("instruction")
+        analysis["sigma0"] = _ev2       # graded + persisted on the entry record
+        log_agent("system", "SIGMA0",
+            f"{ticker} council EV {_ev2['ev_r']:+.2f}R p_win {_ev2['p_win']:.2f} "
+            f"→ {_ev2['decision']} | claude {_cl_action}({_claude_conf}) "
+            f"| {', '.join(_ev2['why'])}")
+        if _ev2["decision"] == "SKIP":
+            return {"status": "skipped", "ticker": ticker,
+                    "reason": f"Σ₀ council EV {_ev2['ev_r']:+.2f}R / p_win {_ev2['p_win']:.2f} below entry bar",
+                    "direction": analysis.get("direction"), "confidence": conf,
+                    "action": "HOLD", "catalyst": analysis.get("catalyst", ""),
+                    "grok_score": analysis.get("confidence", conf), "sigma0": _ev2}
+        # Council says ENTER — override a Claude HOLD/no-execute into the directional
+        # order. size_pct is already clamped to profile min/max (agent_claude_decision),
+        # so it is a valid size even when Claude declined.
+        if not decision.get("execute") or _cl_action == "HOLD":
+            decision["execute"] = True
+            decision["action"] = "BUY" if analysis.get("direction") == "BULLISH" else "SELL"
+            log_agent("system", "SIGMA0",
+                f"{ticker} council overrides Claude HOLD → {decision['action']} (EV +)")
+    elif not decision.get("execute") or decision.get("action") == "HOLD":
+        # Legacy: Claude HOLD / no-execute is a hard veto (SIGMA0_EV=0).
         reason = decision.get("reasoning", "No clear signal")
         log_agent("system", "CLAUDE", f"{ticker} — {reason}")
         return {"status": "skipped", "ticker": ticker, "reason": reason,

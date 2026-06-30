@@ -1,5 +1,5 @@
 {
-  "built_at": 1782487209.3741558,
+  "built_at": 1782848900.6877778,
   "docs": [
     "README.md",
     "CLAUDE.md",
@@ -25,6 +25,7 @@
     "docs/SIGMA0-CONTINUAL-TRAINING.md",
     "docs/KEYSTONE-PROGRESS-REPORT-2026-06-19.md",
     "docs/SIGMA0-COLLAPSE-CERTIFICATE.md",
+    "docs/SIGMA0-EV-GATE.md",
     "docs/SIGMA0-C3-NONCOLLAPSE-NORMAL.md",
     "docs/SIGMA0-T1-NONNORMAL-DICHOTOMY.md",
     "docs/SIGMA0-COLLAPSE-EXPLAINER.md",
@@ -47,6 +48,6 @@
     "docs/convergence-io/CEG.md",
     "docs/convergence-io/DILATION.md"
   ],
-  "sections": 651,
-  "sha256": "8dd9046f77766ea7ebaa2c0f5331a6bd99958ad3672d23db11f06574bd70d0b3"
+  "sections": 668,
+  "sha256": "06e7f4571d3965726f81df27a938f19858c602cd05a2c95025a00e6df7f5efea"
 }
