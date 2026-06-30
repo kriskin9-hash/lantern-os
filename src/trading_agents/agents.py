@@ -7305,6 +7305,87 @@ Return ONLY valid JSON with this exact structure (keep all text fields under 12 
         return results
 
 
+# ── Σ₀ EV evidence helpers: cheap per-ticker win-rate + directional news ───────
+# Feed the convergence_ev scorer with LIVE base rate (realized win-rate) and news
+# sentiment, instead of the neutral defaults. Both are cheap (one SQLite read /
+# one tail-read of the shared news registry) and cached so a 1-min scan is light.
+_EV_NEWS_CACHE = {}
+_EV_NEWS_POS = ("surge", "rally", "beat", "beats", "record", "gain", "gains", "rise",
+                "rises", "jump", "jumps", "soar", "soars", "upgrade", "upgraded",
+                "bullish", "strong", "growth", "profit", "tops", "raises", "raised",
+                "outperform", "buy", "rebound", "wins", "approval", "expands")
+_EV_NEWS_NEG = ("drop", "drops", "fall", "falls", "plunge", "plunges", "crash", "miss",
+                "misses", "loss", "losses", "sink", "sinks", "slump", "downgrade",
+                "downgraded", "bearish", "weak", "cut", "cuts", "layoff", "layoffs",
+                "probe", "lawsuit", "warn", "warns", "warning", "investigation",
+                "recall", "slides", "tumble", "tumbles", "halts", "bankruptcy")
+
+
+def _ev_recent_win_rate(ticker: str):
+    """Realized win-rate in [0,1] for the EV base rate: last 10 closed trades for
+    this ticker, else portfolio-wide last 20. None when there isn't enough history
+    (the scorer then falls back to its 0.5 prior)."""
+    try:
+        con = sqlite3.connect(LESSONS_DB)
+        rows = con.execute(
+            "SELECT pnl_pct FROM trade_history WHERE symbol=? AND status='closed' "
+            "AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 10", (ticker,)).fetchall()
+        if len(rows) < 5:
+            rows = con.execute(
+                "SELECT pnl_pct FROM trade_history WHERE status='closed' "
+                "AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 20").fetchall()
+        con.close()
+        if len(rows) < 5:
+            return None
+        pnls = [r[0] for r in rows]
+        return len([p for p in pnls if p > 0]) / len(pnls)
+    except Exception:
+        return None
+
+
+def _ev_news_sentiment(ticker: str):
+    """Directional news sentiment in [-1,+1] for `ticker`, from the SHARED CSF news
+    registry (the same Alpaca-backed feed Explore/the trader news panel use):
+    impact-weighted keyword polarity over recent headlines that tag this ticker.
+    0.0 when there's no recent news. Cached 5 minutes."""
+    import time as _t
+    now = _t.time()
+    hit = _EV_NEWS_CACHE.get(ticker)
+    if hit and now - hit[0] < 300:
+        return hit[1]
+    score = 0.0
+    try:
+        path = os.path.join(os.path.dirname(__file__), "..", "..",
+                            "data", "lantern-garage", "trading", "news.jsonl")
+        if os.path.exists(path):
+            up = ticker.upper()
+            num = 0.0
+            wsum = 0.0
+            with open(path, "r", encoding="utf-8") as fh:
+                lines = fh.readlines()[-500:]   # recent tail only — cheap
+            for ln in lines:
+                try:
+                    rec = json.loads(ln)
+                except Exception:
+                    continue
+                if up not in [str(s).upper() for s in (rec.get("symbols") or [])]:
+                    continue
+                hl = (rec.get("headline") or "").lower()
+                pos = sum(1 for w in _EV_NEWS_POS if w in hl)
+                neg = sum(1 for w in _EV_NEWS_NEG if w in hl)
+                if pos == neg:
+                    continue
+                w = 0.5 + (rec.get("impact", 40) or 40) / 100.0    # weight by impact
+                num += (1.0 if pos > neg else -1.0) * w
+                wsum += w
+            if wsum > 0:
+                score = max(-1.0, min(1.0, num / wsum))
+    except Exception:
+        score = 0.0
+    _EV_NEWS_CACHE[ticker] = (now, score)
+    return score
+
+
 def fetch_ticker_price(ticker: str) -> float:
     """Fetch current price — used in parallel pre-fetch stage."""
     try:
@@ -7676,8 +7757,16 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         _struct = riley.get("structure") or {}
         _pat    = {"PERFECT": "A", "GOOD": "B"}.get(riley.get("entry_quality"))
         _tr     = abs(float(profile.get("tp", 8)) / float(profile.get("stop", -4) or -4))
+        _dir    = analysis.get("direction", "NEUTRAL")
+        # Live evidence (no longer neutral defaults): realized win-rate as the base
+        # rate, directional news sentiment from the shared feed, and higher-tf trend
+        # agreement from the consecutive-trend read computed upstream (if present).
+        _wr     = _ev_recent_win_rate(ticker)
+        _news   = _ev_news_sentiment(ticker)
+        _consec = locals().get("_consec") or {}
+        _hl, _lh = _consec.get("higher_lows", 0), _consec.get("lower_highs", 0)
         _ev = _score_ev({
-            "direction":         analysis.get("direction", "NEUTRAL"),
+            "direction":         _dir,
             "llm_conf":          conf,
             "in_zone":           bool((riley.get("zone") or {}).get("in_zone")),
             "zone_strength":     _zone.get("strength", 0),
@@ -7685,6 +7774,10 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             "structure_shifted": bool(_struct.get("structure_shifted")),
             "structure_conf":    _struct.get("confidence", 0),
             "pattern_grade":     _pat,
+            "trend_aligned":     (_dir == "BULLISH" and _hl >= 3) or (_dir == "BEARISH" and _lh >= 3),
+            "trend_conflicts":   (_dir == "BULLISH" and _lh >= 3) or (_dir == "BEARISH" and _hl >= 3),
+            "news_sentiment":    _news,
+            "backtest_winrate":  _wr if _wr is not None else 0.5,
             "target_r":          _tr,
         })
         _ev["instruction"] = {
