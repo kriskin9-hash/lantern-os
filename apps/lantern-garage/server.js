@@ -561,7 +561,7 @@ server.listen(port, host, () => {
   // ── Crypto Price & News Collector (30s polling) ──
   const CryptoCollector = require("./lib/crypto-collector");
   const cryptoCollector = new CryptoCollector();
-  cryptoCollector.start(30000); // 30s interval
+  cryptoCollector.start(10000); // 10s (#1697: tighter so 24/7 crypto price ticks are visible/flash)
   deps.cryptoCollector = cryptoCollector; // Make available to routes
 
   // ── Market News Collector (10-min polling, watchlist + broad market RSS) ──

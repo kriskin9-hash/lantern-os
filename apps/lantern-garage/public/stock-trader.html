@@ -171,10 +171,12 @@
   /* Order ticket trigger row */
   .order-ticket{display:flex;align-items:center;gap:6px;padding:0 14px 10px}
   .order-ticket button{flex:1;font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 10px;border-radius:3px;cursor:pointer;border:1px solid transparent;letter-spacing:.05em;transition:background .15s}
-  .btn-buy{background:rgba(0,212,170,.12);color:var(--green);border-color:rgba(0,212,170,.3)}
-  .btn-buy:hover{background:rgba(0,212,170,.22)}
-  .btn-sell{background:rgba(255,95,109,.12);color:var(--red);border-color:rgba(255,95,109,.3)}
-  .btn-sell:hover{background:rgba(255,95,109,.22)}
+  /* #1696: always-vibrant BUY/SELL — bold fill + bright text (no longer relies on
+     Σ₀ highlighting to stand out). */
+  .btn-buy{background:rgba(0,212,170,.32);color:#7df5d6;border-color:var(--green);font-weight:700}
+  .btn-buy:hover{background:rgba(0,212,170,.5);color:#defff6}
+  .btn-sell{background:rgba(255,95,109,.32);color:#ffb3ba;border-color:var(--red);font-weight:700}
+  .btn-sell:hover{background:rgba(255,95,109,.5);color:#ffe1e4}
   /* Σ₀-grounded signal emphasis (#1578): a side is highlighted only when the
      card's dir matches AND conf ≥ the kalshi-suggest MIN_CONVICTION floor (65%).
      Otherwise (flat / quiet / low-confidence) BOTH buttons mute — no emphasis
@@ -182,8 +184,8 @@
   .order-ticket button.sig-on{transition:background .15s,box-shadow .15s}
   .btn-buy.sig-on{background:rgba(0,212,170,.30);border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset,0 0 10px rgba(0,212,170,.25)}
   .btn-sell.sig-on{background:rgba(255,95,109,.30);border-color:var(--red);box-shadow:0 0 0 1px var(--red) inset,0 0 10px rgba(255,95,109,.25)}
-  .order-ticket button.sig-off{opacity:.4;filter:grayscale(.5)}
-  .order-ticket button.sig-off:hover{opacity:.6}
+  /* #1696: buttons stay vibrant — Σ₀ no longer mutes them (sig-off is a no-op). */
+  .order-ticket button.sig-off{opacity:1;filter:none}
   @media (prefers-reduced-motion: reduce){ .order-ticket button{transition:none} }
   /* Chart canvas + overlay — canvas covers the full ladder and draws its own
      right-side price axis (52px) + bottom time axis (16px); the HTML overlay
@@ -719,9 +721,9 @@ const _MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','No
 function _fmtTick(d, kind, showDate){
   if(kind === 'year')  return String(d.getFullYear());
   if(kind === 'month') return _MONTHS[d.getMonth()] + (d.getMonth()===0 ? " '"+String(d.getFullYear()).slice(2) : '');
-  if(kind === 'day')   return (d.getMonth()+1)+'/'+d.getDate();
+  if(kind === 'day')   return String(d.getDate());           // #1698: day number only (28, not 6/28)
   const hhmm = d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',hour12:false});
-  return showDate ? (d.getMonth()+1)+'/'+d.getDate()+' '+hhmm : hhmm;
+  return showDate ? d.getDate()+' '+hhmm : hhmm;             // month is carried by the 'month' tick
 }
 function timeAxisTicks(bars, maxTicks){
   const n = bars.length;
