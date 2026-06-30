@@ -90,6 +90,10 @@ def action_scan_market(args):
         return {
             'signals': signals,
             'zones': zones,
+            # The engine's per-ticker decision log (why each ticker entered or was
+            # skipped) — so the UI can SHOW that it's actually looking for entries,
+            # not just report "0 signals". Newest last; capped in log_agent at 100.
+            'logs': list(agent_log),
             'timestamp': datetime.utcnow().isoformat() + 'Z',
             'watchlist_count': len(watchlist),
             'signals_count': len(signals)

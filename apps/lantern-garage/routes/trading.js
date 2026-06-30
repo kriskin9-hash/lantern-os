@@ -209,6 +209,22 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
       const scan = cacheEntry.data;
       const signals = Array.isArray(scan.signals) ? scan.signals : [];
       if (!scan.error) {
+        // The engine's per-ticker decision log (#1623) — surface the REASONS each
+        // ticker entered or was skipped (Grok/Riley/Σ₀ EV/threshold), so the feed
+        // proves the scanner is actually evaluating every ticker, not just "0
+        // signals". Keep only the informative per-ticker lines (drop the engine's
+        // own scan-cycle banners, which the summary below already conveys).
+        const engineLogs = Array.isArray(scan.logs) ? scan.logs : [];
+        const decisionLines = engineLogs
+          .filter((l) => l && l.body && !/^Scan starting/i.test(l.body))
+          .slice(-40)
+          .map((l, i) => ({
+            id: `scan_${scan.timestamp}_eng_${i}`,
+            agent: (l.agent || l.type || 'scanner').toString().toLowerCase(),
+            action: String(l.body).slice(0, 160),
+            symbol: '',
+            timestamp: scan.timestamp,
+          }));
         const logEntries = [
           {
             id: `scan_${scan.timestamp}_summary`,
@@ -217,6 +233,7 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
             symbol: '',
             timestamp: scan.timestamp,
           },
+          ...decisionLines,
           ...signals.filter((s) => s && s.symbol).map((s) => ({
             id: `scan_${scan.timestamp}_${s.symbol}`,
             agent: s.agent || 'scanner',
