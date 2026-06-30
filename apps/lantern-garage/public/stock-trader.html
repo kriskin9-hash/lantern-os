@@ -1496,7 +1496,7 @@ function renderWatchlist(){
     const dir= d.direction||sig.direction||'';
     const cl = t.chg_pct>0?'up':t.chg_pct<0?'dn':'flat';
     const sigTxt = dir ? `<span class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'}${d.confidence||sig.confidence||0}%</span>` : '<span></span>';
-    return `<div class="wl-item${activeTicker===t.ticker?' active':''}" role="button" tabindex="0" aria-label="View ${t.ticker} chart" onclick="focusTicker('${t.ticker}')" onkeydown="if(event.key==='Enter'){focusTicker('${t.ticker}')}">
+    return `<div class="wl-item${activeTicker===t.ticker?' active':''}" role="button" tabindex="0" draggable="true" data-wl-ticker="${t.ticker}" aria-label="View ${t.ticker} chart" onclick="focusTicker('${t.ticker}')" onkeydown="if(event.key==='Enter'){focusTicker('${t.ticker}')}">
       <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-price">$${_wlPx(t.price)}</span></div>
       <div class="wl-row"><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span>${sigTxt}<button class="wl-remove" aria-label="Remove ${t.ticker} from watchlist" onclick="removeWatchlistTicker('${t.ticker}',event)">×</button></div>
     </div>`;
@@ -2097,12 +2097,28 @@ function initFooterResize(){
 
 // Drag-to-reorder chart slots in fixed layouts. Delegated on the grid (survives
 // re-renders); only the ⠿ handle initiates a drag, so chart pan/zoom still works.
+let _dragWlTk = null;   // a watchlist symbol being dragged onto a chart (#1700)
 function initChartDrag(){
   const grid = document.getElementById('cardsGrid');
   if(!grid || grid._dragInit) return;
   grid._dragInit = true;
   let dragTk = null;
   const clear = ()=> grid.querySelectorAll('.card.dragging,.card.drag-over').forEach(c=>c.classList.remove('dragging','drag-over'));
+
+  // Watchlist → chart: dragging a watchlist row onto a chart slot switches THAT
+  // slot to the dragged symbol (others unchanged). Delegated on the list.
+  const wlList = document.getElementById('wlList');
+  if(wlList){
+    wlList.addEventListener('dragstart', (e)=>{
+      const item = e.target.closest('.wl-item');
+      if(!item){ return; }
+      _dragWlTk = item.dataset.wlTicker;
+      e.dataTransfer.effectAllowed = 'copy';
+      try{ e.dataTransfer.setData('text/plain', _dragWlTk||''); }catch(_){}
+    });
+    wlList.addEventListener('dragend', ()=>{ _dragWlTk = null; clear(); });
+  }
+
   grid.addEventListener('dragstart', (e)=>{
     const h = e.target.closest('.drag-handle');
     if(!h || !slotCount){ return; }
@@ -2111,27 +2127,30 @@ function initChartDrag(){
     try{ e.dataTransfer.setData('text/plain', dragTk||''); }catch(_){}
     if(card) card.classList.add('dragging');
   });
-  grid.addEventListener('dragend', clear);
+  grid.addEventListener('dragend', ()=>{ clear(); dragTk = null; });
   grid.addEventListener('dragover', (e)=>{
-    if(!dragTk || !slotCount) return;
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    if((!dragTk && !_dragWlTk) || !slotCount) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = _dragWlTk ? 'copy' : 'move';
     const over = e.target.closest('.card');
     grid.querySelectorAll('.card.drag-over').forEach(c=>c.classList.remove('drag-over'));
     if(over && over.dataset.ticker !== dragTk) over.classList.add('drag-over');
   });
   grid.addEventListener('drop', (e)=>{
-    if(!dragTk || !slotCount) return;
+    if((!dragTk && !_dragWlTk) || !slotCount) return;
     e.preventDefault();
     const over = e.target.closest('.card');
     if(over){
       const dropTk = over.dataset.ticker;
-      const i = chartSlots.indexOf(dragTk), j = chartSlots.indexOf(dropTk);
-      if(dropTk && dropTk!==dragTk && i>=0 && j>=0){
-        chartSlots[i]=dropTk; chartSlots[j]=dragTk;   // swap slot positions
-        persistSlots(); lastCardOrder=''; renderCards();
+      if(_dragWlTk){
+        // #1700: replace this slot with the dragged watchlist symbol
+        const idx = chartSlots.indexOf(dropTk);
+        if(idx >= 0 && dropTk !== _dragWlTk){ chartSlots[idx] = _dragWlTk; persistSlots(); lastCardOrder=''; renderCards(); }
+      } else if(dragTk){
+        const i = chartSlots.indexOf(dragTk), j = chartSlots.indexOf(dropTk);
+        if(dropTk && dropTk!==dragTk && i>=0 && j>=0){ chartSlots[i]=dropTk; chartSlots[j]=dragTk; persistSlots(); lastCardOrder=''; renderCards(); }
       }
     }
-    clear(); dragTk = null;
+    clear(); dragTk = null; _dragWlTk = null;
   });
 }
 
