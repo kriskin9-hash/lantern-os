@@ -1113,6 +1113,13 @@ async function handleStreamChat(req, url, res) {
   // so without it grok successes were silently never recorded to the leaderboard (#1236).
   const _EXECUTABLE_CLOUD = new Set(["anthropic", "gemini", "openai", "xai", "grok"]);
 
+  // Accumulated model output. Declared up here (not at the dispatch loop) because
+  // sendDone() closes over it and some early-return paths — the malformed/empty
+  // body guard (#1504), the convergence-agent fast path — call sendDone before the
+  // dispatch loop runs. A `let` declared later left those calls in the temporal
+  // dead zone ("Cannot access 'fullReply' before initialization").
+  let fullReply = "";
+
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
     const signature = {
@@ -1370,11 +1377,16 @@ async function handleStreamChat(req, url, res) {
   };
 
   // Honest bad-request handling: the body arrived but couldn't be parsed (malformed
-  // JSON / bad encoding), so `message` is empty for a reason that has nothing to do
-  // with providers. Say so plainly instead of falling through to "all providers
-  // failed / cloud unreachable" (which sent a debugging session down the wrong path).
-  if (parsed.bodyError && !message) {
-    sendError("I couldn't read your message — the request body was malformed or had a bad encoding (e.g. a leading UTF-8 BOM). Please resend.");
+  // JSON / bad encoding) or was empty, so `message` is empty for a reason that has
+  // nothing to do with providers. Say so plainly instead of falling through to "all
+  // providers failed / cloud unreachable" (which sent a debugging session down the
+  // wrong path). The parser (lib/stream-chat/request.js) signals this via
+  // `parsed.parseError` ("malformed_json" | "empty_body"); the older `bodyError`
+  // flag it was checked against here was never set, leaving this guard dead (#1504).
+  if (parsed.parseError && !message) {
+    sendError(parsed.parseError === "empty_body"
+      ? "I couldn't read your message — the request body was empty. Please resend."
+      : "I couldn't read your message — the request body was malformed or had a bad encoding (e.g. a leading UTF-8 BOM). Please resend.");
     sendDone("offline", { agent: doneAgentName, online: false, error: "bad_request_body", suggestions: FALLBACK_DOORS });
     return;
   }
@@ -1422,7 +1434,7 @@ async function handleStreamChat(req, url, res) {
     providerState.openrouter.hasKey || process.env.OLLAMA_BASE_URL
   );
 
-  let fullReply = "";
+  // `fullReply` is declared earlier (above sendDone) so early-return paths are safe (#1504).
 
   // A cloud provider can answer HTTP 200 with ZERO streamed tokens — a safety block,
   // a soft rate-limit, or a grounding misfire. That is NOT a success: finalizing it
