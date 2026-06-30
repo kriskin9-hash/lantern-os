@@ -261,6 +261,25 @@ class TraderAgent {
    * Get open positions from Alpaca
    * Returns: { positions: [...], account: {...} }
    */
+  async getOrders(limit = 50) {
+    // Broker-truth order history from Alpaca (engine + manual). Cached 45s — it
+    // changes only when a trade fires, and the cold Python spawn + Alpaca call can
+    // run ~10s, so a short cache would re-spawn on every poll. 20s call timeout
+    // (fastTimeout's 7s is too tight for the cold spawn).
+    const cacheKey = 'orders';
+    if (this.cache[cacheKey] && Date.now() - this.cache[cacheKey].time < 45000) {
+      return this.cache[cacheKey].data;
+    }
+    try {
+      const result = await this._callPython('get_orders', { limit }, 20000);
+      this.cache[cacheKey] = { data: result, time: Date.now() };
+      return result;
+    } catch (error) {
+      console.error('[TraderAgent] Get orders failed:', error.message);
+      return this._staleOr(cacheKey, { orders: [], count: 0, error: error.message });
+    }
+  }
+
   async getPositions() {
     const cacheKey = 'positions';
     if (this.cache[cacheKey] && Date.now() - this.cache[cacheKey].time < 60000) { // 60s

@@ -406,24 +406,31 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
   }
 
   // GET /api/trading/orders
-  // Real local paper-trade ledger — the SAME store that POST /api/trading/orders
-  // and /orders/place write to (tradingStore), so a placed order shows up here.
-  // Previously this read CSF memory, which surfaced a stale "shape-array" shape
-  // fixture and never reflected placed orders (#1228).
+  // Broker truth from Alpaca (#1714): every order the account submitted —
+  // autonomous (Σ₀ engine) AND manual — so the Orders / Order-history tabs
+  // reconcile with Positions and Realized P&L. The engine places straight to
+  // Alpaca and never wrote to the old local tradingStore ledger, which is why
+  // those tabs showed "None" while real positions and profit existed. Falls back
+  // to the local ledger only if the broker call fails.
   if (url.pathname === '/api/trading/orders' && req.method === 'GET') {
     try {
       const limitParam = parseInt(url.searchParams.get('limit') || '50', 10);
-      const stored = tradingStore.listOrders(limitParam > 0 ? { limit: limitParam } : {});
-      const orders = stored.slice().reverse().map((o) => ({
-        id: o.id || o.order_id || '',
-        symbol: o.symbol || o.ticker || '',
-        side: o.side || '',
-        qty: o.qty || 0,
-        type: o.type || o.order_type || 'market',
-        status: o.status || 'unknown',
-        filled_at: o.filled_at || o.submitted_at || '',
-        filled_avg: o.filled_avg || o.price || 0,
-      }));
+      let orders = [];
+      if (traderAgent) {
+        const r = await traderAgent.getOrders(limitParam > 0 ? limitParam : 50);
+        orders = (r && Array.isArray(r.orders)) ? r.orders : [];
+      }
+      if (!orders.length) {
+        // Fallback: local ledger (manual-only) if the broker returned nothing.
+        const stored = tradingStore.listOrders(limitParam > 0 ? { limit: limitParam } : {});
+        orders = stored.slice().reverse().map((o) => ({
+          id: o.id || o.order_id || '', symbol: o.symbol || o.ticker || '',
+          side: o.side || '', qty: o.qty || 0, type: o.type || o.order_type || 'market',
+          limit_price: o.limit_price || null, status: o.status || 'unknown',
+          filled_avg_price: o.filled_avg || o.price || 0,
+          filled_at: o.filled_at || o.submitted_at || '', created_at: o.created_at || '',
+        }));
+      }
       sendJson(res, orders, 200);
     } catch (error) {
       console.error('[Trading] /orders error:', error.message);

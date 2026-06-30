@@ -409,6 +409,46 @@ def action_get_positions(args):
         }
 
 
+def action_get_orders(args):
+    """
+    Broker-truth order history straight from Alpaca — every order the account
+    submitted, autonomous (Σ₀ engine) or manual. Args: {limit?: int}.
+    Returns: {orders: [{id, symbol, side, qty, type, limit_price, status,
+              filled_avg_price, filled_at, submitted_at, created_at}], count}.
+    """
+    def _f(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+    try:
+        limit = int(args.get('limit', 50) or 50)
+        raw = alpaca.list_orders(status='all', limit=max(1, min(limit, 500)),
+                                 direction='desc', nested=False)
+        orders = []
+        for o in raw:
+            qty = _f(getattr(o, 'qty', None))
+            if not qty:
+                qty = _f(getattr(o, 'filled_qty', None)) or 0
+            orders.append({
+                'id':               str(getattr(o, 'id', '') or ''),
+                'symbol':           getattr(o, 'symbol', '') or '',
+                'side':             getattr(o, 'side', '') or '',
+                'qty':              qty,
+                'type':             getattr(o, 'type', None) or getattr(o, 'order_type', None) or 'market',
+                'limit_price':      _f(getattr(o, 'limit_price', None)),
+                'status':           getattr(o, 'status', '') or '',
+                'filled_avg_price': _f(getattr(o, 'filled_avg_price', None)),
+                'filled_at':        str(getattr(o, 'filled_at', '') or '') or None,
+                'submitted_at':     str(getattr(o, 'submitted_at', '') or '') or None,
+                'created_at':       str(getattr(o, 'created_at', '') or '') or None,
+            })
+        return {'orders': orders, 'count': len(orders)}
+    except Exception as e:
+        log.error(f"get_orders failed: {str(e)}")
+        return {'orders': [], 'count': 0, 'error': str(e)}
+
+
 def action_get_bars(args):
     """
     Get OHLCV bars for a ticker
@@ -723,6 +763,7 @@ def main():
         'get_market_status': action_get_market_status,
         'get_watchlist_prices': action_get_watchlist_prices,
         'get_positions': action_get_positions,
+        'get_orders': action_get_orders,
         'get_bars': action_get_bars,
         'get_bars_multi': action_get_bars_multi,
         'place_order': action_place_order,
