@@ -58,6 +58,12 @@
   .site-footer{display:none}         /* full-screen app has its own footer; suppress the injected global one (#1579) */
   /* ── Layout ── */
   /* Leave room for the injected global site-nav (52px sticky bar, #1579). */
+  /* ── Accessibility (#1632, WCAG 2.1 AA) ── */
+  .visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  :focus-visible{outline:2px solid var(--blue,#3b82f6);outline-offset:2px;border-radius:2px}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  }
   .layout{display:grid;grid-template-columns:180px 1fr;grid-template-rows:52px minmax(0,1fr) var(--footer-h, clamp(220px,34vh,460px));height:calc(100vh - 52px)}
   /* Draggable divider to resize the bottom panel section (#1630) */
   .footer-resize{position:absolute;top:-4px;left:0;right:0;height:8px;cursor:ns-resize;z-index:30}
@@ -105,7 +111,7 @@
   .wl-add input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:4px 6px;border-radius:3px}
   .wl-add button{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .wl-add button:hover{color:var(--text0)}
-  .wl-remove{font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;padding:0 4px}
+  .wl-remove{font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;padding:0 4px;background:none;border:0;line-height:1}
   .wl-remove:hover{color:var(--red)}
   /* ── Ticker cards grid ── */
   .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px}
@@ -287,7 +293,8 @@
 <div class="layout">
 
 <!-- Header -->
-<div class="header">
+<h1 class="visually-hidden">Keystone Stock Trader — live charts, watchlist, and Σ₀ signals</h1>
+<div class="header" role="region" aria-label="Trading toolbar">
   <div class="logo">Keystone<span>Trader</span></div>
   <div class="badge badge-paper">PAPER</div>
   <div class="hstat"><div class="l">Equity</div><div class="v" id="hEquity">—</div></div>
@@ -296,7 +303,7 @@
   <div class="hstat"><div class="l">Positions</div><div class="v" id="hPos">—</div></div>
   <div class="hstat"><div class="l">Market</div><div class="v" id="hMkt">—</div></div>
   <button id="zoomBackBtn" class="chart-ctrl" style="display:none;cursor:pointer" onclick="closeFullscreenChart()" title="Back to the chart grid">← Back to grid</button>
-  <select id="chartLayoutSelect" class="chart-ctrl" onchange="setSlotCount(this.value)" title="How many charts to show — fewer = bigger">
+  <select id="chartLayoutSelect" class="chart-ctrl" aria-label="Number of charts to show" onchange="setSlotCount(this.value)" title="How many charts to show — fewer = bigger">
     <option value="0">⊞ All</option>
     <option value="1">1 chart</option>
     <option value="2">2 charts</option>
@@ -306,11 +313,11 @@
     <option value="10">10 charts</option>
     <option value="20">20 charts</option>
   </select>
-  <select id="chartTypeSelect" class="chart-ctrl" onchange="changeChartType(this.value)">
+  <select id="chartTypeSelect" class="chart-ctrl" aria-label="Chart type" onchange="changeChartType(this.value)">
     <option value="line">Line</option>
     <option value="candle">Candles</option>
   </select>
-  <select id="chartTfSelect" class="chart-ctrl" onchange="changeTimeframe(this.value)">
+  <select id="chartTfSelect" class="chart-ctrl" aria-label="Chart timeframe" onchange="changeTimeframe(this.value)">
     <option value="1m">1m</option>
     <option value="5m" selected>5m</option>
     <option value="15m">15m</option>
@@ -329,23 +336,23 @@
 </div>
 
 <!-- Sidebar -->
-<div class="sidebar">
+<div class="sidebar" role="complementary" aria-label="Watchlist">
   <div class="wl-add">
-    <input type="text" id="wlAddInput" placeholder="Add symbol" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
-    <button onclick="addWatchlistTicker()">+</button>
+    <input type="text" id="wlAddInput" aria-label="Add symbol to watchlist" placeholder="Add symbol" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
+    <button onclick="addWatchlistTicker()" aria-label="Add symbol to watchlist">+</button>
   </div>
   <div id="wlInfo" class="wl-info"></div>
   <div id="wlList"></div>
 </div>
 
 <!-- Main: ticker cards -->
-<div class="main">
+<div class="main" role="main" aria-label="Charts">
   <div class="cards-grid" id="cardsGrid"></div>
 </div>
 
 <!-- Footer -->
 <div class="footer" style="position:relative">
-  <div class="footer-resize" id="footerResize" title="Drag to resize"></div>
+  <div class="footer-resize" id="footerResize" role="separator" aria-label="Resize the panel section" tabindex="0" title="Drag to resize"></div>
   <div class="fpanel">
     <div class="panel-title">⚡ Σ₀ Signals — when to enter</div>
     <div id="sigma0Signals"></div>
@@ -372,11 +379,11 @@
     <div class="fs-header">
       <span class="fs-ticker" id="fsTicker">—</span>
       <span class="fs-price" id="fsPrice">—</span>
-      <select id="fsChartTypeSelect" class="chart-ctrl" onchange="changeChartType(this.value)">
+      <select id="fsChartTypeSelect" class="chart-ctrl" aria-label="Chart type" onchange="changeChartType(this.value)">
         <option value="line">Line</option>
         <option value="candle">Candles</option>
       </select>
-      <select id="fsChartTfSelect" class="chart-ctrl" onchange="changeTimeframe(this.value)">
+      <select id="fsChartTfSelect" class="chart-ctrl" aria-label="Chart timeframe" onchange="changeTimeframe(this.value)">
         <option value="1m">1m</option>
         <option value="5m">5m</option>
         <option value="15m">15m</option>
@@ -397,7 +404,7 @@
     </div>
     <div class="fs-body">
       <div class="zone-ladder" id="ladder-fs">
-        <canvas class="chart-canvas" id="chart-fs"></canvas>
+        <canvas class="chart-canvas" id="chart-fs" aria-hidden="true"></canvas>
         <div class="ladder-overlay" id="overlay-fs"></div>
       </div>
     </div>
@@ -431,12 +438,12 @@
 
       <div class="ot-row" id="otLimitRow" style="display:none">
         <span class="ot-label">Limit price</span>
-        <input type="number" class="ot-field" id="otLimitPrice" step="0.01" oninput="renderOrderTicket()">
+        <input type="number" class="ot-field" id="otLimitPrice" aria-label="Limit price" step="0.01" oninput="renderOrderTicket()">
       </div>
 
       <div class="ot-row">
         <span class="ot-label">Units</span>
-        <input type="number" class="ot-field" id="otQty" value="1" min="1" step="1" oninput="renderOrderTicket()">
+        <input type="number" class="ot-field" id="otQty" aria-label="Quantity" value="1" min="1" step="1" oninput="renderOrderTicket()">
       </div>
       <div class="ot-row"><span></span><span class="ot-usd" id="otUsdEquiv">≈ $0.00 USD</span></div>
 
@@ -444,24 +451,24 @@
         <div class="ot-section-title">Exits</div>
         <div class="ot-exit-row">
           <div class="ot-exit-head">
-            <input type="checkbox" id="otTpEnabled" onchange="otToggleExit('Tp')">
+            <input type="checkbox" id="otTpEnabled" aria-label="Enable take-profit" onchange="otToggleExit('Tp')">
             <span class="ot-label">Take profit, price</span>
           </div>
           <div class="ot-exit-fields">
-            <input type="number" class="ot-field" id="otTpPrice" step="0.01" disabled oninput="otSyncFromPrice('tp')">
+            <input type="number" class="ot-field" id="otTpPrice" aria-label="Take-profit price" step="0.01" disabled oninput="otSyncFromPrice('tp')">
             <span class="ot-tick-label">ticks</span>
-            <input type="number" class="ot-field" id="otTpTicks" step="1" disabled oninput="otSyncFromTicks('tp')">
+            <input type="number" class="ot-field" id="otTpTicks" aria-label="Take-profit ticks" step="1" disabled oninput="otSyncFromTicks('tp')">
           </div>
         </div>
         <div class="ot-exit-row">
           <div class="ot-exit-head">
-            <input type="checkbox" id="otSlEnabled" onchange="otToggleExit('Sl')">
+            <input type="checkbox" id="otSlEnabled" aria-label="Enable stop-loss" onchange="otToggleExit('Sl')">
             <span class="ot-label">Stop loss, price</span>
           </div>
           <div class="ot-exit-fields">
-            <input type="number" class="ot-field" id="otSlPrice" step="0.01" disabled oninput="otSyncFromPrice('sl')">
+            <input type="number" class="ot-field" id="otSlPrice" aria-label="Stop-loss price" step="0.01" disabled oninput="otSyncFromPrice('sl')">
             <span class="ot-tick-label">ticks</span>
-            <input type="number" class="ot-field" id="otSlTicks" step="1" disabled oninput="otSyncFromTicks('sl')">
+            <input type="number" class="ot-field" id="otSlTicks" aria-label="Stop-loss ticks" step="1" disabled oninput="otSyncFromTicks('sl')">
           </div>
         </div>
       </div>
@@ -1124,7 +1131,7 @@ function buildCard(ticker, d){
 <div class="card state-${state}" id="card-${ticker}">
   <div class="card-header">
     <div style="display:flex;align-items:center;gap:8px">
-      <span class="card-ticker" onclick="editSlot('${ticker}')" title="Click to change symbol">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
+      <span class="card-ticker" role="button" tabindex="0" aria-label="Change symbol, currently ${ticker}" onclick="editSlot('${ticker}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();editSlot('${ticker}')}" title="Click to change symbol">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="card-price" id="cp-${ticker}">—</span>
@@ -1133,7 +1140,7 @@ function buildCard(ticker, d){
   </div>
   <div id="meta-${ticker}">${confHtml}${watchHtml}</div>
   <div class="zone-ladder" id="ladder-${ticker}">
-    <canvas class="chart-canvas" id="chart-${ticker}"></canvas>
+    <canvas class="chart-canvas" id="chart-${ticker}" aria-hidden="true"></canvas>
     <div class="ladder-overlay" id="overlay-${ticker}"></div>
   </div>
   <div class="order-ticket">
@@ -1457,9 +1464,9 @@ function renderWatchlist(){
     const dir= d.direction||sig.direction||'';
     const cl = t.chg_pct>0?'up':t.chg_pct<0?'dn':'flat';
     const sigTxt = dir ? `<span class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'}${d.confidence||sig.confidence||0}%</span>` : '<span></span>';
-    return `<div class="wl-item${activeTicker===t.ticker?' active':''}" onclick="focusTicker('${t.ticker}')">
+    return `<div class="wl-item${activeTicker===t.ticker?' active':''}" role="button" tabindex="0" aria-label="View ${t.ticker} chart" onclick="focusTicker('${t.ticker}')" onkeydown="if(event.key==='Enter'){focusTicker('${t.ticker}')}">
       <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-price">$${_wlPx(t.price)}</span></div>
-      <div class="wl-row"><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span>${sigTxt}<span class="wl-remove" onclick="removeWatchlistTicker('${t.ticker}',event)">×</span></div>
+      <div class="wl-row"><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span>${sigTxt}<button class="wl-remove" aria-label="Remove ${t.ticker} from watchlist" onclick="removeWatchlistTicker('${t.ticker}',event)">×</button></div>
     </div>`;
   }).join('');
   if(activeTicker) renderSymbolInfo(activeTicker);
