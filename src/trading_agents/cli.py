@@ -216,15 +216,37 @@ def action_get_market_status(args):
         except:
             pass
 
+        # Honest day P&L from activity (#1691), not equity-vs-last_equity; and the
+        # market regime from SPY (the real market), not the account's frozen P&L.
+        import sqlite3 as _sql
+        unrealized = 0.0
+        try:
+            unrealized = sum(float(p.unrealized_pl) for p in alpaca.list_positions())
+        except Exception:
+            pass
+        realized_today = 0.0
+        try:
+            from agents import LESSONS_DB as _DB
+            _con = _sql.connect(_DB)
+            _row = _con.execute(
+                "SELECT COALESCE(SUM(pnl_usd),0) FROM trade_history "
+                "WHERE status='closed' AND pnl_usd IS NOT NULL AND ts LIKE ?",
+                (datetime.now().strftime('%Y-%m-%d') + '%',)).fetchone()
+            _con.close()
+            realized_today = float(_row[0] or 0)
+        except Exception:
+            pass
+        day_pnl_usd = round(unrealized + realized_today, 2)
+        day_pnl_pct = round(day_pnl_usd / equity * 100, 2) if equity else 0
         return {
             'market_open': market_open,
             'vix': vix,
             'vix_regime': vix_regime,
-            'market': 'BULLISH' if day_pnl_pct > 0 else 'BEARISH' if day_pnl_pct < 0 else 'NEUTRAL',
+            'market': 'BULLISH' if spy_1d > 0.1 else 'BEARISH' if spy_1d < -0.1 else 'NEUTRAL',
             'spy_1d': round(float(spy_1d), 2),
             'spy_5d': round(float(spy_5d), 2),
             'day_pnl_pct': day_pnl_pct,
-            'day_pnl_usd': equity - last_equity if 'last_equity' in locals() else 0,
+            'day_pnl_usd': day_pnl_usd,
             'equity': equity,
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         }
@@ -339,13 +361,38 @@ def action_get_positions(args):
                 'pnl_pct': float(pos.unrealized_plpc) * 100,
             })
 
+        # Day P&L from ACTUAL trading activity, not Alpaca's equity-vs-last_equity
+        # (which freezes after-hours and shows phantom gains with zero positions —
+        # #1691): unrealized on open positions + realized on trades CLOSED TODAY.
+        # When flat with no trades today this is exactly $0.
+        import sqlite3 as _sql
+        from datetime import datetime as _dt
+        unrealized = sum(p['unrealized_pl'] for p in positions)
+        realized_today = 0.0
+        try:
+            from agents import LESSONS_DB as _DB
+            _con = _sql.connect(_DB)
+            _today = _dt.now().strftime('%Y-%m-%d')
+            _row = _con.execute(
+                "SELECT COALESCE(SUM(pnl_usd),0) FROM trade_history "
+                "WHERE status='closed' AND pnl_usd IS NOT NULL AND ts LIKE ?",
+                (_today + '%',)).fetchone()
+            _con.close()
+            realized_today = float(_row[0] or 0)
+        except Exception as _e:
+            log.warning("realized-today query failed: %s", _e)
+        equity = round(float(account.equity), 2)
+        day_pnl = round(unrealized + realized_today, 2)
         return {
             'positions': positions,
             'account': {
-                'equity': round(float(account.equity), 2),
+                'equity': equity,
                 'cash': round(float(account.cash), 2),
                 'buying_power': round(float(account.buying_power), 2),
-                'pnl_today': round(float(account.equity) - float(account.last_equity), 2),
+                'pnl_today': day_pnl,
+                'day_pnl_pct': round(day_pnl / equity * 100, 2) if equity else 0,
+                'realized_today': round(realized_today, 2),
+                'unrealized': round(unrealized, 2),
             }
         }
     except Exception as e:
