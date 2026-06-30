@@ -18,7 +18,8 @@
 const fs = require("fs");
 const path = require("path");
 const { rankedFeed, pagedFeed, embedCards } = require("../lib/explore-feed");
-const { recordModelOutcome } = require("../lib/model-leaderboard");
+const { recordModelOutcome, recordOutcomeWithDecay } = require("../lib/model-leaderboard");
+const { buildUserNewsContext } = require("../lib/news-personalize");
 const { renderThumb } = require("../lib/explore-thumb");
 
 const SUCCESS_EVENTS = new Set(["click", "dwell", "like", "open"]);
@@ -100,8 +101,16 @@ module.exports = async function exploreRoute(req, res, url, deps) {
     }
     const seen = Array.isArray(body.seen) ? body.seen.slice(0, 1000).map(String) : [];
     const type = body.type && body.type !== "all" ? String(body.type) : null;
+    const topic = body.topic ? String(body.topic).slice(0, 40).toLowerCase() : null;
+    // Personalize (Reason): resolve the signed-in user and build their news
+    // context so the finance topic ranks by per-user relevance (watchlist +
+    // interests + their own engagement). Guests/local fall back to the shared
+    // desk-watchlist context. Cheap to build per request; only the finance
+    // producer consumes it.
+    const userId = (req.session && req.session.patreon && req.session.patreon.id) || null;
+    const userCtx = buildUserNewsContext(userId);
     try {
-      const feed = await pagedFeed({ seen, limit: body.limit, type });
+      const feed = await pagedFeed({ seen, limit: body.limit, type, topic, userCtx });
       sendJson(res, feed, 200);
     } catch (e) {
       sendJson(res, { cards: [], count: 0, error: e.message }, 200);
@@ -135,6 +144,11 @@ module.exports = async function exploreRoute(req, res, url, deps) {
     if (event !== "impression") {
       try {
         await recordModelOutcome(key, "explore", success, dwellMs, 0);
+        // Per-user signal (Remember): record the same outcome in the user's OWN
+        // "explore-user" scope so news-personalize can rank by what THIS user
+        // engages with, not just the crowd. Guests fold into the "global" scope.
+        const uid = (req.session && req.session.patreon && req.session.patreon.id) || "global";
+        recordOutcomeWithDecay("explore-user", uid, key, success, dwellMs, 0, 1.0);
       } catch (e) {
         sendJson(res, { ok: false, error: e.message }, 200);
         return true;

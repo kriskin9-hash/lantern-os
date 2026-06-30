@@ -567,7 +567,7 @@ server.listen(port, host, () => {
   // ── Market News Collector (10-min polling, watchlist + broad market RSS) ──
   const NewsCollector = require("./lib/news-collector");
   const newsCollector = new NewsCollector();
-  newsCollector.start(600000); // 10-min interval
+  newsCollector.start(300000); // 5-min interval
   deps.newsCollector = newsCollector; // Make available to routes
 
   // ── Kalshi Position Monitor (10s polling) + Convergence Trainer ──

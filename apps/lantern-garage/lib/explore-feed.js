@@ -28,7 +28,9 @@ const discover = require("../routes/discover-feeds");
 const youtube = require("../routes/youtube");
 const github = require("../routes/github-activity");
 const flourishing = require("./flourishing-feeds");
+const tradingNews = require("./trading-news");
 const { rankCandidates } = require("./model-leaderboard");
+const { rankNewsForUser } = require("./news-personalize");
 
 const REPO_ROOT = path.resolve(__dirname, "../../..");
 const PCSF_FILE = path.join(REPO_ROOT, "data", "pcsf", "explore.pcsf.json");
@@ -291,6 +293,83 @@ function docCards() {
     });
 }
 
+// Market news as feed cards (#1582/#1583). Reuses the local-first trading-news
+// CSF registry (lib/trading-news.js → free Yahoo Finance RSS via news-collector),
+// so Explore surfaces the SAME grounded headlines the trader page does — no new
+// ingestion path. Each card is a `read` (📰) typed card tagged topics:["finance",
+// <symbols…>] so the Finance chip and /explore.html?topic=finance can filter to it
+// while it still flows through the one ranked feed. A headline with no source/url
+// is dropped (External-Reality Rule: no card without a source).
+function financeCards(ctx) {
+  let records = [];
+  try {
+    records = tradingNews.queryRecentNews({ limit: 200 });
+  } catch {
+    return [];
+  }
+  records = (records || []).filter((r) => r && (r.headline || r.title) && (r.url || r.source));
+
+  // PERSONALIZE (Reason): when we know the user, rank the pool by per-user
+  // relevance so the most-relevant news leads. The order is preserved into the
+  // feed because finance cards share one source — diversityRerank keeps a
+  // single source's input order. Without a user, fall through in registry
+  // (newest-first) order.
+  if (ctx) {
+    try { records = rankNewsForUser(records, ctx); } catch { /* fall back to raw order */ }
+  }
+
+  return records.map((r) => {
+    const headline = r.headline || r.title;
+    const symbols = (Array.isArray(r.symbols) ? r.symbols : []).map((s) => String(s).toLowerCase());
+    const src = r.source || "Market News";
+    // Evidence: lead with the personalized "why this is relevant to YOU" signals
+    // (External-Reality Rule — the ranking is explained, not opaque), then the
+    // generic impact/ticker line.
+    const personal = Array.isArray(r.relevanceWhy) ? r.relevanceWhy : [];
+    // Personalized cards already name their top signals (ticker/impact/fresh) in
+    // `relevanceWhy`; only fall back to the generic impact/ticker line when there
+    // is no per-user context, so the evidence never repeats itself.
+    const why = (personal.length
+      ? [...personal, "market news"]
+      : [
+          r.impact ? `impact ${r.impact}` : "",
+          symbols.length ? symbols.map((s) => s.toUpperCase()).join(", ") : "",
+          "market news",
+        ]
+    ).filter(Boolean).join(" · ");
+    // Lead image, in preference order (never the headline — that would render the
+    // title twice): (1) the REAL article cover from the source; (2) the primary
+    // ticker's company logo; (3) a clean minimal finance cover (glyph + source).
+    // The browser loads (1)/(2) directly — same-origin TLS interception doesn't
+    // affect <img>. A broken logo falls back to the minimal cover via imageFallback.
+    const realImg = r.image && /^https:\/\//i.test(r.image) ? r.image : "";
+    const primary = (symbols[0] || "").toUpperCase();
+    // Only A–Z tickers have a stock logo (skip crypto/FX like BTCUSD, indices stay
+    // best-effort). Company-logo-by-ticker via Financial Modeling Prep (no key).
+    const logoUrl = /^[A-Z]{1,5}$/.test(primary)
+      ? "https://financialmodelingprep.com/image-stock/" + primary + ".png"
+      : "";
+    const minimalCover = genThumb("finance", "", src);
+    const card = {
+      id: "finance:" + (r.news_id || r.memory_id || r.url || headline),
+      type: "read",
+      title: headline,
+      url: r.url || "",
+      source: src,
+      published: r.published || r.recorded_at || null,
+      topics: ["finance", ...symbols],
+      summary: r.summary || "",
+      image: realImg || logoUrl || minimalCover,
+      imageFallback: minimalCover,
+      // A logo (not a real photo) renders CONTAINED on a tile, not cropped.
+      imageFit: !realImg && logoUrl ? "contain" : undefined,
+      evidence: { why, source: src },
+    };
+    if (Number.isFinite(r.relevance)) card.relevance = r.relevance;
+    return card;
+  });
+}
+
 // Curated open-archive embeds (games + listening). Data-driven from
 // data/explore/embeds.json so adding content is a JSON edit, not a code change.
 // Cached like the other static reads — the seed only changes on deploy. Each
@@ -358,7 +437,7 @@ function embedCards() {
 // ── Aggregate (Observe) ──────────────────────────────────────────────────────
 
 // Fan out to every producer; one source failing/timing out drops only its cards.
-async function aggregate() {
+async function aggregate(userCtx) {
   const producers = [
     ["embed", () => Promise.resolve(embedCards())],
     ["read", readCards],
@@ -366,6 +445,7 @@ async function aggregate() {
     ["build", buildCards],
     ["belief", beliefCards],
     ["doc", () => Promise.resolve(docCards())],
+    ["finance", () => Promise.resolve(financeCards(userCtx))],
   ];
   const settled = await Promise.allSettled(
     producers.map(([label, fn]) => withTimeout(fn(), PER_SOURCE_TIMEOUT_MS, label).catch(() => [])),
@@ -455,7 +535,7 @@ function diversityRerank(scored) {
 // start) fall back to editorial order, then freshness — exactly the contract in
 // issue #1216.
 async function rankedFeed(opts = {}) {
-  const cards = await aggregate();
+  const cards = await aggregate(opts.userCtx);
   const editorial = editorialOrder();
   const edIndex = (key) => {
     const i = editorial.indexOf(key);
@@ -525,10 +605,13 @@ function pickPage(pool, limit, exploreRatio) {
   return page.slice(0, limit);
 }
 
-async function pagedFeed({ seen = [], limit = DEFAULT_PAGE, type = null, exploreRatio = 0.22 } = {}) {
+async function pagedFeed({ seen = [], limit = DEFAULT_PAGE, type = null, topic = null, userCtx = null, exploreRatio = 0.22 } = {}) {
   limit = Math.max(1, Math.min(30, Number(limit) || DEFAULT_PAGE));
-  const { cards } = await rankedFeed();
-  const all = type ? cards.filter((c) => c.type === type) : cards;
+  const { cards } = await rankedFeed({ userCtx });
+  // A chip filters by media TYPE (read/watch/…) OR by TOPIC (finance) — topics are
+  // the cross-cutting dimension (e.g. finance news is a `read` tagged "finance").
+  let all = type ? cards.filter((c) => c.type === type) : cards;
+  if (topic) all = all.filter((c) => Array.isArray(c.topics) && c.topics.includes(topic));
   const seenSet = new Set(Array.isArray(seen) ? seen : []);
   let pool = all.filter((c) => !seenSet.has(c.id));
   let cycled = false;

@@ -19,6 +19,7 @@ const THEME = {
   belief: ["\u{1F30D}", "#22c55e"],
   embed:  ["\u{1F579}", "#06b6d4"],
   action: ["⚡",     "#06b6d4"],
+  finance:["\u{1F4C8}", "#22c55e"],
 };
 
 const xml = (s) =>
@@ -51,7 +52,10 @@ function wrap(title, maxChars, maxLines) {
 
 function renderThumb({ type, title, source } = {}) {
   const [glyph, accent] = THEME[type] || ["◈", "#06b6d4"];
-  const lines = wrap(title || type || "", 26, 3);
+  // Finance covers are intentionally minimal: a clean tinted panel with just the
+  // glyph + source, no headline. So an empty title stays empty (don't fall back to
+  // the type name, which would print "finance").
+  const lines = (type === "finance" && !title) ? [] : wrap(title || type || "", 26, 3);
   const startY = 196 - (lines.length - 1) * 17;
   const titleSvg = lines
     .map((ln, i) => `<text x="40" y="${startY + i * 34}" class="t">${xml(ln)}</text>`)
