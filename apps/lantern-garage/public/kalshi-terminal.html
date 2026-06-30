@@ -198,6 +198,18 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   color:var(--text);border:none;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:16px;
   transition:background .2s}
 .image-modal-close:hover{background:rgba(0,0,0,.8)}
+/* ── deck mode toggle + Σ₀ council banner ───────────────────────────────────── */
+.mode-bar{display:flex;gap:6px;justify-content:center;padding:8px 8px 4px;flex-wrap:wrap}
+.mode-btn{background:#161b24;color:var(--muted);border:1px solid #2c3446;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.mode-btn.active{background:var(--accent,#3b82f6);color:#fff;border-color:transparent}
+.mode-btn:focus-visible{outline:2px solid var(--accent,#3b82f6);outline-offset:2px}
+.council-banner{margin:0 auto 4px;max-width:560px;padding:8px 12px;border-radius:8px;font-size:11px;line-height:1.5}
+.council-banner.warn{background:rgba(220,70,70,.10);border:1px solid rgba(220,70,70,.45)}
+.council-banner.ok{background:rgba(60,180,120,.08);border:1px solid rgba(60,180,120,.4)}
+.council-banner .cb-head{font-weight:700;font-size:12px;margin-bottom:2px;color:#e8edf5}
+.council-banner.warn .cb-head{color:#ff9b9b}
+.council-banner .cb-stats{color:var(--muted);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px}
+.council-banner .cb-verdict{color:var(--muted);margin-top:3px;font-size:10px;font-style:italic}
 </style>
 </head>
 <body>
@@ -224,6 +236,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </div>
 </nav>
 
+<div class="mode-bar" role="tablist" aria-label="Deck mode">
+  <button class="mode-btn" id="mReplay" role="tab" aria-selected="true" onclick="setMode('replay')" title="Swipe recorded history — graded instantly vs the real outcome">⟲ Replay</button>
+  <button class="mode-btn" id="mPaper" role="tab" aria-selected="false" onclick="setMode('paper')" title="Live candidate markets, paper-only (no real orders)">📝 Paper</button>
+  <button class="mode-btn" id="mLive" role="tab" aria-selected="false" onclick="setMode('live')" title="Live decks (currently paused — no proven edge after fees)">● Live</button>
+</div>
+<div class="council-banner" id="councilBanner" aria-live="polite"></div>
 
 <main class="deck">
   <article class="stage" id="stage" role="region" aria-label="Current market position"></article>
@@ -264,6 +282,79 @@ const API='/api/trading/kalshi';
 const SYNC_MS=5000, DECK_TARGET=20, PREFETCH_AT=10, MAX_AGE_MS=60000;
 let conn={}, deck=[], idx=0, busy=false, dragging=false, liveMap={}, prefetching=false;
 let lastSyncMs=0, lastDetCount=null;
+// Deck MODE: 'replay' (recorded history, graded vs known outcome — always works),
+// 'paper' (live candidates, paper-only), 'live' (original decks, currently paused).
+// Default to replay so the swipe is testable + the council trains while live is halted.
+let MODE='replay', replayExhausted=false;
+
+function setMode(m){
+  if(MODE===m && deck.length) return;
+  MODE=m; deck=[]; idx=0; liveMap={}; prefetching=false; replayExhausted=false;
+  for(const [id,mode] of [['mReplay','replay'],['mPaper','paper'],['mLive','live']]){
+    const b=document.getElementById(id);
+    if(b){ b.classList.toggle('active',mode===m); b.setAttribute('aria-selected',mode===m?'true':'false'); }
+  }
+  const stage=document.getElementById('stage'); if(stage) stage.innerHTML='';
+  document.getElementById('end').style.display='none';
+  loadCouncil();
+  if(MODE==='live') syncDeck(); else loadModeDeck();
+}
+
+// Load a paper/replay deck slice and append unique cards (continuous deck).
+async function loadModeDeck(){
+  let d;
+  if(MODE==='replay'){
+    if(replayExhausted) return;
+    d=await j(`/replay-deck?limit=20&offset=${deck.length}`);
+    if(!d || !(d.cards||[]).length){ replayExhausted=true; }
+  } else { // paper
+    d=await j('/paper-deck?limit=20');
+  }
+  const cards=(d&&d.cards)||[];
+  stampCards(cards, d&&d.generatedAt);
+  const have=new Set(deck.map(c=>c.ticker));
+  const add=cards.filter(c=>!have.has(c.ticker));
+  if(deck.length===0){ deck=add.slice(); idx=0; }
+  else if(add.length){ deck.push(...add); }
+  if(idx<deck.length){
+    document.getElementById('end').style.display='none';
+    if(!document.getElementById('front')) render();
+  } else {
+    showModeEnd(d);
+  }
+  markFresh(deck.length-idx);
+}
+
+function showModeEnd(d){
+  const end=document.getElementById('end');
+  const stage=document.getElementById('stage'); if(stage) stage.innerHTML='';
+  if(!end) return;
+  end.style.display='flex';
+  const note = MODE==='replay'
+    ? (replayExhausted?'Replay deck complete — every swipe was graded into the Σ₀ council below.':'Loading replay history…')
+    : (d&&d.note)||'No live candidate markets right now (Kalshi closed or no creds). Try Replay to swipe recorded history.';
+  end.innerHTML=`<div style="color:var(--gold);font-weight:700">${MODE==='replay'?'⟲ Replay':'📝 Paper'} — ${idx} swiped</div>`
+    +`<div style="font-size:12px;color:var(--muted);max-width:340px">${note}</div>`
+    +`<button class="btn-ghost" onclick="setMode('${MODE}')">↻ Reload deck</button>`;
+}
+
+// Σ₀ council readout — realized after-fee truth, shown prominently (honesty surface).
+async function loadCouncil(){
+  try{
+    const c=await j('/council');
+    const b=document.getElementById('councilBanner'); if(!b) return;
+    if(c.error){ b.className='council-banner'; b.innerHTML=''; return; }
+    const noEdge=/NO PROVEN EDGE/i.test(c.verdict||'');
+    const wr=c.win_rate!=null?Math.round(c.win_rate*100)+'%':'—';
+    const net=c.avg_pnl_pct!=null?(c.avg_pnl_pct>=0?'+':'')+c.avg_pnl_pct+'%':'—';
+    const netCol=c.avg_pnl_pct>=0?'var(--green)':'var(--danger)';
+    const brier=c.calibration&&c.calibration.mean_brier!=null?Number(c.calibration.mean_brier).toFixed(3):'—';
+    b.className='council-banner '+(noEdge?'warn':'ok');
+    b.innerHTML=`<div class="cb-head">${noEdge?'⛔ NO PROVEN EDGE — paper / data-collection only · live trading halted':'Σ₀ Council'}</div>`
+      +`<div class="cb-stats">graded <b>${c.graded||0}</b> · win <b>${wr}</b> gross · net/trade <b style="color:${netCol}">${net}</b> after fees · Brier <b>${brier}</b> · ${c.maturity||''}</div>`
+      +`<div class="cb-verdict">${c.verdict||''}</div>`;
+  }catch(_){}
+}
 
 // ── real-time freshness ───────────────────────────────────────────────────────
 // Every card carries _genMs (server generatedAt, else receipt time). Only cards
@@ -276,7 +367,8 @@ function stampCards(cards, genAt){
   return cards||[];
 }
 function cardAgeMs(card){ return card._genMs==null ? Infinity : Date.now()-card._genMs; }
-function isFresh(card){ return cardAgeMs(card) < MAX_AGE_MS; }
+// Replay cards are recorded history — staleness (a live-price concern) doesn't apply.
+function isFresh(card){ return MODE==='replay' ? true : cardAgeMs(card) < MAX_AGE_MS; }
 // Drop non-fresh cards. Never yank a card mid-drag. Returns true if the visible
 // front card was removed (caller must re-render); pruning hidden cards needs none.
 function flushStale(){
@@ -325,6 +417,8 @@ async function loadBalance(){
 // ── syncDeck: initial load + live merge every SYNC_MS ────────────────────────
 // Show all open positions (exits first, then holds) + suggestion fill
 async function syncDeck(){
+  // Paper/replay modes are paper-only and don't use the live positions deck.
+  if(MODE!=='live'){ if(MODE==='paper') await loadModeDeck(); return; }
   const d=await j('/positions-deck');
   // GLOBAL TRADING-PAUSE: server cleared all cards. Force-empty the deck (the
   // in-place prune never removes the front card deck[idx]) and show why.
@@ -425,6 +519,9 @@ async function maybePrefetch(){
   if(remaining>=PREFETCH_AT) return;
   prefetching=true;
   try {
+    // Paper/replay modes refill from their own endpoint (next history slice / fresh
+    // live candidates). The prefetching flag guards re-entrancy via render().
+    if(MODE!=='live'){ await loadModeDeck(); return; }
     const pendingTickers=new Set(deck.slice(idx).map(c=>c.ticker));
     const [detR, ieR, cryR]=await Promise.all([
       j('/decisive-deck?risk=0.5').catch(()=>({})),
@@ -783,6 +880,10 @@ setInterval(()=>{
 // Time: must complete within 500ms (velocity = distance/time)
 function attachSwipe(el){
   if(!el) return;
+  // Each render attaches fresh window-level move/up listeners; without removing the
+  // previous card's, stale handlers accumulate and race on the shared `dragging` flag
+  // (a stale mouseup can clear it before the live card's handler runs, eating swipes).
+  if(attachSwipe._cleanup) attachSwipe._cleanup();
   const DEADZONE=10, MIN_SWIPE=150, MAX_SWIPE_TIME=500;
   let startX=0,startY=0,startMs=0,dx=0,dy=0,active=false;
   const take=el.querySelector('.stamp.take'), pass=el.querySelector('.stamp.pass');
@@ -867,6 +968,11 @@ function attachSwipe(el){
   el.addEventListener('touchstart',down,{passive:true});
   el.addEventListener('touchmove',move,{passive:true});
   el.addEventListener('touchend',up);
+  // Remove THIS card's window listeners before the next card attaches its own.
+  attachSwipe._cleanup=()=>{
+    window.removeEventListener('mousemove',move);
+    window.removeEventListener('mouseup',up);
+  };
 }
 function flyOut(dir){
   const el=document.getElementById('front'); if(!el) return;
@@ -890,8 +996,37 @@ async function act(dir,fromSwipe){
   if(dir==='pass'){ if(!fromSwipe) return flyOut('pass'); idx++; render(); return; }
   if(dir==='take' && !fromSwipe) return flyOut('take');
 
-  // ── Guard: refuse bad takes before anything fires ─────────────────────────
   const card=deck[idx];
+
+  // ── REPLAY mode: grade the swipe vs the recorded outcome (Verify→Converge) ──
+  if(MODE==='replay'){
+    busy=true;
+    try{
+      const res=await j('/replay-grade',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ticker:card.ticker, side:card.favSide, entryCents:card.favAsk||card.entryCents||50})});
+      showReplayResult(res,card);
+      loadCouncil();
+      idx++; render();
+    }catch(e){ showResult({error:e.message},card); idx++; }
+    finally{ busy=false; }
+    return;
+  }
+  // ── PAPER mode: open a paper position (no real order) ───────────────────────
+  if(MODE==='paper'){
+    if(card.favAsk==null){ blockTake('No live ask — cannot paper-trade'); return; }
+    busy=true;
+    try{
+      const o={ticker:card.ticker, side:card.favSide, action:'buy', type:'limit', count:1, limitCents:card.favAsk};
+      const res=await j('/paper-trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+      showPaperResult(res,card);
+      idx++; render();
+    }catch(e){ showResult({error:e.message},card); idx++; }
+    finally{ busy=false; }
+    return;
+  }
+
+  // ── LIVE mode: original guarded real/dry-run order path ─────────────────────
+  // ── Guard: refuse bad takes before anything fires ─────────────────────────
   const isSell=card.kind==='exit'||card.kind==='position';
   if(!isSell){
     // Suggestion / signal / convergence card — enforce quality bar
@@ -949,6 +1084,28 @@ function showResult(res,card){
     t.textContent=ok?`LIVE · took ${lbl} ✓`:`LIVE · FAILED ${lbl} (status ${res.status}) — check portfolio`;
   } else { t.className='toast err show'; t.textContent=JSON.stringify(res).slice(0,140); }
   clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3200);
+}
+
+function showReplayResult(res,card){
+  const t=document.getElementById('toast');
+  if(res.error){ t.className='toast err show'; t.textContent='✕ '+res.error; }
+  else{
+    const w=res.won; const lbl=(card.favSide==='yes'?'▲ YES':'▼ NO');
+    t.className='toast '+(w?'live':'err')+' show';
+    t.textContent=`REPLAY · ${lbl} → ${w?'WON':'LOST'} · net ${res.net_cents>=0?'+':''}${res.net_cents}¢ after fee (real outcome: ${res.outcome===1?'YES':'NO'})`;
+  }
+  clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3400);
+}
+
+function showPaperResult(res,card){
+  const t=document.getElementById('toast');
+  if(res.error){ t.className='toast err show'; t.textContent='✕ '+res.error; }
+  else{
+    const lbl=(card.favSide==='yes'?'▲ YES':'▼ NO');
+    t.className='toast dry show';
+    t.textContent=`PAPER · opened ${lbl} @ ${card.favAsk}¢ · tracked in ledger (no real order)`;
+  }
+  clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3400);
 }
 
 // ── image gallery ────────────────────────────────────────────────────────────
@@ -1030,7 +1187,7 @@ let connInterval, balInterval, syncInterval, imgInterval, liveInterval;
 function init(){
   // Restore saved theme
   try{const t=localStorage.getItem('kalshi-theme');if(t){document.documentElement.setAttribute('data-theme',t);document.getElementById('themeToggle').textContent=t==='dark'?'☀':'🌙';}}catch(_){}
-  loadConnection(); loadBalance(); syncDeck(); loadImages(); pollLiveStatus();
+  loadConnection(); loadBalance(); setMode('replay'); loadImages(); pollLiveStatus();
 
   // Start polling with normal intervals
   connInterval=setInterval(loadConnection,20000);
