@@ -219,7 +219,7 @@
      container sits under the header on the right edge and is click-through
      (pointer-events:none) so the rest of the terminal stays interactive while
      the ticket is open; only the panel itself captures input. */
-  .ot-bg{position:fixed;top:52px;right:0;bottom:0;z-index:1100;display:flex;align-items:stretch;justify-content:flex-end;pointer-events:none}
+  .ot-bg{position:fixed;top:104px;right:0;bottom:0;z-index:1100;display:flex;align-items:stretch;justify-content:flex-end;pointer-events:none}
   .ot-bg.hidden{display:none}
   .ot-modal{pointer-events:auto;background:var(--bg1);border-left:1px solid var(--border);
     width:340px;max-width:92vw;height:100%;overflow-y:auto;font-family:var(--mono);
@@ -1314,17 +1314,16 @@ function otCurrentPrice(){
   return price;
 }
 
-function openOrderTicket(ticker, side){
-  otTicker    = ticker;
-  otSide      = side;
-  otOrderType = 'market';
+let otUserClosed = false;   // #1694: respect an explicit X — don't auto-reopen
+// #1695: retarget the order panel to a symbol WITHOUT changing its open/closed state.
+function setOrderSymbol(ticker){
+  if(!ticker) return;
+  otTicker = ticker;
   const price = getCurrentPrice(ticker);
-
   document.getElementById('otTickerLabel').textContent = ticker;
   document.getElementById('otQty').value = 1;
   document.getElementById('otLimitPrice').value = price ? price.toFixed(2) : '';
   document.getElementById('otLimitRow').style.display = 'none';
-
   ['Tp','Sl'].forEach(kind=>{
     document.getElementById('ot'+kind+'Enabled').checked = false;
     document.getElementById('ot'+kind+'Price').value = '';
@@ -1332,18 +1331,25 @@ function openOrderTicket(ticker, side){
     document.getElementById('ot'+kind+'Price').disabled = true;
     document.getElementById('ot'+kind+'Ticks').disabled = true;
   });
-
+  renderOrderTicket();
+}
+function openOrderPanel(){
+  otUserClosed = false;
   document.getElementById('otBg').classList.remove('hidden');
   document.body.classList.add('ot-open');
-  renderOrderTicket();
   // The chart area just got narrower — re-fit visible charts to the new width.
   requestAnimationFrame(()=>{ renderTicker(fullscreenTicker); wlPrices.forEach(t=>renderTicker(t.ticker)); });
 }
+function openOrderTicket(ticker, side){
+  otSide = side; otOrderType = 'market';
+  setOrderSymbol(ticker);
+  openOrderPanel();
+}
 
 function closeOrderTicket(){
+  otUserClosed = true;                 // #1694: stays closed until reopened via BUY/SELL
   document.getElementById('otBg').classList.add('hidden');
   document.body.classList.remove('ot-open');
-  otTicker = null;
   requestAnimationFrame(()=>{ renderTicker(fullscreenTicker); wlPrices.forEach(t=>renderTicker(t.ticker)); });
 }
 
@@ -1528,6 +1534,8 @@ function focusTicker(t){
   activeTicker = t;
   renderWatchlist();
   renderSymbolInfo(t);
+  setOrderSymbol(t);                    // #1695: order panel follows the selected symbol
+  if(!otUserClosed) openOrderPanel();   // keep it open unless the user X'd it
   openFullscreenChart(t);
 }
 
@@ -2128,6 +2136,9 @@ function startDashboard(){
   syncRangeButtons(chartTimeframe);
   initFooterResize();
   initChartDrag();
+  // #1694: order panel is open by default (for the active/first symbol) once data
+  // loads, unless the user closes it with X.
+  setTimeout(()=>{ if(!otUserClosed && wlPrices.length){ setOrderSymbol(activeTicker || wlPrices[0].ticker); openOrderPanel(); } }, 1600);
   // Restore the saved chart-grid layout (#1628).
   const ls = document.getElementById('chartLayoutSelect');
   if(ls){ ls.value = String(slotCount); }
