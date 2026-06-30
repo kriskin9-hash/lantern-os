@@ -102,6 +102,12 @@
   .card-header{padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
   .card-ticker{font-family:var(--mono);font-size:14px;font-weight:600}
   .card-price{font-family:var(--mono);font-size:12px;color:var(--text1)}
+  /* Tick-flash (#1627): on each price change, flash green/red for ~1s then fade
+     back to the normal colour. Normal state is untouched. */
+  @keyframes cpFlashUp{0%{color:var(--green);background:rgba(0,212,170,.20)}100%{color:var(--text1);background:transparent}}
+  @keyframes cpFlashDown{0%{color:var(--red);background:rgba(255,95,109,.20)}100%{color:var(--text1);background:transparent}}
+  .card-price.flash-up{animation:cpFlashUp 1s ease-out;border-radius:3px}
+  .card-price.flash-down{animation:cpFlashDown 1s ease-out;border-radius:3px}
   .card-state{font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:2px;letter-spacing:.1em}
   .state-open .card-state{background:rgba(0,212,170,.12);color:var(--green)}
   .state-watching .card-state{background:rgba(74,158,255,.12);color:var(--blue)}
@@ -443,6 +449,7 @@
 // ── State ──────────────────────────────────────────────────────────────────
 let zonesData      = {};
 let wlPrices       = [];
+const _lastCardPrice = {};   // last seen price per ticker, for the tick-flash (#1627)
 let activeTicker   = null;
 let barsData       = {};
 let chartType      = 'line';
@@ -1714,7 +1721,20 @@ async function loadWatchlistPrices(){
     renderWatchlist();
     wlPrices.forEach(t=>{
       const el = document.getElementById('cp-'+t.ticker);
-      if(el) el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
+      if(el){
+        // Tick-flash (#1627): price stays its normal colour, but each time it
+        // changes it flashes green (up) / red (down) for ~1s, then fades back.
+        const prev = _lastCardPrice[t.ticker];
+        el.textContent = '$'+fmt(t.price, t.price>=100?2:4);
+        if(prev!=null && t.price !== prev){
+          const cls = t.price > prev ? 'flash-up' : 'flash-down';
+          el.classList.remove('flash-up','flash-down');
+          void el.offsetWidth;                       // restart the animation
+          el.classList.add(cls);
+          setTimeout(()=>el.classList.remove(cls), 1000);
+        }
+        _lastCardPrice[t.ticker] = t.price;
+      }
       renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price);
     });
     updateRegimeBadges();
@@ -1870,7 +1890,7 @@ function startDashboard(){
   loadAgentLog();
   loadOrders();
   setInterval(fullRefresh,         30000);
-  setInterval(loadWatchlistPrices,  5000);
+  setInterval(loadWatchlistPrices,  3000);   // #1627: tighter so the tick-flash is responsive
   setInterval(loadBars,            15000);
   setInterval(loadAgentLog,         5000);
   setInterval(loadOrders,          60000);
