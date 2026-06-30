@@ -103,13 +103,22 @@
   .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
   .wl-signal{font-family:var(--mono);font-size:8px}
   /* Selected-symbol info panel (#1631) — name, exchange, day stats, regime/signal. */
-  .wl-info{display:none;flex:0 0 auto;max-height:42%;overflow-y:auto;padding:8px 12px 10px;border-top:1px solid var(--border);background:var(--bg2)}
+  .wl-info{display:none;flex:0 0 auto;max-height:58%;overflow-y:auto;padding:9px 12px 12px;border-top:1px solid var(--border);background:var(--bg2)}
   .wl-info.show{display:block}
   .wi-sym{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text0)}
   .wi-name{font-size:9px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .wi-px{font-family:var(--mono);font-size:13px;font-weight:600;margin-top:5px}
-  .wi-meta{font-family:var(--mono);font-size:8.5px;color:var(--text2);margin-top:4px;display:flex;flex-wrap:wrap;gap:2px 10px}
+  .wi-meta{font-family:var(--mono);font-size:9px;color:var(--text2);margin-top:4px;display:flex;flex-wrap:wrap;gap:3px 12px}
   .wi-meta b{color:var(--text1);font-weight:600}
+  /* #1711: expanded info — Technicals / Returns / Key stats sections */
+  .wi-sect{font-family:var(--mono);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--text2);margin:10px 0 5px;border-top:1px solid var(--border);padding-top:8px}
+  .wi-tech{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text1)}
+  .wi-tech.up{color:var(--green)} .wi-tech.dn{color:var(--red)}
+  .wi-rets{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .wi-ret{background:var(--bg0);border:1px solid var(--border);border-radius:4px;padding:5px 4px;text-align:center}
+  .wi-ret-v{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--text2)}
+  .wi-ret.up .wi-ret-v{color:var(--green)} .wi-ret.dn .wi-ret-v{color:var(--red)}
+  .wi-ret-l{font-family:var(--mono);font-size:8px;color:var(--text2);margin-top:1px}
   .wl-add{display:flex;padding:8px 12px;border-bottom:1px solid var(--border)}
   /* #1709: single full-width "Add symbol" button → opens the search popup */
   .wl-add-btn{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:7px 8px;border-radius:4px;cursor:pointer;letter-spacing:.03em}
@@ -1589,6 +1598,8 @@ function renderWatchlist(){
 
 // Selected-symbol info panel (#1631) — TradingView-style: name/exchange + day stats
 // + signal. Company name is lazy-fetched once via the Alpaca-backed symbol-info GET.
+const _symStats = {};   // ticker → /api/trading/symbol-stats (returns/volume/technicals)
+function _fmtVol(v){ return v==null?'—': v>=1e9?(v/1e9).toFixed(2)+'B': v>=1e6?(v/1e6).toFixed(2)+'M': v>=1e3?(v/1e3).toFixed(1)+'K': v; }
 function renderSymbolInfo(ticker){
   const el = document.getElementById('wlInfo'); if(!el) return;
   if(!ticker){ el.className='wl-info'; el.innerHTML=''; return; }
@@ -1600,19 +1611,33 @@ function renderSymbolInfo(ticker){
   const chg = t.chg_pct||0;
   const cl = chg>0?'up':chg<0?'dn':'flat';
   const kind = _wlIsCrypto(ticker)?'Crypto':'Equity';
+  const st = _symStats[ticker];
+  const retCell = (lbl,v)=>`<div class="wi-ret ${v==null?'':v>=0?'up':'dn'}"><div class="wi-ret-v">${v==null?'—':(v>=0?'+':'')+v+'%'}</div><div class="wi-ret-l">${lbl}</div></div>`;
+  const techCls = st&&st.technical ? (st.technical.includes('Buy')?'up':st.technical.includes('Sell')?'dn':'') : '';
   el.className = 'wl-info show';
   el.innerHTML = `
     <div class="wi-sym">${ticker}</div>
     <div class="wi-name">${_symNames[ticker]||kind}</div>
     <div class="wi-px">$${_wlPx(t.price)} <span class="wl-chg ${cl}">${chg>=0?'+':''}${chg}%</span></div>
-    <div class="wi-meta">
-      <span><b>Type</b> ${kind}</span>
-      ${dir?`<span><b>Signal</b> ${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'} ${conf}%</span>`:''}
-    </div>`;
+    ${(st&&st.available)?`
+    <div class="wi-sect">Technicals</div>
+    <div class="wi-tech ${techCls}">${st.technical}</div>
+    <div class="wi-sect">Returns</div>
+    <div class="wi-rets">${retCell('1M',st.returns['1M'])}${retCell('3M',st.returns['3M'])}${retCell('YTD',st.returns['YTD'])}${retCell('1Y',st.returns['1Y'])}${retCell('3Y',st.returns['3Y'])}</div>
+    <div class="wi-sect">Key stats</div>
+    <div class="wi-meta"><span><b>Volume</b> ${_fmtVol(st.volume)}</span><span><b>Avg Vol</b> ${_fmtVol(st.avgVolume)}</span><span><b>SMA50</b> $${st.sma50}</span></div>`:''}
+    <div class="wi-sect">About</div>
+    <div class="wi-meta"><span><b>Type</b> ${kind}</span>${dir?`<span><b>Signal</b> ${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'} ${conf}%</span>`:''}</div>`;
   if(!_symNames[ticker] && kind==='Equity'){
     fetch('/api/trading/symbol-info?ticker='+encodeURIComponent(ticker)).then(r=>r.json()).then(j=>{
       if(j&&j.name){ _symNames[ticker]=j.name + (j.exchange?(' · '+j.exchange):''); if(activeTicker===ticker) renderSymbolInfo(ticker); }
     }).catch(()=>{});
+  }
+  if(_symStats[ticker]===undefined){
+    _symStats[ticker]=null;   // in-flight
+    fetch('/api/trading/symbol-stats?ticker='+encodeURIComponent(ticker)).then(r=>r.json()).then(j=>{
+      _symStats[ticker]=j||{}; if(activeTicker===ticker) renderSymbolInfo(ticker);
+    }).catch(()=>{ _symStats[ticker]={}; });
   }
 }
 
