@@ -514,7 +514,10 @@ async function handleStreamChat(req, url, res) {
       sendToken(`Door types: ${doorTypes}\n`);
       sendToken(`Style: Abstract, dreamlike, not cartoonish\n\n`);
       
-      const py = spawn("python", ["scripts/generate-door-images.py", "generate"], { cwd: repoRoot });
+      // PYTHONIOENCODING=utf-8 so non-ASCII stdout streamed to the chat UI isn't mangled
+      // into "�" on Windows (cp1252 default) — same fix as convergence-adapter.js (#1605).
+      const py = spawn("python", ["scripts/generate-door-images.py", "generate"],
+        { cwd: repoRoot, env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
       let stdout = "";
       let stderr = "";
       
