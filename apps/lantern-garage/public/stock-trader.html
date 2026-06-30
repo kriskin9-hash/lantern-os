@@ -82,15 +82,25 @@
   .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;margin-left:auto;transition:background .15s,color .15s}
   .nav-link:hover{color:var(--text0);background:var(--bg3)}
   /* ── Sidebar watchlist ── */
-  .wl-item{padding:6px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s}
+  /* Denser, TradingView-style rows (#1631): symbol + price on one line, change +
+     signal on a tight second line. */
+  .wl-item{padding:4px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s;line-height:1.25}
   .wl-item:hover,.wl-item.active{background:var(--bg2)}
   .wl-item.active{box-shadow:inset 2px 0 0 var(--blue)}
-  .wl-sym{font-family:var(--mono);font-size:11px;font-weight:600}
-  .wl-row{display:flex;justify-content:space-between;align-items:center}
-  .wl-price{font-family:var(--mono);font-size:10px;color:var(--text1)}
-  .wl-chg{font-family:var(--mono);font-size:9px;font-weight:600}
+  .wl-sym{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--text0)}
+  .wl-row{display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .wl-price{font-family:var(--mono);font-size:9.5px;color:var(--text1)}
+  .wl-chg{font-family:var(--mono);font-size:9px;font-weight:600;white-space:nowrap}
   .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
-  .wl-signal{font-family:var(--mono);font-size:8px;margin-top:2px}
+  .wl-signal{font-family:var(--mono);font-size:8px}
+  /* Selected-symbol info panel (#1631) — name, exchange, day stats, regime/signal. */
+  .wl-info{display:none;padding:8px 12px 9px;border-bottom:1px solid var(--border);background:var(--bg2)}
+  .wl-info.show{display:block}
+  .wi-sym{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text0)}
+  .wi-name{font-size:9px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wi-px{font-family:var(--mono);font-size:13px;font-weight:600;margin-top:5px}
+  .wi-meta{font-family:var(--mono);font-size:8.5px;color:var(--text2);margin-top:4px;display:flex;flex-wrap:wrap;gap:2px 10px}
+  .wi-meta b{color:var(--text1);font-weight:600}
   .wl-add{display:flex;gap:4px;padding:8px 12px;border-bottom:1px solid var(--border)}
   .wl-add input{flex:1;min-width:0;background:var(--bg2);border:1px solid var(--border);color:var(--text0);font-family:var(--mono);font-size:10px;padding:4px 6px;border-radius:3px}
   .wl-add button{background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
@@ -321,9 +331,10 @@
 <!-- Sidebar -->
 <div class="sidebar">
   <div class="wl-add">
-    <input type="text" id="wlAddInput" placeholder="Add ticker" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
+    <input type="text" id="wlAddInput" placeholder="Add symbol" maxlength="10" onkeydown="if(event.key==='Enter')addWatchlistTicker()">
     <button onclick="addWatchlistTicker()">+</button>
   </div>
+  <div id="wlInfo" class="wl-info"></div>
   <div id="wlList"></div>
 </div>
 
@@ -1435,24 +1446,58 @@ async function submitOrderTicket(){
 }
 
 // ── Watchlist sidebar ─────────────────────────────────────────────────────────
+const _symNames = {};   // ticker → "Company Name · EXCHANGE", lazily fetched (#1631)
+const _wlIsCrypto = (tk)=> /USD$/.test(tk) && tk.length>=6;
+const _wlPx = (p)=> p>100 ? p.toLocaleString() : (p!=null ? p.toFixed(4) : '—');
+
 function renderWatchlist(){
   document.getElementById('wlList').innerHTML = wlPrices.map(t=>{
     const d  = zonesData[t.ticker]||{};
     const sig= d.last_signal||{};
     const dir= d.direction||sig.direction||'';
     const cl = t.chg_pct>0?'up':t.chg_pct<0?'dn':'flat';
-    const sigTxt = dir ? `<div class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'} ${d.confidence||sig.confidence||0}%</div>` : '';
+    const sigTxt = dir ? `<span class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'}${d.confidence||sig.confidence||0}%</span>` : '<span></span>';
     return `<div class="wl-item${activeTicker===t.ticker?' active':''}" onclick="focusTicker('${t.ticker}')">
-      <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}% <span class="wl-remove" onclick="removeWatchlistTicker('${t.ticker}',event)">×</span></span></div>
-      <div class="wl-row"><span class="wl-price">$${t.price>100?t.price.toLocaleString():t.price.toFixed(4)}</span></div>
-      ${sigTxt}
+      <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-price">$${_wlPx(t.price)}</span></div>
+      <div class="wl-row"><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span>${sigTxt}<span class="wl-remove" onclick="removeWatchlistTicker('${t.ticker}',event)">×</span></div>
     </div>`;
   }).join('');
+  if(activeTicker) renderSymbolInfo(activeTicker);
+}
+
+// Selected-symbol info panel (#1631) — TradingView-style: name/exchange + day stats
+// + signal. Company name is lazy-fetched once via the Alpaca-backed symbol-info GET.
+function renderSymbolInfo(ticker){
+  const el = document.getElementById('wlInfo'); if(!el) return;
+  if(!ticker){ el.className='wl-info'; el.innerHTML=''; return; }
+  const t = wlPrices.find(x=>x.ticker===ticker) || {ticker, price:null, chg_pct:0};
+  const d = zonesData[ticker]||{};
+  const sig = d.last_signal||{};
+  const dir = d.direction||sig.direction||'';
+  const conf = d.confidence||sig.confidence||0;
+  const chg = t.chg_pct||0;
+  const cl = chg>0?'up':chg<0?'dn':'flat';
+  const kind = _wlIsCrypto(ticker)?'Crypto':'Equity';
+  el.className = 'wl-info show';
+  el.innerHTML = `
+    <div class="wi-sym">${ticker}</div>
+    <div class="wi-name">${_symNames[ticker]||kind}</div>
+    <div class="wi-px">$${_wlPx(t.price)} <span class="wl-chg ${cl}">${chg>=0?'+':''}${chg}%</span></div>
+    <div class="wi-meta">
+      <span><b>Type</b> ${kind}</span>
+      ${dir?`<span><b>Signal</b> ${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'} ${conf}%</span>`:''}
+    </div>`;
+  if(!_symNames[ticker] && kind==='Equity'){
+    fetch('/api/trading/symbol-info?ticker='+encodeURIComponent(ticker)).then(r=>r.json()).then(j=>{
+      if(j&&j.name){ _symNames[ticker]=j.name + (j.exchange?(' · '+j.exchange):''); if(activeTicker===ticker) renderSymbolInfo(ticker); }
+    }).catch(()=>{});
+  }
 }
 
 function focusTicker(t){
   activeTicker = t;
   renderWatchlist();
+  renderSymbolInfo(t);
   openFullscreenChart(t);
 }
 

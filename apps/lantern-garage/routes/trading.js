@@ -503,6 +503,21 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/symbol-info?ticker=AAPL — name/exchange/asset_class for the
+  // watchlist info panel (#1631). Read-only; reuses the Alpaca-backed validator.
+  if (url.pathname === '/api/trading/symbol-info' && req.method === 'GET') {
+    const ticker = (url.searchParams.get('ticker') || '').trim();
+    if (!ticker) { sendJson(res, { error: 'ticker required' }, 400); return true; }
+    if (!traderAgent) { sendJson(res, { error: 'TraderAgent not initialized' }, 503); return true; }
+    try {
+      const info = await traderAgent.validateSymbol(ticker);
+      sendJson(res, info || {}, 200);
+    } catch (error) {
+      sendJson(res, { error: error.message }, 200);
+    }
+    return true;
+  }
+
   // GET /api/trading/watchlist
   if (url.pathname === '/api/trading/watchlist' && req.method === 'GET') {
     if (!traderAgent) {

@@ -7485,6 +7485,7 @@ def validate_symbol(ticker: str) -> dict:
         return {"valid": True, "tradable": tradable,
                 "symbol": getattr(asset, "symbol", t),
                 "name": getattr(asset, "name", t),
+                "exchange": getattr(asset, "exchange", "") or "",
                 "asset_class": getattr(asset, "_raw", {}).get("class", "us_equity")
                                if hasattr(asset, "_raw") else "us_equity",
                 "reason": "" if tradable else "asset exists but is not tradable"}
