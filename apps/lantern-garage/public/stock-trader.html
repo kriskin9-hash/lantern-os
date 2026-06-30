@@ -623,7 +623,7 @@ const SLOT_COLS = {1:1,2:2,3:3,4:2,6:3,10:5,20:5};
 let activeTicker   = null;
 let barsData       = {};
 let chartType      = 'line';
-let chartTimeframe = '5m';
+let chartTimeframe = (()=>{ try{ return localStorage.getItem('trader.tf') || '5m'; }catch(e){ return '5m'; } })();
 let fullscreenTicker = null;
 let otTicker = null, otSide = 'buy', otOrderType = 'market';
 const TICK_SIZE = 0.01;
@@ -2169,6 +2169,35 @@ async function loadWatchlistPrices(){
 }
 
 let barsLoading = false;
+// ── Chart bar cache: stale-while-revalidate ──────────────────────────────────
+// Charts paint instantly from the last fetch (localStorage), then loadBars()
+// replaces it with live data. Keyed per timeframe — purely a paint speed-up, the
+// cache is never trusted as truth (a live fetch always follows). Cookies aren't
+// used here: they're 4KB-capped and ride every HTTP request, so bar data belongs
+// in localStorage, not cookies.
+const BARS_CACHE_TTL = 12*3600*1000;   // 12h
+function _saveBarsCache(){
+  try{
+    // Trim to the last ~220 bars/ticker — plenty for the instant paint (visible
+    // window is ~78), and keeps the cache small across timeframes. loadBars still
+    // fetches the full history a beat later.
+    const trimmed = {};
+    for(const k in barsData){ const a = barsData[k] || []; trimmed[k] = a.length > 220 ? a.slice(-220) : a; }
+    localStorage.setItem('trader.bars.'+chartTimeframe, JSON.stringify({ts:Date.now(), bars:trimmed}));
+  }catch(e){ /* quota exceeded → skip caching, no harm */ }
+}
+function _restoreBarsCache(){
+  try{
+    const c = JSON.parse(localStorage.getItem('trader.bars.'+chartTimeframe)||'null');
+    if(!c || !c.bars || (Date.now()-(c.ts||0)) > BARS_CACHE_TTL) return false;
+    barsData = c.bars;
+    return true;
+  }catch(e){ return false; }
+}
+function _paintFromCache(){
+  try{ (wlPrices||[]).forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price)); }catch(e){}
+  try{ renderFullscreenChart(); }catch(e){}
+}
 async function loadBars(){
   if(barsLoading) return;
   barsLoading = true;
@@ -2180,6 +2209,7 @@ async function loadBars(){
     for(const ticker of Object.keys(bars)){
       barsData[ticker] = bars[ticker].bars || [];
     }
+    _saveBarsCache();                       // persist for instant paint next time
     wlPrices.forEach(t=> renderZoneLadder(t.ticker, zonesData[t.ticker]||{}, t.price));
     updateRegimeBadges();
     renderFullscreenChart();
@@ -2197,11 +2227,13 @@ function changeChartType(type){
 
 function changeTimeframe(tf){
   chartTimeframe = tf;
+  try{ localStorage.setItem('trader.tf', tf); }catch(e){}   // remember for next reload
   document.getElementById('chartTfSelect').value = tf;
   document.getElementById('fsChartTfSelect').value = tf;
   // #1699: reset every chart's visible window so the new timeframe's default
   // (one range-label's worth of candles) takes effect instead of carrying over.
   Object.values(chartView).forEach(v=>{ v.visibleBars=null; v.barOffset=0; v.gVis=null; v.gOff=null; });
+  if(_restoreBarsCache()) _paintFromCache();    // instant paint from cache; loadBars refreshes
   syncRangeButtons(tf);
   loadBars();
 }
@@ -2459,6 +2491,10 @@ function initChartDrag(){
 }
 
 function startDashboard(){
+  _restoreBarsCache();          // preload cached bars so the first chart render paints instantly
+  // Reflect the remembered timeframe in the selectors (chartTimeframe was restored
+  // from localStorage at init).
+  ['chartTfSelect','fsChartTfSelect'].forEach(id=>{ const s=document.getElementById(id); if(s) s.value=chartTimeframe; });
   syncRangeButtons(chartTimeframe);
   initFooterResize();
   initChartDrag();
