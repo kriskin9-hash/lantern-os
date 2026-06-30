@@ -8726,6 +8726,40 @@ def _scan_cache_partition(targets: list, prices: dict, cache: dict):
     return fresh, cached
 
 
+# ── Σ₀ grounding pre-gate (Reason-stage routing) ──────────────────────────────
+# Spend the model only on tickers that could actually produce a trade. ENTER
+# requires convergence_ev.has_evidence — ≥1 grounding signal (zone / 1-min
+# structure / pattern / trend / news). Riley short-circuits when far from a zone
+# (find_sr_zones), so zone/structure/pattern grounding can ONLY exist near a zone.
+# Therefore a ticker that is far from every zone AND has no multi-bar trend AND no
+# news lean is guaranteed to SKIP — calling the LLM for it is wasted. This gate is
+# deliberately CONSERVATIVE and direction-agnostic: near a zone → keep and let the
+# full flow decide; held positions always pass (they still need exit/flip scans);
+# any error → keep (fail-open). It can never drop a setup the full flow would take.
+# Kill-switch: SIGMA0_PREGATE=0.
+_PREGATE_ON        = os.getenv("SIGMA0_PREGATE", "1") != "0"
+_PREGATE_ZONE_PROX = float(os.getenv("SIGMA0_PREGATE_ZONE_PROX", "3.5"))  # % to a zone that still "counts"
+
+
+def _has_grounding(ticker: str, price: float, open_positions: dict = None) -> bool:
+    if not _PREGATE_ON:
+        return True
+    try:
+        if open_positions and get_position_side(ticker, open_positions) != "none":
+            return True                                   # never gate a held position
+        sr = find_sr_zones(ticker, price)
+        if sr.get("in_zone") or float(sr.get("dist_to_nearest", 99) or 99) <= _PREGATE_ZONE_PROX:
+            return True                                   # at/near a zone — let the full flow decide
+        _c = _riley_detect_consecutive_trend(ticker) or {}
+        if int(_c.get("higher_lows", 0) or 0) >= 3 or int(_c.get("lower_highs", 0) or 0) >= 3:
+            return True                                   # a real multi-bar trend can ground it
+        if abs(float(_ev_news_sentiment(ticker) or 0.0)) >= 0.2:
+            return True                                   # a real news lean can ground it
+        return False                                      # far from any zone, trendless, newsless → would SKIP
+    except Exception:
+        return True                                       # fail-open: never drop on error
+
+
 # ── Main scan ─────────────────────────────────────────────────────────────────
 
 def scan_all(watchlist: list, notify_fn=None) -> list:
@@ -8877,11 +8911,24 @@ def scan_all(watchlist: list, notify_fn=None) -> list:
         t1 = datetime.now()
         # Filter to tickers with valid prices
         valid_targets = [t for t in scan_targets if prices.get(t, 0) > 0]
+        _pregated = []
         if valid_targets:
             # Σ₀ cache: only re-read tickers whose price actually moved; reuse the
             # rest. The expensive batch shrinks (or skips) when the tape is quiet.
             _cache = _scan_cache_load()
             fresh_targets, cached_results = _scan_cache_partition(valid_targets, prices, _cache)
+            # Σ₀ pre-gate: among the moved tickers, only spend the model on those
+            # that could actually ENTER; flat/featureless ones would SKIP regardless.
+            _pregated = []
+            if _PREGATE_ON and fresh_targets:
+                _grounded = [t for t in fresh_targets
+                             if _has_grounding(t, prices.get(t, 0), open_positions)]
+                _pregated = [t for t in fresh_targets if t not in _grounded]
+                if _pregated:
+                    log_agent("system", "SCANNER",
+                        f"Σ₀ pre-gate: skipped {len(_pregated)} flat/featureless ticker(s) "
+                        f"pre-LLM ({', '.join(_pregated)})")
+                fresh_targets = _grounded
             grok_results = batch_grok_analysis(fresh_targets, prices) if fresh_targets else {}
             _now_ts = datetime.now().timestamp()
             for _t, _a in list(grok_results.items()):           # cache raw, pre-rotation
@@ -8934,10 +8981,16 @@ def scan_all(watchlist: list, notify_fn=None) -> list:
                     market_bias=market_bias,
                 )
 
-        with ThreadPoolExecutor(max_workers=max(1, min(len(valid_targets), 4)),
+        # Pre-gated tickers (flat + featureless, no LLM read) can't ENTER and hold
+        # no position — record as skipped, don't waste a Stage-3 pass on them.
+        _stage3_targets = [t for t in valid_targets if t not in _pregated]
+        for _pt in _pregated:
+            skipped.append({"ticker": _pt, "reason": "Σ₀ pre-gate — no grounding (flat, no zone/trend/news)"})
+
+        with ThreadPoolExecutor(max_workers=max(1, min(len(_stage3_targets), 4)),
                                 thread_name_prefix="claude") as ex:
             scan_futures = {ex.submit(scan_with_semaphore, t): t
-                           for t in valid_targets}
+                           for t in _stage3_targets}
             for fut in as_completed(scan_futures, timeout=90):  # 90s max per scan
                 t = scan_futures[fut]
                 try:
