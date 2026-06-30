@@ -280,6 +280,7 @@
   <div class="hstat"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
   <div class="hstat"><div class="l">Positions</div><div class="v" id="hPos">—</div></div>
   <div class="hstat"><div class="l">Market</div><div class="v" id="hMkt">—</div></div>
+  <button id="zoomBackBtn" class="chart-ctrl" style="display:none;cursor:pointer" onclick="closeFullscreenChart()" title="Back to the chart grid">← Back to grid</button>
   <select id="chartLayoutSelect" class="chart-ctrl" onchange="setSlotCount(this.value)" title="How many charts to show — fewer = bigger">
     <option value="0">⊞ All</option>
     <option value="1">1 chart</option>
@@ -1206,6 +1207,8 @@ function persistSlots(){
 }
 function setSlotCount(v){
   slotCount = parseInt(v,10) || 0;
+  _preZoomSlot = null;                                       // manual layout change exits zoom mode
+  const bb=document.getElementById('zoomBackBtn'); if(bb) bb.style.display='none';
   persistSlots();
   lastCardOrder = '';            // force a full rebuild
   applyGridCols();
@@ -1447,20 +1450,28 @@ function focusTicker(t){
   openFullscreenChart(t);
 }
 
-// ── Fullscreen ticker chart ──────────────────────────────────────────────────
+// ── Zoom a ticker (#1629) ─────────────────────────────────────────────────────
+// Inline zoom: instead of a full-screen popup, expand the chart into the grid as a
+// single tall chart (reusing the 1-slot layout, #1628). A "← Back to grid" button
+// restores the previous layout.
+let _preZoomSlot = null;
 function openFullscreenChart(t){
+  if(_preZoomSlot===null) _preZoomSlot = slotCount;   // remember layout to restore
   fullscreenTicker = t;
-  document.getElementById('fsTicker').textContent = t;
-  document.getElementById('fsChartTypeSelect').value = chartType;
-  document.getElementById('fsChartTfSelect').value = chartTimeframe;
-  syncRangeButtons(chartTimeframe);
-  document.getElementById('fsBg').classList.remove('hidden');
-  renderFullscreenChart();
+  chartSlots = [t]; slotCount = 1;
+  const ls=document.getElementById('chartLayoutSelect'); if(ls) ls.value='1';
+  const bb=document.getElementById('zoomBackBtn'); if(bb) bb.style.display='';
+  persistSlots(); lastCardOrder=''; applyGridCols(); renderCards();
+  try{ document.querySelector('.main').scrollTop = 0; }catch(e){}
 }
 
 function closeFullscreenChart(){
   fullscreenTicker = null;
-  document.getElementById('fsBg').classList.add('hidden');
+  slotCount = (_preZoomSlot!=null ? _preZoomSlot : 0); _preZoomSlot = null;
+  const ls=document.getElementById('chartLayoutSelect'); if(ls) ls.value=String(slotCount);
+  const bb=document.getElementById('zoomBackBtn'); if(bb) bb.style.display='none';
+  document.getElementById('fsBg').classList.add('hidden');   // legacy popup (now unused)
+  persistSlots(); lastCardOrder=''; applyGridCols(); renderCards();
 }
 
 function renderFullscreenChart(){
