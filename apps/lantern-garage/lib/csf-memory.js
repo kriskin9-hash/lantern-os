@@ -135,6 +135,44 @@ function relevanceScore(text, query) {
   return hits / queryTokens.length;
 }
 
+// IDF support for the live chat read path (#1690 — ports the Python MemoryEngine #1689 fix).
+// The JS path has no persistent inverted index, so document frequency is computed over the
+// candidate records each query. Rare, distinctive words then outweigh common ones instead of
+// every matched token counting the same — a turn matching a rare keyword beats a distractor
+// matching only a common one.
+function buildDocFreq(records) {
+  const df = new Map();
+  for (const r of records || []) {
+    const text = `${r.content?.text || r.content?.raw_input || ""} ${(r.tags || []).join(" ")}`;
+    for (const tok of new Set(getFilteredTokens(text))) df.set(tok, (df.get(tok) || 0) + 1);
+  }
+  return { df, N: Math.max((records || []).length, 1) };
+}
+
+// Smoothed inverse document frequency; always > 0 (BM25-style +1 smoothing).
+function idfOf(dfInfo, token) {
+  const d = (dfInfo && dfInfo.df.get(token)) || 0;
+  const N = (dfInfo && dfInfo.N) || 1;
+  return Math.log((N + 1) / (d + 1)) + 1;
+}
+
+// IDF-weighted relevance: the fraction of the query's IDF mass that `text` matches
+// (0..1, so the existing MIN_RELEVANCE threshold still applies). Falls back to the flat
+// hit ratio when no df info is supplied (keeps other callers unchanged).
+function relevanceScoreIdf(text, query, dfInfo) {
+  if (!dfInfo) return relevanceScore(text, query);
+  const queryTokens = getFilteredTokens(query);
+  if (queryTokens.length === 0) return 0;
+  const textTokens = new Set(getFilteredTokens(text));
+  let matchedIdf = 0, totalIdf = 0;
+  for (const qt of queryTokens) {
+    const w = idfOf(dfInfo, qt);
+    totalIdf += w;
+    if (textTokens.has(qt)) matchedIdf += w;
+  }
+  return totalIdf > 0 ? matchedIdf / totalIdf : 0;
+}
+
 // Count of DISTINCT non-stopword tokens shared between query and text. The ratio
 // from relevanceScore alone lets a SINGLE coincidental content word clear a
 // threshold on a short query — the #1276 confabulation case — so cross-session
@@ -153,10 +191,11 @@ function distinctiveHitCount(text, query) {
 function queryMemories(message, limit = 3) {
   const allRecords = readMemoryRecords(50);
   if (allRecords.length === 0) return [];
+  const dfInfo = buildDocFreq(allRecords);   // IDF over the candidate pool (#1690)
   const scored = allRecords.map(r => {
     const text = r.content?.text || r.content?.raw_input || (r.tags || []).join(" ");
     const tagText = (r.tags || []).join(" ");
-    const score = Math.max(relevanceScore(text, message), relevanceScore(tagText, message));
+    const score = Math.max(relevanceScoreIdf(text, message, dfInfo), relevanceScoreIdf(tagText, message, dfInfo));
     return { record: r, score };
   });
   scored.sort((a, b) => b.score - a.score);
@@ -485,6 +524,9 @@ async function formatCSFContextForPromptAsync(message) {
 
 module.exports = {
   relevanceScore,
+  relevanceScoreIdf,
+  buildDocFreq,
+  idfOf,
   distinctiveHitCount,
   readMemoryRecords,
   _verifyRecords,
