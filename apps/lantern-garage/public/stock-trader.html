@@ -966,7 +966,12 @@ function _renderLadder(ticker, d, currentPrice, canvas, overlay, bars, viewKey){
   // the user can still zoom out to reveal the full history.
   if(bars.length > 0 && view.visibleBars == null){
     const isFs = viewKey === 'overlay-fs';
-    view.visibleBars = Math.min(bars.length, isFs ? 180 : 70);
+    // #1699: default the visible window to ~one range-label's worth of candles per
+    // timeframe (1D≈78×5m, 5D≈35×1h, 1M≈22 daily trading days) instead of a flat
+    // 70 — so the candle count matches the selected range. Pan to see more history.
+    const DEFAULT_VIS = { '1m': 78, '5m': 78, '15m': 52, '1h': 35, '4h': 30, '1d': 22 };
+    const base = DEFAULT_VIS[chartTimeframe] || 70;
+    view.visibleBars = Math.min(bars.length, isFs ? Math.round(base * 2.2) : base);
     view.barOffset = 0;
   }
 
@@ -1956,6 +1961,9 @@ function changeTimeframe(tf){
   chartTimeframe = tf;
   document.getElementById('chartTfSelect').value = tf;
   document.getElementById('fsChartTfSelect').value = tf;
+  // #1699: reset every chart's visible window so the new timeframe's default
+  // (one range-label's worth of candles) takes effect instead of carrying over.
+  Object.values(chartView).forEach(v=>{ v.visibleBars=null; v.barOffset=0; v.gVis=null; v.gOff=null; });
   syncRangeButtons(tf);
   loadBars();
 }
