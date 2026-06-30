@@ -214,10 +214,19 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         // proves the scanner is actually evaluating every ticker, not just "0
         // signals". Keep only the informative per-ticker lines (drop the engine's
         // own scan-cycle banners, which the summary below already conveys).
+        // Keep the feed to the SIGNAL, not the firehose: the Σ₀ EV verdict per
+        // ticker (one line each) plus any executed trade / entry / error. Drop the
+        // Riley/backtest/break-retest/zone debug spam (~15 lines a scan) that was
+        // burying the actual decisions and trades.
+        const TRADE_RE = /→\s*ENTER|executed|order placed|placed order|filled|\bEXIT\b|closed.*p&l|trade taken|order failed|trade failed/i;
         const engineLogs = Array.isArray(scan.logs) ? scan.logs : [];
         const decisionLines = engineLogs
-          .filter((l) => l && l.body && !/^Scan starting/i.test(l.body))
-          .slice(-40)
+          .filter((l) => {
+            if (!l || !l.body) return false;
+            const agent = String(l.agent || l.type || '').toLowerCase();
+            return agent === 'sigma0' || TRADE_RE.test(l.body);
+          })
+          .slice(-15)
           .map((l, i) => ({
             id: `scan_${scan.timestamp}_eng_${i}`,
             agent: (l.agent || l.type || 'scanner').toString().toLowerCase(),

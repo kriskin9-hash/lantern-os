@@ -132,6 +132,11 @@
   .cards-grid.grid-fixed{height:100%;gap:8px}
   .cards-grid.grid-fixed .card{display:flex;flex-direction:column;min-height:0;grid-column:auto!important;opacity:1}
   .cards-grid.grid-fixed .card .zone-ladder{flex:1 1 auto;height:auto!important;min-height:0;margin-bottom:6px}
+  /* Drag-to-reorder chart slots (multi-chart layouts) */
+  .drag-handle{cursor:grab;color:var(--tv-text-secondary);font-size:13px;line-height:1;user-select:none;padding:0 2px}
+  .drag-handle:active{cursor:grabbing}
+  .card.dragging{opacity:.45}
+  .card.drag-over{outline:2px dashed var(--blue);outline-offset:-2px}
   .card-price{font-family:var(--mono);font-size:12px;color:var(--text1)}
   /* Tick-flash (#1627): on each price change, flash green/red for ~1s then fade
      back to the normal colour. Normal state is untouched. */
@@ -1133,10 +1138,10 @@ function buildCard(ticker, d){
   const emph = emphasisAttrs(dir, conf);
 
   return `
-<div class="card state-${state}" id="card-${ticker}">
+<div class="card state-${state}" id="card-${ticker}" data-ticker="${ticker}">
   <div class="card-header">
     <div style="display:flex;align-items:center;gap:8px">
-      <span class="card-ticker" role="button" tabindex="0" aria-label="Change symbol, currently ${ticker}" onclick="editSlot('${ticker}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();editSlot('${ticker}')}" title="Click to change symbol">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
+      ${slotCount ? `<span class="drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder ${ticker}">⠿</span>` : ''}<span class="card-ticker" role="button" tabindex="0" aria-label="Change symbol, currently ${ticker}" onclick="editSlot('${ticker}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();editSlot('${ticker}')}" title="Click to change symbol">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="card-price" id="cp-${ticker}">—</span>
@@ -2077,9 +2082,50 @@ function initFooterResize(){
   handle.addEventListener('touchstart',start,{passive:false});
 }
 
+// Drag-to-reorder chart slots in fixed layouts. Delegated on the grid (survives
+// re-renders); only the ⠿ handle initiates a drag, so chart pan/zoom still works.
+function initChartDrag(){
+  const grid = document.getElementById('cardsGrid');
+  if(!grid || grid._dragInit) return;
+  grid._dragInit = true;
+  let dragTk = null;
+  const clear = ()=> grid.querySelectorAll('.card.dragging,.card.drag-over').forEach(c=>c.classList.remove('dragging','drag-over'));
+  grid.addEventListener('dragstart', (e)=>{
+    const h = e.target.closest('.drag-handle');
+    if(!h || !slotCount){ return; }
+    const card = h.closest('.card'); dragTk = card && card.dataset.ticker;
+    e.dataTransfer.effectAllowed = 'move';
+    try{ e.dataTransfer.setData('text/plain', dragTk||''); }catch(_){}
+    if(card) card.classList.add('dragging');
+  });
+  grid.addEventListener('dragend', clear);
+  grid.addEventListener('dragover', (e)=>{
+    if(!dragTk || !slotCount) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    const over = e.target.closest('.card');
+    grid.querySelectorAll('.card.drag-over').forEach(c=>c.classList.remove('drag-over'));
+    if(over && over.dataset.ticker !== dragTk) over.classList.add('drag-over');
+  });
+  grid.addEventListener('drop', (e)=>{
+    if(!dragTk || !slotCount) return;
+    e.preventDefault();
+    const over = e.target.closest('.card');
+    if(over){
+      const dropTk = over.dataset.ticker;
+      const i = chartSlots.indexOf(dragTk), j = chartSlots.indexOf(dropTk);
+      if(dropTk && dropTk!==dragTk && i>=0 && j>=0){
+        chartSlots[i]=dropTk; chartSlots[j]=dragTk;   // swap slot positions
+        persistSlots(); lastCardOrder=''; renderCards();
+      }
+    }
+    clear(); dragTk = null;
+  });
+}
+
 function startDashboard(){
   syncRangeButtons(chartTimeframe);
   initFooterResize();
+  initChartDrag();
   // Restore the saved chart-grid layout (#1628).
   const ls = document.getElementById('chartLayoutSelect');
   if(ls){ ls.value = String(slotCount); }
