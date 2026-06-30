@@ -7839,7 +7839,21 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         # Live evidence (no longer neutral defaults): realized win-rate as the base
         # rate, directional news sentiment from the shared feed, and higher-tf trend
         # agreement from the consecutive-trend read computed upstream (if present).
-        _wr     = _ev_recent_win_rate(ticker)
+        # Base rate: prefer REALIZED win-rate (≥5 closed trades); otherwise fall
+        # back to the 90-day backtest hit-rate for this ticker+direction so the EV
+        # agrees with the downstream backtest filter instead of optimistically
+        # entering a historically-losing setup (#1623 — the SOLUSD case: realized
+        # was thin → EV used a 0.5 prior and said ENTER while the 90d backtest was
+        # 22%). run_backtest is cached, and it's called again downstream, so this
+        # is free. Only trust it with a meaningful sample (≥10 setups).
+        _wr = _ev_recent_win_rate(ticker)
+        if _wr is None:
+            try:
+                _bt0 = run_backtest(ticker, analysis.get("direction", "NEUTRAL"), profile)
+                if _bt0 and (_bt0.get("total_setups", 0) or 0) >= 10:
+                    _wr = float(_bt0.get("win_rate") or 0.5)
+            except Exception:
+                pass
         _news   = _ev_news_sentiment(ticker)
         _consec = locals().get("_consec") or {}
         _hl, _lh = _consec.get("higher_lows", 0), _consec.get("lower_highs", 0)
