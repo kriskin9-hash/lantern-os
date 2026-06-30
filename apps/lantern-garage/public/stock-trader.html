@@ -123,7 +123,7 @@
   .badge-paper{background:rgba(245,166,35,.15);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
   .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;margin-left:auto}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;margin-left:auto;transition:background .15s,color .15s}
+  .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;transition:background .15s,color .15s}
   .nav-link:hover{color:var(--text0);background:var(--bg3)}
   /* ── Sidebar watchlist ── */
   /* Denser, TradingView-style rows (#1631): symbol + price on one line, change +
@@ -331,12 +331,15 @@
   .ot-usd{font-size:10px;color:var(--text2);text-align:right;flex:1}
   .ot-section{border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:8px}
   .ot-section-title{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.15em}
-  .ot-exit-row{display:flex;flex-direction:column;gap:6px}
-  .ot-exit-head{display:flex;align-items:center;gap:6px}
-  .ot-exit-head input[type=checkbox]{accent-color:var(--blue)}
-  .ot-exit-fields{display:flex;align-items:center;gap:6px}
-  .ot-exit-fields .ot-field{flex:1;width:auto;text-align:left}
-  .ot-tick-label{font-size:9px;color:var(--text2);white-space:nowrap}
+  .ot-exit-row{display:flex;flex-direction:column;gap:7px}
+  .ot-exit-head{display:flex;align-items:center;gap:7px;cursor:pointer}
+  .ot-exit-head input[type=checkbox]{accent-color:var(--blue);width:14px;height:14px;cursor:pointer}
+  .ot-exit-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .ot-fieldcell{display:flex;flex-direction:column;gap:3px}
+  .ot-fieldcell>span{font-size:8px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em}
+  .ot-exit-fields .ot-field{width:100%;text-align:right}
+  .ot-field:focus{outline:none;border-color:var(--blue);background:var(--bg1)}
+  .ot-field:disabled{opacity:.45;cursor:not-allowed}
   .ot-info-row{display:flex;justify-content:space-between;font-size:10px;color:var(--text2)}
   .ot-info-row span:last-child{color:var(--text0)}
   .ot-submit{font-family:var(--mono);font-size:12px;font-weight:600;padding:10px;border-radius:4px;cursor:pointer;border:1px solid transparent;letter-spacing:.05em;text-transform:uppercase;text-align:center}
@@ -567,9 +570,12 @@
             <span class="ot-label">Take profit, price</span>
           </div>
           <div class="ot-exit-fields">
-            <input type="number" class="ot-field" id="otTpPrice" aria-label="Take-profit price" step="0.01" disabled oninput="otSyncFromPrice('tp')">
-            <span class="ot-tick-label">ticks</span>
-            <input type="number" class="ot-field" id="otTpTicks" aria-label="Take-profit ticks" step="1" disabled oninput="otSyncFromTicks('tp')">
+            <label class="ot-fieldcell"><span>Price</span>
+              <input type="number" class="ot-field" id="otTpPrice" aria-label="Take-profit price" step="0.01" placeholder="0.00" disabled oninput="otSyncFromPrice('tp')">
+            </label>
+            <label class="ot-fieldcell"><span>Ticks</span>
+              <input type="number" class="ot-field" id="otTpTicks" aria-label="Take-profit ticks" step="1" placeholder="0" disabled oninput="otSyncFromTicks('tp')">
+            </label>
           </div>
         </div>
         <div class="ot-exit-row">
@@ -578,9 +584,12 @@
             <span class="ot-label">Stop loss, price</span>
           </div>
           <div class="ot-exit-fields">
-            <input type="number" class="ot-field" id="otSlPrice" aria-label="Stop-loss price" step="0.01" disabled oninput="otSyncFromPrice('sl')">
-            <span class="ot-tick-label">ticks</span>
-            <input type="number" class="ot-field" id="otSlTicks" aria-label="Stop-loss ticks" step="1" disabled oninput="otSyncFromTicks('sl')">
+            <label class="ot-fieldcell"><span>Price</span>
+              <input type="number" class="ot-field" id="otSlPrice" aria-label="Stop-loss price" step="0.01" placeholder="0.00" disabled oninput="otSyncFromPrice('sl')">
+            </label>
+            <label class="ot-fieldcell"><span>Ticks</span>
+              <input type="number" class="ot-field" id="otSlTicks" aria-label="Stop-loss ticks" step="1" placeholder="0" disabled oninput="otSyncFromTicks('sl')">
+            </label>
           </div>
         </div>
       </div>
