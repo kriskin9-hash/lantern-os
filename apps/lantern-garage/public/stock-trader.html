@@ -130,8 +130,12 @@
      signal on a tight second line. */
   .wl-item{padding:5px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s;line-height:1.25;display:flex;align-items:center;gap:8px}
   .wl-content{flex:1;min-width:0}
-  .wl-logo{width:20px;height:20px;border-radius:5px;flex:0 0 auto;object-fit:contain;background:#fff}
-  .wl-logo.ph{display:flex;align-items:center;justify-content:center;background:var(--bg3);color:var(--text2);font-family:var(--mono);font-size:7px;font-weight:700}
+  /* Circular brand badge (TradingView-style). Background is chosen adaptively per
+     logo (adaptLogoBg): dark by default so colour logos pop, light only for
+     dark-monochrome marks (e.g. Intel) that would vanish on dark. */
+  .wl-logo{width:22px;height:22px;border-radius:50%;flex:0 0 auto;object-fit:contain;padding:2px;box-sizing:border-box;background:#11161d;border:1px solid rgba(255,255,255,.10)}
+  .wl-logo.on-light{background:#eef1f4;border-color:rgba(0,0,0,.12)}
+  .wl-logo.ph{display:flex;align-items:center;justify-content:center;object-fit:none;padding:0;background:linear-gradient(135deg,#2b3340,#1a2029);color:var(--text1);font-family:var(--mono);font-size:7px;font-weight:700;border-color:rgba(255,255,255,.08)}
   .wl-item:hover,.wl-item.active{background:var(--bg2)}
   .wl-item.active{box-shadow:inset 2px 0 0 var(--blue)}
   .wl-sym{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--text0)}
@@ -251,8 +255,9 @@
   .sym-results{overflow-y:auto;flex:1}
   .sym-row{display:flex;align-items:center;gap:12px;padding:8px 14px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03)}
   .sym-row:hover,.sym-row.sel{background:var(--bg2)}
-  .sym-logo{width:28px;height:28px;border-radius:6px;object-fit:contain;background:#fff;flex:0 0 auto}
-  .sym-logo.ph{display:flex;align-items:center;justify-content:center;background:var(--bg3);color:var(--text2);font-family:var(--mono);font-size:9px;font-weight:700}
+  .sym-logo{width:28px;height:28px;border-radius:50%;object-fit:contain;padding:3px;box-sizing:border-box;background:#11161d;border:1px solid rgba(255,255,255,.10);flex:0 0 auto}
+  .sym-logo.on-light{background:#eef1f4;border-color:rgba(0,0,0,.12)}
+  .sym-logo.ph{display:flex;align-items:center;justify-content:center;object-fit:none;padding:0;background:linear-gradient(135deg,#2b3340,#1a2029);color:var(--text1);font-family:var(--mono);font-size:9px;font-weight:700}
   .sym-sym{font-family:var(--mono);font-weight:700;font-size:13px;color:var(--text0);min-width:62px}
   .sym-name{flex:1;color:var(--text1);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sym-ex{font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:.05em}
@@ -1423,7 +1428,7 @@ function renderSymResults(){
     const esc=s=>String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
     const ph=`<div class='sym-logo ph'>${esc(a.symbol).slice(0,3)}</div>`;
     const logo = cr ? ph
-      : `<img class="sym-logo" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(a.symbol)}.png" alt="" onerror="this.outerHTML=&quot;${ph.replace(/"/g,'&quot;')}&quot;">`;
+      : `<img class="sym-logo${_logoBg[a.symbol]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${esc(a.symbol)}" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(a.symbol)}.png" alt="" onload="adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph.replace(/"/g,'&quot;')}&quot;">`;
     return `<div class="sym-row${i===_symSel?' sel':''}" data-i="${i}" onclick="pickSym(${i})">
       ${logo}<span class="sym-sym">${esc(a.symbol)}</span>
       <span class="sym-name">${esc(a.name)}</span>
@@ -1623,7 +1628,29 @@ const _wlIsCrypto = (tk)=> /USD$/.test(tk) && tk.length>=6;
 function tickerLogoHtml(ticker){
   const ph = `<span class='wl-logo ph'>${(ticker||'').slice(0,3)}</span>`;
   if(_wlIsCrypto(ticker)) return ph;
-  return `<img class="wl-logo" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png" alt="" onerror="this.outerHTML=&quot;${ph}&quot;">`;
+  return `<img class="wl-logo${_logoBg[ticker]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${ticker}" src="https://financialmodelingprep.com/image-stock/${encodeURIComponent(ticker)}.png" alt="" onload="adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph}&quot;">`;
+}
+// Pick the badge background per logo by sampling its luminance (FMP sends CORS, so
+// the canvas isn't tainted). Dark-monochrome marks (Intel) get a light badge;
+// everything else keeps the dark badge so colour logos pop. Cached in localStorage.
+const _logoBg = (()=>{ try{ return JSON.parse(localStorage.getItem('logoBg')||'{}'); }catch(e){ return {}; } })();
+function adaptLogoBg(img){
+  const sym = img.dataset.sym;
+  if(_logoBg[sym]){ img.classList.toggle('on-light', _logoBg[sym]==='l'); return; }
+  try{
+    const c=document.createElement('canvas'); c.width=c.height=24;
+    const ctx=c.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(img,0,0,24,24);
+    const d=ctx.getImageData(0,0,24,24).data;
+    let lum=0,n=0,colorful=0;
+    for(let i=0;i<d.length;i+=4){ const a=d[i+3]; if(a<40) continue; const r=d[i],g=d[i+1],b=d[i+2]; lum+=0.299*r+0.587*g+0.114*b; if(Math.max(r,g,b)-Math.min(r,g,b)>40) colorful++; n++; }
+    // Light badge only for DARK + MONOCHROME marks (e.g. Intel black). Colour logos
+    // (Meta blue, Tesla red) stay on the dark badge so they pop like the screenshot.
+    const dark = n && (lum/n) < 110 && (colorful/n) < 0.25;
+    _logoBg[sym] = dark ? 'l' : 'd';
+    try{ localStorage.setItem('logoBg', JSON.stringify(_logoBg)); }catch(e){}
+    img.classList.toggle('on-light', dark);
+  }catch(e){ /* tainted or decode error → leave dark badge */ }
 }
 const _wlPx = (p)=> p>100 ? p.toLocaleString() : (p!=null ? p.toFixed(4) : '—');
 
