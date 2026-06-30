@@ -233,6 +233,8 @@
   .s0-lvl{font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);margin-top:2px}
   .s0-why{font-size:10px;color:var(--tv-text-secondary);margin-top:3px;font-style:italic}
   .s0-empty{font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);padding:4px 0}
+  .s0-status{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--mono);font-size:10px;color:var(--tv-text-secondary);padding:2px 0 7px;margin-bottom:6px;border-bottom:1px solid var(--tv-border)}
+  .s0-status .pos{color:var(--green)} .s0-status .neg{color:var(--red)}
   /* Agent log */
   .log-item{font-family:var(--mono);font-size:10px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:grid;grid-template-columns:45px 55px 1fr;gap:4px;align-items:start}
   .log-time{color:var(--text2)}.log-agent{font-weight:600}
@@ -1654,9 +1656,28 @@ async function loadZones(){
 // actionable entry instruction — direction, entry/stop/target, R:R, EV, p_win,
 // and the evidence — instead of merely tinting a BUY/SELL button. The engine
 // auto-executes ENTER signals; this is the human-readable narration of that.
+// Compact session/portfolio status for the Σ₀ panel (#1625) — the old Telegram
+// "Portfolio Update / Session Start" lines, but dense (no chat spacing): equity,
+// today P&L, open positions, market regime + open/closed, tickers scanned, cadence.
+const s0Status = { equity:null, pnl:null, positions:0, market:null, marketOpen:null };
+function renderS0StatusHtml(){
+  const pnl = s0Status.pnl||0;
+  const reg = s0Status.market || '—';
+  const dot = reg==='BULLISH'?'🟢':reg==='BEARISH'?'🔴':'⚪';
+  const openTxt = s0Status.marketOpen===false?' · closed':(s0Status.marketOpen?' · open':'');
+  const scanned = Object.keys(zonesData||{}).length;
+  return `<div class="s0-status">`+
+    `<span>💼 ${s0Status.equity!=null?'$'+fmt(s0Status.equity,0):'—'}</span>`+
+    `<span class="${pnl>=0?'pos':'neg'}">${pnl>=0?'▲':'▼'} ${pnl>=0?'+':'-'}$${fmt(Math.abs(pnl),0)} today</span>`+
+    `<span>${s0Status.positions?('📌 '+s0Status.positions+' open'):'📭 flat'}</span>`+
+    `<span>${dot} ${reg}${openTxt}</span>`+
+    `<span>⏱ ${scanned} scanned · 1m</span>`+
+  `</div>`;
+}
 function renderSigma0Signals(){
   const el = document.getElementById('sigma0Signals');
   if(!el) return;
+  const statusHtml = renderS0StatusHtml();
   const enters = [];
   Object.keys(zonesData||{}).forEach(t=>{
     const s0 = (zonesData[t]&&zonesData[t].last_signal&&zonesData[t].last_signal.sigma0) || null;
@@ -1671,8 +1692,8 @@ function renderSigma0Signals(){
     });
   });
   enters.sort((a,b)=> (b.ev||0)-(a.ev||0));
-  if(!enters.length){ el.innerHTML = '<div class="s0-empty">No actionable entries — scanning every minute.</div>'; return; }
-  el.innerHTML = enters.slice(0,6).map(i=>`
+  if(!enters.length){ el.innerHTML = statusHtml + '<div class="s0-empty">No actionable entries — scanning every minute.</div>'; return; }
+  el.innerHTML = statusHtml + enters.slice(0,6).map(i=>`
     <div class="s0-sig${i.isShort?' short':''}">
       <div class="s0-head">${i.label} ${newsEsc(i.ticker)} — ENTER @ $${i.entry}</div>
       <div class="s0-lvl">stop $${i.stop} · target $${i.target} · R:R ${i.rr} · EV ${i.ev>=0?'+':''}${i.ev}R · win ${Math.round((i.p||0)*100)}%</div>
@@ -1757,6 +1778,8 @@ async function loadPortfolio(){
     pe.textContent = (pnl>=0?'+':'')+'$'+fmt(Math.abs(pnl),0);
     pe.className   = 'v '+(pnl>=0?'pos':'neg');
     document.getElementById('hPos').textContent = (d.positions||[]).length;
+    s0Status.equity = a.equity; s0Status.pnl = pnl; s0Status.positions = (d.positions||[]).length;
+    renderSigma0Signals();
   }catch(e){}
 }
 
@@ -1766,6 +1789,7 @@ async function loadMarketStatus(){
     const d = await r.json();
     document.getElementById('hVix').textContent = d.vix ? d.vix+' '+d.vix_regime : '—';
     document.getElementById('hMkt').textContent = d.market||'—';
+    s0Status.market = d.market; s0Status.marketOpen = d.market_open; renderSigma0Signals();
     const ms = document.getElementById('mktStatus');
     ms.innerHTML = `
       <div class="mkt-row"><span class="mkt-label">VIX</span><span class="mkt-val">${d.vix||'—'} (${d.vix_regime||'—'})</span></div>
