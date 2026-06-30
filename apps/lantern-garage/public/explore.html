@@ -1619,6 +1619,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // rebuild) and dedupe by stable card id; a bottom sentinel pulls the next page
   // as it nears the viewport. /api/explore/feed/page → lib/explore-feed pagedFeed.
   let filterEpoch = 0;        // bumped on filter change to cancel in-flight pages
+  let feedDone = false;       // catalog exhausted / cycle cap hit — stop auto-pulling
   const PAGE = 9;
   const MAX_CYCLES = 2;       // after looping the catalog this many times, stop auto-loading
 
@@ -1659,6 +1660,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const cards = (data && data.cards) || [];
       if (data && data.cycled) { cycles++; seen.clear(); } // endless: re-serve a fresh cycle
       if (!cards.length) {
+        feedDone = true;
         if (io) io.unobserve(sentinel);
         // Small filtered category fully shown → say "caught up", don't blank or
         // re-stack duplicates (the server no longer cycles a single-page catalog).
@@ -1669,6 +1671,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       appendCards(cards);
       if (cycles >= MAX_CYCLES) {                          // looped the catalog enough — stop pulling
+        feedDone = true;
         if (io) io.unobserve(sentinel);
         if (statusEl) statusEl.textContent = totalShown + " loaded · you're all caught up";
       } else if (statusEl) {
@@ -1682,7 +1685,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (epoch === filterEpoch) loading = false;
       sentinel.classList.remove('is-loading');
       stream.setAttribute('aria-busy', 'false');
+      // Keep pulling until the viewport is actually covered. IntersectionObserver
+      // only fires on a CHANGE of intersection, so a short page that leaves the
+      // sentinel continuously in view (a filtered feed with galleries hidden)
+      // stalls after one page. This explicit re-check is immune to that.
+      if (epoch === filterEpoch) requestAnimationFrame(fillIfNeeded);
     }
+  }
+
+  // Pull another page if we're not done, not mid-load, and the sentinel is within
+  // (or near) the viewport — i.e. the current cards don't fill the screen yet.
+  function fillIfNeeded() {
+    if (feedDone || loading) return;
+    const rect = sentinel.getBoundingClientRect();
+    if (rect.top <= window.innerHeight + 700) loadPage();
   }
 
   const io = ('IntersectionObserver' in window)
@@ -1693,7 +1709,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function reset() {
     filterEpoch++;
-    loading = false; totalShown = 0; cycles = 0;
+    loading = false; totalShown = 0; cycles = 0; feedDone = false;
     seen.clear();
     if (activeEmbed) deactivateEmbed(activeEmbed);   // stop any playing game/film/radio
     if (playObserver) playObserver.disconnect();
@@ -1757,13 +1773,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Kick off, then keep the sentinel observed. Fallback for no IntersectionObserver.
+  // Kick off, then keep the sentinel observed.
   syncShowcases();   // honor a deep-linked filter on first paint
   loadPage();
   if (io) io.observe(sentinel);
-  else window.addEventListener('scroll', () => {
-    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 700) loadPage();
-  }, { passive: true });
+  // Always drive pagination from scroll/resize too — never rely solely on the
+  // IntersectionObserver. On a filtered feed it can fail to fire (a sentinel that
+  // never registers an intersection CHANGE), which stalled the finance feed at 9.
+  // fillIfNeeded is cheap and guarded (loading/feedDone), and uses getBoundingClientRect.
+  window.addEventListener('scroll', fillIfNeeded, { passive: true });
+  window.addEventListener('resize', fillIfNeeded, { passive: true });
 })();
 </script>
 </body>
