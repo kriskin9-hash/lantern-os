@@ -100,7 +100,12 @@
   .card.state-watching{border-color:rgba(74,158,255,.25)}
   .card.state-quiet{opacity:.75}
   .card-header{padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-  .card-ticker{font-family:var(--mono);font-size:14px;font-weight:600}
+  .card-ticker{font-family:var(--mono);font-size:14px;font-weight:600;cursor:pointer;border-bottom:1px dotted transparent}
+  .card-ticker:hover{border-bottom-color:var(--tv-text-secondary)}
+  /* Per-slot symbol editor input (#1628) */
+  .slot-sym{font-family:var(--mono);font-size:14px;font-weight:600;width:84px;background:var(--bg0);color:var(--tv-text);border:1px solid var(--tv-accent);border-radius:3px;padding:1px 5px;text-transform:uppercase;outline:none}
+  /* 1-chart layout (#1628 + zoom #1629): a single tall chart filling the grid */
+  .cards-grid.grid-single .card .zone-ladder{height:calc(100vh - 340px);min-height:380px}
   .card-price{font-family:var(--mono);font-size:12px;color:var(--text1)}
   /* Tick-flash (#1627): on each price change, flash green/red for ~1s then fade
      back to the normal colour. Normal state is untouched. */
@@ -275,6 +280,16 @@
   <div class="hstat"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
   <div class="hstat"><div class="l">Positions</div><div class="v" id="hPos">—</div></div>
   <div class="hstat"><div class="l">Market</div><div class="v" id="hMkt">—</div></div>
+  <select id="chartLayoutSelect" class="chart-ctrl" onchange="setSlotCount(this.value)" title="How many charts to show — fewer = bigger">
+    <option value="0">⊞ All</option>
+    <option value="1">1 chart</option>
+    <option value="2">2 charts</option>
+    <option value="3">3 charts</option>
+    <option value="4">4 charts</option>
+    <option value="6">6 charts</option>
+    <option value="10">10 charts</option>
+    <option value="20">20 charts</option>
+  </select>
   <select id="chartTypeSelect" class="chart-ctrl" onchange="changeChartType(this.value)">
     <option value="line">Line</option>
     <option value="candle">Candles</option>
@@ -450,6 +465,12 @@
 let zonesData      = {};
 let wlPrices       = [];
 const _lastCardPrice = {};   // last seen price per ticker, for the tick-flash (#1627)
+// Configurable chart grid (#1628): slotCount 0 = show ALL watchlist tickers (legacy).
+// >0 = show that many chart slots, seeded from the watchlist but each freely
+// re-assignable by typing a symbol. Persisted across reloads.
+let slotCount  = parseInt(localStorage.getItem('trader.slotCount')||'0',10) || 0;
+let chartSlots = (()=>{ try{ return JSON.parse(localStorage.getItem('trader.chartSlots'))||[]; }catch(e){ return []; } })();
+const SLOT_COLS = {1:1,2:2,3:3,4:2,6:3,10:5,20:5};
 let activeTicker   = null;
 let barsData       = {};
 let chartType      = 'line';
@@ -1085,7 +1106,7 @@ function buildCard(ticker, d){
 <div class="card state-${state}" id="card-${ticker}">
   <div class="card-header">
     <div style="display:flex;align-items:center;gap:8px">
-      <span class="card-ticker">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
+      <span class="card-ticker" onclick="editSlot('${ticker}')" title="Click to change symbol">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <span class="card-price" id="cp-${ticker}">—</span>
@@ -1155,23 +1176,81 @@ function updateCardMeta(ticker, d){
 
 // ── Render all cards ─────────────────────────────────────────────────────────
 let lastCardOrder = null;
+// Which tickers the grid renders. slotCount 0 → all watchlist (sorted by state).
+// >0 → the chartSlots, seeded from the watchlist first-N but kept in user order.
+function visibleTickers(){
+  const all = wlPrices.map(t=>t.ticker);
+  if(!slotCount){
+    const order={open:0,watching:1,quiet:2};
+    return all.slice().sort((a,b)=> order[tickerState(zonesData[a]||{})] - order[tickerState(zonesData[b]||{})]);
+  }
+  // Seed/extend slots from the watchlist until we have slotCount of them.
+  if(chartSlots.length < slotCount){
+    const seed = all.filter(t=>!chartSlots.includes(t));
+    while(chartSlots.length < slotCount && seed.length) chartSlots.push(seed.shift());
+    while(chartSlots.length < slotCount) chartSlots.push(all[chartSlots.length % Math.max(1,all.length)] || 'SPY');
+    persistSlots();
+  }
+  return chartSlots.slice(0, slotCount);
+}
+function applyGridCols(){
+  const grid = document.getElementById('cardsGrid');
+  if(!grid) return;
+  grid.style.gridTemplateColumns = slotCount
+    ? `repeat(${SLOT_COLS[slotCount] || Math.ceil(Math.sqrt(slotCount))},1fr)`
+    : 'repeat(auto-fill,minmax(340px,1fr))';
+  grid.classList.toggle('grid-single', slotCount === 1);   // 1 chart → tall (also serves zoom #1629)
+}
+function persistSlots(){
+  try{ localStorage.setItem('trader.slotCount', String(slotCount)); localStorage.setItem('trader.chartSlots', JSON.stringify(chartSlots)); }catch(e){}
+}
+function setSlotCount(v){
+  slotCount = parseInt(v,10) || 0;
+  persistSlots();
+  lastCardOrder = '';            // force a full rebuild
+  applyGridCols();
+  renderCards();
+}
+
 function renderCards(){
   const grid = document.getElementById('cardsGrid');
-  const sorted = wlPrices.map(t=>t.ticker).sort((a,b)=>{
-    const order={open:0,watching:1,quiet:2};
-    return order[tickerState(zonesData[a]||{})] - order[tickerState(zonesData[b]||{})];
-  });
+  const list = visibleTickers();
 
-  // Avoid tearing down + rebuilding all 16 cards (and their canvases) on every
+  // Avoid tearing down + rebuilding all the cards (and their canvases) on every
   // periodic refresh — only do a full rebuild when the card set/order changes.
-  const orderKey = sorted.join(',');
+  const orderKey = slotCount + '|' + list.join(',');
   if(orderKey === lastCardOrder){
-    sorted.forEach(t => updateCardMeta(t, zonesData[t]||{}));
+    list.forEach(t => updateCardMeta(t, zonesData[t]||{}));
     return;
   }
   lastCardOrder = orderKey;
-  grid.innerHTML = sorted.map(t => buildCard(t, zonesData[t]||{})).join('');
-  sorted.forEach(t => renderZoneLadder(t, zonesData[t]||{}, getCurrentPrice(t)));
+  applyGridCols();
+  grid.innerHTML = list.map(t => buildCard(t, zonesData[t]||{})).join('');
+  list.forEach(t => renderZoneLadder(t, zonesData[t]||{}, getCurrentPrice(t)));
+}
+
+// Per-slot symbol editor (#1628): click a chart's ticker to retype it. Validates +
+// resolves via the same Alpaca-backed watchlist endpoint (#1624), then swaps the slot.
+function editSlot(oldTicker){
+  const span = document.querySelector('#card-'+oldTicker+' .card-ticker');
+  if(!span || span.dataset.editing) return;
+  span.dataset.editing = '1';
+  span.innerHTML = `<input class="slot-sym" placeholder="${oldTicker}" maxlength="10" autocomplete="off"
+     onkeydown="if(event.key==='Enter'){commitSlot('${oldTicker}',this.value)}else if(event.key==='Escape'){renderCards()}"
+     onblur="setTimeout(()=>{try{renderCards()}catch(e){}},150)">`;
+  const inp = span.querySelector('input'); if(inp) inp.focus();
+}
+async function commitSlot(oldTicker, raw){
+  const sym = String(raw||'').trim().toUpperCase();
+  if(!sym || sym===oldTicker){ renderCards(); return; }
+  try{
+    const r = await fetch('/api/trading/watchlist', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker:sym})});
+    const d = await r.json();
+    if(!r.ok || d.valid===false){ alert(d.error || `"${sym}" isn't a tradable symbol`); renderCards(); return; }
+    const resolved = (d.resolved && d.resolved.symbol) || sym;
+    if(slotCount){ const i = chartSlots.indexOf(oldTicker); if(i>=0) chartSlots[i]=resolved; else chartSlots.push(resolved); persistSlots(); }
+    lastCardOrder=''; await loadWatchlistPrices(); await loadZones(); renderCards();
+  }catch(e){ renderCards(); }
 }
 
 // ── Order ticket ──────────────────────────────────────────────────────────────
@@ -1885,6 +1964,10 @@ async function fullRefresh(){
 // ── Init ──────────────────────────────────────────────────────────────────────
 function startDashboard(){
   syncRangeButtons(chartTimeframe);
+  // Restore the saved chart-grid layout (#1628).
+  const ls = document.getElementById('chartLayoutSelect');
+  if(ls){ ls.value = String(slotCount); }
+  applyGridCols();
   fullRefresh();
   loadBars();
   loadAgentLog();
