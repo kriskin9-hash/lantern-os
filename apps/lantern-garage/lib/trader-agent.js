@@ -165,6 +165,15 @@ class TraderAgent {
   }
 
   /**
+   * Validate a ticker symbol is a real, tradable asset before adding it to the
+   * watchlist (#1624). Delegates to the Python engine (which holds the Alpaca
+   * creds). Returns { valid, tradable, symbol, name, asset_class, price?, reason }.
+   */
+  async validateSymbol(ticker) {
+    return this._callPython('validate_symbol', { ticker }, this.fastTimeout);
+  }
+
+  /**
    * Analyze a specific signal (enrich with ticker, confidence scoring)
    * Returns: { symbol, action, reason, confidence, timestamp }
    */

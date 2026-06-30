@@ -43,9 +43,11 @@ try:
         DEFAULT_WATCHLIST,
         ASSET_PROFILES,
         alpaca,
+        validate_symbol,
     )
 except ImportError as e:
     # agents.py not available — evaluate_* actions still work without it
+    validate_symbol = None
     scan_all = None
     get_portfolio_equity = None
     get_open_positions = None
@@ -57,6 +59,18 @@ except ImportError as e:
     ASSET_PROFILES = {}
     alpaca = None
     _agents_import_error = str(e)
+
+
+def action_validate_symbol(args):
+    """Validate a ticker symbol before it's added to the watchlist (#1624)."""
+    ticker = (args.get('ticker') or '').strip()
+    if not ticker:
+        return {'valid': False, 'reason': 'ticker required'}
+    if validate_symbol is None:
+        # Engine unavailable — don't hard-block the add, but flag it unverified.
+        return {'valid': True, 'tradable': None, 'symbol': ticker.upper(),
+                'reason': 'engine unavailable — not verified'}
+    return validate_symbol(ticker)
 
 
 def action_scan_market(args):
@@ -638,6 +652,7 @@ def main():
         'place_order': action_place_order,
         'evaluate_asset': action_evaluate_asset,
         'evaluate_watchlist': action_evaluate_watchlist,
+        'validate_symbol': action_validate_symbol,
     }
 
     if action not in handlers:

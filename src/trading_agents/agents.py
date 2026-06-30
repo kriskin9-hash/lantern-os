@@ -7464,6 +7464,35 @@ def _conv_grade_close(ticker: str, pnl_pct):
     })
 
 
+def validate_symbol(ticker: str) -> dict:
+    """Validate a ticker is a REAL, tradable asset before it's added to the
+    watchlist (#1624) — via the Alpaca asset API for equities and a live price
+    probe for crypto. Runs Python-side because that's where the Alpaca creds live
+    (the Node server has none). Returns {valid, tradable, symbol, name, asset_class,
+    price?, reason}."""
+    t = (ticker or "").strip().upper()
+    if not t or not re.match(r"^[A-Z0-9.\-/]{1,12}$", t):
+        return {"valid": False, "tradable": False, "symbol": t, "reason": "invalid format"}
+    try:
+        if is_crypto(t):
+            price = fetch_ticker_price(t)
+            ok = bool(price and price > 0)
+            return {"valid": ok, "tradable": ok, "symbol": t, "name": t,
+                    "asset_class": "crypto", "price": price if ok else None,
+                    "reason": "" if ok else "no market data for crypto pair"}
+        asset = alpaca.get_asset(t)
+        tradable = bool(getattr(asset, "tradable", False))
+        return {"valid": True, "tradable": tradable,
+                "symbol": getattr(asset, "symbol", t),
+                "name": getattr(asset, "name", t),
+                "asset_class": getattr(asset, "_raw", {}).get("class", "us_equity")
+                               if hasattr(asset, "_raw") else "us_equity",
+                "reason": "" if tradable else "asset exists but is not tradable"}
+    except Exception:
+        return {"valid": False, "tradable": False, "symbol": t,
+                "reason": "not a known symbol on Alpaca"}
+
+
 def fetch_ticker_price(ticker: str) -> float:
     """Fetch current price — used in parallel pre-fetch stage."""
     try:
