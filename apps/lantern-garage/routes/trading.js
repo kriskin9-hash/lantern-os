@@ -33,6 +33,33 @@ try {
   console.error('[Trading Routes] Failed to initialize TraderAgent:', e.message);
 }
 
+// ── Autonomous market scan loop (Σ₀ Observe stage) ───────────────────────────
+// Scan the watchlist every ~minute regardless of page activity, so signals,
+// entry/exit instructions, and (when enabled) auto-execution stay live even with
+// nobody watching the page. Self-RESCHEDULING — the next scan is queued only
+// after the previous finishes, so a slow 45-60s scan never overlaps itself.
+// The shared cache means page polls in the same minute reuse this scan rather
+// than triggering a second one. Kill-switch: TRADER_AUTOSCAN=0.
+const AUTOSCAN_MS = parseInt(process.env.TRADER_AUTOSCAN_MS || '60000');
+let _autoscanStopped = false;
+async function _autoscanTick() {
+  if (_autoscanStopped || !traderAgent) return;
+  try {
+    traderAgent.cache && (traderAgent.cache['market_scan'] = null); // force fresh each minute
+    const scan = await traderAgent.scanMarket();
+    const n = Array.isArray(scan && scan.signals) ? scan.signals.length : 0;
+    if (n) console.log(`[Trading] autoscan — ${n} signal(s)`);
+  } catch (e) {
+    console.error('[Trading] autoscan failed:', e.message);
+  } finally {
+    if (!_autoscanStopped) setTimeout(_autoscanTick, AUTOSCAN_MS);
+  }
+}
+if (traderAgent && process.env.TRADER_AUTOSCAN !== '0') {
+  setTimeout(_autoscanTick, 5000); // first scan shortly after boot
+  console.log(`[Trading] autonomous scan loop started (every ${AUTOSCAN_MS}ms)`);
+}
+
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
 
