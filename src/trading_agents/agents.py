@@ -29,6 +29,34 @@ CLAUDE_HAIKU  = "claude-haiku-4-5-20251001"
 
 
 grok   = OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1")
+
+# Grok-with-fallback (#1701). Models are interchangeable (CLAUDE.md): when xAI is
+# down — out of credits, rate-limited, network — route the SAME analysis prompt to
+# Claude Haiku instead of letting every ticker default to NEUTRAL (which silently
+# halts all trading). One env flag (SCANNER_LLM_FALLBACK=0) disables it.
+def grok_chat(messages, max_tokens=2500, timeout=30):
+    """Return the model's text for an OpenAI-style `messages` list. Grok first;
+    on ANY failure, fall back to Claude Haiku (mapping the single prompt across
+    the Anthropic interface). Raises only if BOTH providers fail."""
+    try:
+        resp = grok.chat.completions.create(
+            model="grok-3-mini", messages=messages, max_tokens=max_tokens, timeout=timeout)
+        return resp.choices[0].message.content
+    except Exception as e:
+        if os.getenv("SCANNER_LLM_FALLBACK") == "0":
+            raise
+        log.warning("Grok unavailable (%s) — falling back to Claude Haiku", str(e)[:100])
+        log_agent("system", "LLM", f"Grok down ({str(e)[:40]}) → Claude Haiku fallback")
+        sys_txt = "\n".join(m["content"] for m in messages if m.get("role") == "system")
+        umsgs = [{"role": m["role"], "content": m["content"]}
+                 for m in messages if m.get("role") in ("user", "assistant")] \
+                or [{"role": "user", "content": messages[-1]["content"]}]
+        kw = {"model": CLAUDE_HAIKU, "max_tokens": max_tokens, "messages": umsgs}
+        if sys_txt:
+            kw["system"] = sys_txt
+        r = claude.messages.create(**kw)
+        return r.content[0].text if r.content else ""
+
 alpaca = tradeapi.REST(
     os.getenv("ALPACA_API_KEY"),
     os.getenv("ALPACA_SECRET_KEY"),
@@ -4105,13 +4133,7 @@ Return ONLY valid JSON:
   "key_reversal_level": "price level where reversal most likely",
   "action": "BUY|SELL|HOLD"
 }}"""
-    resp = grok.chat.completions.create(
-        model="grok-3-mini",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=300,
-        timeout=25,
-    )
-    result = extract_json(resp.choices[0].message.content)
+    result = extract_json(grok_chat([{"role": "user", "content": prompt}], max_tokens=300, timeout=25))
     result["direction"]     = result.get("direction", "NEUTRAL").upper()
     result["action"]        = result.get("action", "HOLD").upper()
     result["news_velocity"] = news_velocity.get("velocity", "NORMAL")
@@ -7232,13 +7254,8 @@ Return ONLY valid JSON with this exact structure (keep all text fields under 12 
 
     log.info("[GROK_PROMPT] Ticker context sent to Grok:\n%s", ticker_lines.strip())
     try:
-        resp = grok.chat.completions.create(
-            model="grok-3-mini",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=2500,   # increased — 13 tickers need ~150 tokens each
-            timeout=30,
-        )
-        raw = resp.choices[0].message.content
+        # Grok-with-Claude-fallback so a dead xAI account doesn't NEUTRAL-out the scan.
+        raw = grok_chat([{"role": "user", "content": prompt}], max_tokens=2500)
         # Repair common Grok JSON issues before parsing:
         # smart quotes, trailing commas, apostrophes in values
         import re as _re
