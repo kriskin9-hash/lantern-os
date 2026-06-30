@@ -2,6 +2,31 @@
   "_comment": "Curated embed seed for the Explore feed (Observe stage). Each entry becomes one full-width 'embed' card rendered as a lazy iframe. Sourced from open archives (Internet Archive / Musopen, public-domain or freely-streamable) and local Keystone games. Every card carries [why, source] per the Σ₀ Verify rule. To add/replace content, edit this file — no code change. Per-card key = 'source:embed:<slug>' so each panel earns or loses its slot independently (engagement or discarded). Verified live 2026-06-27.",
   "embeds": [
     {
+      "slug": "three-doors",
+      "title": "Kingdome of Hearts — Three Doors",
+      "kind": "game",
+      "url": "/three-doors-game.html",
+      "source": "Keystone Arcade",
+      "published": "2026-06-30",
+      "topics": [
+        "game",
+        "play",
+        "kingdome",
+        "doors"
+      ],
+      "thumb": "https://media.lantern-os.net/koh/ba0a53b095-t.webp",
+      "lore": "Seven stages, three doors each scene, no wrong choices. A dream journey through the Kingdome — each loop different.",
+      "why": "Keystone's own choose-your-path game, served locally — the Three Doors loop made playable",
+      "evidence_source": "local /three-doors-game.html · data/three-doors/scenes.json",
+      "embed": {
+        "provider": "local",
+        "src": "/three-doors-game.html",
+        "height": 640,
+        "interactive": true,
+        "width": 720
+      }
+    },
+    {
       "slug": "t-rex",
       "title": "T-Rex Runner",
       "kind": "game",

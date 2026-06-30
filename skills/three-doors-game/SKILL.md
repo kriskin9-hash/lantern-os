@@ -1,6 +1,6 @@
 ---
 name: three-doors-game
-description: Use this skill when the user wants to play, continue, export, import, ingest, or preserve the Lantern OS 3 Doors Game. Trigger on phrases such as "3 doors", "three doors", "lets play", "images only", "!threedoors", "!ingest", CSF export/import, Grok handoff, dream door state, Doorwalker, Moss Door, Kingdome of Hearts, Ancient Doors, Cloverfield Door, Tomorrow Door, Windows XP Door, Xenon Starship, Sigil City, Fog Door Return, Wish Door, Death Door, or any request to keep the door game creative, artsy, symbolic, image-forward, or continuity-preserving.
+description: This skill should be used when the user wants to play, continue, export, import, ingest, or preserve the Lantern OS 3 Doors Game. Trigger on phrases such as "3 doors", "three doors", "lets play", "images only", "!threedoors", "!ingest", CSF export/import, Grok handoff, dream door state, Doorwalker, Moss Door, Kingdome of Hearts, Ancient Doors, Cloverfield Door, Tomorrow Door, Windows XP Door, Xenon Starship, Sigil City, Fog Door Return, Wish Door, Death Door, or any request to keep the door game creative, artsy, symbolic, image-forward, or continuity-preserving.
 ---
 
 # Three Doors Game
