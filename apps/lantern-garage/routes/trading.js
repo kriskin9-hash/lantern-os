@@ -54,18 +54,28 @@ function _isUsMarketHours() {
   return mins >= 570 && mins < 960;              // 09:30 (570) .. 16:00 (960) ET
 }
 let _autoscanStopped = false;
+// Overnight (market-closed) scanning is OFF by default — off-hours the only thing
+// to scan is crypto, and the user mostly wants it idle overnight. Flip on via the
+// 🌙 toggle for after-hours crypto testing; it auto-resets at the next market open
+// so a forgotten toggle can't quietly burn tokens later. (#1714)
+let _scanWhenClosed = process.env.TRADER_SCAN_CLOSED === '1';
 async function _autoscanTick() {
   if (_autoscanStopped || !traderAgent) return;
-  try {
-    traderAgent.cache && (traderAgent.cache['market_scan'] = null); // force fresh each minute
-    const scan = await traderAgent.scanMarket();
-    const n = Array.isArray(scan && scan.signals) ? scan.signals.length : 0;
-    if (n) console.log(`[Trading] autoscan — ${n} signal(s)`);
-  } catch (e) {
-    console.error('[Trading] autoscan failed:', e.message);
-  } finally {
-    if (!_autoscanStopped) setTimeout(_autoscanTick, _isUsMarketHours() ? AUTOSCAN_MS : AUTOSCAN_CLOSED_MS);
+  const marketHours = _isUsMarketHours();
+  if (marketHours && _scanWhenClosed) _scanWhenClosed = false;      // auto-reset at open
+  // Off-hours with overnight scanning off → skip the scan entirely: no Python
+  // spawn, no model call, zero tokens. The price collectors keep polling (free).
+  if (marketHours || _scanWhenClosed) {
+    try {
+      traderAgent.cache && (traderAgent.cache['market_scan'] = null); // force fresh each minute
+      const scan = await traderAgent.scanMarket();
+      const n = Array.isArray(scan && scan.signals) ? scan.signals.length : 0;
+      if (n) console.log(`[Trading] autoscan — ${n} signal(s)`);
+    } catch (e) {
+      console.error('[Trading] autoscan failed:', e.message);
+    }
   }
+  if (!_autoscanStopped) setTimeout(_autoscanTick, marketHours ? AUTOSCAN_MS : AUTOSCAN_CLOSED_MS);
 }
 if (traderAgent && process.env.TRADER_AUTOSCAN !== '0') {
   setTimeout(_autoscanTick, 5000); // first scan shortly after boot
@@ -557,6 +567,18 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     } catch (error) {
       sendJson(res, { results: [], error: error.message }, 200);
     }
+    return true;
+  }
+
+  // GET/POST /api/trading/overnight-scan — read or flip overnight (market-closed)
+  // crypto scanning. ?set=on|off|toggle changes it; GET with no param just reads.
+  // Off = no off-hours model calls (0 tokens); auto-resets to off at market open. (#1714)
+  if (url.pathname === '/api/trading/overnight-scan') {
+    const set = (url.searchParams.get('set') || '').toLowerCase();
+    if (set === 'on') _scanWhenClosed = true;
+    else if (set === 'off') _scanWhenClosed = false;
+    else if (set === 'toggle') _scanWhenClosed = !_scanWhenClosed;
+    sendJson(res, { enabled: _scanWhenClosed, marketHours: _isUsMarketHours() }, 200);
     return true;
   }
 

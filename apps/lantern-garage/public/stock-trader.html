@@ -125,6 +125,8 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
   .nav-link{font-family:var(--mono);font-size:10px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;transition:background .15s,color .15s}
   .nav-link:hover{color:var(--text0);background:var(--bg3)}
+  .ovn-toggle{cursor:pointer}
+  .ovn-toggle.ovn-on{background:rgba(0,212,170,.22);border-color:var(--green);color:var(--green)}
   /* ── Sidebar watchlist ── */
   /* Denser, TradingView-style rows (#1631): symbol + price on one line, change +
      signal on a tight second line. */
@@ -428,6 +430,7 @@
     <button class="range-btn" data-range="1M" onclick="changeRange('1M')">1M</button>
   </div>
   <div class="pulse"></div>
+  <button class="nav-link ovn-toggle" id="ovnToggle" onclick="toggleOvernightScan()" title="Scan crypto while the US market is closed. OFF = no overnight model calls (0 tokens). Auto-resets to OFF at market open.">🌙 Overnight —</button>
   <a href="/kalshi-terminal.html" class="nav-link">Kalshi →</a>
   <a href="/explore.html?topic=finance" class="nav-link">News →</a>
 </div>
@@ -2459,11 +2462,25 @@ function startDashboard(){
   loadBars();
   loadAgentLog();
   loadOrders();
+  refreshOvernightScan();
   setInterval(fullRefresh,         30000);
   setInterval(loadWatchlistPrices,  3000);   // #1627: tighter so the tick-flash is responsive
   setInterval(loadBars,            15000);
   setInterval(loadAgentLog,         5000);
   setInterval(loadOrders,          60000);
+  setInterval(refreshOvernightScan, 60000);  // reflect the auto-reset at market open
+}
+// 🌙 Overnight (market-closed) crypto scanning toggle (#1714)
+function _setOvnBtn(on){
+  const b=document.getElementById('ovnToggle'); if(!b) return;
+  b.textContent='🌙 Overnight '+(on?'ON':'OFF');
+  b.classList.toggle('ovn-on', !!on);
+}
+async function refreshOvernightScan(){
+  try{ const j=await (await fetch('/api/trading/overnight-scan')).json(); _setOvnBtn(j.enabled); }catch(e){}
+}
+async function toggleOvernightScan(){
+  try{ const j=await (await fetch('/api/trading/overnight-scan?set=toggle',{method:'POST'})).json(); _setOvnBtn(j.enabled); }catch(e){}
 }
 document.addEventListener('DOMContentLoaded', startDashboard);
 
