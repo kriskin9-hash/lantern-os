@@ -1629,6 +1629,20 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/sigma0/calibration
+  // Σ₀ council (Converge stage): Brier calibration + per-signal realized edge over
+  // the trader's graded convergence outcomes. The learning input for re-weighting
+  // the EV signals — which evidence actually predicted wins.
+  if (url.pathname === '/api/trading/sigma0/calibration' && req.method === 'GET') {
+    try {
+      const { council } = require('../lib/sigma0-trader-council');
+      sendJson(res, council(), 200);
+    } catch (error) {
+      sendJson(res, { error: 'calibration failed', details: error.message, graded: 0 }, 200);
+    }
+    return true;
+  }
+
   // POST /api/trading/news/record
   // Explicitly record a news item into CSF (used by the UI or external ingestion).
   if (url.pathname === '/api/trading/news/record' && req.method === 'POST') {

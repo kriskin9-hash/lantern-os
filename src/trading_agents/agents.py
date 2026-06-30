@@ -585,6 +585,11 @@ def close_trade_history(symbol: str, exit_price: float,
         con.close()
     except Exception as e:
         log.warning("Failed to close trade history: %s", e)
+    # Σ₀ Verify/Converge — grade this trade's convergence record against its P&L.
+    try:
+        _conv_grade_close(symbol, pnl_pct)
+    except Exception as e:
+        log.warning("sigma0 convergence grade failed %s: %s", symbol, e)
 
 def scan_for_new_tickers(current_watchlist: list) -> tuple:
     """
@@ -7386,6 +7391,79 @@ def _ev_news_sentiment(ticker: str):
     return score
 
 
+# ── Σ₀ convergence loop: emit a record on ENTER, grade it on close ─────────────
+# Closes Observe→Remember→Verify→Converge for the trader: every executed entry
+# becomes a ConvergenceRecord in the SHARED store (schema mirrors
+# lib/convergence-records.js / src/convergence/objects.py) so the council sees it;
+# on close we append a Brier-scored outcome (same rule as
+# convergence-outcome-grader.js) so realized edge can re-weight the EV signals.
+_CONV_RECORDS = os.path.join(os.path.dirname(__file__), "..", "..",
+                             "data", "convergence", "records.jsonl")
+_CONV_TRADER_OUTCOMES = os.path.join(os.path.dirname(__file__), "..", "..",
+                                     "data", "convergence", "trader-outcomes.jsonl")
+
+
+def _conv_append(path: str, obj: dict):
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(obj) + "\n")
+    except Exception as e:
+        log.warning("convergence append failed (%s): %s", path, e)
+
+
+def _conv_emit_entry(ticker: str, direction: str, order_id, ev: dict) -> str:
+    """Act stage: persist a ConvergenceRecord for an executed ENTER. Returns the
+    record id (stored on the position so close can grade it)."""
+    now = datetime.now().isoformat()
+    rid = f"cr-trade-{ticker}-{datetime.now().strftime('%Y%m%dT%H%M%S%f')}"
+    rec = {
+        "id": rid,
+        "hypothesis": f"{direction} {ticker} — Σ₀ EV {ev.get('ev_r')}R, p_win {ev.get('p_win')}",
+        "evidence_ids": [],
+        "result": {
+            "action": "ENTER", "ticker": ticker, "direction": direction,
+            "order_id": str(order_id) if order_id is not None else None,
+            "instruction": ev.get("instruction"), "signals": ev.get("signals"),
+            "ev_r": ev.get("ev_r"), "why": ev.get("why"),
+        },
+        "confidence": float(ev.get("p_win") or 0.5),
+        "reasoner": "trader-sigma0",
+        "timestamp": now,
+        "verified": False,
+        "verification_notes": None,
+        "source": f"convergence_ev:{ticker}:{order_id}",
+        "applied_evidence": [],
+        "grounding_signals": list(ev.get("why") or []),
+        "allowed_max_confidence": None,
+    }
+    _conv_append(_CONV_RECORDS, rec)
+    return rid
+
+
+def _conv_grade_close(ticker: str, pnl_pct):
+    """Verify/Converge: grade the open ENTER record for `ticker` against realized
+    P&L (Brier = (confidence − outcome)²), append to the trader outcomes log so the
+    council can recalibrate. No-op if the position had no Σ₀ record."""
+    info = _position_adjustments.get(ticker) or {}
+    rid = info.get("sigma0_record_id")
+    conf = info.get("sigma0_pwin")
+    if not rid or conf is None:
+        return
+    won = (pnl_pct or 0) > 0
+    outcome = 1 if won else 0
+    # Schema matches convergence-outcome-grader.js (passed + brier_score +
+    # confidence) so calibrationSummary() consumes it directly; outcome + signals
+    # are kept for the per-signal realized-edge aggregation.
+    _conv_append(_CONV_TRADER_OUTCOMES, {
+        "record_id": rid, "ticker": ticker,
+        "confidence": float(conf), "passed": won, "outcome": outcome,
+        "brier_score": round((float(conf) - outcome) ** 2, 4),
+        "pnl_pct": pnl_pct, "signals": info.get("sigma0_signals"),
+        "graded_at": datetime.now().isoformat(),
+    })
+
+
 def fetch_ticker_price(ticker: str) -> float:
     """Fetch current price — used in parallel pre-fetch stage."""
     try:
@@ -8449,6 +8527,18 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             "entry_price":    price,
             "peak_price":     price,
         }
+        # Σ₀ convergence record (Act) — emit + stash the id/p_win/signals so the
+        # close handler can grade this exact entry against its outcome.
+        _sig0 = analysis.get("sigma0")
+        if _sig0:
+            try:
+                _rid = _conv_emit_entry(ticker, analysis.get("direction"),
+                                        result.get("order_id") or result.get("id"), _sig0)
+                _position_adjustments[ticker]["sigma0_record_id"] = _rid
+                _position_adjustments[ticker]["sigma0_pwin"] = _sig0.get("p_win")
+                _position_adjustments[ticker]["sigma0_signals"] = _sig0.get("signals")
+            except Exception as _e:
+                log.warning("sigma0 convergence emit failed %s: %s", ticker, _e)
         save_position_state(ticker, _position_adjustments[ticker])  # persist
         log_agent("system", "LEVELS",
             f"{ticker} levels set: Stop ${levels['stop_price']:.4f} "
