@@ -560,6 +560,24 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/llm-usage — daily Σ₀ model-read tally (made vs saved by the
+  // scan cache + grounding pre-gate), so the API-spend reduction is observable.
+  if (url.pathname === '/api/trading/llm-usage' && req.method === 'GET') {
+    try {
+      const fs = require('fs');
+      const p = require('path').join(__dirname, '..', '..', '..', 'data', 'lantern-garage', 'trading', 'llm-usage.json');
+      const days = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8') || '{}') : {};
+      const today = Object.keys(days).sort().slice(-1)[0] || null;
+      let totMade = 0, totSaved = 0;
+      for (const d of Object.values(days)) { totMade += d.reads_made || 0; totSaved += (d.saved_cache || 0) + (d.saved_pregate || 0); }
+      const pct = (totMade + totSaved) ? Math.round(100 * totSaved / (totMade + totSaved)) : 0;
+      sendJson(res, { days, today, totals: { reads_made: totMade, reads_saved: totSaved, pct_avoided: pct } }, 200);
+    } catch (error) {
+      sendJson(res, { days: {}, error: error.message }, 200);
+    }
+    return true;
+  }
+
   // GET /api/trading/logo?symbol=SPY — brand-logo proxy. Prefers logo.dev (crisp,
   // icon-style, high-res) when LOGODEV_TOKEN is set, else falls back to FMP. Served
   // same-origin so the page can sample luminance without CORS taint. (#1713)

@@ -8760,6 +8760,47 @@ def _has_grounding(ticker: str, price: float, open_positions: dict = None) -> bo
         return True                                       # fail-open: never drop on error
 
 
+# ── Σ₀ LLM-usage counter (so the reduction is observable) ─────────────────────
+_LLM_USAGE_FILE = os.path.join(os.path.dirname(__file__), "..", "..",
+                               "data", "lantern-garage", "trading", "llm-usage.json")
+
+
+def _log_llm_usage(reads_made: int, saved_cache: int, saved_pregate: int, candidates: int):
+    """Tally Stage-2 model reads vs reads avoided (cache + pre-gate), per day, so
+    the API-spend reduction is visible in the feed and on disk. Never breaks a scan."""
+    try:
+        try:
+            with open(_LLM_USAGE_FILE) as f:
+                data = json.load(f) or {}
+        except Exception:
+            data = {}
+        day = datetime.now().strftime("%Y-%m-%d")
+        e = data.get(day) or {"reads_made": 0, "saved_cache": 0, "saved_pregate": 0,
+                              "candidates": 0, "scans": 0}
+        e["reads_made"]    += int(reads_made)
+        e["saved_cache"]   += int(saved_cache)
+        e["saved_pregate"] += int(saved_pregate)
+        e["candidates"]    += int(candidates)
+        e["scans"]         += 1
+        data[day] = e
+        for _old in sorted(data)[:-30]:                   # keep ~30 days
+            data.pop(_old, None)
+        os.makedirs(os.path.dirname(_LLM_USAGE_FILE), exist_ok=True)
+        tmp = _LLM_USAGE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp, _LLM_USAGE_FILE)
+        saved = e["saved_cache"] + e["saved_pregate"]
+        tot = e["reads_made"] + saved
+        pct = (100 * saved // tot) if tot else 0
+        log_agent("system", "SIGMA0",
+            f"LLM reads — this scan: {reads_made} made, {saved_cache + saved_pregate} saved "
+            f"({saved_cache} cache + {saved_pregate} pre-gate) | today: {e['reads_made']} made / "
+            f"{saved} saved ({pct}% avoided) over {e['scans']} scans")
+    except Exception:
+        pass
+
+
 # ── Main scan ─────────────────────────────────────────────────────────────────
 
 def scan_all(watchlist: list, notify_fn=None) -> list:
@@ -8940,6 +8981,7 @@ def scan_all(watchlist: list, notify_fn=None) -> list:
                 log_agent("system", "SCANNER",
                     f"Σ₀ cache: reused {len(cached_results)}/{len(valid_targets)} LLM "
                     f"reads (price unchanged), {len(fresh_targets)} re-analyzed")
+            _log_llm_usage(len(fresh_targets), len(cached_results), len(_pregated), len(valid_targets))
         else:
             grok_results = {}
 
