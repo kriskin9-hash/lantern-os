@@ -86,22 +86,25 @@ def get_decode_params(mode: ServingMode) -> dict:
     if not mode.decode_antirepetition:
         return {}
 
-    # Fast mode: aggressive antirepetition to prevent token loops
+    # Fast mode: aggressive antirepetition to prevent token loops. Strengthened for the
+    # local-Ollama degraded path (#1609) — small served models spiral into multi-word /
+    # multi-language repetition that repeat_penalty=1.1 over 64 tokens didn't catch.
+    # Mirror of apps/lantern-garage/lib/serving-modes.js getDecodeParams().
     if mode.name == "fast":
         return {
-            "top_p": 0.95,
-            "frequency_penalty": 0.5,
-            "repetition_penalty": 1.1,  # For Ollama
-            "repeat_last_n": 64,         # For Ollama
+            "top_p": 0.92,
+            "frequency_penalty": 0.6,
+            "repetition_penalty": 1.18,  # For Ollama (repeat_penalty)
+            "repeat_last_n": 256,         # For Ollama — wider look-back catches longer drift
         }
 
     # Deep mode: moderate antirepetition (adaptive loop may need some repetition for grounding)
     if mode.name == "deep":
         return {
             "top_p": 0.98,
-            "frequency_penalty": 0.2,
-            "repetition_penalty": 1.05,
-            "repeat_last_n": 128,
+            "frequency_penalty": 0.3,
+            "repetition_penalty": 1.1,
+            "repeat_last_n": 256,
         }
 
     return {}

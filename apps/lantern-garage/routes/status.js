@@ -114,6 +114,17 @@ module.exports = async function statusRoutes(req, res, url, deps) {
     return true;
   }
   if (url.pathname === "/api/health") {
+    // Bare liveness (fast, backward-compatible) by default. `?full=1` enumerates every
+    // subsystem — one call reports the true state of every moving part (#1551).
+    if (url.searchParams.get("full") === "1") {
+      try {
+        const health = await require("../lib/health-aggregator").probeAll();
+        sendJson(res, { ok: health.overall !== "down", service: "lantern-garage", generatedAt: new Date().toISOString(), ...health });
+      } catch (e) {
+        sendJson(res, { ok: true, service: "lantern-garage", generatedAt: new Date().toISOString(), error: e.message });
+      }
+      return true;
+    }
     sendJson(res, { ok: true, service: "lantern-garage", generatedAt: new Date().toISOString() });
     return true;
   }

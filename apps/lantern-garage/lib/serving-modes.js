@@ -44,10 +44,15 @@ function getServingMode() {
 function getDecodeParams(mode) {
   const m = mode || getServingMode();
   if (m.name === "deep") {
-    return { top_p: 0.98, frequency_penalty: 0.2, repetition_penalty: 1.05, repeat_last_n: 128 };
+    return { top_p: 0.98, frequency_penalty: 0.3, repetition_penalty: 1.1, repeat_last_n: 256 };
   }
-  // fast (default)
-  return { top_p: 0.95, frequency_penalty: 0.5, repetition_penalty: 1.1, repeat_last_n: 64 };
+  // fast (default). Strengthened for the local-Ollama degraded path (#1609): small
+  // served models spiral into mid-generation multi-word / multi-language repetition,
+  // and repeat_penalty=1.1 over only the last 64 tokens was too weak to catch it.
+  // Raise the penalty, widen the look-back window to cover longer drift, and tighten
+  // top_p. Stays within Ollama's native repeat_penalty/repeat_last_n levers (Ollama
+  // does not honor frequency_penalty, so we don't fake it there).
+  return { top_p: 0.92, frequency_penalty: 0.6, repetition_penalty: 1.18, repeat_last_n: 256 };
 }
 
 /**

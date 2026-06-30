@@ -105,6 +105,9 @@ const prWatcher = new PrWatcher({
   mergeIgnoreChecks: process.env.PR_WATCHER_MERGE_IGNORE_CHECKS
     ? process.env.PR_WATCHER_MERGE_IGNORE_CHECKS.split(",").map((s) => s.trim()).filter(Boolean)
     : null,
+  mergeIgnorePatterns: process.env.PR_WATCHER_MERGE_IGNORE_PATTERNS
+    ? process.env.PR_WATCHER_MERGE_IGNORE_PATTERNS.split(",").map((s) => s.trim()).filter(Boolean)
+    : null,
 });
 
 // Shared dependency bundle passed to every route module
@@ -172,6 +175,16 @@ const routes = [
   require("./routes/discover-feeds"),  // Explore: curated discovery rail (RSS/Atom, cached)
   require("./routes/explore"),         // Explore: single-pane PCSF-ranked feed + interaction logging (#1211)
   require("./routes/convergence-dispatch"),
+  require("./routes/metrics"),          // #1411: outcome metrics (verified-patch / honesty / route-quality)
+  require("./routes/factcheck"),        // #1430: personal fact-check button
+  require("./routes/decisions"),        // #1436: decision journal + calibration
+  require("./routes/memory-decay"),     // #1422: confidence-decay memory
+  require("./routes/drift"),            // #1428: drift-canary observability
+  require("./routes/learn"),            // #1438: learn-anything tutor + retention
+  require("./routes/replay"),           // #1419: convergence replay / time-travel debugger
+  require("./routes/preferences"),      // #1426: retrieval-based personal preference model
+  require("./routes/finance"),          // #1434: personal financial reasoning cockpit
+  require("./routes/health"),           // #1435: symptom journal with calibrated honesty
   require("./routes/memory"),
   require("./routes/research-repo"),    // Research Team: repo→Convergence-Memory learning
   require("./routes/flourishing"),
@@ -287,8 +300,14 @@ const server = http.createServer((req, res) => {
 
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
-    console.error(`Lantern Garage port ${port} is already in use. Open http://127.0.0.1:${port} or choose another port.`);
-    process.exitCode = 1;
+    // Name the owning PID + the exact command to free the port, instead of a bare
+    // "already in use" — the deploy/boot EADDRINUSE wedge was hard to clear because you
+    // couldn't tell which stale instance held the port (#1549).
+    const { findPortOwner, eaddrinuseHelp } = require("./lib/port-guard");
+    findPortOwner(port)
+      .then((owner) => console.error(`[lantern-garage] ${eaddrinuseHelp(port, owner)}`))
+      .catch(() => console.error(`[lantern-garage] Port ${port} is already in use.`))
+      .finally(() => { process.exitCode = 1; });
     return;
   }
   throw error;

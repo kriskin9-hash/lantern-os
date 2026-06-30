@@ -16,21 +16,24 @@ const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
 const { emitConvergenceRecord } = require("./convergence-records");
+const { recordConvergance } = require("./csf-memory-writer");
 const { resolveCodingRoute } = require("./route-contract");
 const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
 const { parseStreamChatRequest } = require("./stream-chat/request");
 const { runCanaries } = require("./canary");
+const streamSurprise = require("./stream-surprise");
 const { councilReview } = require("./council-review");
 const { verifyExec } = require("./exec-verify");
 const { assembleSessionContext } = require("./session-summary-store");
-const { formatCSFContextForPrompt, saveDoorChoice } = require("./csf-memory");
+const { formatCSFContextForPrompt, formatCSFContextForPromptAsync, saveDoorChoice } = require("./csf-memory");
 const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
 const { resolveGrounding, formatGroundingForPrompt } = require("./mesh-grounding");
 const { defaultRings } = require("./grounding-rings");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
 const { generateDoorSceneImage } = require("./image-generation");
+const { analyzeImage } = require("./vision");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
 const { chatDilation, groundingPolicy, isGroundingDue, GROUNDING_TICK_MS } = require("./grounding-policy");
 // #1012 boiling-frog defense: ms epoch of the last mandatory external-grounding tick.
@@ -116,10 +119,16 @@ function _extractRunnable(reply) {
 // underlying call finishes (and self-times-out) in the background.
 const GROUNDING_TIMEOUT_MS = parseInt(process.env.GROUNDING_TIMEOUT_MS, 10) || 4000;
 
-// Σ₀ council execution check. OFF by default — it runs model-authored code in a sandbox,
-// which is an operator-gated security decision (SECURITY.md). Set COUNCIL_EXEC_VERIFY=1 to
-// let a coding reply's own asserts decide grounded-vs-refuted on real execution.
-const COUNCIL_EXEC_VERIFY = process.env.COUNCIL_EXEC_VERIFY === "1";
+// Σ₀ council execution check. ON by default — when a coding reply carries runnable code + a
+// check, RUN it so the reply's own asserts (not the model's self-judgment) decide
+// grounded-vs-refuted. This is the dominant grounding anchor; leaving it off kept the council's
+// verify-face text-only. The sandbox is shell-free, temp-dir isolated, hard-timed, output-capped,
+// and runs with a MINIMAL env that strips every API key (lib/exec-verify.js) — that isolation is
+// what makes default-on defensible on the local single-operator surface. Set COUNCIL_EXEC_VERIFY=0
+// to disable on shared/multi-tenant surfaces where running model-authored code is unacceptable
+// (SECURITY.md: prompt-injection could still steer the model to emit network/FS-touching code,
+// though it cannot read secrets).
+const COUNCIL_EXEC_VERIFY = process.env.COUNCIL_EXEC_VERIFY !== "0";
 const COUNCIL_EXEC_TIMEOUT_MS = parseInt(process.env.COUNCIL_EXEC_TIMEOUT_MS, 10) || 8000;
 function withTimeout(promise, ms, fallback) {
   return Promise.race([
@@ -241,6 +250,27 @@ async function handleStreamChat(req, url, res) {
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
   const attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+  // Image attachments (#1606): every downstream consumer on this path treats an attachment
+  // as TEXT, so an uploaded image (which carries no extractable text) used to vanish silently
+  // and the model would honestly report it received "0 files". Resolve each image to a text
+  // description via the provider-portable vision helper so the chat can actually SEE and act
+  // on the picture. Runs once per turn, bounded to the (≤4) attachments parse already capped.
+  for (const a of attachments) {
+    if (a && typeof a.image === "string" && a.image.trim() && !(a.text && a.text.trim())) {
+      try {
+        const v = await analyzeImage(
+          "Describe this image in detail for a reasoning assistant: transcribe any visible text verbatim, and note objects, layout, colours, charts, and anything notable so the assistant can answer questions or act on it.",
+          a.image,
+          { mimeType: a.mimeType },
+        );
+        a.text = v && v.ok && v.text
+          ? `[image "${a.name}" — visual description from vision model below]\n${v.text}`
+          : `[image "${a.name}" — could not be analyzed: ${(v && v.error) || "vision unavailable"}]`;
+      } catch (e) {
+        a.text = `[image "${a.name}" — vision error: ${e && e.message ? e.message : String(e)}]`;
+      }
+    }
+  }
   // "Ground this" retry (groundedness canary loop): force the web-search grounding
   // Prepend attachment content to the user's message if available.
   if (attachments.length > 0) {
@@ -514,7 +544,10 @@ async function handleStreamChat(req, url, res) {
       sendToken(`Door types: ${doorTypes}\n`);
       sendToken(`Style: Abstract, dreamlike, not cartoonish\n\n`);
       
-      const py = spawn("python", ["scripts/generate-door-images.py", "generate"], { cwd: repoRoot });
+      // PYTHONIOENCODING=utf-8 so non-ASCII stdout streamed to the chat UI isn't mangled
+      // into "�" on Windows (cp1252 default) — same fix as convergence-adapter.js (#1605).
+      const py = spawn("python", ["scripts/generate-door-images.py", "generate"],
+        { cwd: repoRoot, env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
       let stdout = "";
       let stderr = "";
       
@@ -619,6 +652,20 @@ async function handleStreamChat(req, url, res) {
             });
             recordId = rec && rec.id;
           } catch (_e) { /* record emit is best-effort */ }
+          // Remember-stage hook: ingest this convergence interaction into the ONE
+          // canonical CSF memory so it's recalled in later chats. Best-effort.
+          try {
+            await recordConvergance({
+              question,
+              answer,
+              confidence: conf,
+              providers: members.map((m) => m.provider),
+              dissent,
+              recordId,
+              synthesizer: `${result.provider}/${result.model}`,
+              surface: surfaceMode || "chat",
+            });
+          } catch (_e) { /* CSF ingest is best-effort — never break chat */ }
           for (const w of answer.split(" ")) sendToken(w + " ");
           if (dissent.length) {
             sendToken(`\n\n**Where the council disagreed (${dissent.length}):**\n`);
@@ -638,6 +685,16 @@ async function handleStreamChat(req, url, res) {
           try {
             const fb = await swarmOrchestrate({ job: "chat", mode: "single", systemPrompt: convSystem, message: question, history });
             const ans = String(fb.text).replace(/\n*CONFIDENCE:\s*[0-9]*\.?[0-9]+\s*$/i, "").trim() || String(fb.text);
+            try {
+              await recordConvergance({
+                question,
+                answer: ans,
+                confidence: 0.5,
+                providers: [fb.provider].filter(Boolean),
+                synthesizer: `${fb.provider}/${fb.model || "single"}`,
+                surface: surfaceMode || "chat",
+              });
+            } catch (_e) { /* best-effort */ }
             for (const w of ans.split(" ")) sendToken(w + " ");
             sendDone("keystone", { agent: "Keystone", provider: fb.provider, online: true, routeLabel: "Convergence · single (council unavailable)" });
           } catch (e2) {
@@ -970,8 +1027,10 @@ async function handleStreamChat(req, url, res) {
     }
   }
 
-  // CSF long-term memory + door state (query-time relevance filtered)
-  const csfContext = formatCSFContextForPrompt(message);
+  // CSF long-term memory + door state (query-time relevance filtered).
+  // Async path: Memories section is semantic-reranked (nomic-embed multi-signal)
+  // when Ollama is up, else falls back to keyword scoring inside the query.
+  const csfContext = await formatCSFContextForPromptAsync(message);
   const csfBlock = csfContext ? `\n\nLong-term memory (CSF):\n${csfContext}` : "";
 
   // Convergence Oracle — ground EVERY question in its cosmic-time observer slice (in-process
@@ -999,7 +1058,9 @@ async function handleStreamChat(req, url, res) {
   // primary evidence: read, quote, summarize, or act on them, and ground answers in their content.
   let attachmentBlock = "";
   if (attachments.length) {
-    const blocks = attachments.map((a) => `--- Attached file: ${a.name} (${a.text.length} chars) ---\n${a.text}`).join("\n\n");
+    const blocks = attachments
+      .filter((a) => a && a.text)
+      .map((a) => `--- Attached file: ${a.name} (${a.text.length} chars) ---\n${a.text}`).join("\n\n");
     attachmentBlock = `\n\nAttached files for this turn (the user uploaded these — treat them as the primary evidence; quote/summarize/act on them and cite the filename):\n${blocks}`;
   }
 
@@ -1113,6 +1174,24 @@ async function handleStreamChat(req, url, res) {
   // so without it grok successes were silently never recorded to the leaderboard (#1236).
   const _EXECUTABLE_CLOUD = new Set(["anthropic", "gemini", "openai", "xai", "grok"]);
 
+  // Accumulated model output. Declared up here (not at the dispatch loop) because
+  // sendDone() closes over it and some early-return paths — the malformed/empty
+  // body guard (#1504), the convergence-agent fast path — call sendDone before the
+  // dispatch loop runs. A `let` declared later left those calls in the temporal
+  // dead zone ("Cannot access 'fullReply' before initialization").
+  let fullReply = "";
+  // #1678 Verify valve: per-token logprob accumulator. Logprob-exposing providers feed it
+  // during streaming; sendDone() reads it once as tokenSurprise for the groundedness canary.
+  // No-op when SURPRISE_CANARY is off or the provider has no logprobs (value() → null →
+  // modelUncertainty 0 → behaviour byte-identical to before).
+  const surprise = streamSurprise.createSurpriseAccumulator();
+
+  // Capability-gated local-model swap decision (lib/local-model-registry.js),
+  // captured when the LOCAL model chain is built below and stamped onto the done
+  // signature when a local model answers — so the auto-swap is visible, not silent.
+  // Declared up here because sendDone() (defined next) closes over it.
+  let _localModelSwap = null;
+
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
     const signature = {
@@ -1126,6 +1205,14 @@ async function handleStreamChat(req, url, res) {
       convergenceId: routeDecision.convergence_id || null,
       requiresConvergence: routeDecision.requires_convergence || false,
     };
+    // Surface the capability-gated local-model swap (lib/local-model-registry.js):
+    // when a LOCAL model answered, tell the UI which model LED and WHY (VRAM-gated
+    // to the detected box) so the auto-swap is visible rather than silent. `served`
+    // is the model that actually replied — it differs from `lead` only when the
+    // lead wasn't serving and the chain fell through.
+    if ((source === "ollama" || source === "offline") && _localModelSwap) {
+      signature.modelSwap = { ..._localModelSwap, served: extra.model || _localModelSwap.lead };
+    }
     // ── Degraded-local indicator (issue #740, narrowed by #1167) ────────────
     // In Auto mode (no explicit provider) the cloud chain (Gemini→Claude→OpenAI→
     // Grok) can silently fall through to the local Ollama model — which ignores
@@ -1158,9 +1245,15 @@ async function handleStreamChat(req, url, res) {
       if (fullReply) {
         const { collapse, grounded, signaturePatch } = runCanaries(fullReply, {
           groundingContext,
+          tokenSurprise: surprise.value(), // #1678: model-internal uncertainty (null when none captured)
+          surpriseModel: signature.model,  // #1681: calibrate the uncertainty magnitude to this model
           context: { source, provider: signature.provider, agent: agent.id || agent.name, surface: "dream-chat" },
         });
         Object.assign(signature, signaturePatch);
+        // #1678 Verify-valve telemetry: when a logprob-exposing provider fed the accumulator,
+        // surface the model-internal surprise field on the done signature — operator-visible
+        // proof the valve is open. Absent for no-logprob providers (Anthropic) and flag off.
+        if (surprise.count()) signature.surprise = surprise.field();
         // Σ₀ council: fold both canary axes (+ any reason-face dissent) into one Δ and the
         // 4-way answerability gate (grounded/seam_open/pin/refuted), log a council record so
         // the operator-escalation backtest accrues data, and stamp the verdict for the UI.
@@ -1203,6 +1296,28 @@ async function handleStreamChat(req, url, res) {
             `[canary_ungrounded] risk=${grounded.risk} source=${source} ` +
             `provider=${signature.provider} signals=${JSON.stringify(grounded.signals)}`
           );
+        }
+        // #1733 honest abstention + manufactured negative: we FORCED a grounding pass
+        // (a "Ground this" / auto-verify retry) and the reply is STILL confident-but-
+        // unanchored with no grounding context found. Fail closed — flag it so the UI
+        // says "couldn't verify" instead of re-badging ungrounded — and append the
+        // verified "could not ground" example to the convergence corpus the ADR-0010
+        // distillation draws on (the positive/grounded half is emitClaimDraft below).
+        if (forceGround && grounded.ungrounded && !groundingContext) {
+          signature.abstained = true;
+          try {
+            const { appendConvergenceRecord } = require("./dream-chat");
+            appendConvergenceRecord({
+              hypothesis: String(message || "").slice(0, 500),
+              evidence: [],
+              result: "unverified",
+              confidence: { groundedness: Number((1 - grounded.risk).toFixed(2)) },
+              source: "groundedness-canary:forced-grounding-empty",
+              surface: "dream-chat",
+              provider: signature.provider,
+              risk: grounded.risk,
+            });
+          } catch { /* corpus logging must never break a reply */ }
         }
       }
     } catch { /* canaries must never break a reply */ }
@@ -1370,11 +1485,16 @@ async function handleStreamChat(req, url, res) {
   };
 
   // Honest bad-request handling: the body arrived but couldn't be parsed (malformed
-  // JSON / bad encoding), so `message` is empty for a reason that has nothing to do
-  // with providers. Say so plainly instead of falling through to "all providers
-  // failed / cloud unreachable" (which sent a debugging session down the wrong path).
-  if (parsed.bodyError && !message) {
-    sendError("I couldn't read your message — the request body was malformed or had a bad encoding (e.g. a leading UTF-8 BOM). Please resend.");
+  // JSON / bad encoding) or was empty, so `message` is empty for a reason that has
+  // nothing to do with providers. Say so plainly instead of falling through to "all
+  // providers failed / cloud unreachable" (which sent a debugging session down the
+  // wrong path). The parser (lib/stream-chat/request.js) signals this via
+  // `parsed.parseError` ("malformed_json" | "empty_body"); the older `bodyError`
+  // flag it was checked against here was never set, leaving this guard dead (#1504).
+  if (parsed.parseError && !message) {
+    sendError(parsed.parseError === "empty_body"
+      ? "I couldn't read your message — the request body was empty. Please resend."
+      : "I couldn't read your message — the request body was malformed or had a bad encoding (e.g. a leading UTF-8 BOM). Please resend.");
     sendDone("offline", { agent: doneAgentName, online: false, error: "bad_request_body", suggestions: FALLBACK_DOORS });
     return;
   }
@@ -1422,7 +1542,7 @@ async function handleStreamChat(req, url, res) {
     providerState.openrouter.hasKey || process.env.OLLAMA_BASE_URL
   );
 
-  let fullReply = "";
+  // `fullReply` is declared earlier (above sendDone) so early-return paths are safe (#1504).
 
   // A cloud provider can answer HTTP 200 with ZERO streamed tokens — a safety block,
   // a soft rate-limit, or a grounding misfire. That is NOT a success: finalizing it
@@ -1617,26 +1737,38 @@ async function handleStreamChat(req, url, res) {
     if (cleaned.length) staticChain = cleaned;
   }
   // Σ₀ local-model adapter (lib/local-model-registry.js): the registry is the
-  // source of truth for which LOCAL model LEADS this intent — VRAM-gated to the
-  // box and Ouro-default / capability-first aware. Its picks lead; any remaining
-  // static-chain models stay as fallbacks. Falls back to the static chain on any
-  // error so this is purely additive. See docs/SIGMA0-MODEL-ADAPTER.md.
+  // SOURCE OF TRUTH for which LOCAL model LEADS this intent — VRAM-gated to the
+  // detected box and capability-first aware. resolveLocalLead() folds the static
+  // fallbacks AND the operator's OLLAMA_MODEL pin into the registry's capability
+  // order and returns the authoritative lead, so a stale pin (the legacy
+  // ouro:latest default) can no longer front-jump and defeat the swap. A custom
+  // (non-registry) pin still leads — the operator's deliberate choice wins. Capture
+  // the decision for the UI. Fail-safe: any error keeps the static chain.
+  let _swapLead = null;
   try {
-    const regChain = require("./local-model-registry").selectChain(intent);
-    if (regChain && regChain.length) {
-      const lead = new Set(regChain);
-      staticChain = [...regChain, ...staticChain.filter((m) => !lead.has(m))];
-    }
+    const _resolved = require("./local-model-registry").resolveLocalLead(intent, { fallback: staticChain });
+    staticChain = _resolved.chain;
+    _swapLead = _resolved.lead;
+    _localModelSwap = {
+      lead: _resolved.lead,
+      registryLead: _resolved.registryLead,
+      reason: _resolved.reason,
+      vramBudgetGB: _resolved.vramBudgetGB,
+      intent,
+      capabilityFirst: _resolved.capabilityFirst,
+      pinHonored: _resolved.pinHonored,
+      candidates: _resolved.chain.slice(0, 5),
+    };
   } catch (_e) { /* keep static chain */ }
   let modelChain = staticChain;
   try { modelChain = await orderChainByLeaderboard(staticChain, intent); } catch { /* keep static */ }
-  // Lead with the operator-pinned served model (OLLAMA_MODEL) when set, so the chat
-  // uses the model that's actually pulled/served (e.g. ouro:latest) instead of the
-  // static chain's default first entry. Deduped so it leads exactly once. Previously
-  // OLLAMA_MODEL was documented as "always a candidate" but never actually led.
-  if (process.env.OLLAMA_MODEL) {
-    const _pinned = process.env.OLLAMA_MODEL;
-    modelChain = [_pinned, ...modelChain.filter((x) => x !== _pinned)];
+  // Re-assert the registry's authoritative lead as the chain head: the leaderboard
+  // reorder tunes the FALLBACK order (measured win-rate) but must never displace the
+  // deterministic, VRAM-gated swap pick. (OLLAMA_MODEL is already folded into the
+  // chain by resolveLocalLead — a registry-managed pin keeps its capability slot; a
+  // custom pin is the lead and is preserved here.)
+  if (_swapLead && modelChain[0] !== _swapLead) {
+    modelChain = [_swapLead, ...modelChain.filter((x) => x !== _swapLead)];
   }
 
   // ── Tier 0: cheap Knowledge Center answer before any model ($0, no LLM) ──
@@ -1862,6 +1994,12 @@ async function handleStreamChat(req, url, res) {
               // call another tool or answer — matching the cloud models' agency. Bounded.
               const convo = buildProviderMessages(sysForOllama, compacted, message);
               let lastTurn = fullReply;
+              // The first turn was a pure tool call — its raw markup (```json …,
+              // <tool_call>…, or name{…}) must NOT leak into the user-facing answer.
+              // Build the final reply from the GROUNDED follow-up turns only, falling
+              // back to the original text just in case nothing usable comes back.
+              const _firstTurn = fullReply;
+              let toolAnswer = "";
               const MAX_TOOL_ITERS = 5;
               for (let iter = 0; iter < MAX_TOOL_ITERS && tc; iter++) {
                 const result = await toolRunner.runTool(tc.name, tc.input, { operator });
@@ -1876,8 +2014,11 @@ async function handleStreamChat(req, url, res) {
                 const followText = await streamOllamaFollow(convo);
                 const nextTc = toolRunner.parseToolCall(followText);
                 if (nextTc) { tc = nextTc; lastTurn = followText; } // markup already streamed; keep going
-                else { if (followText.trim()) fullReply += "\n\n" + followText; tc = null; }
+                else { if (followText.trim()) toolAnswer += (toolAnswer ? "\n\n" : "") + followText.trim(); tc = null; }
               }
+              // Prefer the grounded answer; only fall back to the first turn if the
+              // local model produced no usable follow-up text at all.
+              fullReply = toolAnswer.trim() || _firstTurn;
             }
           } catch (e) { /* tool handling is non-fatal — fall through to normal render */ }
           const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
@@ -1968,6 +2109,7 @@ async function handleStreamChat(req, url, res) {
     // otherwise it falls through to the backstop. Gates every per-provider guard.
     const _hardPin = requestedProvider && _isLastProvider;
     fullReply = "";   // fresh per provider — never carry a failed attempt's partial text
+    surprise.reset(); // #1678: nor a failed attempt's captured logprobs
 
   // Provider: Gemini (streaming)
   const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -2061,6 +2203,11 @@ async function handleStreamChat(req, url, res) {
       if (groundingEnabled) {
         geminiPayloadBase.tools = [{ googleSearch: {} }];
       }
+      // #1678 Verify valve: request per-token logprobs, but only on the non-grounding wire —
+      // Gemini rejects responseLogprobs alongside the googleSearch tool. Flag-gated no-op otherwise.
+      if (!groundingEnabled) {
+        geminiPayloadBase.generationConfig = streamSurprise.withGeminiLogprobs(geminiPayloadBase.generationConfig);
+      }
       const payload = JSON.stringify(geminiPayloadBase);
       const _gt = await geminiTransport({ model: geminiModel, apiKey: geminiKey });
       await new Promise((resolve, reject) => {
@@ -2090,6 +2237,7 @@ async function handleStreamChat(req, url, res) {
               if (!raw) continue;
               try {
                 const evt = JSON.parse(raw);
+                surprise.pushGeminiEvent(evt); // #1678
                 const parts = evt.candidates?.[0]?.content?.parts || [];
                 for (const p of parts) {
                   const token = p.text || "";
@@ -2146,7 +2294,7 @@ async function handleStreamChat(req, url, res) {
         msg.includes("quota") ||
         /gemini_status_5\d\d/.test(msg) || // 500/502/503/504 high-demand
         msg.includes("gemini_timeout");
-      if (isTransient) { fullReply = ""; continue; } // retry with next model silently
+      if (isTransient) { fullReply = ""; surprise.reset(); continue; } // retry with next model silently
       // Terminal gemini failure (chain exhausted / non-transient): record to the
       // leaderboard so PCSF learns provider reliability. Not reached on a
       // transient retry that later succeeds (that path `continue`d above). (#1236)
@@ -2416,11 +2564,11 @@ async function handleStreamChat(req, url, res) {
     }
     try {
       // FAST-mode anti-repetition decode params (issue #729): top_p + frequency_penalty.
-      const payload = JSON.stringify(serving.applyOpenAIDecodeParams({
+      const payload = JSON.stringify(streamSurprise.withOpenAILogprobs(serving.applyOpenAIDecodeParams({
         model: modelFor("openai"),
         stream: true,
         messages: buildProviderMessages(systemPrompt, compacted, message),
-      }));
+      }))); // #1678: + per-token logprobs when SURPRISE_CANARY on (else unchanged)
 
       await new Promise((resolve, reject) => {
         const req2 = https.request({
@@ -2450,6 +2598,7 @@ async function handleStreamChat(req, url, res) {
               if (raw === "[DONE]" || raw === "") continue;
               try {
                 const evt = JSON.parse(raw);
+                surprise.pushOpenAIEvent(evt); // #1678
                 const token = evt.choices?.[0]?.delta?.content || "";
                 if (token) { fullReply += token; sendToken(token); }
               } catch { /* skip malformed */ }
@@ -2553,10 +2702,10 @@ async function handleStreamChat(req, url, res) {
     try {
       const xaiModel = modelFor("xai");
       // xAI/Grok is OpenAI-compatible → FAST-mode decode params (issue #729).
-      const payload = JSON.stringify(serving.applyOpenAIDecodeParams({
+      const payload = JSON.stringify(streamSurprise.withOpenAILogprobs(serving.applyOpenAIDecodeParams({
         model: xaiModel, stream: true,
         messages: buildProviderMessages(systemPrompt, compacted, message),
-      }));
+      }))); // #1678: + per-token logprobs when SURPRISE_CANARY on (else unchanged)
       await new Promise((resolve, reject) => {
         const req2 = require("https").request({
           agent: llmAgent,
@@ -2572,7 +2721,7 @@ async function handleStreamChat(req, url, res) {
               if (!line.startsWith("data: ")) continue;
               const raw = line.slice(6).trim();
               if (raw === "[DONE]" || !raw) continue;
-              try { const t = JSON.parse(raw).choices?.[0]?.delta?.content || ""; if (t) { fullReply += t; sendToken(t); } } catch { /* skip */ }
+              try { const evt = JSON.parse(raw); surprise.pushOpenAIEvent(evt); /* #1678 */ const t = evt.choices?.[0]?.delta?.content || ""; if (t) { fullReply += t; sendToken(t); } } catch { /* skip */ }
             }
           });
           upstream.on("end", resolve); upstream.on("error", reject);

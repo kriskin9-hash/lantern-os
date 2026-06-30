@@ -35,6 +35,8 @@ These documents are non-negotiable for safe, compliant contributions.
 
 **THEN:** [Convergence Core Mapping](docs/convergence-core-mapping.md) — how existing code aligns with architecture.
 
+**BENCHMARKS:** [docs/BENCHMARKS.md](docs/BENCHMARKS.md) — the maintained registry of every *external* mark we run (HumanEval, SWE-bench, LongMemEval, …). Update it in the same PR whenever a harness or measured result changes.
+
 ---
 
 **THE ENTIRE PROJECT IS ONE LOOP:**
@@ -193,7 +195,7 @@ Business logic is split into `apps/lantern-garage/lib/`:
 
 ### Dream Journal agents
 
-Six agent personas are defined in `apps/lantern-garage/lib/dream-chat.js`: `lantern`, `blinkbug`, `keystone`, `waterfall`, `xenon`, `founder`. Each has a `systemPrompt`. `selectAgent()` scores inbound messages by keyword match; the winner's prompt is injected into the LLM call.
+The chat persona is a single grounded agent, **`keystone`**, defined in `apps/lantern-garage/lib/dream-chat.js` and loaded from `data/contexts/personas.json`. `selectAgent()` scores inbound messages by keyword match and defaults to `keystone`; the persona's `systemPrompt` is injected into the LLM call. (The earlier fictional RP personas — `lantern`, `blinkbug`, `waterfall`, `xenon`, `founder` — were removed in #1664. The string `lantern` persists *only* as the internal assistant message-role used by conversation/CSF storage, not as a selectable persona.)
 
 **Only these five skills have real implementations:** `dream_journal`, `lucid_dreaming`, `archive_curator`, `voice_curator`, `job_application`. All other `skills/*/SKILL.md` entries are design contracts only — do not claim they are live.
 
@@ -273,7 +275,7 @@ Copy `.env.example` to `.env` at repo root. Key variables: `ANTHROPIC_API_KEY`, 
 | dream-chat-agent-select | Switch agent personas + verify prompt changes | `/dream-chat.html` |
 | dream-chat-error-handling | Send malformed input + verify error state | `/dream-chat.html` |
 | home-nav-links | Click all nav links + verify page loads | `/` → all targets |
-| trader-dashboard-load | Verify Kalshi deck renders | `/trader-dashboard.html` |
+| trader-dashboard-load | Verify Kalshi deck renders | `/kalshi-terminal.html` |
 | responsive-mobile | Test 375x812 (iPhone) viewport | All pages |
 | responsive-tablet | Test 768x1024 (iPad) viewport | All pages |
 | console-monitoring | Capture console errors during all scenarios | All pages |

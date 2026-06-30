@@ -24,19 +24,24 @@ def test_deep_when_ouro_native(monkeypatch):
 
 
 def test_fast_decode_params():
-    """FAST mode anti-repetition params are exactly the documented values."""
+    """FAST mode anti-repetition params, strengthened for the local-Ollama path (#1609)."""
     p = serving_modes.get_decode_params(serving_modes.FAST_MODE)
-    assert p["top_p"] == 0.95
-    assert p["frequency_penalty"] == 0.5
-    assert p["repetition_penalty"] == 1.1
-    assert p["repeat_last_n"] == 64
+    assert p["top_p"] == 0.92
+    assert p["frequency_penalty"] == 0.6
+    assert p["repetition_penalty"] == 1.18
+    assert p["repeat_last_n"] == 256
+    # Minimum anti-collapse strength bar — must not regress to the weak 1.1 / 64.
+    assert p["repetition_penalty"] >= 1.15
+    assert p["repeat_last_n"] >= 256
 
 
 def test_deep_decode_params():
     """DEEP mode uses gentler anti-repetition (adaptive loop needs some repetition)."""
     p = serving_modes.get_decode_params(serving_modes.DEEP_MODE)
+    fast = serving_modes.get_decode_params(serving_modes.FAST_MODE)
     assert p["top_p"] == 0.98
-    assert p["frequency_penalty"] == 0.2
+    assert p["frequency_penalty"] == 0.3
+    assert p["repetition_penalty"] < fast["repetition_penalty"]
 
 
 def test_both_modes_enable_antirepetition():

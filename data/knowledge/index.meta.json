@@ -1,5 +1,5 @@
 {
-  "built_at": 1782848900.6877778,
+  "built_at": 1782842464.3711693,
   "docs": [
     "README.md",
     "CLAUDE.md",
@@ -17,6 +17,7 @@
     "docs/adr/0001-record-architecture-decisions.md",
     "docs/adr/0002-single-convergence-core.md",
     "docs/adr/0003-one-canonical-csf-module.md",
+    "docs/MEMORY-RETRIEVAL.md",
     "docs/adr/0004-append-only-memory.md",
     "docs/adr/0005-interchangeable-model-providers.md",
     "docs/adr/0006-dual-boot-worktree-topology.md",
@@ -25,7 +26,6 @@
     "docs/SIGMA0-CONTINUAL-TRAINING.md",
     "docs/KEYSTONE-PROGRESS-REPORT-2026-06-19.md",
     "docs/SIGMA0-COLLAPSE-CERTIFICATE.md",
-    "docs/SIGMA0-EV-GATE.md",
     "docs/SIGMA0-C3-NONCOLLAPSE-NORMAL.md",
     "docs/SIGMA0-T1-NONNORMAL-DICHOTOMY.md",
     "docs/SIGMA0-COLLAPSE-EXPLAINER.md",
@@ -48,6 +48,6 @@
     "docs/convergence-io/CEG.md",
     "docs/convergence-io/DILATION.md"
   ],
-  "sections": 668,
-  "sha256": "06e7f4571d3965726f81df27a938f19858c602cd05a2c95025a00e6df7f5efea"
+  "sections": 669,
+  "sha256": "278440194003da936cb78c09e7b9bd4b57c83f73ec9b6d70ace4e6c77f71db0a"
 }
