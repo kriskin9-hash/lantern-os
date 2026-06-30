@@ -1502,6 +1502,48 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
         }
       }
 
+      // GET — Grounded deck: near-term groundable EVENT markets (weather first),
+      // web-researched P(YES) vs market price, fee-aware EV. Paper-only; renders from
+      // cache instantly and grounds misses in the background. The profitable arm —
+      // edge from information the thin market hasn't priced (vs momentum, which has none).
+      if (url.pathname === '/api/trading/kalshi/grounded-deck' && req.method === 'GET') {
+        const eventSuggester = require('../lib/kalshi-event-suggester');
+        const limit = q.limit ? Number(q.limit) : 12;
+        try {
+          const out = await eventSuggester.getGroundedSuggestions({ limit });
+          return sendJson(res, out, 200), true;
+        } catch (e) {
+          return sendJson(res, { cards: [], count: 0, mode: 'grounded', error: e.message }, 200), true;
+        }
+      }
+
+      // POST — ground a single market on demand { ticker } (Re-ground button).
+      if (url.pathname === '/api/trading/kalshi/ground' && req.method === 'POST') {
+        const grounding = require('../lib/kalshi-grounding');
+        const eventSuggester = require('../lib/kalshi-event-suggester');
+        const kapi = require('../lib/kalshi-api');
+        const body = await collectRequestBody(req);
+        const { ticker } = body ? JSON.parse(body) : {};
+        if (!ticker) return sendJson(res, { error: 'ticker required' }, 400), true;
+        try {
+          const r = await kapi.getMarket(ticker);
+          const m = r && r.data && r.data.market;
+          if (!m) return sendJson(res, { error: 'market not found', ticker }, 404), true;
+          const g = await grounding.groundMarket(m, { force: true });
+          const card = eventSuggester.toCard(m, g, Date.now());
+          return sendJson(res, { ticker, grounding: g, card }, 200), true;
+        } catch (e) {
+          return sendJson(res, { error: e.message, ticker }, 200), true;
+        }
+      }
+
+      // GET — grade resolved grounded paper picks into the council (forward Verify→Converge).
+      if (url.pathname === '/api/trading/kalshi/grounded-sync' && req.method === 'GET') {
+        const kc = require('../lib/kalshi-council');
+        try { return sendJson(res, await kc.groundedSync(), 200), true; }
+        catch (e) { return sendJson(res, { error: e.message }, 200), true; }
+      }
+
       // GET /api/trading/kalshi/positions-deck?exitsOnly=true
       // Open positions as swipe cards: entry price, current bid, P&L, exit tag.
       // exitsOnly=true: only show positions marked for exit (STOP-LOSS/TAKE-PROFIT/CONVERGENCE)

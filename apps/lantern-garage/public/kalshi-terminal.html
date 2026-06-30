@@ -210,6 +210,20 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .council-banner.warn .cb-head{color:#ff9b9b}
 .council-banner .cb-stats{color:var(--muted);font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:10px}
 .council-banner .cb-verdict{color:var(--muted);margin-top:3px;font-size:10px;font-style:italic}
+/* grounded-card evidence box */
+.grounded-box{margin-top:6px;padding:7px 9px;border-radius:7px;font-size:10.5px;line-height:1.5;font-family:'IBM Plex Mono',ui-monospace,monospace}
+.grounded-box.ok{background:rgba(60,150,220,.08);border:1px solid rgba(60,150,220,.4)}
+.grounded-box.warn{background:rgba(220,160,40,.08);border:1px solid rgba(220,160,40,.4);color:var(--muted)}
+.grounded-box.pending{background:#11151d;border:1px solid #2c3446;color:var(--muted)}
+.grounded-box .gb-head{color:#cfe3f5;margin-bottom:3px}
+.grounded-box .gb-rat{color:var(--muted);margin-bottom:3px;font-family:inherit}
+.grounded-box .gb-foot{color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.grounded-box a{color:#6db3f2;text-decoration:none}
+.reground-btn{margin-left:auto;background:#1b2230;color:#cfe3f5;border:1px solid #2c3446;border-radius:6px;padding:3px 9px;font-size:10px;cursor:pointer;font-family:inherit}
+.reground-btn:hover{background:#222b3d}
+.reground-btn:disabled{opacity:.6;cursor:default}
+.grounded-box .spin{display:inline-block;animation:spin 1.6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -237,6 +251,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </nav>
 
 <div class="mode-bar" role="tablist" aria-label="Deck mode">
+  <button class="mode-btn" id="mGrounded" role="tab" aria-selected="false" onclick="setMode('grounded')" title="Web-grounded event markets — research-driven P(YES) vs market price, paper-only">🔎 Grounded</button>
   <button class="mode-btn" id="mReplay" role="tab" aria-selected="true" onclick="setMode('replay')" title="Swipe recorded history — graded instantly vs the real outcome">⟲ Replay</button>
   <button class="mode-btn" id="mPaper" role="tab" aria-selected="false" onclick="setMode('paper')" title="Live candidate markets, paper-only (no real orders)">📝 Paper</button>
   <button class="mode-btn" id="mLive" role="tab" aria-selected="false" onclick="setMode('live')" title="Live decks (currently paused — no proven edge after fees)">● Live</button>
@@ -285,12 +300,12 @@ let lastSyncMs=0, lastDetCount=null;
 // Deck MODE: 'replay' (recorded history, graded vs known outcome — always works),
 // 'paper' (live candidates, paper-only), 'live' (original decks, currently paused).
 // Default to replay so the swipe is testable + the council trains while live is halted.
-let MODE='replay', replayExhausted=false;
+let MODE='replay', replayExhausted=false, lastGroundStats=null;
 
 function setMode(m){
   if(MODE===m && deck.length) return;
   MODE=m; deck=[]; idx=0; liveMap={}; prefetching=false; replayExhausted=false;
-  for(const [id,mode] of [['mReplay','replay'],['mPaper','paper'],['mLive','live']]){
+  for(const [id,mode] of [['mGrounded','grounded'],['mReplay','replay'],['mPaper','paper'],['mLive','live']]){
     const b=document.getElementById(id);
     if(b){ b.classList.toggle('active',mode===m); b.setAttribute('aria-selected',mode===m?'true':'false'); }
   }
@@ -300,18 +315,38 @@ function setMode(m){
   if(MODE==='live') syncDeck(); else loadModeDeck();
 }
 
-// Load a paper/replay deck slice and append unique cards (continuous deck).
+// Load a paper/replay/grounded deck slice and append unique cards (continuous deck).
 async function loadModeDeck(){
   let d;
   if(MODE==='replay'){
     if(replayExhausted) return;
     d=await j(`/replay-deck?limit=20&offset=${deck.length}`);
     if(!d || !(d.cards||[]).length){ replayExhausted=true; }
+  } else if(MODE==='grounded'){
+    d=await j('/grounded-deck?limit=14');
+    if(d) lastGroundStats=d;
   } else { // paper
     d=await j('/paper-deck?limit=20');
   }
   const cards=(d&&d.cards)||[];
   stampCards(cards, d&&d.generatedAt);
+  if(MODE==='grounded'){
+    // Grounded cards mutate as background research completes (pending → done), so
+    // UPDATE in place (preserving order + the card on screen) and append new tickers.
+    const pos=new Map(deck.map((c,i)=>[c.ticker,i]));
+    for(const nc of cards){
+      if(pos.has(nc.ticker)){
+        const i=pos.get(nc.ticker);
+        if(!(i===idx&&dragging)) deck[i]=Object.assign({},nc,{_genMs:deck[i]._genMs});
+      } else deck.push(nc);
+    }
+    if(idx<deck.length){
+      document.getElementById('end').style.display='none';
+      if(!document.getElementById('front')) render(); else if(!dragging) patchFront(deck[idx]);
+    } else showModeEnd(d);
+    markFresh(deck.length-idx);
+    return;
+  }
   const have=new Set(deck.map(c=>c.ticker));
   const add=cards.filter(c=>!have.has(c.ticker));
   if(deck.length===0){ deck=add.slice(); idx=0; }
@@ -417,8 +452,9 @@ async function loadBalance(){
 // ── syncDeck: initial load + live merge every SYNC_MS ────────────────────────
 // Show all open positions (exits first, then holds) + suggestion fill
 async function syncDeck(){
-  // Paper/replay modes are paper-only and don't use the live positions deck.
-  if(MODE!=='live'){ if(MODE==='paper') await loadModeDeck(); return; }
+  // Paper/replay/grounded modes are paper-only and don't use the live positions deck.
+  // Paper + grounded re-poll (grounded cards mutate as background research completes).
+  if(MODE!=='live'){ if(MODE==='paper'||MODE==='grounded') await loadModeDeck(); return; }
   const d=await j('/positions-deck');
   // GLOBAL TRADING-PAUSE: server cleared all cards. Force-empty the deck (the
   // in-place prune never removes the front card deck[idx]) and show why.
@@ -590,6 +626,28 @@ function sigma0Badge(card){
   </div>`;
 }
 
+// Grounded-card extra: research status, rationale, evidence/sources, Re-ground.
+function groundedExtra(card){
+  if(card.mode!=='grounded') return '';
+  const st=card.grounding_status;
+  const reBtn=`<button id="regroundBtn" class="reground-btn" onclick="event.stopPropagation();reground('${(card.ticker||'').replace(/'/g,'')}')">🔎 Re-ground</button>`;
+  if(st==='pending'){
+    return `<div class="grounded-box pending"><span class="spin">🔎</span> Researching market in real time — web grounding in progress…</div>`;
+  }
+  if(st==='knowledge-only'){
+    return `<div class="grounded-box warn">⚠ No live sources — knowledge-only estimate. Deferring to the market price (no edge claimed). ${reBtn}</div>`;
+  }
+  // web-grounded
+  const py=card.grounded_p_yes!=null?Math.round(card.grounded_p_yes*100):null;
+  const srcN=(card.sources||[]).length;
+  const srcLinks=(card.sources||[]).slice(0,4).map((u,i)=>`<a href="${(u||'').replace(/"/g,'%22')}" target="_blank" rel="noopener noreferrer">[${i+1}]</a>`).join(' ');
+  const evN=(card.evidence||[]).length;
+  return `<div class="grounded-box ok">
+    <div class="gb-head">🔎 Web-grounded · P(YES) <b>${py}%</b> vs market <b>${card.yesPct}%</b> · ${card.model||''}</div>
+    ${card.rationale?`<div class="gb-rat">${card.rationale.replace(/</g,'&lt;')}</div>`:''}
+    <div class="gb-foot">${srcN?`${srcN} live source${srcN>1?'s':''}: ${srcLinks}`:'no source links'}${evN?` · ${evN} evidence`:''} ${reBtn}</div>
+  </div>`;
+}
 function cleanTitle(title,ticker){
   if(!title) return ticker||'Market';
   // Strip leading "yes " / "no " prefix from raw position labels
@@ -806,6 +864,7 @@ function cardInner(card){
       </div>
       <div class="reason">${card.reason||''}</div>
       ${sigma0Badge(card)}
+      ${groundedExtra(card)}
       ${strategyReason}
       ${fitnessDisplay}
       ${traceHtml}
@@ -1011,6 +1070,24 @@ async function act(dir,fromSwipe){
     finally{ busy=false; }
     return;
   }
+  // ── GROUNDED mode: take a web-grounded pick → paper position (forward-graded) ─
+  if(MODE==='grounded'){
+    if(card.grounding_status!=='done'){
+      blockTake(card.grounding_status==='knowledge-only'?'No live sources — Re-ground for live data before taking':'Still researching — wait for grounding');
+      return;
+    }
+    if(card.favAsk==null){ blockTake('No live ask — cannot paper-trade'); return; }
+    busy=true;
+    try{
+      const o={ticker:card.ticker, side:card.favSide, action:'buy', type:'limit', count:1, limitCents:card.favAsk,
+        source:'kalshi-grounded', grounded_confidence:card.grounded_confidence, grounded_p_yes:card.grounded_p_yes};
+      const res=await j('/paper-trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
+      showGroundedResult(res,card);
+      idx++; render();
+    }catch(e){ showResult({error:e.message},card); idx++; }
+    finally{ busy=false; }
+    return;
+  }
   // ── PAPER mode: open a paper position (no real order) ───────────────────────
   if(MODE==='paper'){
     if(card.favAsk==null){ blockTake('No live ask — cannot paper-trade'); return; }
@@ -1106,6 +1183,28 @@ function showPaperResult(res,card){
     t.textContent=`PAPER · opened ${lbl} @ ${card.favAsk}¢ · tracked in ledger (no real order)`;
   }
   clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3400);
+}
+
+function showGroundedResult(res,card){
+  const t=document.getElementById('toast');
+  if(res.error){ t.className='toast err show'; t.textContent='✕ '+res.error; }
+  else{
+    const lbl=(card.favSide==='yes'?'▲ YES':'▼ NO');
+    t.className='toast live show';
+    t.textContent=`GROUNDED · ${lbl} @ ${card.favAsk}¢ · P(YES) ${Math.round((card.grounded_p_yes||0)*100)}% · paper pick logged, graded on resolution`;
+  }
+  clearTimeout(showResult._h); showResult._h=setTimeout(()=>t.classList.remove('show'),3600);
+}
+
+// Re-ground a single market on demand (web search + LLM, ~20s). Updates the card in place.
+async function reground(ticker){
+  const card=deck[idx]; if(!card||card.ticker!==ticker) return;
+  const btn=document.getElementById('regroundBtn'); if(btn){ btn.disabled=true; btn.textContent='🔎 Researching…'; }
+  try{
+    const res=await j('/ground',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker})});
+    if(res&&res.card){ deck[idx]=Object.assign({},res.card,{_genMs:Date.now()}); patchFront(deck[idx]); loadCouncil(); }
+    else if(btn){ btn.disabled=false; btn.textContent='🔎 Re-ground'; }
+  }catch(_){ if(btn){ btn.disabled=false; btn.textContent='🔎 Re-ground'; } }
 }
 
 // ── image gallery ────────────────────────────────────────────────────────────

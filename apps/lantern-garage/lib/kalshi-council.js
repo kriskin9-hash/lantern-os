@@ -139,7 +139,71 @@ function gradeReplay({ ticker, side, entryCents }) {
   };
 }
 
+// ── grounded picks: Verify→Converge on resolution ──────────────────────────────
+// Grade a resolved grounded paper pick into the council. `confidence` is the grounded
+// model's probability for the TAKEN side; `won` is whether that side resolved correct.
+// Tagged source:"kalshi-grounded" so the council can show whether grounding is
+// calibrated and net-positive after fees — the honest profitability measurement.
+function gradeGrounded({ ticker, side, entryCents, confidence, won, recordId }) {
+  const entry = Math.min(99, Math.max(1, Number(entryCents) || 50));
+  const fee = fees.takerFeeCents(entry);
+  const net = (won ? (100 - entry) : -entry) - fee;
+  const conf = Math.round(Math.max(0, Math.min(1, Number(confidence) || 0.5)) * 1000) / 1000;
+  const outcome = won ? 1 : 0;
+  const row = {
+    record_id: recordId || `kalshi-grounded-${ticker}-${Date.now()}`,
+    ticker, side,
+    confidence: conf,
+    passed: !!won,
+    outcome,
+    brier_score: Math.round((conf - outcome) ** 2 * 10000) / 10000,
+    pnl_pct: Math.round((net / entry) * 10000) / 100,
+    pnl_cents_after_fee: net,
+    signals: { grounded: conf },
+    source: "kalshi-grounded",
+    conviction_recorded: true,
+    graded_at: new Date().toISOString(),
+  };
+  appendOutcome(row);
+  return { ok: true, won, net_cents: net, row };
+}
+
+/**
+ * groundedSync — find open grounded paper picks whose market has RESOLVED and grade
+ * them into the council, then close the paper position. Forward-running: returns
+ * {graded, pending} so it can be polled. Pure of any order placement.
+ */
+async function groundedSync() {
+  const paperLedger = require("./kalshi-paper-ledger");
+  const kapi = require("./kalshi-api");
+  const open = paperLedger.getOpen().filter((p) => p.source === "kalshi-grounded");
+  let graded = 0, pending = 0;
+  const already = new Set();
+  if (fs.existsSync(OUTCOMES)) {
+    for (const l of fs.readFileSync(OUTCOMES, "utf8").split("\n")) {
+      if (!l.trim()) continue;
+      try { already.add(JSON.parse(l).record_id); } catch { /* skip */ }
+    }
+  }
+  for (const p of open) {
+    const recordId = `kalshi-grounded-${p.id}`;
+    if (already.has(recordId)) continue;
+    try {
+      const r = await kapi.getMarket(p.ticker);
+      const m = r && r.data && r.data.market;
+      const result = m && (m.result || "").toLowerCase(); // "yes" | "no" | ""
+      if (!result || (result !== "yes" && result !== "no")) { pending++; continue; }
+      const yesWon = result === "yes";
+      const won = (p.side === "yes" && yesWon) || (p.side === "no" && !yesWon);
+      gradeGrounded({ ticker: p.ticker, side: p.side, entryCents: p.limitCents, confidence: p.grounded_confidence, won, recordId });
+      paperLedger.closePosition(p.id, { exitTag: "RESOLVED", exitPriceCents: yesWon ? 100 : 0 });
+      graded++;
+    } catch { pending++; }
+  }
+  return { graded, pending, openGrounded: open.length };
+}
+
 module.exports = {
-  snapshot, buildReplayCards, gradeReplay, appendOutcome, pWinModel,
+  snapshot, buildReplayCards, gradeReplay, gradeGrounded, groundedSync, appendOutcome, pWinModel,
   OUTCOMES_PATH: OUTCOMES,
 };
