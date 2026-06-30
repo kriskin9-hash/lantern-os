@@ -1955,10 +1955,17 @@ document.addEventListener('mousemove', function(e){
   ladder.style.cursor = (x>=w-AXIS_W) ? 'ns-resize' : (y>=h-AXIS_H) ? 'ew-resize' : 'grab';
 });
 
-document.addEventListener('mouseup', function(){
+document.addEventListener('mouseup', function(e){
   if(!_chartDrag) return;
-  _chartDrag.ladder.style.cursor = '';
+  const drag = _chartDrag;
+  drag.ladder.style.cursor = '';
   _chartDrag = null;
+  // A click (negligible movement — not a pan/zoom drag) on a chart switches the
+  // order panel to that chart's symbol, so BUY/SELL targets what you clicked.
+  if(Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) < 6 && drag.dataTicker){
+    setOrderSymbol(drag.dataTicker);
+    openOrderPanel();
+  }
 });
 
 // Double-click anywhere on a chart resets zoom/pan to the default auto-fit view.
