@@ -2438,7 +2438,10 @@ async function loadAgentLog(){
 
 async function loadOrders(){
   try{
-    const r = await fetch('/api/trading/orders');
+    // Ask for the full broker-truth window (Alpaca caps a single page at 500).
+    // Without an explicit limit the API defaulted to 50, so a busy session's
+    // Order history silently dropped every fill past the 50 most recent.
+    const r = await fetch('/api/trading/orders?limit=500');
     const orders = await r.json();
     renderOrders(orders);                   // #1712: Orders + Order history tabs
   }catch(e){}

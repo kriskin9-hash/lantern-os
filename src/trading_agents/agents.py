@@ -486,6 +486,15 @@ def init_lessons_db():
         con.execute("ALTER TABLE daily_analysis ADD COLUMN metadata TEXT")
     except Exception:
         pass  # column already exists
+    # Migration: add closed_ts so realized P&L is bucketed by the day a trade was
+    # CLOSED, not the day it was opened. Without it, an overnight hold's realized
+    # P&L is credited to its OPEN date (ts), so "today's realized" mis-attributes
+    # any position that spans a day boundary. Legacy rows have NULL closed_ts and
+    # fall back to ts (open date) via COALESCE at read time.
+    try:
+        con.execute("ALTER TABLE trade_history ADD COLUMN closed_ts TEXT")
+    except Exception:
+        pass  # column already exists
     # Success patterns from winning trades — complement to lessons (losses)
     con.execute("""
         CREATE TABLE IF NOT EXISTS success_patterns (
@@ -601,13 +610,14 @@ def close_trade_history(symbol: str, exit_price: float,
         # SQLite doesn't support ORDER BY in UPDATE — use subquery to find latest id
         con.execute(
             "UPDATE trade_history SET exit_price=?, pnl_pct=?, pnl_usd=?, "
-            "close_reason=?, status='closed' "
+            "close_reason=?, status='closed', closed_ts=? "
             "WHERE id = ("
             "  SELECT id FROM trade_history "
             "  WHERE symbol=? AND status='open' "
             "  ORDER BY id DESC LIMIT 1"
             ")",
-            (exit_price, pnl_pct, pnl_usd, reason, symbol)
+            (exit_price, pnl_pct, pnl_usd, reason,
+             datetime.now().isoformat(), symbol)
         )
         con.commit()
         con.close()
