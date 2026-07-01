@@ -2376,7 +2376,10 @@ function renderOrders(orders){
   const tbl=(rows)=> rows.length ? `<table class="tp-table"><thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Limit</th><th>Status</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="tp-empty">None</div>';
   const isOpen=(o)=>['new','accepted','pending','open','partially_filled'].includes((o.status||'').toLowerCase());
   if(openEl) openEl.innerHTML = tbl(arr.filter(isOpen).map(row).join(''));
-  if(histEl) histEl.innerHTML = tbl(arr.filter(o=>!isOpen(o)).slice(0,30).map(row).join(''));
+  // Show the full fetched history (up to the 500 the API returns), not just the
+  // 30 most recent — capping here was the visible half of "not all trades saved":
+  // a busy session closes dozens in an hour, so 30 rows hid most of the day.
+  if(histEl) histEl.innerHTML = tbl(arr.filter(o=>!isOpen(o)).slice(0,500).map(row).join(''));
 }
 
 async function loadPortfolio(){
