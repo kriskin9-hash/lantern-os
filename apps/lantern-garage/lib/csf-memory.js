@@ -65,14 +65,21 @@ function readMemoryRecords(limit = 20) {
   for (const file of files) {
     const text = _readText(path.join(CSF_MEMORY_PATH, file));
     const lines = text.trim().split("\n").filter(Boolean);
+    // Take the MOST RECENT `limit` lines, not the first (#1429 follow-up). JSONL is
+    // append-only oldest-first, so once a registry passes `limit` total entries, every
+    // record written after that point was permanently unreachable — the earliest writes
+    // shadowed everything newer forever. A store with hundreds of historical entries
+    // (e.g. raw.jsonl's trading records) meant NOTHING written since has ever surfaced
+    // in queryMemories()/buildCSFContext(). Slicing from the end costs nothing extra —
+    // the file is already fully read into memory by _readText() above.
+    const recent = lines.slice(-limit);
     const parsed = [];
-    for (const line of lines) {
+    for (const line of recent) {
       try { parsed.push(JSON.parse(line)); } catch {}
     }
     records.push(..._verifyRecords(parsed, String(file)));
-    if (records.length >= limit) break;
   }
-  return records.slice(0, limit);
+  return records;
 }
 
 function readIngestDocs(limit = 3) {

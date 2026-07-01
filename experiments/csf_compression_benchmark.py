@@ -79,6 +79,24 @@ def corpus_cube_delta() -> bytes:
     return p.read_bytes() if p.exists() else b""
 
 
+def corpus_csf_memory() -> bytes:
+    """Complete lines (whole flat JSON objects) from the largest real data/csf_memory/*.jsonl
+    registry — the exact corpus #1593 specifies. Unlike corpus_jsonl_mem() (raw byte truncation,
+    fine for generic codecs), CSF-Col needs each line to be a complete parseable object, so this
+    reads whole lines up to CAP rather than cutting off mid-record."""
+    d = REPO / "data/csf_memory"
+    cands = sorted(d.glob("*.jsonl"), key=lambda p: p.stat().st_size, reverse=True) if d.exists() else []
+    if not cands:
+        return b""
+    out = bytearray()
+    with open(cands[0], "rb") as f:
+        for line in f:
+            if len(out) + len(line) > CAP:
+                break
+            out += line
+    return bytes(out)
+
+
 # --------------------------------------------------------------------------
 # Codecs: each is (name, tier, encode_fn, decode_fn)
 # --------------------------------------------------------------------------
@@ -221,6 +239,57 @@ def bench_csf_symbolic(text_blob: bytes):
     print(f"  NOTE: compress_text has no decode path shipped — round-trip UNVERIFIED.")
 
 
+def bench_csf_col(blob: bytes):
+    """CSF-Col (#1593): column-major pre-transform, THEN zstd — vs zstd-19 alone on the same
+    raw JSONL. The transform is a pre-pass (see src/csf/col_transform.py), not a standalone
+    compressor, so the fair comparison is zstd(col_transform(x)) vs zstd(x), not the transform's
+    own output size. Falsifiable per the issue: if it doesn't clear zstd-19, that's reported
+    honestly, not hidden."""
+    try:
+        from csf import col_transform
+    except Exception as e:
+        print(f"\n### CSF-Col (#1593) — unavailable: {e}")
+        return None
+    if not blob:
+        print("\n### CSF-Col (#1593) — no data/csf_memory/*.jsonl corpus found, skipped")
+        return None
+    if zstd is None:
+        print("\n### CSF-Col (#1593) — zstd not installed, skipped")
+        return None
+
+    print(f"\n### CSF-Col (#1593) — column transform + zstd-19, vs zstd-19 alone  —  raw {len(blob):,} B")
+    try:
+        transformed = col_transform.forward(blob)
+    except col_transform.NotApplicable as e:
+        print(f"  NotApplicable on this corpus ({e}) — transform declined, nothing to benchmark.")
+        return None
+
+    assert col_transform.inverse(transformed) == blob, "col_transform round-trip failed"
+
+    z = zstd.ZstdCompressor(level=19)
+    d = zstd.ZstdDecompressor()
+    baseline_comp = z.compress(blob)
+    baseline_ok = d.decompress(baseline_comp) == blob
+
+    colzstd_comp = z.compress(transformed)
+    colzstd_back = col_transform.inverse(d.decompress(colzstd_comp))
+    colzstd_ok = colzstd_back == blob
+
+    baseline_ratio = len(blob) / len(baseline_comp)
+    colzstd_ratio = len(blob) / len(colzstd_comp)
+    delta_pct = (len(baseline_comp) / len(colzstd_comp) - 1) * 100
+
+    print(f"  zstd-19 alone         {len(baseline_comp):>9,}B  ({baseline_ratio:.2f}x)  lossless={'OK' if baseline_ok else 'FAIL!!'}")
+    print(f"  CSF-Col + zstd-19     {len(colzstd_comp):>9,}B  ({colzstd_ratio:.2f}x)  lossless={'OK' if colzstd_ok else 'FAIL!!'}")
+    verdict = "BEATS" if delta_pct > 0 else "LOSES TO"
+    print(f"  -> CSF-Col {verdict} plain zstd-19 by {delta_pct:+.1f}%")
+    return {
+        "raw": len(blob), "zstd19": len(baseline_comp), "col_zstd19": len(colzstd_comp),
+        "zstd19_ratio": baseline_ratio, "col_zstd19_ratio": colzstd_ratio,
+        "delta_pct": delta_pct, "lossless": baseline_ok and colzstd_ok,
+    }
+
+
 def dominance(name: str, rows):
     """Confirm CSF-Omni is the top (or tied-top) ratio on this corpus.
 
@@ -269,6 +338,15 @@ def main():
     if cube:
         rows = bench_blob("C. cube delta stream (3^12 lattice storage face)", cube)
         summary.append(("C. cube delta", rows))
+
+    # D. The exact corpus #1593 specifies (real data/csf_memory/*.jsonl, not the corpus-B
+    # proxy). Full panel first (zstd-19 / brotli-11 / omni / lzma, same codecs as A-C) so
+    # CSF-Col has real comparative context, then the CSF-Col-specific pre-transform check.
+    csf_mem = corpus_csf_memory()
+    if csf_mem:
+        rows = bench_blob("D. data/csf_memory (real CSF-Col target corpus, #1593)", csf_mem)
+        summary.append(("D. csf_memory", rows))
+    col_result = bench_csf_col(csf_mem)
 
     print("\n" + "=" * 95)
     print("DOMINANCE — is CSF-Omni the best-or-tied codec on every corpus?")

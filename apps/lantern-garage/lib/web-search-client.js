@@ -296,34 +296,97 @@ function _unwrapSearch(raw) {
 
 const MCP_ATTEMPT_TIMEOUT = parseInt(process.env.WEB_SEARCH_MCP_TIMEOUT || "6000", 10);
 
-/**
- * Dependable web search for the chat tool loop (#1212): try the MCP path with a
- * bounded per-call timeout + 1 retry, then fall back to a keyless direct DuckDuckGo
- * search. Returns a normalized {success, results, error, source}. On total failure
- * the caller gets an explicit error (so the model says "search unavailable" instead
- * of silently answering from memory).
- */
-async function webSearch(query, maxResults = 5, opts = {}) {
+// #1529 — keyless-search throttling causes real 0-source variance: the same query
+// returns 4-8 sources one minute and 0 the next, with nothing about the query
+// itself changing. The source is transient rate-limiting on the keyless fallbacks,
+// not query difficulty. Two mitigations, both self-contained (no new credentials):
+//
+//   1. Short-TTL SUCCESS cache. A throttled retry within the window still returns
+//      the good result from moments ago instead of an honest-but-unlucky zero.
+//      Failures are never cached — a failed attempt should keep retrying, not get
+//      stuck replaying its own failure.
+//   2. One backoff+retry specifically on a detected 429, before falling through to
+//      the next provider in the chain. Most keyless throttling clears within a few
+//      hundred ms; retrying once beats losing the source entirely to a blip.
+const SEARCH_CACHE_TTL_MS = parseInt(process.env.WEB_SEARCH_CACHE_TTL_MS || "300000", 10); // 5 min
+const KEYLESS_RETRY_BACKOFF_MS = parseInt(process.env.WEB_SEARCH_RETRY_BACKOFF_MS || "400", 10);
+const SEARCH_CACHE_MAX_ENTRIES = 500; // bound growth on a long-running server
+const _searchCache = new Map(); // key -> { result, expiresAt }
+
+function _cacheKey(query, maxResults) {
+  return `${maxResults}::${String(query || "").trim().toLowerCase()}`;
+}
+function _cacheGet(key) {
+  const hit = _searchCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) { _searchCache.delete(key); return null; }
+  return hit.result;
+}
+function _cacheSet(key, result) {
+  if (_searchCache.size >= SEARCH_CACHE_MAX_ENTRIES) {
+    const oldest = _searchCache.keys().next().value;
+    if (oldest !== undefined) _searchCache.delete(oldest);
+  }
+  _searchCache.set(key, { result, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+}
+// Test-only: reset cache state between test cases without waiting out the TTL.
+function _clearSearchCache() { _searchCache.clear(); }
+
+function _isRateLimited(err) {
+  return /rate-limited|429/i.test(String(err || ""));
+}
+
+async function _webSearchUncached(query, maxResults, opts) {
   const mcpTimeout = opts.mcpTimeoutMs || MCP_ATTEMPT_TIMEOUT;
   const retries = opts.retries == null ? 1 : opts.retries;
+  const mcpImpl = opts._mcpImpl || webSearchMcp;
+  const fallbackImpls = opts._fallbackImpls || [webSearchDirect, webSearchWiki];
+  const backoffMs = opts._retryBackoffMs == null ? KEYLESS_RETRY_BACKOFF_MS : opts._retryBackoffMs;
   let lastErr = "search failed";
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const raw = await webSearchMcp(query, maxResults, mcpTimeout);
+      const raw = await mcpImpl(query, maxResults, mcpTimeout);
       const norm = _unwrapSearch(raw);
       if (norm.success) return { ...norm, source: "mcp" };
       lastErr = norm.error || lastErr;
     } catch (e) { lastErr = e.message || lastErr; }
   }
   // MCP slow/down/empty → keyless fallbacks: DDG instant answer, then Wikipedia.
-  for (const fb of [webSearchDirect, webSearchWiki]) {
+  for (const fb of fallbackImpls) {
     try {
-      const r = await fb(query, maxResults);
+      let r = await fb(query, maxResults);
       if (r.success) return r;
+      if (_isRateLimited(r.error) && backoffMs > 0) {
+        await new Promise((res) => setTimeout(res, backoffMs));
+        r = await fb(query, maxResults);
+        if (r.success) return r;
+      }
       lastErr = r.error || lastErr;
     } catch (e) { lastErr = e.message || lastErr; }
   }
   return { success: false, results: [], error: lastErr, source: "none" };
+}
+
+/**
+ * Dependable web search for the chat tool loop (#1212): try the MCP path with a
+ * bounded per-call timeout + 1 retry, then fall back to a keyless direct DuckDuckGo
+ * search, retrying once on a detected rate-limit before moving to the next provider
+ * (#1529). Successful results are cached for WEB_SEARCH_CACHE_TTL_MS (default 5 min,
+ * keyed by query+maxResults) so throttling variance can't turn a result that
+ * existed moments ago into an honest-but-unlucky zero. Returns a normalized
+ * {success, results, error, source}; a cache hit also carries `fromCache: true`. On
+ * total failure the caller gets an explicit error (so the model says "search
+ * unavailable" instead of silently answering from memory).
+ */
+async function webSearch(query, maxResults = 5, opts = {}) {
+  const key = _cacheKey(query, maxResults);
+  if (!opts.skipCache) {
+    const cached = _cacheGet(key);
+    if (cached) return { ...cached, fromCache: true };
+  }
+  const result = await _webSearchUncached(query, maxResults, opts);
+  if (result.success) _cacheSet(key, result);
+  return result;
 }
 
 module.exports = {
@@ -332,6 +395,9 @@ module.exports = {
   webSearchWiki,
   webSearch,
   _httpFallbackError,
+  _cacheKey,
+  _clearSearchCache,
+  _isRateLimited,
   formatGroundingContext,
   needsGrounding,
   extractSearchQuery,
