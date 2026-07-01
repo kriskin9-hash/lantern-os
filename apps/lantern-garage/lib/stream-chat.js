@@ -453,7 +453,7 @@ async function handleStreamChat(req, url, res) {
         const localFirst = rolloverMode === "default" || process.env.KEYSTONE_LOCAL_FIRST !== "0";
         const providers = localFirst
           ? kernelEscalationChain()
-          : [{ provider, model: kernelModel || "claude-opus-4-8" }];
+          : [{ provider, model: kernelModel || "claude-sonnet-5" }];
 
         const { result, providerUsed, escalations, landedBy, verified } = await runKernelWithEscalation({
           providers,
@@ -625,6 +625,118 @@ async function handleStreamChat(req, url, res) {
         sendDone("failed", { agent: "ReportCard", error: e.message });
       }
       res.end();
+      return;
+    }
+
+    // !research <topic> | !research continue <taskId>: a persisted, resumable
+    // research TASK — not one search, a job that keeps going round after round
+    // (each round targets the gaps the last one left open) until the gap-check
+    // says nothing's left or the round cap is hit. State is saved to
+    // data/research-tasks/<id>.json after every round, so a task that runs long
+    // survives across chat turns (and server restarts): send
+    // `!research continue <taskId>` to keep an unfinished task moving. Built on
+    // lib/wide-search's Observe→Reason→Verify→Converge loop (the same engine
+    // autowork uses to ground issue research). Unlike !search (one query, raw
+    // result list) or the single-shot version of !research, this is the actual
+    // long-running-task pattern: it doesn't stop until the job is done.
+    if (cmd.name === "research" || cmd.name === "deep-research") {
+      const researchTask = require("./research-task");
+      const args = (cmd.args || "").trim() || message.replace(/^!\S+\s*/, "").trim();
+      const continueMatch = args.match(/^continue\s+(\S+)/i);
+
+      let task;
+      if (continueMatch) {
+        task = researchTask.loadTask(continueMatch[1]);
+        if (!task) {
+          res.writeHead(404, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "research_task_not_found", taskId: continueMatch[1] }));
+          return;
+        }
+      } else {
+        if (!args) {
+          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "research_topic_required", message: "Usage: !research <topic>" }));
+          return;
+        }
+        task = researchTask.createTask(args, { sessionId });
+      }
+
+      sse.writeStreamHeaders(res);
+      sse.sendRoute(res, { label: "Research · Σ₀ task loop", agentName: "Keystone", surface: surfaceMode });
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+      const STAGE_LABEL = {
+        expanding: "  Breaking the topic into angled sub-questions…\n",
+        fanning_out: "  Searching the web across every angle…\n",
+        low_pass_start: "  Pruning the source pool for relevance…\n",
+        high_pass_start: "  Synthesizing a grounded, cited answer…\n",
+        gap_check_start: "  Checking what's still missing…\n",
+      };
+      // Rounds run inside THIS request are capped so one HTTP turn can't hang
+      // forever; a task that isn't done after this many rounds is left
+      // "running" and the user is told the resume command. The task keeps its
+      // own MAX_TOTAL_ROUNDS ceiling across however many turns it takes.
+      const ROUNDS_PER_TURN = parseInt(process.env.RESEARCH_ROUNDS_PER_TURN || "3", 10);
+
+      try {
+        sendToken(`🔎 Research task \`${task.id}\`: "${task.topic}"\n`);
+        let ranThisTurn = 0;
+        while (task.status === "running" && ranThisTurn < ROUNDS_PER_TURN) {
+          sendToken(`\n**Round ${task.rounds.length + 1}**${task.gaps.length ? ` — covering: ${task.gaps.join(", ")}` : ""}\n`);
+          await researchTask.runRound(task, (stage, status) => {
+            const label = STAGE_LABEL[status];
+            if (label) sendToken(label);
+          });
+          ranThisTurn++;
+        }
+
+        sendToken(`\n${task.latestAnswer}\n`);
+        if (task.sources && task.sources.length) {
+          sendToken(`\n**Sources (${task.sources.length}):**\n`);
+          for (const s of task.sources) sendToken(`[${s.n}] ${s.title || s.url} — ${s.url}\n`);
+        }
+        sendToken(`\n_Confidence: ${task.confidence}_\n`);
+
+        let recordId = null;
+        if (task.status === "done") {
+          sendToken(`\n✦ Task complete after ${task.rounds.length} round(s).\n`);
+          try {
+            const rec = await emitConvergenceRecord({
+              hypothesis: task.topic.slice(0, 300),
+              result: String(task.latestAnswer).slice(0, 2000),
+              confidence: task.confidence,
+              evidence_ids: task.sources.map((s) => s.url).filter(Boolean),
+              reasoner: "research-task",
+              verified: task.confidence >= 0.5,
+              verification_notes: `Σ₀ research task ${task.id} over ${task.rounds.length} round(s), ${task.sources.length} source(s) kept`,
+              source: `research-task/${task.id}`,
+            });
+            recordId = rec && rec.id;
+          } catch (_e) { /* record emit is best-effort */ }
+          try {
+            await recordConvergance({
+              question: task.topic,
+              answer: task.latestAnswer,
+              confidence: task.confidence,
+              recordId,
+              synthesizer: "research-task",
+              surface: surfaceMode || "chat",
+            });
+          } catch (_e) { /* CSF ingest is best-effort — never break chat */ }
+        } else {
+          sendToken(`\n⧗ Still open (round ${task.rounds.length}/${researchTask.MAX_TOTAL_ROUNDS}, gaps: ${task.gaps.join(", ") || "none flagged"}). Send \`!research continue ${task.id}\` to keep going.\n`);
+        }
+
+        sendDone("keystone", {
+          agent: "Keystone",
+          online: true,
+          routeLabel: "Research · Σ₀ task loop",
+          research: { taskId: task.id, status: task.status, rounds: task.rounds.length, confidence: task.confidence, sources: task.sources.length, recordId },
+        });
+      } catch (err) {
+        sendToken(`\nResearch failed: ${err.message}\n`);
+        sendDone("failed", { agent: "Keystone", online: false, error: err.message });
+      }
       return;
     }
 

@@ -254,3 +254,73 @@ def test_legacy_no_codec_field_still_unpacks():
         csf_pack.unpack(out, str(d / "x"))
         for arc, raw in blobs.items():
             assert (d / "x" / arc).read_bytes() == raw
+
+
+# --------------------------------------------------------------------------
+# Per-file grounding: optional description + metadata (Σ₀ store)
+# --------------------------------------------------------------------------
+
+def test_annotations_round_trip_and_index():
+    """description + metadata attach per file, survive the archive, and are
+    retrievable via list_archive / file_annotation / annotations — while the
+    blob content round-trips byte-for-byte."""
+    blobs = {"a.py": b"print('a')\n", "b.py": b"print('b')\n", "c.py": b"# no note\n"}
+    ann = {
+        "a.py": {"description": "prints a", "metadata": {"loop_stage": "Act", "verdict": "grounded", "confidence": 0.9}},
+        "b.py": "prints b",  # bare-string shorthand -> description only
+    }
+    with tempfile.TemporaryDirectory() as d:
+        out = str(pathlib.Path(d) / "out.csf")
+        csf_pack.pack_blobs(blobs, out, annotations=ann)
+
+        # manifest carries the fields
+        m = csf_pack.list_archive(out)
+        by = {fe["path"]: fe for fe in m["files"]}
+        assert by["a.py"]["description"] == "prints a"
+        assert by["a.py"]["metadata"]["loop_stage"] == "Act"
+        assert by["b.py"]["description"] == "prints b"
+        assert "metadata" not in by["b.py"]        # bare string -> no metadata key
+        assert "description" not in by["c.py"]      # un-annotated file stays clean
+        assert "metadata" not in by["c.py"]
+
+        # convenience readers
+        fa = csf_pack.file_annotation(out, "a.py")
+        assert fa == {"description": "prints a", "metadata": {"loop_stage": "Act", "verdict": "grounded", "confidence": 0.9}}
+        idx = csf_pack.annotations(out)
+        assert set(idx) == {"a.py", "b.py"}          # only annotated members appear
+        assert idx["b.py"]["metadata"] is None
+
+        # blob content is untouched by annotation
+        dest = pathlib.Path(d) / "x"
+        csf_pack.unpack(out, str(dest))
+        for arc, raw in blobs.items():
+            assert (dest / arc).read_bytes() == raw
+
+
+def test_annotations_absent_is_byte_identical():
+    """Packing with no annotations (or empty ones) must produce the exact same
+    bytes as before the feature existed — annotating is strictly additive."""
+    blobs = {"a.txt": b"x" * 100, "b.txt": b"y" * 100}
+    with tempfile.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        # created_at is time-based; pin it out of the comparison by zeroing both
+        a = d / "a.csf"
+        b = d / "b.csf"
+        csf_pack.pack_blobs(blobs, str(a), codec="zlib")
+        csf_pack.pack_blobs(blobs, str(b), codec="zlib", annotations={})
+        ma, mb = csf_pack.list_archive(str(a)), csf_pack.list_archive(str(b))
+        # file entries identical (no description/metadata keys introduced)
+        assert [fe for fe in ma["files"]] == [fe for fe in mb["files"]]
+        assert csf_pack.annotations(str(a)) == {}
+
+
+def test_pack_files_with_annotations():
+    """pack() (filesystem) accepts annotations keyed by the arc_path it lists."""
+    with tempfile.TemporaryDirectory() as d:
+        d = pathlib.Path(d)
+        f = d / "script.py"
+        f.write_text("print('hi')\n")
+        out = str(d / "out.csf")
+        csf_pack.pack([str(f)], out,
+                      annotations={"script.py": {"description": "a script", "metadata": {"loop_stage": "Infra"}}})
+        assert csf_pack.file_annotation(out, "script.py")["description"] == "a script"
