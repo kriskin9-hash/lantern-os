@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.8.14] - 2026-07-01
+### Fixed
+- **Restore merged work silently reverted by the stale worktree-sync commit `2fd3598c`.** The bulk "sync worktree state" commit wrote stale copies of files over master, reverting already-merged PRs. Restored: compact chat-first home page (#1763), PLT KV-cache decode (#1766), a11y Test 7 font/style contract (#1763), dream-chat capability-notice styles/JS (#1761), orchestration boot-burst resilience (#1769), R2 media-hosting docs/script (#1762), ADR-0011 + Σ₀ coder doc refresh (#1764), plus two deleted changelog fragments.
+### Added
+- **Stale-clobber pre-push gate** (`scripts/validate-prepush-stale-clobber.py`, pre-push section 2b): blocks pushes whose file content is byte-identical to an OLDER origin/master version than the merge-base's — the revert-to-stale signature. Bypass only via `SKIP_CLOBBER_CHECK=1` (deliberately not covered by `SKIP_MONOWORKSTREAM`). Strengthens the **Verify** stage.
+
 ## [1.8.13] - 2026-07-01
 ### Fixed
 - **pr-watcher: verdict-first fleet reviews unwedge auto-merge.** Review bodies whose verdict line arrived truncated were parsed as `COMMENT` forever, wedging otherwise-ready PRs out of auto-merge; the parser now reads a leading verdict line first and only falls back to the legacy scan, so truncated reviews resolve instead of blocking. Covered by a new `tests/test_pr_watcher.js` case.
