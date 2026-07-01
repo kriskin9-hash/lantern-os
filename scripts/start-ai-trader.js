@@ -171,6 +171,11 @@ log(`AI_TRADER_HOST: ${AI_TRADER_HOST}`);
 log(`AI_TRADER_PORT: ${AI_TRADER_PORT}`);
 log('='.repeat(60));
 
+if (!fs.existsSync(path.join(AI_TRADER_PATH, 'main.py'))) {
+  log(`AI_TRADER_PATH has no main.py — this box doesn't have the AI Trader sibling repo. Skipping (set LANTERN_DISABLE_TRADING=1 to silence this manager entirely).`);
+  process.exit(0);
+}
+
 startAITrader();
 
 // Graceful shutdown
