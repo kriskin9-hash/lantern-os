@@ -300,6 +300,60 @@ async function recordConvergance(interaction, opts = {}) {
 }
 
 /**
+ * Ingest one detected personal-fact statement ("my kid's shoe size is 7") as a CSF trace
+ * memory (#1429, Remember stage).
+ *
+ * Mirrors recordConvergance() exactly: writes through the ONE canonical CSF memory so the
+ * fact is recalled by the EXISTING csf-memory.js queryMemories() / formatCSFContextForPrompt
+ * pipeline already wired into every chat turn — no dedicated store, no dedicated recall
+ * lookup. lib/life-memory.js supplies the pure {subject, attribute, value} detection; this
+ * is the only place that actually persists it. Best-effort: callers wrap in try/catch.
+ *
+ * @param {object} fact
+ * @param {string} fact.subject
+ * @param {string} fact.attribute
+ * @param {string} fact.value
+ * @param {string} [fact.category]     - from lib/life-memory.js::categorize()
+ * @param {string[]} [fact.keywords]   - from lib/life-memory.js::keywordsFromFact()
+ * @param {string} [fact.rawText]      - the original message, for the content.raw_input field
+ * @param {string} [fact.surface="chat"]
+ * @param {string} [fact.sessionId="chat"]
+ */
+async function recordLifeFact(fact, opts = {}) {
+  fact = fact || {};
+  const value = String(fact.value || "").trim();
+  if (!value) return null;
+  const subject = String(fact.subject || "").trim();
+  const attribute = String(fact.attribute || "").trim();
+  const surface = fact.surface || "chat";
+
+  const summary = subject && subject !== attribute
+    ? `${subject}'s ${attribute}: ${value}`
+    : `${attribute || "Fact"}: ${value}`;
+
+  const tags = ["life-memory"];
+  if (fact.category) tags.push(fact.category);
+
+  const content = {
+    text: summary,
+    session_id: fact.sessionId || "chat",
+    timestamp: _nowIso(),
+    surface,
+    role: "user",
+    raw_input: fact.rawText || summary,
+    event: "life_fact",
+    subject,
+    attribute,
+    value,
+  };
+
+  return _writeTrace(
+    { content, tags, keywords: Array.isArray(fact.keywords) ? fact.keywords : [], entities: [], confidence: 1.0, sourceSurface: surface },
+    opts,
+  );
+}
+
+/**
  * Return the most recent trading trace records (orders and/or signals),
  * newest first. `kind`, if given, should be "order" or "signal" — filters
  * to records carrying that tag.
@@ -334,6 +388,7 @@ module.exports = {
   recordOrder,
   recordSignal,
   recordConvergance,
+  recordLifeFact,
   queryRecent,
   verifyRecord,
   // Shared canonical-checksum primitives. trading-memory.js / trading-news.js

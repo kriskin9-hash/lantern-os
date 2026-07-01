@@ -16,7 +16,8 @@ const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
 const { emitConvergenceRecord } = require("./convergence-records");
-const { recordConvergance } = require("./csf-memory-writer");
+const { recordConvergance, recordLifeFact } = require("./csf-memory-writer");
+const { extractFact, categorize, keywordsFromFact } = require("./life-memory");
 const { resolveCodingRoute } = require("./route-contract");
 const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
@@ -250,6 +251,23 @@ async function handleStreamChat(req, url, res) {
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
   const attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+
+  // Remember-stage hook (#1429): a declarative personal-fact statement ("my kid's shoe size
+  // is 7") gets persisted into the ONE canonical CSF memory, same pattern as recordConvergance
+  // below — no dedicated store, no dedicated recall UI. formatCSFContextForPromptAsync (below)
+  // already retrieves + IDF-ranks it into later turns automatically. Best-effort, non-blocking.
+  if (message) {
+    try {
+      const fact = extractFact(message);
+      if (fact) {
+        const category = categorize(message);
+        await recordLifeFact({
+          ...fact, category, keywords: keywordsFromFact(fact),
+          rawText: message, sessionId: user || "chat", surface: "dream-chat-stream",
+        });
+      }
+    } catch (e) { console.error("[life-memory] capture failed (non-fatal):", e.message); }
+  }
   // Image attachments (#1606): every downstream consumer on this path treats an attachment
   // as TEXT, so an uploaded image (which carries no extractable text) used to vanish silently
   // and the model would honestly report it received "0 files". Resolve each image to a text

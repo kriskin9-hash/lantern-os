@@ -4,6 +4,8 @@ const fs = require("fs");
 const path = require("path");
 const { readMcpResourceSync } = require("./mcp-resource-client");
 const { formatCSFContextForPrompt } = require("./csf-memory");
+const { recordLifeFact } = require("./csf-memory-writer");
+const { extractFact, categorize, keywordsFromFact } = require("./life-memory");
 const { webSearchMcp, webSearch, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
 const { safeExec } = require("./safe-exec");
 const { selectProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
@@ -656,6 +658,21 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
   console.log("[dreamChatReply] Called with agent:", requestedAgent, "provider:", requestedProvider);
   const text = String(message || "").trim();
   const webSuggestions = generateWebSuggestions(message);
+
+  // Remember-stage hook (#1429): same capture as stream-chat.js — persist a detected
+  // personal-fact statement through the ONE canonical CSF memory. Best-effort, non-blocking.
+  if (text) {
+    try {
+      const fact = extractFact(text);
+      if (fact) {
+        const category = categorize(text);
+        await recordLifeFact({
+          ...fact, category, keywords: keywordsFromFact(fact),
+          rawText: text, surface: "dream-chat",
+        });
+      }
+    } catch (e) { console.error("[life-memory] capture failed (non-fatal):", e.message); }
+  }
 
 
   let agent;
