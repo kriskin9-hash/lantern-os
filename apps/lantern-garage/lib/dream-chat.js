@@ -461,17 +461,40 @@ async function handleConvergenceCommand(recentDreams, agent, rawMessage) {
   const groundQuery = explicitTopic.length >= 3
     ? explicitTopic
     : _deriveConvergenceQuery(recentDreams);
+  // Grounding runs through the research-task loop (lib/research-task.js) rather
+  // than one flat webSearch(): 1-2 rounds of fan-out + gap-driven refinement give
+  // !convergance a better-sourced synthesis than a single query would, and it
+  // leaves a resumable task file behind — `!research continue <id>` can pick up
+  // the same grounding thread later if it wasn't enough. Bounded to 2 rounds so
+  // convergence stays interactive; falls back to a plain webSearch on any error
+  // so a research-task problem never breaks the dream-convergence path.
   let groundingBlock = "";
   let groundingSources = [];
+  let groundingTaskId = null;
   if (groundQuery) {
     try {
-      const search = await webSearch(groundQuery, 5, { retries: 1 });
-      if (search.success && search.results.length) {
-        groundingBlock = "\n\n" + formatGroundingContext(search.results, groundQuery);
-        groundingSources = search.results.slice(0, 5).map((r) => r.url).filter(Boolean);
+      const researchTask = require("./research-task");
+      const task = researchTask.createTask(groundQuery, {});
+      await researchTask.runRound(task);
+      if (task.status === "running") await researchTask.runRound(task);
+      groundingTaskId = task.id;
+      if (task.sources.length) {
+        const asResults = task.sources.map((s) => ({ rank: s.n, title: s.title, url: s.url, snippet: s.snippet }));
+        groundingBlock = "\n\n" + formatGroundingContext(asResults, groundQuery)
+          + `\n\nGrounding synthesis so far:\n${task.latestAnswer}`;
+        groundingSources = task.sources.map((s) => s.url).filter(Boolean);
       }
     } catch (e) {
-      console.error("[convergence] grounding search failed:", e.message);
+      console.error("[convergence] research-task grounding failed, falling back to plain search:", e.message);
+      try {
+        const search = await webSearch(groundQuery, 5, { retries: 1 });
+        if (search.success && search.results.length) {
+          groundingBlock = "\n\n" + formatGroundingContext(search.results, groundQuery);
+          groundingSources = search.results.slice(0, 5).map((r) => r.url).filter(Boolean);
+        }
+      } catch (e2) {
+        console.error("[convergence] fallback grounding search also failed:", e2.message);
+      }
     }
   }
   const grounded = groundingSources.length > 0;
@@ -547,6 +570,7 @@ Be honest. If there's not enough data, say so.`;
         sources: groundingSources,
         grounded,
         grounding_query: groundQuery || null,
+        grounding_task_id: groundingTaskId,
         result: reply,
         fix: null,
         // Grounded syntheses earn higher confidence; ungrounded ones are capped low

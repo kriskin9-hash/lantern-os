@@ -29,13 +29,17 @@ updated: 2026-06-20
 
 #### 1. **Anthropic Claude** ✅
 - **API Key:** `ANTHROPIC_API_KEY` (format: `sk-ant-...`)
-- **Model Var:** `ANTHROPIC_MODEL` (default: `claude-3-5-haiku-20241022`)
+- **Model Var:** `ANTHROPIC_MODEL` (default: `claude-haiku-4-5-20251001`)
 - **State:** ✓ Present (configured)
 - **Get Key:** https://console.anthropic.com/settings/keys
 - **Endpoint:** `api.anthropic.com`
 - **Streaming:** Yes
 - **Use Case:** High-quality reasoning, long-context reasoning
-- **Notes:** Free tier available. Recommended default.
+- **Notes:** Free tier available. Recommended default. The kernel/autowork chain
+  (`PROVIDER_CHAINS.kernel` in `lib/provider-router.js`, mirrored in
+  `routes/providers.js`) uses `claude-sonnet-5` as its Anthropic tier — it's
+  built for sustained, multi-step agentic sessions with self-correction and
+  dynamic replanning, matching the long-running kernel/autowork workload.
 
 #### 2. **OpenAI ChatGPT** ✅
 - **API Key:** `OPENAI_API_KEY` (format: `sk-...`)

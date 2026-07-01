@@ -28,7 +28,7 @@ const { verifyExec } = require("./exec-verify");
 const { assembleSessionContext } = require("./session-summary-store");
 const { formatCSFContextForPrompt, formatCSFContextForPromptAsync, saveDoorChoice } = require("./csf-memory");
 const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
-const { resolveGrounding, formatGroundingForPrompt, gatherProjectContext } = require("./mesh-grounding");
+const { resolveGrounding, formatGroundingForPrompt } = require("./mesh-grounding");
 const { defaultRings } = require("./grounding-rings");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
@@ -153,18 +153,6 @@ function triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMes
     });
   
   return entryId;
-}
-
-// #1693: The grounding canary needs to be precise. Upstream project context (e.g. from
-// `gatherProjectContext`) can contain generic information that isn't directly relevant
-// to the asserted claims in a reply. If this generic context is included in the
-// `anchor` calculation for `scoreReplyGroundedness`, it can artificially boost the
-// score and suppress the ungroundedness canary, even when the reply is truly ungrounded.
-// For now, we temporarily disable its contribution to the `anchor` calculation until a
-// more sophisticated claim-evidence overlap mechanism is implemented.
-function formatGroundingContextForCanary(context) {
-  // Filter out project context for the canary, as per #1693
-  return context.filter(item => item.type !== 'project_context');
 }
 
 /**
@@ -311,7 +299,20 @@ async function handleStreamChat(req, url, res) {
   const logConversation = (entry) => appendConversationEntry({ ...entry, sessionId });
 
   // Handle bang commands
-  const cmd = parseBangCommand(message);
+  let cmd = parseBangCommand(message);
+
+  // Natural-language research intent: Keystone chat shouldn't require knowing the
+  // `!research` bang syntax for a "long-running task, work it until it's done"
+  // ask. A plain "research X" / "look into X" / "investigate X" opener routes
+  // into the exact same persisted, resumable research-task loop (lib/research-task.js)
+  // as the explicit command — same code path, just a friendlier entry point.
+  if (!cmd) {
+    const nlMatch = message.trim().match(
+      /^(?:please\s+|can you\s+|could you\s+)?(?:do (?:a |some )?(?:deep[- ]?)?research on|deep[- ]?research(?:ing)? on|research|look into|investigate|dig into|find out (?:everything |all )?about)\s+(.{3,})/i
+    );
+    if (nlMatch) cmd = { name: "research", args: nlMatch[1].trim() };
+  }
+
   if (cmd) {
     // Three Doors mode
     if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors") {
@@ -453,7 +454,7 @@ async function handleStreamChat(req, url, res) {
         const localFirst = rolloverMode === "default" || process.env.KEYSTONE_LOCAL_FIRST !== "0";
         const providers = localFirst
           ? kernelEscalationChain()
-          : [{ provider, model: kernelModel || "claude-opus-4-8" }];
+          : [{ provider, model: kernelModel || "claude-sonnet-5" }];
 
         const { result, providerUsed, escalations, landedBy, verified } = await runKernelWithEscalation({
           providers,
@@ -628,6 +629,118 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
+    // !research <topic> | !research continue <taskId>: a persisted, resumable
+    // research TASK — not one search, a job that keeps going round after round
+    // (each round targets the gaps the last one left open) until the gap-check
+    // says nothing's left or the round cap is hit. State is saved to
+    // data/research-tasks/<id>.json after every round, so a task that runs long
+    // survives across chat turns (and server restarts): send
+    // `!research continue <taskId>` to keep an unfinished task moving. Built on
+    // lib/wide-search's Observe→Reason→Verify→Converge loop (the same engine
+    // autowork uses to ground issue research). Unlike !search (one query, raw
+    // result list) or the single-shot version of !research, this is the actual
+    // long-running-task pattern: it doesn't stop until the job is done.
+    if (cmd.name === "research" || cmd.name === "deep-research") {
+      const researchTask = require("./research-task");
+      const args = (cmd.args || "").trim() || message.replace(/^!\S+\s*/, "").trim();
+      const continueMatch = args.match(/^continue\s+(\S+)/i);
+
+      let task;
+      if (continueMatch) {
+        task = researchTask.loadTask(continueMatch[1]);
+        if (!task) {
+          res.writeHead(404, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "research_task_not_found", taskId: continueMatch[1] }));
+          return;
+        }
+      } else {
+        if (!args) {
+          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "research_topic_required", message: "Usage: !research <topic>" }));
+          return;
+        }
+        task = researchTask.createTask(args, { sessionId });
+      }
+
+      sse.writeStreamHeaders(res);
+      sse.sendRoute(res, { label: "Research · Σ₀ task loop", agentName: "Keystone", surface: surfaceMode });
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+      const STAGE_LABEL = {
+        expanding: "  Breaking the topic into angled sub-questions…\n",
+        fanning_out: "  Searching the web across every angle…\n",
+        low_pass_start: "  Pruning the source pool for relevance…\n",
+        high_pass_start: "  Synthesizing a grounded, cited answer…\n",
+        gap_check_start: "  Checking what's still missing…\n",
+      };
+      // Rounds run inside THIS request are capped so one HTTP turn can't hang
+      // forever; a task that isn't done after this many rounds is left
+      // "running" and the user is told the resume command. The task keeps its
+      // own MAX_TOTAL_ROUNDS ceiling across however many turns it takes.
+      const ROUNDS_PER_TURN = parseInt(process.env.RESEARCH_ROUNDS_PER_TURN || "3", 10);
+
+      try {
+        sendToken(`🔎 Research task \`${task.id}\`: "${task.topic}"\n`);
+        let ranThisTurn = 0;
+        while (task.status === "running" && ranThisTurn < ROUNDS_PER_TURN) {
+          sendToken(`\n**Round ${task.rounds.length + 1}**${task.gaps.length ? ` — covering: ${task.gaps.join(", ")}` : ""}\n`);
+          await researchTask.runRound(task, (stage, status) => {
+            const label = STAGE_LABEL[status];
+            if (label) sendToken(label);
+          });
+          ranThisTurn++;
+        }
+
+        sendToken(`\n${task.latestAnswer}\n`);
+        if (task.sources && task.sources.length) {
+          sendToken(`\n**Sources (${task.sources.length}):**\n`);
+          for (const s of task.sources) sendToken(`[${s.n}] ${s.title || s.url} — ${s.url}\n`);
+        }
+        sendToken(`\n_Confidence: ${task.confidence}_\n`);
+
+        let recordId = null;
+        if (task.status === "done") {
+          sendToken(`\n✦ Task complete after ${task.rounds.length} round(s).\n`);
+          try {
+            const rec = await emitConvergenceRecord({
+              hypothesis: task.topic.slice(0, 300),
+              result: String(task.latestAnswer).slice(0, 2000),
+              confidence: task.confidence,
+              evidence_ids: task.sources.map((s) => s.url).filter(Boolean),
+              reasoner: "research-task",
+              verified: task.confidence >= 0.5,
+              verification_notes: `Σ₀ research task ${task.id} over ${task.rounds.length} round(s), ${task.sources.length} source(s) kept`,
+              source: `research-task/${task.id}`,
+            });
+            recordId = rec && rec.id;
+          } catch (_e) { /* record emit is best-effort */ }
+          try {
+            await recordConvergance({
+              question: task.topic,
+              answer: task.latestAnswer,
+              confidence: task.confidence,
+              recordId,
+              synthesizer: "research-task",
+              surface: surfaceMode || "chat",
+            });
+          } catch (_e) { /* CSF ingest is best-effort — never break chat */ }
+        } else {
+          sendToken(`\n⧗ Still open (round ${task.rounds.length}/${researchTask.MAX_TOTAL_ROUNDS}, gaps: ${task.gaps.join(", ") || "none flagged"}). Send \`!research continue ${task.id}\` to keep going.\n`);
+        }
+
+        sendDone("keystone", {
+          agent: "Keystone",
+          online: true,
+          routeLabel: "Research · Σ₀ task loop",
+          research: { taskId: task.id, status: task.status, rounds: task.rounds.length, confidence: task.confidence, sources: task.sources.length, recordId },
+        });
+      } catch (err) {
+        sendToken(`\nResearch failed: ${err.message}\n`);
+        sendDone("failed", { agent: "Keystone", online: false, error: err.message });
+      }
+      return;
+    }
+
     if (cmd.name === "converge" || cmd.name === "convergance") {
       // Σ₀ convergence (real, not a length vote): run a multi-provider COUNCIL —
       // creative + critic + a Sonnet synthesizer — then EMIT a Convergence Record so
@@ -641,9 +754,30 @@ async function handleStreamChat(req, url, res) {
         const sendToken = (token) => sse.sendToken(res, token);
         const sendDone = (source, meta) => sse.sendDone(res, source, meta); // ends the response
         sendToken("Σ₀ converging across providers…\n\n");
+        // Ground the council in real sources first (Σ₀ external-reality rule) via
+        // the same research-task loop `!research` and autowork use, bounded to 2
+        // rounds so convergence stays interactive. Best-effort: a failed/slow
+        // research pass degrades to the council's own (ungrounded) synthesis
+        // rather than blocking or erroring the whole !convergance turn.
+        let groundingTaskId = null;
+        let groundedQuestion = question;
+        try {
+          sendToken("Grounding in live sources…\n");
+          const researchTask = require("./research-task");
+          const groundTask = researchTask.createTask(question, { sessionId });
+          await researchTask.runRound(groundTask);
+          if (groundTask.status === "running") await researchTask.runRound(groundTask);
+          groundingTaskId = groundTask.id;
+          if (groundTask.sources.length) {
+            const sourceLines = groundTask.sources.map((s) => `[${s.n}] ${s.title || s.url} — ${s.url}`).join("\n");
+            groundedQuestion = `${question}\n\n--- Research grounding (task ${groundTask.id}) ---\n${groundTask.latestAnswer}\n\nSources:\n${sourceLines}\n--- End grounding ---\n\nUsing the grounding above where relevant, answer the original question.`;
+          }
+        } catch (e) {
+          console.error("[convergance] research-task grounding failed, council proceeds ungrounded:", e.message);
+        }
         const convSystem = "You are a Σ₀ convergence engine. Weigh the perspectives, then give the single most accurate, well-grounded answer — comprehensive, with sources as Markdown links [title](url) when you can. End with exactly one final line: CONFIDENCE: <a number 0-1 for how well-supported the answer is>.";
         try {
-          const result = await swarmOrchestrate({ job: "chat", mode: "council", systemPrompt: convSystem, message: question, history });
+          const result = await swarmOrchestrate({ job: "chat", mode: "council", systemPrompt: convSystem, message: groundedQuestion, history });
           let conf = 0.6;
           const cm = String(result.text).match(/CONFIDENCE:\s*([0-9]*\.?[0-9]+)/i);
           if (cm) conf = Math.max(0, Math.min(1, parseFloat(cm[1])));
@@ -659,7 +793,7 @@ async function handleStreamChat(req, url, res) {
               evidence_ids: members.map((m) => m.provider),
               reasoner: "convergance-council",
               verified: true,
-              verification_notes: `Σ₀ council convergence over ${members.length} member(s) [${members.map((m) => `${m.role}:${m.provider}`).join(", ")}]; synthesizer=${result.provider}/${result.model}` + (dissent.length ? `; dissent: ${dissent.join(" | ")}` : "; dissent: none"),
+              verification_notes: `Σ₀ council convergence over ${members.length} member(s) [${members.map((m) => `${m.role}:${m.provider}`).join(", ")}]; synthesizer=${result.provider}/${result.model}; grounding_task=${groundingTaskId || "none"}` + (dissent.length ? `; dissent: ${dissent.join(" | ")}` : "; dissent: none"),
               source: `council/${result.provider}/${result.model}`,
             });
             recordId = rec && rec.id;
@@ -695,7 +829,7 @@ async function handleStreamChat(req, url, res) {
           // Council unavailable (e.g. no provider keys) — fall back to a single provider
           // so the user still gets an answer. Headers are already SSE, so do NOT fall through.
           try {
-            const fb = await swarmOrchestrate({ job: "chat", mode: "single", systemPrompt: convSystem, message: question, history });
+            const fb = await swarmOrchestrate({ job: "chat", mode: "single", systemPrompt: convSystem, message: groundedQuestion, history });
             const ans = String(fb.text).replace(/\n*CONFIDENCE:\s*[0-9]*\.?[0-9]+\s*$/i, "").trim() || String(fb.text);
             try {
               await recordConvergance({
@@ -1203,6 +1337,9 @@ async function handleStreamChat(req, url, res) {
   // signature when a local model answers — so the auto-swap is visible, not silent.
   // Declared up here because sendDone() (defined next) closes over it.
   let _localModelSwap = null;
+  // #1554: conversation-gate reason (router-gate.js), captured when ROUTER_GATE=1
+  // so sendDone() can surface WHY a turn escalated. Stays null when the gate is off.
+  let _gateReason = null;
 
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
@@ -1225,6 +1362,18 @@ async function handleStreamChat(req, url, res) {
     if ((source === "ollama" || source === "offline") && _localModelSwap) {
       signature.modelSwap = { ..._localModelSwap, served: extra.model || _localModelSwap.lead };
     }
+    // #1554 — capability-gated routing, made observable: surface WHY this turn
+    // routed to this model. primaryProviderHint carries the task classification and
+    // the provider-selection reason; _gateReason adds the conversation-gate note
+    // (ROUTER_GATE=1). The chosen model itself is already in signature.provider/.model
+    // (and .modelSwap for local). Together the UI can show "which model + why".
+    if (primaryProviderHint && (primaryProviderHint.reason || primaryProviderHint.taskType)) {
+      signature.routeReason = {
+        taskType: primaryProviderHint.taskType || null,
+        why: primaryProviderHint.reason || null,
+        gate: _gateReason || null,
+      };
+    }
     // ── Degraded-local indicator (issue #740, narrowed by #1167) ────────────
     // In Auto mode (no explicit provider) the cloud chain (Gemini→Claude→OpenAI→
     // Grok) can silently fall through to the local Ollama model — which ignores
@@ -1240,15 +1389,6 @@ async function handleStreamChat(req, url, res) {
     if (degradedLocal) {
       signature.degraded = true;
       finalRouteLabel = `${routeLabel} · ⚠ degraded — local model (cloud unreachable)`;
-    } else if (isLocalSource && isCodingIntent && !requestedProvider && !isRpMode) {
-      // #1556 [CAP-4]: coding-on-local is the designed fast path (#1167), NOT a
-      // cloud outage — so we don't claim "cloud unreachable". But a local model is
-      // weakest exactly at complex coding, the prime confident-wrong case. Set the
-      // capability expectation so the UI warns instead of passing a possibly
-      // fabricated coding answer off as authoritative. Acceptance: local-only
-      // coding turns warn (and can escalate) rather than fabricate.
-      signature.capability = "local-coding";
-      finalRouteLabel = `${routeLabel} · ⓘ local model — complex coding may be limited; ask to escalate`;
     }
     // Σ₀ verify: fire-and-forget — full grounding via dream-chat.js::verifyResponse
     if (SIGMA0_VERIFY && fullReply && message) {
@@ -1640,6 +1780,7 @@ async function handleStreamChat(req, url, res) {
         const gate = gateDecision([...priorTurns, { role: "user", text: message }]);
         const keywordTaskType = taskType;
         const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        _gateReason = gate.reason;
         if (applied) {
           console.warn(`[router-gate] escalate -> reasoning (${gate.reason})`);
           taskType = "reasoning";

@@ -37,9 +37,19 @@ Scores updated per-run in `data/agi-benchmark.jsonl`.
 
 ### convergence
 The Converge stage as a skill — grounded synthesis + Convergence Records. Backs the `!convergance` chat command.
-- Synthesizes recent entries into ONE insight; grounds forward-looking claims in live web search (Σ₀ external-reality rule)
-- Appends evidence-bearing records to `data/convergence/records.jsonl` (`grounded`, `sources`, honest confidence)
+- Synthesizes recent entries into ONE insight; grounds forward-looking claims via the `research` skill's task loop (1-2 bounded rounds of fan-out + gap-driven refinement — falls back to a single web search on error)
+- Appends evidence-bearing records to `data/convergence/records.jsonl` (`grounded`, `sources`, `grounding_task_id`, honest confidence)
 - `!convergance <topic>` grounds on an explicit topic; `!convergance log an issue <title>` files a GitHub issue (shell-free)
+
+### research *(Σ₀ grounded)*
+Persisted, resumable long-running research tasks — the Remember + Verify stages made durable across chat turns.
+- `!research <topic>` (or plain language: "research X" / "look into X" / "investigate X") starts a TASK, not a single search
+- Each round runs the wide-search Observe→Reason→Verify→Converge loop (fan-out sub-queries, low-fidelity prune, high-fidelity cited synthesis), then a gap-check decides whether another round is warranted
+- State persists to `data/research-tasks/<id>.json` after every round — survives server restarts; `!research continue <id>` resumes an unfinished task from where it left off
+- Bounded by `RESEARCH_TASK_MAX_ROUNDS` (default 8 total) and `RESEARCH_ROUNDS_PER_TURN` (default 3 per HTTP turn)
+- On completion, emits a Convergence Record (`reasoner: "research-task"`) and a CSF memory entry
+- Backs both `!convergance`'s grounding (1-2 bounded rounds) and autowork's issue research (`AUTOWORK_RESEARCH_ROUNDS`, default 2) — one engine, three entry points
+- Implementation: `apps/lantern-garage/lib/research-task.js` (task state) + `lib/wide-search.js` (per-round search loop)
 
 ### dream_journal
 Dream Journal entry creation, management, and RAG-backed search.
@@ -72,7 +82,7 @@ Text-to-speech and audio generation via ElevenLabs/OpenAI.
 ### autonomous_work *(Σ₀ grounded)*
 Fully autonomous issue resolution via `/api/convergence/autonomous-work/stream`.
 - Observe: fetch GitHub issue + extract keywords
-- Research: grep codebase + DuckDuckGo web search
+- Research: grep codebase + the `research` skill's task loop (up to `AUTOWORK_RESEARCH_ROUNDS` rounds, default 2, targeting each round's gaps)
 - Reason: Claude generates JSON plan via `extractJson` (4-strategy fallback)
 - Act: apply unified diff patch to correct `auto/issue-N` branch
 - Verify: run allowlisted test commands

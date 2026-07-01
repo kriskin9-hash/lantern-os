@@ -46,7 +46,7 @@ const PROVIDER_KEY_ALLOWLIST = [
 ];
 
 const PROVIDER_CONFIGS = {
-  anthropic: { key: "ANTHROPIC_API_KEY", model: "claude-opus-4-8" },
+  anthropic: { key: "ANTHROPIC_API_KEY", model: "claude-sonnet-5" },
   openai: { key: "OPENAI_API_KEY", model: "gpt-4o-mini" },
   gemini: { key: "GEMINI_API_KEY", model: "gemini-2.5-flash" },
   mistral: { key: "MISTRAL_API_KEY", model: "mistral-large-latest" },
@@ -121,7 +121,7 @@ function maskValue(val) {
 const PROVIDER_CHAINS = {
   kernel: [
     { provider: "ollama", models: ["keystone-ft", "ouro:latest"] },
-    { provider: "anthropic", models: ["claude-opus-4-8"] },
+    { provider: "anthropic", models: ["claude-sonnet-5"] },
   ],
   coding: [
     { provider: "ollama", models: ["qwen2.5-coder", "deepseek"] },
