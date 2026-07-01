@@ -49,21 +49,18 @@ const tests = {
     const res = await request('/three-doors-game.html');
     assert.strictEqual(res.status, 200, 'Game HTML should return 200');
     assert(res.body.includes('three-doors'), 'HTML should contain game code');
-    assert(res.body.includes('LOCAL_PNG_SCENES'), 'Should have local PNG scene mapping');
-    assert(res.body.includes('SERVER_GENERATED_SCENES'), 'Should have server generation wiring');
   },
 
-  'Local door images exist': async () => {
-    const scenes = [
-      'moss-entry', 'burrow', 'sunken-bell', 'little-crown', 'garden-door',
-      'xenon-convergence', 'end-of-time', 'storybook', 'cloverfield', 'future-doors',
-      'xp-door', 'kingdome-garden', 'sigil-city', 'fog-door-return'
-    ];
-
-    for (const scene of scenes) {
-      const res = await request(`/data/images/three-doors/${scene}.png`);
-      assert(res.status === 200, `${scene}.png should exist (got ${res.status})`);
-    }
+  'Three-doors data has curated + generated image wiring': async () => {
+    // Scene art no longer ships as static local PNGs — every scene resolves
+    // to either curated Kingdome-of-Hearts art on R2 or server generation
+    // (see CURATED_IMAGES / SERVER_GENERATED_SCENES in three-doors-data.js).
+    const res = await request('/js/three-doors-data.js');
+    assert.strictEqual(res.status, 200, 'three-doors-data.js should return 200');
+    assert(res.body.includes('CURATED_IMAGES'), 'Should have curated R2 image mapping');
+    assert(res.body.includes('media.lantern-os.net'), 'Curated images should be hosted on R2');
+    assert(res.body.includes('SERVER_GENERATED_SCENES'), 'Should have server generation wiring');
+    assert(!res.body.includes('LOCAL_PNG_SCENES'), 'Local PNG placeholders should be retired');
   },
 
   'Trading dashboard accessible': async () => {

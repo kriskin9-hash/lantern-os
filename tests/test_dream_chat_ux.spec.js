@@ -106,14 +106,14 @@ async function send(page, text) {
 const lastAgent = (page) => page.locator(".message.agent").last();
 
 test.describe("Dream Chat — page load", () => {
-  test("loads with the unisona.ai title", async ({ page }) => {
+  test("loads with the Keystone OS title", async ({ page }) => {
     await page.goto(PAGE);
-    await expect(page).toHaveTitle(/Dream Chat|unisona/i);
+    await expect(page).toHaveTitle(/Dream Chat|Keystone OS/i);
   });
 
-  test("nav brand reads unisona.ai", async ({ page }) => {
+  test("nav brand reads Keystone OS", async ({ page }) => {
     await page.goto(PAGE);
-    await expect(page.locator(".nav-brand")).toContainText("unisona.ai");
+    await expect(page.locator(".nav-brand")).toContainText("Keystone OS");
   });
 
   test("empty state shows the Keystone Desk welcome", async ({ page }) => {
