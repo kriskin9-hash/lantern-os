@@ -325,10 +325,30 @@ async function handleStreamChat(req, url, res) {
   // into the exact same persisted, resumable research-task loop (lib/research-task.js)
   // as the explicit command — same code path, just a friendlier entry point.
   if (!cmd) {
-    const nlMatch = message.trim().match(
-      /^(?:please\s+|can you\s+|could you\s+)?(?:do (?:a |some )?(?:deep[- ]?)?research on|deep[- ]?research(?:ing)? on|research|look into|investigate|dig into|find out (?:everything |all )?about)\s+(.{3,})/i
+    // Strip conversational openers ("hey", "so", "ok can you...") before matching —
+    // a real person doesn't open with the trigger verb, they lead with a greeting.
+    const stripped = message.trim().replace(
+      /^(?:hey|hi|hello|yo|so|hmm|ok|okay|alright|well)[,!.\s]+/i, ""
     );
-    if (nlMatch) cmd = { name: "research", args: nlMatch[1].trim() };
+    const nlMatch = stripped.match(
+      /^(?:please\s+|can you\s+|could you\s+|would you\s+|i (?:need|want) you to\s+)?(?:do (?:a |some )?(?:deep[- ]?)?research on|deep[- ]?research(?:ing)? on|research|look into|investigate|dig into|find out (?:everything |all )?about)\s+(.{3,})/i
+    );
+    if (nlMatch) {
+      cmd = { name: "research", args: nlMatch[1].trim() };
+    } else if (sessionId) {
+      // Plain continuation ("keep going", "keep digging on that", "continue") —
+      // a real person doesn't remember or paste the task id back. Resume the
+      // most recently-updated still-running research task for THIS session, if
+      // one exists; otherwise fall through to normal chat as usual.
+      const continueMatch = stripped.match(
+        /^(?:yeah\s+|yes\s+|ok\s+|okay\s+|sure\s+)?(?:keep (?:going|digging|researching|looking)(?:\s+on that|\s+into it)?|continue(?:\s+(?:researching|digging|that|it))?|dig deeper|more on that|do (?:another|one more) round)\b/i
+      );
+      if (continueMatch) {
+        const researchTask = require("./research-task");
+        const latest = researchTask.findLatestRunningTask(sessionId);
+        if (latest) cmd = { name: "research", args: `continue ${latest.id}` };
+      }
+    }
   }
 
   if (cmd) {
@@ -2018,7 +2038,12 @@ async function handleStreamChat(req, url, res) {
       const u = new URL(process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434");
       const loopModel = modelChain[0];
       const callLLM = (p, sys) => new Promise((resolve, reject) => {
-        const body = JSON.stringify({ model: loopModel, stream: false, messages: buildProviderMessages(sys, compacted, p) });
+        // #1609: the loop-reasoner local path was the one Ollama call site that
+        // built its body with no `options`, so the served model ran with Ollama's
+        // weak defaults (repeat_last_n=64) and could spiral into mid-generation
+        // repetition. Apply the same anti-repetition decode params as every other
+        // local call site.
+        const body = JSON.stringify({ model: loopModel, stream: false, messages: buildProviderMessages(sys, compacted, p), options: serving.applyOllamaDecodeParams({}) });
         const rq = http.request({ hostname: u.hostname, port: u.port || 11434, path: "/api/chat", method: "POST",
           headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } }, (resp) => {
           let d = ""; resp.on("data", (c) => (d += c));
