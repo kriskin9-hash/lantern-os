@@ -151,7 +151,11 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 
-  // Capture refs directly — avoids getElementById timing race in rAF
+  // Refs are already valid the moment el.innerHTML was set (querySelector
+  // works on a detached subtree) — no need to defer to a paint frame, and
+  // doing so made image loading depend on requestAnimationFrame actually
+  // firing, which browsers throttle or fully suspend in a backgrounded tab.
+  // Kicking off the network request has nothing to do with painting.
   const cvsEl = el.querySelector(`#${canvasId}`);
   const imgEl = el.querySelector(`#${imgId}`);
   const descEl = el.querySelector(`#${descId}`);
@@ -159,52 +163,40 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   // Draw canvas placeholder immediately, then load image by priority:
   // 1. Curated R2 art or server generation (getSceneImageUrl)
   // 2. Pollinations fallback
-  requestAnimationFrame(() => {
-    const cvs = cvsEl;
-    if (cvs) drawScene(cvs, sceneKey);
-    const img = imgEl;
-
-    const url = getSceneImageUrl(sceneKey);
-    if (url && img) {
-      img.onerror = () => loadPollinationsImage(imgId, canvasId, sceneKey);
-      img.onload = () => {
-        if (cvs) cvs.style.display = "none";
-        img.style.display = "";
-        logThreeDoorsEvent("image_load", { sceneKey, source: "curated" });
-      };
-      img.src = url;
-      return;
-    }
-
+  if (cvsEl) drawScene(cvsEl, sceneKey);
+  const imageUrl = getSceneImageUrl(sceneKey);
+  if (imageUrl && imgEl) {
+    imgEl.onerror = () => loadPollinationsImage(imgId, canvasId, sceneKey);
+    imgEl.onload = () => {
+      if (cvsEl) cvsEl.style.display = "none";
+      imgEl.style.display = "";
+      logThreeDoorsEvent("image_load", { sceneKey, source: "curated" });
+    };
+    imgEl.src = imageUrl;
+  } else {
     loadPollinationsImage(imgId, canvasId, sceneKey);
-  });
+  }
 
   // Wire SD prompt copy for both img and canvas
-  requestAnimationFrame(() => {
-    const img = imgEl;
-    const cvs = cvsEl;
-    const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
-
-    if (img) {
-      img.title = sdPrompt;
-      img.style.cursor = "pointer";
-      img.onclick = () => {
-        navigator.clipboard.writeText(sdPrompt).catch(() => {});
-        img.title = "Copied!";
-        setTimeout(() => { img.title = sdPrompt; }, 1500);
-      };
-    }
-
-    if (cvs) {
-      cvs.title = sdPrompt;
-      cvs.style.cursor = "pointer";
-      cvs.onclick = () => {
-        navigator.clipboard.writeText(sdPrompt).catch(() => {});
-        cvs.title = "Copied!";
-        setTimeout(() => { cvs.title = sdPrompt; }, 1500);
-      };
-    }
-  });
+  const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
+  if (imgEl) {
+    imgEl.title = sdPrompt;
+    imgEl.style.cursor = "pointer";
+    imgEl.onclick = () => {
+      navigator.clipboard.writeText(sdPrompt).catch(() => {});
+      imgEl.title = "Copied!";
+      setTimeout(() => { imgEl.title = sdPrompt; }, 1500);
+    };
+  }
+  if (cvsEl) {
+    cvsEl.title = sdPrompt;
+    cvsEl.style.cursor = "pointer";
+    cvsEl.onclick = () => {
+      navigator.clipboard.writeText(sdPrompt).catch(() => {});
+      cvsEl.title = "Copied!";
+      setTimeout(() => { cvsEl.title = sdPrompt; }, 1500);
+    };
+  }
 
   // Async-refresh scene description with LLM-generated variant
   if (descEl) refreshSceneText(sceneKey, descEl);

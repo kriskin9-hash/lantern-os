@@ -380,43 +380,66 @@ const SD_PROMPTS = {
 };
 
 // ── Image Hierarchy ──────────────────────────────────────────────────────
-// Priority: (1) Curated R2 art ⊃ (2) Server generation ⊃ (3) Pollinations fallback
+// Priority: (1) Curated R2 art ⊃ (2) Direct DALL-E/gpt-image-2 generation ⊃ (3) Pollinations fallback
 // No more static local-PNG placeholders — every scene gets either real,
 // hand-picked Kingdome-of-Hearts concept art (hosted on Cloudflare R2; see
 // apps/lantern-garage/public/assets/content/koh/manifest.json for the full
-// gallery) or freshly generated art. Categorized from the manifest by scene
-// theme; scenes without a confident match fall through to generation.
+// 272-image gallery) or freshly generated art. Categorized from the manifest
+// by scene theme; scenes without a confident match fall through to
+// generation. Where more than one image genuinely fits a scene, all of them
+// are listed — a fresh one is picked each visit, so returning to a door
+// doesn't always show the exact same picture.
 const CURATED_IMAGES = {
-  "kingdome-garden": "https://media.lantern-os.net/koh/f926edc9f0.webp",   // "Kingdome of Hearts Door"
-  "garden-door": "https://media.lantern-os.net/koh/f1d0f94a7c.webp",       // "The Garden Door"
-  "xenon-convergence": "https://media.lantern-os.net/koh/bbcf3a24e1.webp", // "Xenon Door"
-  "storybook": "https://media.lantern-os.net/koh/42958cd836.webp",         // "Storybook Door"
-  "future-doors": "https://media.lantern-os.net/koh/89de9ab297.webp",     // "Three Future Paths"
-  "xp-door": "https://media.lantern-os.net/koh/963cffae79.webp",          // "Gage's XP Door"
-  "sigil-city": "https://media.lantern-os.net/koh/bebbfc7e05.webp",       // "City of Doors Csf Refined"
-  "fog-door-return": "https://media.lantern-os.net/koh/bc91274f5a.webp", // "The Fog Door"
-  "raven-tower": "https://media.lantern-os.net/koh/bc7eda8bc4.webp",      // "Raven Door Perfected Style"
+  "kingdome-garden": [
+    "https://media.lantern-os.net/koh/f926edc9f0.webp",  // "Kingdome of Hearts Door"
+    "https://media.lantern-os.net/koh/99233f8be8.webp",  // "Kingdome of Hearts — doors"
+    "https://media.lantern-os.net/koh/9870902655.webp",  // "Kingdome Hall"
+  ],
+  "garden-door": ["https://media.lantern-os.net/koh/f1d0f94a7c.webp"],       // "The Garden Door"
+  "xenon-convergence": ["https://media.lantern-os.net/koh/bbcf3a24e1.webp"], // "Xenon Door"
+  "storybook": [
+    "https://media.lantern-os.net/koh/42958cd836.webp",  // "Storybook Door"
+    "https://media.lantern-os.net/koh/33673494dc.webp",  // "Doors Storybook"
+  ],
+  "future-doors": ["https://media.lantern-os.net/koh/89de9ab297.webp"],     // "Three Future Paths"
+  "xp-door": ["https://media.lantern-os.net/koh/963cffae79.webp"],          // "Gage's XP Door"
+  "sigil-city": [
+    "https://media.lantern-os.net/koh/bebbfc7e05.webp",  // "City of Doors Csf Refined"
+    "https://media.lantern-os.net/koh/aecfd7cfa9.webp",  // "City of Doors Yggdrasil Convergence"
+  ],
+  "fog-door-return": ["https://media.lantern-os.net/koh/bc91274f5a.webp"], // "The Fog Door"
+  "raven-tower": ["https://media.lantern-os.net/koh/bc7eda8bc4.webp"],      // "Raven Door Perfected Style"
+  "ancient-doors": [
+    "https://media.lantern-os.net/koh/6d13b67931.webp",  // "Library of Babylon" — exact canon match
+    "https://media.lantern-os.net/koh/c93b224d23.webp",  // "Grotto Library"
+  ],
 };
 
 // Scenes to generate via /api/image/generate with SD_PROMPTS + OPENAI_API_KEY
-// (legacy Python-subprocess path):
+// (legacy Python-subprocess path — kept around for DEEP_SCENES novelty
+// scoring in three-doors-game.js; image generation itself now goes through
+// DALLE_GENERATED_SCENES' Node path instead, see three-doors-images.js):
 const SERVER_GENERATED_SCENES = new Set([
   "csf-archive", "memory-vault", "convergence-node", "dream-thread",
   "beacon-tower", "choice-archive", "recursion-well", "echo-chamber",
-  "flux-garden", "void-threshold", "ancient-doors", "threshold-rest"
+  "flux-garden", "void-threshold", "threshold-rest"
 ]);
 
 // Scenes with no curated R2 match — generated via the direct Node DALL-E /
 // gpt-image-2 call (POST /api/image/ai-generate, see lib/openai-image.js),
 // with a graceful fallback to Pollinations if OPENAI_API_KEY is unset or the
-// account can't generate (checked in three-doors-images.js):
+// account can't generate (checked in three-doors-images.js). Also used for
+// dynamic doors — a player-named custom door, or any scene reached through
+// novelty routing that isn't in CURATED_IMAGES.
 const DALLE_GENERATED_SCENES = new Set([
   "moss-entry", "burrow", "sunken-bell", "little-crown", "end-of-time", "cloverfield"
 ]);
 
 function getSceneImageUrl(sceneKey) {
-  // First priority: curated Kingdome-of-Hearts concept art on R2
-  if (CURATED_IMAGES[sceneKey]) return CURATED_IMAGES[sceneKey];
+  // First priority: curated Kingdome-of-Hearts concept art on R2 — pick one
+  // at random each visit when a scene has more than one good match.
+  const curated = CURATED_IMAGES[sceneKey];
+  if (curated && curated.length) return curated[Math.floor(Math.random() * curated.length)];
   // DALLE_GENERATED_SCENES and SERVER_GENERATED_SCENES both resolve via the
   // direct Node DALL-E/gpt-image-2 call now (see loadPollinationsImage in
   // three-doors-images.js) — the old GET-style "/api/image/generate" URL
