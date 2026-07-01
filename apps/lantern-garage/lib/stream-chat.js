@@ -1315,6 +1315,9 @@ async function handleStreamChat(req, url, res) {
   // signature when a local model answers — so the auto-swap is visible, not silent.
   // Declared up here because sendDone() (defined next) closes over it.
   let _localModelSwap = null;
+  // #1554: conversation-gate reason (router-gate.js), captured when ROUTER_GATE=1
+  // so sendDone() can surface WHY a turn escalated. Stays null when the gate is off.
+  let _gateReason = null;
 
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
@@ -1336,6 +1339,18 @@ async function handleStreamChat(req, url, res) {
     // lead wasn't serving and the chain fell through.
     if ((source === "ollama" || source === "offline") && _localModelSwap) {
       signature.modelSwap = { ..._localModelSwap, served: extra.model || _localModelSwap.lead };
+    }
+    // #1554 — capability-gated routing, made observable: surface WHY this turn
+    // routed to this model. primaryProviderHint carries the task classification and
+    // the provider-selection reason; _gateReason adds the conversation-gate note
+    // (ROUTER_GATE=1). The chosen model itself is already in signature.provider/.model
+    // (and .modelSwap for local). Together the UI can show "which model + why".
+    if (primaryProviderHint && (primaryProviderHint.reason || primaryProviderHint.taskType)) {
+      signature.routeReason = {
+        taskType: primaryProviderHint.taskType || null,
+        why: primaryProviderHint.reason || null,
+        gate: _gateReason || null,
+      };
     }
     // ── Degraded-local indicator (issue #740, narrowed by #1167) ────────────
     // In Auto mode (no explicit provider) the cloud chain (Gemini→Claude→OpenAI→
@@ -1752,6 +1767,7 @@ async function handleStreamChat(req, url, res) {
         const gate = gateDecision([...priorTurns, { role: "user", text: message }]);
         const keywordTaskType = taskType;
         const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        _gateReason = gate.reason;
         if (applied) {
           console.warn(`[router-gate] escalate -> reasoning (${gate.reason})`);
           taskType = "reasoning";
