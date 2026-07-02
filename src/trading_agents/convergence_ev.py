@@ -45,6 +45,43 @@ def _clamp(x, lo, hi):
     return lo if x < lo else hi if x > hi else x
 
 
+EDGE_SENS = 5.0   # conviction sensitivity: full ±0.5× swing over p_win 0.40↔0.60
+
+
+def edge_risk_multiplier(p_win, target_r=None) -> float:
+    """Edge-proportional risk sizing — a bounded, risk-NEUTRAL conviction scaler
+    on the flat-$ risk.
+
+    The engine risks a flat $ per trade regardless of conviction; the old Kelly
+    path that was meant to vary size is dead (place_order takes a qty_override).
+    This revives the intent: lean in on high-conviction setups, lean out on
+    marginal ones — but *centred on 1.0* so it does not net-inflate risk (a pure
+    half-Kelly saturates the cap for almost every gate-passing p_win at 3R, which
+    would just be a blanket +50%). Sizing is driven by the calibrated hit-rate
+    p_win (target_r already governs the ENTER/SKIP decision in the EV gate):
+
+        mult = clamp(1.0 + EDGE_SENS · (p_win − 0.5), 0.5, 1.5)
+
+    So p_win 0.50 → 1.0× (neutral), 0.60 → 1.5× (cap), 0.40 → 0.5× (floor). Pure
+    (no I/O), unit-tests standalone. Returns 1.0 on bad inputs; `target_r` is a
+    validity guard only (≤0 or non-numeric → neutral 1.0).
+    """
+    try:
+        p = float(p_win)
+    except (TypeError, ValueError):
+        return 1.0
+    if target_r is not None:
+        try:
+            if float(target_r) <= 0:
+                return 1.0
+        except (TypeError, ValueError):
+            return 1.0
+    if not (0.0 < p < 1.0):
+        return 1.0
+    mult = 1.0 + EDGE_SENS * (p - 0.5)
+    return _clamp(round(mult, 3), 0.5, 1.5)
+
+
 def _grade_to_signal(grade):
     return {"A": 1.0, "B": 0.75, "C": 0.6}.get(str(grade or "").upper(), 0.5)
 

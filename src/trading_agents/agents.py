@@ -4784,7 +4784,8 @@ def _detect_1min_pattern_extreme(ticker: str, action: str, entry_price: float = 
 
 
 def calculate_smart_levels(ticker: str, entry_price: float,
-                            action: str, profile: dict) -> dict:
+                            action: str, profile: dict,
+                            risk_multiplier: float = 1.0) -> dict:
     """
     Riley Coleman structural stop + fixed-$-risk sizing + 3R take profit.
 
@@ -4841,6 +4842,21 @@ def calculate_smart_levels(ticker: str, entry_price: float,
         target_risk = 250
     else:
         target_risk = 500
+
+    # Edge-proportional risk: scale the flat $ risk by the Σ₀ conviction (bounded
+    # 0.5×–1.5×). risk_multiplier defaults to 1.0 (unchanged behaviour) and is
+    # only moved by the caller when SIGMA0_EDGE_SIZING is on. Kept inside the VIX
+    # tiers so a high-conviction trade in a calm tape can lean in, a marginal one
+    # in a HIGH-VIX tape leans out.
+    try:
+        _rm = float(risk_multiplier)
+    except (TypeError, ValueError):
+        _rm = 1.0
+    _rm = max(0.5, min(1.5, _rm))
+    if abs(_rm - 1.0) > 1e-9:
+        target_risk = round(target_risk * _rm, 2)
+        log_agent("system", "RILEY",
+            f"{ticker} edge-sizing ×{_rm:.2f} → risk ${target_risk}")
 
     raw_shares = target_risk / stop_distance
     shares = round(raw_shares, 6) if is_crypto(ticker) else math.floor(raw_shares)
@@ -7375,6 +7391,43 @@ def _ev_recent_win_rate(ticker: str):
         return None
 
 
+def _ev_realized_rr(ticker: str):
+    """Realized reward:risk (avg win % / avg |loss %|) for the EV `target_r`.
+
+    The trade actually taken is a 3R structural setup (calculate_smart_levels),
+    but trailing / zone exits usually close winners before 3R — so the *planned*
+    3.0 is optimistic. Feeding the EV the empirically realized win/loss ratio
+    keeps ENTER/SKIP honest and self-limiting: if winners trail out small, the
+    edge shrinks and marginal trades stop qualifying. Last 30 closed trades for
+    the ticker, else portfolio-wide last 40. None (→ caller uses planned 3.0)
+    when there isn't a win AND a loss in a ≥10 sample.
+    """
+    try:
+        con = sqlite3.connect(LESSONS_DB)
+        rows = con.execute(
+            "SELECT pnl_pct FROM trade_history WHERE symbol=? AND status='closed' "
+            "AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 30", (ticker,)).fetchall()
+        if len(rows) < 10:
+            rows = con.execute(
+                "SELECT pnl_pct FROM trade_history WHERE status='closed' "
+                "AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 40").fetchall()
+        con.close()
+        pnls = [r[0] for r in rows if r[0] is not None]
+        wins = [p for p in pnls if p > 0]
+        losses = [abs(p) for p in pnls if p <= 0]
+        if len(pnls) < 10 or not wins or not losses:
+            return None
+        avg_win = sum(wins) / len(wins)
+        avg_loss = sum(losses) / len(losses)
+        if avg_loss <= 0:
+            return None
+        # Clamp to a sane band: never below 0.5R (a real setup risks ~1R) and
+        # never above the planned 3.0R the executor targets.
+        return max(0.5, min(3.0, avg_win / avg_loss))
+    except Exception:
+        return None
+
+
 def _ev_news_sentiment(ticker: str):
     """Directional news sentiment in [-1,+1] for `ticker`, from the SHARED CSF news
     registry (the same Alpaca-backed feed Explore/the trader news panel use):
@@ -7891,7 +7944,11 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         _zone   = (riley.get("zone") or {}).get("nearest_zone") or {}
         _struct = riley.get("structure") or {}
         _pat    = {"PERFECT": "A", "GOOD": "B"}.get(riley.get("entry_quality"))
-        _tr     = abs(float(profile.get("tp", 8)) / float(profile.get("stop", -4) or -4))
+        # target_r must match the trade actually taken. calculate_smart_levels
+        # uses a 3R structural setup, NOT the profile tp/stop percentages the EV
+        # used to read (those never matched execution). Prefer the REALIZED
+        # win/loss ratio (winners trail out before 3R), else the planned 3.0R.
+        _tr     = _ev_realized_rr(ticker) or 3.0
         _dir    = analysis.get("direction", "NEUTRAL")
         # Live evidence (no longer neutral defaults): realized win-rate as the base
         # rate, directional news sentiment from the shared feed, and higher-tf trend
@@ -7937,7 +7994,9 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             "ticker": ticker, "direction": analysis.get("direction"),
             "entry":  round(price, 4),
             "stop":   round(price * (1 + float(profile.get("stop", -4)) / 100.0), 4),
-            "target": round(price * (1 + float(profile.get("tp", 8)) / 100.0), 4),
+            # target is _tr multiples of the stop distance (kept consistent with the
+            # target_r fed to the gate); the executor's structural stop refines it.
+            "target": round(price * (1 + _tr * abs(float(profile.get("stop", -4))) / 100.0), 4),
             "rr":     round(_tr, 2),
         }
         analysis["sigma0"] = _ev
@@ -8598,7 +8657,20 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
     # ── Riley Coleman levels: structural stop, fixed-$-risk sizing, 3R TP ─────
     # Computed BEFORE the order so the share count reflects the actual risk.
     action = decision["action"]
-    levels = calculate_smart_levels(ticker, price, action, profile_override or profile)
+    # Edge-proportional risk (bounded half-Kelly) from the Σ₀ EV conviction.
+    # Default 1.0 (flat risk) unless SIGMA0_EDGE_SIZING is on and this entry has a
+    # scored convergence record — then bet more on high-p_win / high-R setups.
+    _risk_mult = 1.0
+    if os.getenv("SIGMA0_EDGE_SIZING", "1") != "0":
+        _s0 = analysis.get("sigma0") or {}
+        if _s0.get("p_win") is not None:
+            try:
+                from convergence_ev import edge_risk_multiplier as _erm
+                _risk_mult = _erm(_s0.get("p_win"), _s0.get("target_r"))
+            except Exception:
+                _risk_mult = 1.0
+    levels = calculate_smart_levels(ticker, price, action, profile_override or profile,
+                                    risk_multiplier=_risk_mult)
     if levels.get("skip"):
         log_agent("system", "RILEY", f"{ticker} entry skipped — {levels.get('reason')}")
         return {"status": "skipped", "ticker": ticker, "reason": levels.get("reason"),
