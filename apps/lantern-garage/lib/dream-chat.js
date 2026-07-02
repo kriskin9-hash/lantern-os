@@ -716,7 +716,7 @@ async function dreamChatReply(message, recentDreams, requestedAgent = "", reques
     const searchQuery = extractSearchQuery(text);
     if (searchQuery) {
       try {
-        const searchResult = await webSearchMcp(searchQuery, 5);
+        const searchResult = await webSearch(searchQuery, 5);  // native DDG/Wiki — no Python MCP
         if (searchResult.success && searchResult.results) {
           groundingContext = formatGroundingContext(searchResult.results, searchQuery);
         }
@@ -1290,7 +1290,7 @@ async function verifyResponse(draft, userMessage, agentName) {
 
   const fs = require("fs");
   const path = require("path");
-  const { webSearchMcp } = require("./web-search-client");
+  const { webSearch } = require("./web-search-client");
   const { execFile } = require("child_process");
   const execFileAsync = require("util").promisify(execFile);
   // lib/ → lantern-garage/ → apps/ → repo root (THREE levels). Records + the
@@ -1417,7 +1417,7 @@ async function verifyResponse(draft, userMessage, agentName) {
     // 2b: web search via MCP (try to confirm anything not yet codebase-confirmed)
     if (confidence < 0.75) {
       try {
-        const searchResult = await webSearchMcp(`${c.claim} site:github.com OR site:docs.anthropic.com OR developer docs`, 3);
+        const searchResult = await webSearch(`${c.claim} site:github.com OR site:docs.anthropic.com OR developer docs`, 3);  // native — no Python MCP
         if (searchResult?.results?.length) {
           const snippet = searchResult.results[0].snippet || "";
           evidence = `web: ${snippet.slice(0, 120)}`;
