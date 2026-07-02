@@ -1,0 +1,20 @@
+### Fixed — AI trader ran as 3 duplicate instances, churning the Alpaca account
+
+The AI trader is a singleton service (health server on :5555), but nothing enforced that:
+both dual-boot servers (stable :4177 + dev :4178) and autostart each spawned their own
+`python main.py` via `start-ai-trader.js`. Multiple trading loops on the **same Alpaca
+account** placed opposing orders and churned it to death on market-order spread + fees —
+observed 2026-07-02 as rapid BUY→SELL round-trips (AAPL flipped in 3–7s) and a negative day
+P&L with ~$0 realized edge.
+
+Two-layer fix:
+- **Singleton guard** (`scripts/start-ai-trader.js`): `startAITrader()` now checks the trader
+  health port first and refuses to spawn a duplicate if one is already healthy — attaching as
+  a passive monitor instead.
+- **Dev never trades** (`apps/lantern-garage/server-dev.js`): the :4178 dev boot defaults
+  `LANTERN_DISABLE_TRADING=1`, so only stable :4177 owns the real-money trader. Opt back in
+  explicitly with `LANTERN_DISABLE_TRADING=0` (e.g. a paper account).
+
+Live remediation: collapsed the 3 running instances to 1 (single scheduler confirmed in the
+trader log). Existing positions were left untouched — no forced liquidation.
+</content>

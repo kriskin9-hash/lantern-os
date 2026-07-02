@@ -82,7 +82,21 @@ async function waitForHealth(maxAttempts = 30, delayMs = 500) {
   return false;
 }
 
-function startAITrader() {
+async function startAITrader() {
+  // ── Singleton guard ────────────────────────────────────────────────────────
+  // The AI Trader is ONE service (its health server owns AI_TRADER_PORT / 5555).
+  // Both dual-boot servers (stable 4177 + dev 4178) and autostart each run this
+  // manager, so without this guard we spawn 2-3 copies of `python main.py` — and
+  // multiple trading loops on the SAME Alpaca account place opposing orders and
+  // churn the account to death on market-order spread + fees (observed 2026-07-02:
+  // 3 instances, rapid BUY→SELL round-trips, negative day P&L). If a trader is
+  // already healthy, DO NOT spawn a duplicate — attach as a passive monitor.
+  if (await checkHealth()) {
+    log(`✓ AI Trader already healthy on ${AI_TRADER_HOST}:${AI_TRADER_PORT} — NOT spawning a duplicate (singleton guard).`);
+    isHealthy = true;
+    return;
+  }
+
   log(`Starting AI Trader (attempt ${restartCount + 1})...`);
 
   // Pass environment variables to AI Trader
