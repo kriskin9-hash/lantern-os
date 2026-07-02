@@ -40,6 +40,7 @@ class TraderAgent {
     this._pyQueue = [];
     this._pyActive = 0;
     this._pyConcurrency = config.pythonConcurrency || 3;
+    this._scanInFlight = null; // single-flight guard for scanMarket()
   }
 
   _parseWatchlist(envString) {
@@ -109,30 +110,32 @@ class TraderAgent {
       return this.cache[cacheKey].data;
     }
 
-    try {
-      // Scanning the full watchlist (16 tickers, technical analysis per
-      // ticker) regularly takes 45-60s — well beyond the default
-      // pythonTimeout, so give it its own longer budget.
-      const result = await this._callPython('scan_market', {
-        watchlist: this.watchlist
-      }, 90000);
+    // Single-flight: a scan takes 45-90s. Without this, concurrent callers (the dashboard
+    // fires several requests on load, and pollers hit it repeatedly) each spawn their own
+    // 90s `python scan_market` subprocess — they pile up (observed 4+ at once). Collapse
+    // all concurrent callers onto ONE in-flight scan; the cache serves the rest.
+    if (this._scanInFlight) return this._scanInFlight;
 
-      this.cache[cacheKey] = {
-        data: result,
-        time: Date.now()
-      };
-
-      return result;
-    } catch (error) {
-      console.error('[TraderAgent] Market scan failed:', error.message);
-      // Return fallback with empty data
-      return {
-        signals: [],
-        zones: {},
-        timestamp: new Date().toISOString(),
-        error: error.message
-      };
-    }
+    this._scanInFlight = (async () => {
+      try {
+        const result = await this._callPython('scan_market', {
+          watchlist: this.watchlist
+        }, 90000);
+        this.cache[cacheKey] = { data: result, time: Date.now() };
+        return result;
+      } catch (error) {
+        console.error('[TraderAgent] Market scan failed:', error.message);
+        return {
+          signals: [],
+          zones: {},
+          timestamp: new Date().toISOString(),
+          error: error.message
+        };
+      } finally {
+        this._scanInFlight = null;
+      }
+    })();
+    return this._scanInFlight;
   }
 
   /**

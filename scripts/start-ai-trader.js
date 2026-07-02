@@ -15,7 +15,11 @@ const crypto = require('crypto');
 // populated; dotenv won't override existing vars, so this is a no-op there.
 try { require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') }); } catch (_) {}
 
-const AI_TRADER_PATH = process.env.AI_TRADER_PATH || 'C:\\Independant AI Trader';
+// The trader now runs FULLY INTERNALLY from src/trading_agents/orchestrator.py — no
+// external C:\Independant AI Trader dependency. Override AI_TRADER_PATH only to point at a
+// different checkout of the orchestrator package.
+const AI_TRADER_PATH = process.env.AI_TRADER_PATH || path.join(__dirname, '..', 'src', 'trading_agents');
+const AI_TRADER_ENTRY = process.env.AI_TRADER_ENTRY || 'orchestrator.py';
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
 const logsDir = path.join(__dirname, '..', 'logs');
@@ -174,11 +178,12 @@ async function startAITrader() {
     TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID || '',
   };
 
-  aiTraderProcess = spawn('python', ['main.py'], {
+  aiTraderProcess = spawn('python', [AI_TRADER_ENTRY], {
     cwd: AI_TRADER_PATH,
     stdio: ['inherit', 'pipe', 'pipe'],
     detached: false,
-    env: childEnv,
+    // PYTHONPATH so the package's `from agents import ...` etc. resolve regardless of cwd.
+    env: { ...childEnv, PYTHONPATH: AI_TRADER_PATH },
   });
 
   // Log both stdout and stderr
@@ -246,8 +251,8 @@ log(`AI_TRADER_HOST: ${AI_TRADER_HOST}`);
 log(`AI_TRADER_PORT: ${AI_TRADER_PORT}`);
 log('='.repeat(60));
 
-if (!fs.existsSync(path.join(AI_TRADER_PATH, 'main.py'))) {
-  log(`AI_TRADER_PATH has no main.py — this box doesn't have the AI Trader sibling repo. Skipping (set LANTERN_DISABLE_TRADING=1 to silence this manager entirely).`);
+if (!fs.existsSync(path.join(AI_TRADER_PATH, AI_TRADER_ENTRY))) {
+  log(`AI_TRADER_PATH (${AI_TRADER_PATH}) has no ${AI_TRADER_ENTRY} — internal orchestrator missing. Skipping (set LANTERN_DISABLE_TRADING=1 to silence this manager entirely).`);
   process.exit(0);
 }
 

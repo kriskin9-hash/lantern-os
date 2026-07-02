@@ -762,6 +762,28 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET /api/trading/dashboard/news-feed — served INTERNALLY (no external dashboard).
+  // The news collector (lib/news-collector.js, keyless Yahoo RSS) persists to the local
+  // CSF news registry; serve that directly in the {ticker_news, broad_news} shape the
+  // page expects, instead of proxying to the retired external dashboard (:5050) and
+  // relying on the page's CSF fallback. This is why the finance news works with the
+  // trader fully internal.
+  if (url.pathname === '/api/trading/dashboard/news-feed' && req.method === 'GET') {
+    try {
+      const limit = Number(url.searchParams.get('limit')) || 100;
+      const items = tradingNews.queryRecentNews({ limit }).map((r) => ({
+        id: r.news_id, headline: r.headline, source: r.source, url: r.url,
+        published: r.published, date: r.date, symbols: r.symbols || [], impact: r.impact,
+      }));
+      const ticker_news = items.filter((n) => Array.isArray(n.symbols) && n.symbols.length > 0);
+      const broad_news = items.filter((n) => !n.symbols || n.symbols.length === 0);
+      sendJson(res, { ticker_news, broad_news, source: 'internal-csf', count: items.length }, 200);
+    } catch (error) {
+      sendJson(res, { ticker_news: [], broad_news: [], error: error.message }, 200);
+    }
+    return true;
+  }
+
   // ── /trading.html + /trading-news.html dashboard proxy routes ─────────────
   // Legacy/optional — see DASHBOARD_PROXY_ROUTES note above. Not required
   // for trading memory (orders/agent-log/CSF), which is served above.
