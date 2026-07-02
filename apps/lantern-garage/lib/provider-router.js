@@ -53,9 +53,12 @@ const PROVIDER_CHAINS = {
   // Kernel chain (#894): Keystone/Ouro model first; Claude is explicit last-resort.
   // Controlled by KEYSTONE_ROLLOVER_MODE: "shadow"(default/unset)=Claude only (Stage 0,
   // safe); "default"=Keystone/Ouro first, Claude fallback (Stage 1+).
+  // Anthropic tier uses claude-sonnet-5 — Anthropic's mid-tier model built for
+  // long-running, multi-step agentic sessions (self-correction, dynamic
+  // replanning) which is exactly the kernel/autowork escalation workload.
   kernel: [
     { provider: "ollama", models: ["keystone-ft", "ouro:latest"] },
-    { provider: "anthropic", models: ["claude-opus-4-8"] },
+    { provider: "anthropic", models: ["claude-sonnet-5"] },
   ],
 
   // Local model order here is the coarse fallback; lib/local-model-registry.js is
@@ -87,7 +90,7 @@ const PROVIDER_CHAINS = {
     { provider: "mistral", models: ["mistral-large-latest"] },
     { provider: "openai", models: ["gpt-4o"] },
     { provider: "gemini", models: ["gemini-2.5-flash"] },
-    { provider: "cohere", models: ["command-r-plus"] },
+    { provider: "cohere", models: ["command-a-plus-05-2026"] },
     { provider: "ollama", models: ["lantern-csf-dream"] },
   ],
 
@@ -491,7 +494,7 @@ async function selectKernelProvider(requestedProvider = null) {
   }
 
   // Shadow mode (or all kernel providers unhealthy): use Claude.
-  return { provider: "anthropic", model: "claude-opus-4-8", mode };
+  return { provider: "anthropic", model: "claude-sonnet-5", mode };
 }
 
 module.exports = {

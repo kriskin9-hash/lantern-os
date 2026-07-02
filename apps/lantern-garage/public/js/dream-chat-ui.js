@@ -7,7 +7,7 @@
 function persistToolTurn(role, text, meta) {
   if (!text) return;
   try {
-    const sessionId = localStorage.getItem('lantern_chat_session') || null;
+    const sessionId = localStorage.getItem('lantern_chat_session') || null; // #1268
     fetch('/api/conversations', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role, text, surface: 'garage', sessionId, ...(meta ? { meta } : {}) }),
@@ -37,6 +37,10 @@ function renderToolReplay(tool) {
     return `Here are videos for <b>${esc(tool.query || '')}</b>:`
       + `<iframe src="${esc(embed)}" width="100%" height="240" style="border:0;border-radius:8px;margin:6px 0;max-width:480px;display:block" `
       + `allow="encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>`
+      + `<a href="${esc(searchUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a>`;
+  }
+  if (tool.kind === 'xenon-starship-art' && tool.url) {
+    const searchUrl = tool.url; // Assuming tool.url is the direct link to the generated art
       + `<a href="${esc(searchUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a>`;
   }
   if (tool.kind === 'document' && tool.url) {
@@ -766,6 +770,54 @@ function renderAutoworkActions(fin, prUrl, issue, btn, base) {
   fin.appendChild(bar);
 }
 
+// In-chat accept/reject for a pull request being REVIEWED (#1503 follow-up). The
+// `!review #N` / `!prs` flow renders a diff + verdict but, until now, offered no way
+// to act on it — so "review a PR in chat, then accept it in chat" dead-ended at
+// GitHub. This attaches the same Approve / Discard actions the autowork run panel
+// gives a fresh draft PR (POST /api/convergence/pr-action), keyed by PR number, to
+// ANY reviewed PR — closing the work → review → accept loop in one surface. No Rework
+// button here: a bare PR review isn't tied to a known issue/run to re-drive.
+function renderPrReviewActions(container, prNum, base) {
+  if (!container || !prNum) return;
+  if (container.querySelector('.pr-review-actions')) return;   // don't double-render on re-render
+  base = base || ((typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  const prUrl = `https://github.com/alex-place/lantern-os/pull/${prNum}`;
+  const bar = document.createElement('div');
+  bar.className = 'pr-review-actions';
+  bar.style.cssText = 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+  const mk = (label, title, color) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.title = title;
+    b.style.cssText = `font:600 11px var(--font-sans,sans-serif);padding:4px 10px;border-radius:8px;border:1px solid ${color};background:transparent;color:${color};cursor:pointer`;
+    return b;
+  };
+  const approve = mk('✓ Approve & merge', 'Mark ready for review & squash-merge', '#4ade80');
+  const discard = mk('✕ Discard', 'Close the PR & delete its branch', '#f87171');
+  const all = [approve, discard];
+  const setMsg = (txt, color) => {
+    let m = bar.querySelector('.pr-action-msg');
+    if (!m) { m = document.createElement('span'); m.className = 'pr-action-msg'; m.style.cssText = 'font-size:11px;margin-left:4px'; bar.appendChild(m); }
+    m.style.color = color || ''; m.textContent = txt;
+  };
+  async function doAction(action, confirmText) {
+    if (!window.confirm(confirmText)) return;
+    all.forEach(b => b.disabled = true);
+    setMsg('Working…', '');
+    try {
+      const r = await (await fetch(`${base}/api/convergence/pr-action`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pr: prNum, action }),
+      })).json();
+      if (r && r.ok) { setMsg('✓ ' + (r.message || 'Done'), '#4ade80'); approve.remove(); discard.remove(); }
+      else { setMsg('✗ ' + ((r && r.error) || 'Failed'), '#f87171'); all.forEach(b => b.disabled = false); }
+    } catch (e) { setMsg('✗ ' + (e && e.message || 'request failed'), '#f87171'); all.forEach(b => b.disabled = false); }
+  }
+  approve.onclick = () => doAction('approve', `Approve and squash-merge PR #${prNum}?\n\n${prUrl}`);
+  discard.onclick = () => doAction('discard', `Discard (close) PR #${prNum} and delete its branch?\n\n${prUrl}`);
+  all.forEach(b => bar.appendChild(b));
+  container.appendChild(bar);
+}
+
 // `target` is either an issue number (number/numeric string — `!work #N`) or a
 // free-form task object `{ task: "fix the intent handler" }` from the chat
 // "Run as autowork" button. Task mode files a GitHub issue first (server-side),
@@ -853,7 +905,7 @@ async function runAutowork(target, btn, base) {
     const handleEvent = (evName, data) => {
       let d = {};
       try { d = JSON.parse(data); } catch { return; }
-      if (evName === 'run') { awRunId = d.runId; return; }
+      if (evName === 'run') { awRunId = d.runId; AW_LOCAL_RUNS.add(d.runId); return; }
       if (evName === 'step') {
         let extra = '';
         if (d.phase === 'tests' && d.status === 'done') extra = d.passed ? 'passed' : (d.ran ? 'failed' : 'none');
@@ -982,6 +1034,124 @@ async function runAutowork(target, btn, base) {
     if (typeof scrollToBottom === 'function') scrollToBottom();
   }
 }
+
+// ── Background autowork watcher ────────────────────────────────────────────────
+// Autowork is never headless-invisible: runs started OUTSIDE this chat client (the
+// auto-dispatch daemon, CI/fleet POSTs, another tab) are discovered via
+// /api/convergence/autonomous-work/active and get the same live step panel in-chat,
+// driven by polling /autonomous-work/status (which carries the full step history).
+const AW_LOCAL_RUNS = new Set();     // runIds this client started (already have a panel)
+const AW_WATCHED_RUNS = new Set();   // background runIds already given a panel
+
+function attachBackgroundAutoworkPanel(run, base) {
+  hideEmptyState();
+  const messages = document.getElementById('messages');
+  if (!messages) return;
+  ensureAutoworkStyles();
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const srcLabel = run.source === 'auto-dispatch' ? 'Auto-dispatch' : (run.source || 'background');
+  const issue = run.issue;
+  const phases = AUTOWORK_PHASES.filter(([k]) => k !== 'create_issue');
+  const PHASE_INFO = Object.fromEntries(AUTOWORK_PHASES.map((p) => [p[0], { label: p[1], desc: p[2] }]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML =
+    `<div class="msg-label">Keystone · ${esc(srcLabel)} · Autowork #${esc(issue)}</div>`
+    + `<div class="bubble aw-panel">`
+    + `<div class="aw-activity"><img src="/mandala.svg" class="aw-spin" alt=""><div class="aw-act-text"><b>Background autowork on #${esc(issue)}</b> <span>${esc(run.title || 'started by ' + srcLabel.toLowerCase() + ' — attaching live')}</span></div></div>`
+    + `<div class="aw-steps">${phases.map(([k, label, desc]) =>
+        `<div class="aw-step" data-phase="${k}"><div class="aw-ico">○</div><div class="aw-body">`
+        + `<div class="aw-row1"><span class="aw-label">${esc(label)}</span><span class="aw-desc">${esc(desc)}</span><span class="aw-extra"></span></div>`
+        + `<div class="aw-detail" style="display:none"></div></div></div>`).join('')}</div>`
+    + `<div class="aw-final" style="margin-top:8px;font-weight:600"></div>`
+    + `</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+
+  const actImg = row.querySelector('.aw-activity img');
+  const actText = row.querySelector('.aw-act-text');
+  const setActivity = (label, desc, spinning) => {
+    if (actText) actText.innerHTML = '<b>' + esc(label) + '</b>' + (desc ? ' <span>— ' + esc(desc) + '</span>' : '');
+    if (actImg) actImg.classList.toggle('aw-spin', spinning !== false);
+  };
+  const setStep = (phase, status, extra, detail) => {
+    const el = row.querySelector(`.aw-step[data-phase="${phase}"]`);
+    if (!el) return;
+    el.classList.remove('is-active', 'is-done', 'is-error', 'is-retry');
+    const ico = el.querySelector('.aw-ico');
+    ico.style.color = '';
+    if (status === 'start')        { el.classList.add('is-active'); ico.innerHTML = '<img src="/mandala.svg" class="aw-spin" alt="">'; }
+    else if (status === 'done')    { el.classList.add('is-done');  ico.textContent = '✓'; ico.style.color = '#4ade80'; }
+    else if (status === 'error')   { el.classList.add('is-error'); ico.textContent = '✗'; ico.style.color = '#f87171'; }
+    else if (status === 'retry')   { el.classList.add('is-retry'); ico.textContent = '↻'; ico.style.color = '#facc15'; }
+    else if (status === 'skipped') { ico.textContent = '⊘'; ico.style.color = '#facc15'; el.style.opacity = '1'; }
+    if (extra) el.querySelector('.aw-extra').textContent = extra;
+    if (detail) {
+      const det = el.querySelector('.aw-detail');
+      det.textContent = detail;
+      det.style.display = 'block';
+      det.style.color = (status === 'error') ? '#f87171' : (status === 'retry') ? '#facc15' : '';
+    }
+  };
+  const applySteps = (steps) => {
+    for (const s of steps || []) {
+      let extra = '';
+      if (s.phase === 'tests' && s.status === 'done') extra = s.passed ? 'passed' : (s.ran ? 'failed' : 'none');
+      else if (s.phase === 'research' && s.status === 'done') extra = `${s.filesFound || 0} files · ${s.webSourcesFound || 0} web`;
+      else if (s.phase === 'pr' && s.status === 'done') extra = 'PR opened';
+      else if (s.status === 'retry') extra = `retry ${s.attempt || ''}`.trim();
+      setStep(s.phase, s.status, extra, s.detail || s.error);
+      const info = PHASE_INFO[s.phase];
+      if (info && s.status === 'start') setActivity(info.label + '…', info.desc, true);
+    }
+  };
+
+  (async () => {
+    const fin = row.querySelector('.aw-final');
+    for (let i = 0; i < 480; i++) {   // up to ~40 min at 5s — matches the daemon ceiling
+      let s = null;
+      try { s = await (await fetch(`${base}/api/convergence/autonomous-work/status?runId=${encodeURIComponent(run.runId)}`)).json(); } catch (_e) { /* transient */ }
+      if (s && s.found) {
+        applySteps(s.steps);
+        if (s.done) {
+          if (s.succeeded && s.prUrl) {
+            setActivity('Complete', 'background run opened a pull request', false);
+            fin.style.color = '#4ade80';
+            fin.innerHTML = `✓ Auto-worked #${esc(issue)} — <a href="${esc(s.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a>`;
+            renderAutoworkActions(fin, s.prUrl, issue, row.querySelector('.aw-ico'), base);
+          } else {
+            setActivity('Stopped', s.message || 'run ended', false);
+            fin.style.color = '#f87171';
+            fin.textContent = `✗ ${(s.message || ('run ended at ' + (s.latestPhase || 'an unknown step')))}`;
+          }
+          if (typeof scrollToBottom === 'function') scrollToBottom();
+          return;
+        }
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+    setActivity('Detached', 'stopped watching after 40 minutes — check GitHub for the PR', false);
+  })();
+}
+
+function startBackgroundAutoworkWatcher() {
+  const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
+  const poll = async () => {
+    if (document.hidden) return;
+    if (!document.getElementById('messages')) return;
+    let d = null;
+    try { d = await (await fetch(`${base}/api/convergence/autonomous-work/active`)).json(); } catch (_e) { return; }
+    for (const run of (d && d.active) || []) {
+      if (!run.runId || run.source === 'chat') continue;              // chat runs already have a live panel
+      if (AW_LOCAL_RUNS.has(run.runId) || AW_WATCHED_RUNS.has(run.runId)) continue;
+      AW_WATCHED_RUNS.add(run.runId);
+      attachBackgroundAutoworkPanel(run, base);
+    }
+  };
+  setTimeout(poll, 4000);            // shortly after load, then steady cadence
+  setInterval(poll, 20000);
+}
+try { startBackgroundAutoworkWatcher(); } catch (_e) { /* watcher is best-effort */ }
 
 // ── Image requests ─────────────────────────────────────────────────────────────
 // Detect when the user is asking for a picture and return the subject prompt, else
@@ -1840,6 +2010,7 @@ async function sendMessage(opts = {}) {
   let doneIntent = '';      // routed intent (coding_change, trading, …) — drives the autowork suggestion
   let doneModel = '';       // actual model id from the PCSF receipt (e.g. claude-haiku-4-5)
   let doneModelSwap = null; // capability-gated local-model swap decision (which local model led + why)
+  let doneRouteReason = null; // #1554: why this turn routed here (taskType + provider-selection reason + gate)
   let doneTimestamp = '';   // receipt generatedAt — the signature timestamp
   let doneOnline = true;    // false when no model answered (offline path)
   // #930: coalesce per-token DOM writes into one render per animation frame instead
@@ -1862,6 +2033,9 @@ async function sendMessage(opts = {}) {
   const toolResults = [];  // <tool_call> events arrive mid-stream; re-applied after the final render (which rebuilds the cards empty)
   const nativeToolCalls = [];  // cloud-model (Claude/OpenAI/Gemini) tool *calls* — they emit no <tool_call> text, so we synthesize the cards at finalize
   const requestedProvider = document.getElementById('provider-select')?.value || '';
+  // Model pin (#1127): only meaningful alongside a pinned provider; the server
+  // re-validates against its allowlist, so this is a preference, not authority.
+  const requestedModel = requestedProvider ? (document.getElementById('model-select')?.value || '') : '';
 
   try {
     const provider = requestedProvider;
@@ -1881,6 +2055,7 @@ async function sendMessage(opts = {}) {
         message: text,
         user: 'dream-chat',
         provider,
+        model: requestedModel || undefined,
         attachments: sentAttachments,
         history: history.slice(-10),
         personalContext: sanitizePersonalContext(personalContext || {}),
@@ -1960,6 +2135,7 @@ async function sendMessage(opts = {}) {
             doneIntent = evt.intent || (evt.receipt && evt.receipt.intent) || '';
             doneModel = evt.model || (evt.receipt && evt.receipt.model) || '';
             doneModelSwap = evt.modelSwap || null;
+            doneRouteReason = evt.routeReason || (evt.receipt && evt.receipt.routeReason) || null;
             doneTimestamp = evt.timestamp || (evt.receipt && evt.receipt.generatedAt) || '';
             doneOnline = evt.online !== false;
             if (Array.isArray(evt.actions) && evt.actions.length) doneActions = evt.actions;
@@ -2186,6 +2362,15 @@ async function sendMessage(opts = {}) {
     }
   }
 
+  // In-chat PR review (#1503 follow-up): when this turn was a `!review #N` (the server
+  // tags the done event source "review"), attach Approve / Discard so the user can
+  // accept or reject the reviewed PR without leaving chat — closing the
+  // work → review → accept loop in one surface. PR number comes from the sent text.
+  if (doneProvider === 'review' && !didError) {
+    const _prm = String(text || '').match(/#?(\d+)/);
+    if (_prm) renderPrReviewActions(bubble, parseInt(_prm[1], 10), (typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  }
+
   // Signature line: always show a human-readable label + time. Raw provider/model id
   // goes in a collapsed <details> so curious users can inspect it without it cluttering
   // every reply for normal users. (#1141)
@@ -2220,18 +2405,34 @@ async function sendMessage(opts = {}) {
         const cand = Array.isArray(doneModelSwap.candidates) ? doneModelSwap.candidates.join(' → ') : '';
         swapDebug = `<div style="margin-top:2px">swap: ${_e(doneModelSwap.reason || '')}${cand ? ' · chain: ' + _e(cand) : ''}</div>`;
       }
+      // #1554 — capability-gated routing, observable: assemble WHY this turn routed
+      // to this model (server routeReason = task classification + provider-selection
+      // reason + optional conversation-gate note). Surfaced as a hover tooltip on the
+      // signature label and expanded in the route disclosure below.
+      const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      let routeReasonText = '';
+      if (doneRouteReason && (doneRouteReason.why || doneRouteReason.taskType)) {
+        const rp = [];
+        if (doneRouteReason.taskType) rp.push(doneRouteReason.taskType);
+        if (doneRouteReason.why) rp.push(doneRouteReason.why);
+        if (doneRouteReason.gate) rp.push('gate: ' + doneRouteReason.gate);
+        routeReasonText = rp.join(' · ');
+      }
+      const routeTitle = routeReasonText ? ` title="routed: ${esc(routeReasonText)}"` : '';
+      const routeDebug = routeReasonText ? `<div style="margin-top:2px">route: ${esc(routeReasonText)}</div>` : '';
       if (pm) {
-        // Wrap provider/model in a disclosure so it's accessible but not noisy.
+        // Wrap provider/model + route reason in a disclosure so it's accessible but
+        // not noisy; the visible label carries the reason as a hover tooltip (#1554).
         sig.innerHTML =
-          `<span>${visibleText}${swapChip}</span>` +
+          `<span${routeTitle}>${visibleText}${swapChip}</span>` +
           `<details class="sig-debug" style="display:inline-block;margin-left:6px">` +
-          `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none" aria-label="Debug details">▸ debug</summary>` +
-          `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${pm}${swapDebug}</span>` +
+          `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none" aria-label="Route and model details">▸ route</summary>` +
+          `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${pm}${swapDebug}${routeDebug}</span>` +
           `</details>`;
-        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}; model: ${pm}` + (swapTitle ? `; ${swapTitle}` : ''));
+        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}; model: ${pm}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
       } else {
-        sig.innerHTML = `<span>${visibleText}${swapChip}</span>`;
-        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}` + (swapTitle ? `; ${swapTitle}` : ''));
+        sig.innerHTML = `<span${routeTitle}>${visibleText}${swapChip}</span>`;
+        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
       }
     }
     msg.appendChild(sig);
@@ -2439,7 +2640,6 @@ document.getElementById('input').addEventListener('input', e => {
       // Try to set the selected provider
       if (select.querySelector(`option[value="${provider}"]`)) {
         select.value = provider;
-        console.log(`[dream-chat] Provider set to: ${provider}`);
       } else if (provider !== 'auto') {
         // Provider not available; log but don't break
         console.warn(`[dream-chat] Requested provider '${provider}' not available, using router default`);
@@ -2448,6 +2648,57 @@ document.getElementById('input').addEventListener('input', e => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     }
   } catch (e) { /* no-op */ }
+})();
+
+// ── Model dropdown (#1127 work item 1) ──────────────────────────────────────
+// Follows the provider selection: cloud providers with server-listed choices show
+// a Model select (default = the server's effective modelFor() resolution); Auto,
+// local and keystone-ft hide it. Selection persists per provider in localStorage.
+(function wireModelSelect() {
+  const providerSel = document.getElementById('provider-select');
+  const modelSel = document.getElementById('model-select');
+  const group = document.getElementById('model-select-group');
+  if (!providerSel || !modelSel || !group) return;
+  let catalog = null; // { claude: {default, options:[{id,label}]}, ... }
+
+  function storeKey(p) { return `lantern_model_pin_${p}`; }
+
+  function render() {
+    const p = providerSel.value;
+    const entry = catalog && p ? catalog[p] : null;
+    if (!entry || !entry.options || !entry.options.length) {
+      group.style.display = 'none';
+      modelSel.innerHTML = '<option value="">Default</option>';
+      return;
+    }
+    const saved = localStorage.getItem(storeKey(p)) || '';
+    modelSel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = `Default (${entry.default})`;
+    modelSel.appendChild(def);
+    for (const m of entry.options) {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.label || m.id;
+      if (m.id === saved) o.selected = true;
+      modelSel.appendChild(o);
+    }
+    group.style.display = '';
+  }
+
+  modelSel.addEventListener('change', () => {
+    const p = providerSel.value;
+    if (!p) return;
+    if (modelSel.value) localStorage.setItem(storeKey(p), modelSel.value);
+    else localStorage.removeItem(storeKey(p));
+  });
+  providerSel.addEventListener('change', render);
+
+  fetch('/api/providers/models')
+    .then(r => (r.ok ? r.json() : null))
+    .then(data => { catalog = (data && data.providers) || null; render(); })
+    .catch(() => { /* endpoint absent → dropdown stays hidden */ });
 })();
 
 // ── Observer side panel ───────────────────────────────────────────────────────

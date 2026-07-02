@@ -231,22 +231,32 @@ async function researchIssue(o) {
   if (web && keywords.length) {
     if (wide) {
       try {
-        // Lazy require — wide-search requires THIS module for extractKeywords, so a
-        // top-level require here would be a cycle.
-        const { wideSearch } = require("./wide-search");
+        // Lazy require — research-task -> wide-search -> THIS module for
+        // extractKeywords, so a top-level require here would be a cycle.
+        const researchTask = require("./research-task");
         const wq = (issueTitle || keywords.slice(0, 6).join(" ")).slice(0, 200);
-        const r = await _withDeadline(wideSearch({
-          query: wq,
-          breadth: 5,
-          perQuery: 3,
-          // Forward each wide-search sub-step under the research phase so the run log
-          // and any SSE caller see the fan-out / low-pass / high-pass ladder.
-          onStep: (stage, status, extra) => emit("research", `wide_${stage}_${status}`, extra),
-        }), WEB_PHASE_TIMEOUT, "wide web search");
-        webEvidence = (r.sources || []).slice(0, 5).map((s) => ({ title: s.title, url: s.url, snippet: s.snippet }));
-        webSummary = r.answer || null;
-        webConfidence = r.confidence != null ? r.confidence : null;
-        emit("research", "web_search", { mode: "wide", query: wq, results: webEvidence.length, confidence: webConfidence, sources: webEvidence.map((w) => w.url) });
+        // A persisted research TASK (not one wideSearch() pass): up to
+        // AUTOWORK_RESEARCH_ROUNDS rounds (default 2), each targeting the gaps the
+        // last round left open, so issues that need real investigation get more
+        // than a single-query skim before the model patches blind. Bounded well
+        // under WEB_PHASE_TIMEOUT so a stuck round degrades to whatever evidence
+        // was already gathered rather than blocking the whole autowork run.
+        const maxRounds = Math.max(1, Math.min(4, parseInt(process.env.AUTOWORK_RESEARCH_ROUNDS || "2", 10)));
+        const task = researchTask.createTask(wq, { sessionId: `autowork-issue-${issueNumber}` });
+        await _withDeadline((async () => {
+          let ran = 0;
+          while (task.status === "running" && ran < maxRounds) {
+            await researchTask.runRound(task, (stage, status, extra) => emit("research", `wide_${stage}_${status}`, extra));
+            ran++;
+          }
+        })(), WEB_PHASE_TIMEOUT, "research-task web search");
+        webEvidence = (task.sources || []).slice(0, 5).map((s) => ({ title: s.title, url: s.url, snippet: s.snippet }));
+        webSummary = task.latestAnswer || null;
+        webConfidence = task.confidence != null ? task.confidence : null;
+        emit("research", "web_search", {
+          mode: "wide", query: wq, results: webEvidence.length, confidence: webConfidence,
+          sources: webEvidence.map((w) => w.url), taskId: task.id, rounds: task.rounds.length, taskStatus: task.status,
+        });
       } catch (e) {
         emit("research", "web_search", { mode: "wide", skipped: true, reason: e.message });
       }

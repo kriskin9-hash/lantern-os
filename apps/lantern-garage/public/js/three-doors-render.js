@@ -64,6 +64,36 @@ function drawScene(canvas, sceneKey) {
   ctx.textAlign = "left";
 }
 
+// ── Door chip rendering (shared by initial render + runtime door swaps) ──
+function doorChipsHTML(doors) {
+  return doors.map(d => `
+    <button class="door-chip" onclick="chooseDoor('${d.label}', '${(d.name || "").replace(/'/g, "\\'")}')">
+      <div class="door-letter">${d.label}</div>
+      <div class="door-info">
+        <div class="door-name">${d.name}</div>
+        <div class="door-desc">${d.description || ""}</div>
+      </div>
+    </button>`).join("");
+}
+
+// Swap a scene message's doors (and the quick-pick bar) for a new set —
+// used when the narrator generates runtime doors. Keeps gameState in sync so
+// engineChoose can resolve the new labels/names.
+function applyDoors(msgEl, doors) {
+  if (!doors || doors.length !== 3) return;
+  const banner = msgEl.querySelector(".doors-banner");
+  if (banner) banner.innerHTML = doorChipsHTML(doors);
+  const picks = document.getElementById("door-quick-picks");
+  if (picks) {
+    picks.innerHTML = doors.map(d => `
+      <button class="door-pick" onclick="chooseDoor('${d.label}','${(d.name || "").replace(/'/g,"\\'")}')">
+        <span class="door-letter">${d.label}</span>
+        <div class="door-pick-name">${d.name}</div>
+      </button>`).join("");
+  }
+  if (gameState) gameState.doors = doors;
+}
+
 // ── Scene message rendering ───────────────────────────────────────
 function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   removeTyping();
@@ -79,18 +109,14 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     saveProgress();
   }
 
-  // Check challenges
-  checkChallenges(sceneKey, history.length);
+  // Check challenges — the visit counter is skipped on a mere resume/redraw
+  // (e.g. a page reload) since that doesn't represent a new visit; the
+  // challenge checks themselves still run (idempotent).
+  checkChallenges(sceneKey, history.length, !sceneData.resumed);
 
   const chat = document.getElementById("chat");
   const el = document.createElement("div");
   el.className = "message agent doors-message";
-
-  const sourceBadge = source === "local"
-    ? `<span class="source-badge gemini">Local LLM</span>`
-    : source === "engine"
-    ? `<span class="source-badge engine">Engine</span>`
-    : `<span class="source-badge offline">Offline</span>`;
 
   // Scene art
   const canvasId = "cvs-" + sceneKey + "-" + Date.now();
@@ -105,168 +131,119 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
   // Display text: local LLM narration if available, else scene engine text
   const displayText = geminiText || (sceneData.text || scene.text || "");
 
-  // Poem gate: intercept kingdome-garden if not yet solved
-  const poemSolved = playerProgress.poemSolved;
-  const isPoemScene = sceneKey === "kingdome-garden" && !poemSolved;
+  // The King's riddle is told once, inline, as part of the scene's own
+  // narration (see the kingdome-garden text in three-doors-data.js) — it
+  // used to also gate a separate Q&A panel that repeated the same lines
+  // a second time. Doors are always shown; no gate, no duplicate.
+  const doorHTML = `
+      <div class="doors-section">
+        <div class="doors-kicker">A, B, or C — choose your door</div>
+        <div class="doors-banner">${doorChipsHTML(doors)}</div>
+      </div>`;
 
-  let doorHTML = "";
-  if (isPoemScene) {
-    doorHTML = `
-      <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px">The King asks:</div>
-        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;font-style:italic">
-          I am before the first door and after the last.<br>
-          I hold what was given and return what was asked.<br>
-          Three walked out, three walked in, but only one remained —<br>
-          what was lost at the beginning is the thing that was gained.
-        </div>
-        <input id="poem-answer" type="text" placeholder="Speak your answer..." style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;margin-bottom:8px" onkeydown="if(event.key==='Enter')submitPoem()">
-        <button onclick="submitPoem()" style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:6px">Answer the King</button>
-        <button onclick="skipPoem()" style="width:100%;padding:8px;background:none;border:1px solid var(--border);border-radius:8px;font-family:inherit;font-size:12px;color:var(--muted);cursor:pointer">Skip — just show me the doors</button>
-      </div>`;
-  } else {
-    doorHTML = `
-      <div style="margin-top:12px">
-        <div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:0.03em">Choose a door to continue</div>
-        <div class="doors-banner">
-          ${doors.map(d => `
-            <button class="door-chip" onclick="chooseDoor('${d.label}', '${d.name.replace(/'/g, "\\'")}')">
-              <div class="door-letter">${d.label}</div>
-              <div class="door-info">
-                <div class="door-name">${d.name}</div>
-                <div class="door-desc">${d.description}</div>
-              </div>
-            </button>`).join("")}
-        </div>
-      </div>`;
-  }
+  // One-line caption naming the moment (the skill's turn contract: the
+  // painting is the scene; the caption names the beat).
+  const lastChoice = (history.filter(h => h.startsWith("Chose ")).slice(-1)[0] || "").replace("Chose ", "");
+  const sceneTitle = (scene.text || sceneData.text || "").match(/\*\*([^*]+)\*\*/)?.[1] || sceneKey.replace(/-/g, " ");
+  const caption = lastChoice ? `${sceneTitle} — through ${lastChoice}` : sceneTitle;
+
+  // Lantern's line: on resume it says what it always says, and means it.
+  const lanternLine = sceneData.resumed
+    ? `<div class="fox-line">🏮 <em>"You came back."</em></div>`
+    : foxPresent ? `<div class="fox-line">🏮 Lantern, your guide, is with you.</div>` : "";
+
+  // Opening beat only: introduce the companions in Alex's hand-drawn canon.
+  const castStrip = sceneKey === "castle-balcony" && !sceneData.resumed
+    ? `<div class="cast-strip" aria-label="The companions, as Alex draws them">
+        <figure><img src="/assets/content/koh/reference-lantern-t.webp" alt="Lantern"><figcaption>Lantern</figcaption></figure>
+        <figure><img src="/assets/content/koh/reference-eclipse-t.webp" alt="Eclipse"><figcaption>Eclipse</figcaption></figure>
+        <figure><img src="/assets/content/koh/reference-keystone-t.webp" alt="Keystone"><figcaption>Keystone</figcaption></figure>
+        <figure><img src="/assets/content/koh/reference-blinkbug-t.webp" alt="Blinkbug"><figcaption>Blinkbug</figcaption></figure>
+      </div>`
+    : "";
+
+  // Sigil — City of Doors: every threshold made visible. Show the doors the
+  // player has actually walked (built from playerProgress.walkedDoors).
+  const walkedPaths = sceneKey === "sigil-city" && typeof buildWalkedPathsHTML === "function"
+    ? buildWalkedPathsHTML()
+    : "";
 
   el.innerHTML = `
-    <div class="agent-avatar mandala-avatar">
-      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:44px;height:44px;display:block">
-        <!-- Outer ring -->
-        <circle cx="50" cy="50" r="48" fill="none" stroke="var(--accent)" stroke-width="1" opacity="0.4"/>
-        <circle cx="50" cy="50" r="40" fill="none" stroke="var(--accent)" stroke-width="0.8" opacity="0.3"/>
-        <!-- 12-pointed petals -->
-        <g stroke="var(--accent)" stroke-width="1.2" fill="none" opacity="0.7">
-          <path d="M50,10 Q45,25 50,35 Q55,25 50,10" />
-          <path d="M70,20 Q60,28 55,38 Q65,32 70,20" />
-          <path d="M85,35 Q72,40 62,45 Q75,42 85,35" />
-          <path d="M90,50 Q75,50 65,50 Q80,50 90,50" />
-          <path d="M85,65 Q72,60 62,55 Q75,58 85,65" />
-          <path d="M70,80 Q60,72 55,62 Q65,68 70,80" />
-          <path d="M50,90 Q45,75 50,65 Q55,75 50,90" />
-          <path d="M30,80 Q40,72 45,62 Q35,68 30,80" />
-          <path d="M15,65 Q28,60 38,55 Q25,58 15,65" />
-          <path d="M10,50 Q25,50 35,50 Q20,50 10,50" />
-          <path d="M15,35 Q28,40 38,45 Q25,42 15,35" />
-          <path d="M30,20 Q40,28 45,38 Q35,32 30,20" />
-        </g>
-        <!-- Inner hexagram -->
-        <g fill="var(--accent)" opacity="0.8">
-          <circle cx="50" cy="50" r="3"/>
-          <circle cx="50" cy="35" r="1.5"/>
-          <circle cx="60" cy="43" r="1.5"/>
-          <circle cx="60" cy="57" r="1.5"/>
-          <circle cx="50" cy="65" r="1.5"/>
-          <circle cx="40" cy="57" r="1.5"/>
-          <circle cx="40" cy="43" r="1.5"/>
-        </g>
-      </svg>
-    </div>
     <div class="message-content">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:4px">
-        Keystone ${sourceBadge}
-      </div>
       ${breadcrumb}
       <div class="scene-image">
         <img id="${imgId}" alt="Scene art" style="display:none"
           onload="this.style.display='';document.getElementById('${canvasId}').style.display='none';logThreeDoorsEvent('image_load', { sceneKey: '${sceneKey}', source: 'image' })">
         <canvas id="${canvasId}" width="800" height="450"></canvas>
-        <div class="sd-badge">SD prompt — hover to copy</div>
       </div>
-      <div id="${descId}" style="font-size:14px;line-height:1.6;margin-bottom:10px">${md(displayText)}</div>
-      ${foxPresent ? `<div class="fox-line">🏮 Keystone, your guide, is with you.</div>` : ""}
+      <div class="scene-caption">${caption}</div>
+      <div id="${descId}" class="scene-narration">${md(displayText)}</div>
+      ${lanternLine}
+      ${castStrip}
+      ${walkedPaths}
       ${doorHTML}
     </div>`;
+
+  // The newest scene is the current page of the story; earlier ones recede
+  // so scrolling back reads like flipping back through a journal, not an
+  // endless feed of equally-weighted chat turns.
+  chat.querySelectorAll(".doors-message").forEach(prior => prior.classList.add("is-past"));
 
   chat.appendChild(el);
   chat.scrollTop = chat.scrollHeight;
 
-  // Capture refs directly — avoids getElementById timing race in rAF
+  // Refs are already valid the moment el.innerHTML was set (querySelector
+  // works on a detached subtree) — no need to defer to a paint frame, and
+  // doing so made image loading depend on requestAnimationFrame actually
+  // firing, which browsers throttle or fully suspend in a backgrounded tab.
+  // Kicking off the network request has nothing to do with painting.
   const cvsEl = el.querySelector(`#${canvasId}`);
   const imgEl = el.querySelector(`#${imgId}`);
   const descEl = el.querySelector(`#${descId}`);
 
   // Draw canvas placeholder immediately, then load image by priority:
-  // 1. CAAD local pool (THREE_DOORS_IMAGE_POOL_DIR) or repo caadi/
-  // 2. Dedicated three-doors PNG (LOCAL_PNG_SCENES)
-  // 3. Pollinations / server generation
-  requestAnimationFrame(async () => {
-    const cvs = cvsEl;
-    if (cvs) drawScene(cvs, sceneKey);
-    const img = imgEl;
-
-    // Priority 1: CAAD pool (server picks from local pool or caadi/, lore-aware)
-    try {
-      const r = await fetch(`/api/three-doors/image-pool/random?sceneKey=${encodeURIComponent(sceneKey)}`);
-      if (r.ok) {
-        const d = await r.json();
-        if (d.ok && d.url && img) {
-          img.onerror = () => tryLocalThenPollinations(imgId, canvasId, sceneKey);
-          img.onload = () => {
-            if (cvs) cvs.style.display = "none";
-            img.style.display = "";
-            logThreeDoorsEvent("image_load", { sceneKey, source: `pool:${d.source}`, reason: d.reason });
-          };
-          img.src = d.url;
-          return;
-        }
-      }
-    } catch { /* fall through to local PNGs */ }
-
-    tryLocalThenPollinations(imgId, canvasId, sceneKey);
-  });
-
-  function tryLocalThenPollinations(iId, cId, sk) {
-    const i = document.getElementById(iId);
-    if (LOCAL_PNG_SCENES.has(sk) && i) {
-      i.onerror = () => loadPollinationsImage(iId, cId, sk);
-      i.src = getSceneImageUrl(sk);
-      return;
-    }
-    loadPollinationsImage(iId, cId, sk);
+  // 1. Curated R2 art or server generation (getSceneImageUrl)
+  // 2. Pollinations fallback
+  if (cvsEl) drawScene(cvsEl, sceneKey);
+  const imageUrl = getSceneImageUrl(sceneKey);
+  if (imageUrl && imgEl) {
+    imgEl.onerror = () => loadPollinationsImage(imgId, canvasId, sceneKey);
+    imgEl.onload = () => {
+      if (cvsEl) cvsEl.style.display = "none";
+      imgEl.style.display = "";
+      window.__sceneArt = { sceneKey, prompt: sceneData.image_prompt || SD_PROMPTS[sceneKey] || (scene.text || "").slice(0, 200), url: imageUrl };
+      logThreeDoorsEvent("image_load", { sceneKey, source: "curated" });
+    };
+    imgEl.src = imageUrl;
+  } else {
+    loadPollinationsImage(imgId, canvasId, sceneKey);
   }
 
   // Wire SD prompt copy for both img and canvas
-  requestAnimationFrame(() => {
-    const img = imgEl;
-    const cvs = cvsEl;
-    const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
+  const sdPrompt = sceneData.image_prompt || SD_PROMPTS[sceneKey] || "";
+  if (imgEl) {
+    imgEl.title = sdPrompt;
+    imgEl.style.cursor = "pointer";
+    imgEl.onclick = () => {
+      navigator.clipboard.writeText(sdPrompt).catch(() => {});
+      imgEl.title = "Copied!";
+      setTimeout(() => { imgEl.title = sdPrompt; }, 1500);
+    };
+  }
+  if (cvsEl) {
+    cvsEl.title = sdPrompt;
+    cvsEl.style.cursor = "pointer";
+    cvsEl.onclick = () => {
+      navigator.clipboard.writeText(sdPrompt).catch(() => {});
+      cvsEl.title = "Copied!";
+      setTimeout(() => { cvsEl.title = sdPrompt; }, 1500);
+    };
+  }
 
-    if (img) {
-      img.title = sdPrompt;
-      img.style.cursor = "pointer";
-      img.onclick = () => {
-        navigator.clipboard.writeText(sdPrompt).catch(() => {});
-        img.title = "Copied!";
-        setTimeout(() => { img.title = sdPrompt; }, 1500);
-      };
-    }
-
-    if (cvs) {
-      cvs.title = sdPrompt;
-      cvs.style.cursor = "pointer";
-      cvs.onclick = () => {
-        navigator.clipboard.writeText(sdPrompt).catch(() => {});
-        cvs.title = "Copied!";
-        setTimeout(() => { cvs.title = sdPrompt; }, 1500);
-      };
-    }
-  });
-
-  // Async-refresh scene description with LLM-generated variant
-  if (descEl) refreshSceneText(sceneKey, descEl);
+  // Async-enrich: narration grounded on the painting + play context, and
+  // runtime-generated doors (existing or new-with-metadata). Engine content
+  // renders first and stays if enrichment fails or times out.
+  if (descEl) enrichScene(sceneKey, descEl, el);
 
   // Show choice bar with labelled quick-picks + custom input
   const bar = document.getElementById("choice-bar");
@@ -277,12 +254,9 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     if (input) { input.value = ""; input.disabled = false; }
     if (picks) {
       picks.innerHTML = doors.map(d => `
-        <button onclick="chooseDoor('${d.label}','${d.name.replace(/'/g,"\\'")}')"
-          style="flex:1;padding:8px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color 0.15s,background 0.15s;min-width:0"
-          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--surface)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--surface2)'">
-          <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:2px">${d.label}</div>
-          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.name}</div>
+        <button class="door-pick" onclick="chooseDoor('${d.label}','${d.name.replace(/'/g,"\\'")}')">
+          <span class="door-letter">${d.label}</span>
+          <div class="door-pick-name">${d.name}</div>
         </button>`).join("");
     }
   } else {
@@ -296,12 +270,9 @@ function appendSceneMsg(sceneKey, sceneData, geminiText, source) {
     last_choice: sceneData.last_choice || "",
   };
 
-  // Journey position in the header status line
+  // Journey position lives in the stage breadcrumb bar (#status-line is
+  // reserved for engine/narrator connectivity — see updateStatusLine()).
   if (typeof sceneData.stage_index === "number") {
-    const arch = sceneData.archetype ? " · " + sceneData.archetype : "";
-    document.getElementById("status-line").textContent =
-      "Loop " + ((sceneData.loop_count ?? 0) + 1) + " · Stage " +
-      (sceneData.stage_index + 1) + "/" + (sceneData.stage_count || 7) + arch;
     updateStageBreadcrumb(sceneData.stage_index, sceneData.loop_count ?? 0);
   }
 }
@@ -320,38 +291,187 @@ function updateStageBreadcrumb(stageIndex, loopCount) {
   crumbs.innerHTML = STAGE_LABELS.map((label, i) => {
     const active = i === stageIndex;
     const visited = i < stageIndex || (loopCount > 0 && i > stageIndex);
-    const color = active ? "var(--accent)" : visited ? "var(--muted)" : "var(--border)";
-    const weight = active ? "600" : "400";
-    return (i > 0 ? `<span style="color:var(--border)">›</span>` : "") +
-      `<span style="color:${color};font-weight:${weight};cursor:default" title="Stage ${i+1}: ${label}">${label}</span>`;
+    const cls = active ? "gate-step-dot active" : visited ? "gate-step-dot visited" : "gate-step-dot";
+    const dot = `<span class="${cls}" title="Stage ${i + 1}: ${label}"><span class="dot"></span>${label}</span>`;
+    if (i === 0) return `<span class="gate-step">${dot}</span>`;
+    const lineCls = i <= stageIndex ? "gate-step-line filled" : "gate-step-line";
+    return `<span class="gate-step"><span class="${lineCls}"></span>${dot}</span>`;
   }).join("");
 }
 
-// ── Async scene text refresh — unique LLM take on each visit ─────
-async function refreshSceneText(sceneKey, textEl) {
+// ── Async scene enrichment — grounded narration + runtime doors ──────
+// The turn's contract (from the /three-doors skill): the painting IS the
+// scene, so the narration must describe what the painting actually shows,
+// grounded on [image + play context], and the three doors must be either
+// existing doors of the shared world or new doors whose metadata (name,
+// description, target) is created at runtime — consistent with canon and
+// with what the player has been asking for. The engine's static text and
+// doors render first (instant, offline-safe); this replaces them when the
+// grounded generation succeeds, and quietly leaves them if it doesn't.
+
+// What the current painting shows — set by the image pipeline, consumed here.
+// { sceneKey, prompt, url } — prompt is the exact text the image was
+// generated from, which is the grounding fallback when vision is unavailable.
+window.__sceneArt = window.__sceneArt || null;
+
+// Ask a vision model what is actually in the painting. Best-effort: returns
+// null on any failure (CORS, provider down, timeout) and the caller falls
+// back to the generation prompt as image context.
+async function describeSceneImage(url) {
+  if (!url) return null;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12000);
+    const blob = await (await fetch(url, { signal: ctrl.signal })).blob();
+    clearTimeout(t);
+    if (!blob.type.startsWith("image/") || blob.size > 8 * 1024 * 1024) return null;
+    const base64 = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result).split(",")[1]);
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+    const ctrl2 = new AbortController();
+    const t2 = setTimeout(() => ctrl2.abort(), 20000);
+    const r = await fetch("/api/vision/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: "Describe this painted scene in 2-3 sentences: the setting, any figures present, the light, and the mood. Mention only what is actually visible.",
+        image: base64,
+        mimeType: blob.type,
+      }),
+      signal: ctrl2.signal,
+    });
+    clearTimeout(t2);
+    if (!r.ok) return null;
+    const data = await r.json();
+    const text = (data.answer || data.reply || data.text || "").trim();
+    return text.length > 20 ? text : null;
+  } catch { return null; }
+}
+
+// Parse the narrator's [DOORS: A · Name — desc -> target | ...] line.
+// Canonical names can themselves contain an em-dash ("Sigil — City of Doors"),
+// so before splitting name/description on "—" we try to match the segment
+// against every door name the shared world already knows.
+function knownDoorNames() {
+  const names = [];
+  for (const key of Object.keys(SCENES)) {
+    for (const d of SCENES[key].doors || []) names.push(d.name);
+  }
+  for (const n of Object.keys(playerProgress?.dynamicDoors || {})) {
+    const dyn = playerProgress.dynamicDoors[n];
+    if (dyn?.name) names.push(dyn.name);
+  }
+  return names.sort((a, b) => b.length - a.length); // longest first
+}
+
+function parseGeneratedDoors(reply) {
+  const m = reply.match(/\[DOORS:([\s\S]*?)\]/i);
+  if (!m) return null;
+  const parts = m[1].split("|").map(s => s.trim()).filter(Boolean);
+  if (parts.length !== 3) return null;
+  const letters = ["A", "B", "C"];
+  const known = knownDoorNames();
+  const doors = [];
+  for (let i = 0; i < 3; i++) {
+    const seg = parts[i].replace(/^[ABC]\s*[·:.]\s*/i, "");
+    const arrow = seg.split("->");
+    const target = (arrow[1] || "").trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const head = arrow[0].trim();
+    const headNorm = normalizeDoorName(head);
+    let name, description;
+    const canonical = known.find(k => headNorm === normalizeDoorName(k) || headNorm.startsWith(normalizeDoorName(k) + " "));
+    if (canonical) {
+      name = canonical;
+      description = head.slice(head.toLowerCase().indexOf(canonical.split(" ").pop().toLowerCase()) + canonical.split(" ").pop().length)
+        .replace(/^[\s—:-]+/, "").trim();
+    } else {
+      const nameDesc = head.split("—");
+      name = (nameDesc[0] || "").trim();
+      description = (nameDesc.slice(1).join("—") || "").trim();
+    }
+    if (!name || name.length > 80) return null;
+    doors.push({ label: letters[i], name, description, target: SCENES[target] ? target : "" });
+  }
+  return doors;
+}
+
+async function enrichScene(sceneKey, textEl, msgEl) {
   if (!textEl) return;
   const scene = SCENES[sceneKey];
   if (!scene) return;
   const loopCount = gameState?.loop_count ?? 0;
-  const archetype = scene.archetype || "mystical";
-  const history = (gameState?.history || []).filter(h => h.startsWith("Chose ")).slice(-3).join(", ") || "just arrived";
-  const loopNote = loopCount > 0 ? ` Loop ${loopCount + 1} — the space feels rewritten, familiar but altered.` : "";
-  const prompt = `You are Keystone, the dreaming guide. Describe the scene "${sceneKey}" (archetype: ${archetype}) in 3 evocative sentences. The dreamer arrived via: ${history}.${loopNote} Be symbolic and sensory — never the same twice. End on a threshold feeling. Scene core: ${scene.text.replace(/\*\*/g,"").replace(/\*/g,"").slice(0,200)}`;
+  const theme = scene.theme || scene.archetype || "a threshold";
+  const lesson = scene.lesson || "";
+  const recentChoices = (gameState?.history || []).filter(h => h.startsWith("Chose ")).slice(-3).join(", ") || "just arrived";
+  const loopNote = loopCount > 0 ? ` This is loop ${loopCount + 1} — familiar, but seen with new eyes; don't repeat earlier phrasing.` : "";
+  const desires = (playerProgress?.customDesires || []).slice(-4).join("; ");
+  const desiresNote = desires ? `\nThe dreamer has authored canon of their own — fold it in, their inventions outrank yours: ${desires}` : "";
+
+  // Give the image a moment to resolve, then ground on what it shows.
+  await new Promise(r => setTimeout(r, 2500));
+  const art = (window.__sceneArt && window.__sceneArt.sceneKey === sceneKey) ? window.__sceneArt : null;
+  const visionDesc = art ? await describeSceneImage(art.url) : null;
+  const imageContext = visionDesc
+    ? `The painting for this beat shows (vision-verified): ${visionDesc}`
+    : art ? `The painting for this beat was generated from: ${art.prompt}`
+    : `No painting resolved this beat — describe the scene from canon alone.`;
+
+  // The shared world the narrator may route into.
+  const ownDoors = (scene.doors || []).map(d => `${d.name} — ${d.description}`).join("; ");
+  const targetKeys = Object.keys(SCENES).join(", ");
+
+  const prompt = `You are Lantern, the dreaming guide, narrating one turn of Three Doors inside the Kingdome of Hearts.
+${imageContext}
+Persistent theme (canon, never changes): ${theme}
+Meta-lesson underneath (canon — let it show through the imagery, never state it): ${lesson}
+The dreamer arrived via: ${recentChoices}.${loopNote}${desiresNote}
+
+Write the beat: 3-4 vivid, warm, sensory sentences that describe THIS painting and open the moment — ground every image detail you mention in what the painting actually shows. Never reset the story.
+
+Then, on its own line, offer exactly three doors:
+[DOORS: A · Name — one-line sensory description -> target | B · Name — description -> target | C · Name — description -> target]
+Rules for doors: each is EITHER one of this scene's existing doors (${ownDoors}) OR a new door you invent now — named, atmospheric, symbolically weighted, consistent with the Kingdome (love is the law, death is imaginary, doors are meanings). If the dreamer has expressed desires, let at least one door answer them. target must be one of: ${targetKeys} — pick the world-scene the door most truly opens onto.`;
+
   const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), 20000);
+  setTimeout(() => ctrl.abort(), 25000);
   try {
     const r = await fetch("/api/dream/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: prompt, agent: "lantern" }),
+      // "keystone" is the only live persona (#1664 removed the RP set —
+      // requesting the old "lantern" agent 503s and killed narration silently).
+      body: JSON.stringify({ message: prompt, agent: "keystone" }),
       signal: ctrl.signal,
     });
     if (!r.ok) return;
     const data = await r.json();
-    const fresh = (data.reply || "").trim();
-    if (fresh.length < 40) return;
-    textEl.style.transition = "opacity 0.6s";
-    textEl.style.opacity = "0";
-    setTimeout(() => { textEl.innerHTML = md(fresh); textEl.style.opacity = "1"; }, 600);
-  } catch { /* static text stays */ }
+    const reply = (data.reply || "").trim();
+    if (reply.length < 40) return;
+
+    // Narration = reply minus the doors line.
+    const narration = reply.replace(/\[DOORS:[\s\S]*?\]/i, "").trim();
+    if (narration.length >= 40 && gameState?.scene_key === sceneKey) {
+      textEl.style.transition = "opacity 0.6s";
+      textEl.style.opacity = "0";
+      setTimeout(() => { textEl.innerHTML = md(narration); textEl.style.opacity = "1"; }, 600);
+    }
+
+    // Doors: swap in the generated set; register new ones so navigation works.
+    const doors = parseGeneratedDoors(reply);
+    if (doors && msgEl && gameState?.scene_key === sceneKey && !doorsLocked) {
+      doors.forEach(d => { if (typeof registerDynamicDoor === "function") registerDynamicDoor(sceneKey, d); });
+      applyDoors(msgEl, doors);
+    }
+
+    // Σ₀ evidence trail: what this turn was grounded on.
+    logThreeDoorsEvent("scene_enriched", {
+      sceneKey,
+      groundedOn: visionDesc ? "vision" : art ? "image_prompt" : "canon_only",
+      doorsGenerated: !!doors,
+      doorNames: doors ? doors.map(d => d.name) : [],
+    });
+  } catch { /* engine content stays */ }
 }

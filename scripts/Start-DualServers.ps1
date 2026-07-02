@@ -20,6 +20,11 @@
 .PARAMETER NoChrome
     Skip auto-launching Chrome.
 
+.PARAMETER NoWatchdog
+    Skip launching Watch-DualServers.ps1. By default this launcher also starts the
+    watchdog (detached) so a server that later crashes is auto-restarted instead of
+    staying dead until a human notices (issue #1785).
+
 .PARAMETER StableRoot
     Worktree that serves :4177 (default C:\dev\lantern-os-stable).
 
@@ -33,6 +38,7 @@
 
 param(
     [switch]$NoChrome,
+    [switch]$NoWatchdog,
     [string]$StableRoot = "C:\dev\lantern-os-stable",
     [string]$DevRoot    = "C:\dev\lantern-os-dev"
 )
@@ -58,6 +64,65 @@ foreach ($wt in @($StableRoot, $DevRoot)) {
     }
 }
 Write-Host ("Node {0}; worktrees present." -f (node --version)) -ForegroundColor Green
+
+# --- Dependency preflight: catch node_modules drift BEFORE launch ------------
+# The dual-boot's most common silent failure is a worktree whose node_modules is
+# missing or drifted from package.json: the server then throws MODULE_NOT_FOUND at
+# require() time and the port answers HTTP 000 with nothing but a stack in the err
+# log. This preflight resolve-probes a required dependency in each worktree and runs
+# `npm install` ONLY when it can't resolve (missing/broken), so a healthy tree is
+# untouched and the command stays idempotent. A lockfile-vs-package.json drift is
+# surfaced as a warning (non-fatal). Refs the "preview HTTP 000 on node_modules
+# drift" gotcha.
+function Test-WorktreeDeps($wt) {
+    $appDir = Join-Path $wt 'apps\lantern-garage'
+    $nm     = Join-Path $appDir 'node_modules'
+    $probe  = 'try{require.resolve("express-session");process.exit(0)}catch(e){process.exit(3)}'
+    Push-Location $appDir
+    try {
+        & node -e $probe 2>$null | Out-Null
+        $resolved = ($LASTEXITCODE -eq 0)
+        if (-not $resolved) {
+            Write-Host ("  [deps] {0}: node_modules missing/drifted - running npm install..." -f $wt) -ForegroundColor Yellow
+            & npm install --no-audit --no-fund 2>&1 | Out-Null
+            & node -e $probe 2>$null | Out-Null
+            $resolved = ($LASTEXITCODE -eq 0)
+            if ($resolved) { Write-Host ("  [deps] {0}: dependencies installed." -f $wt) -ForegroundColor Green }
+            else           { Write-Host ("  [deps] {0}: STILL unresolved after npm install - server may fail to boot (see logs)." -f $wt) -ForegroundColor Red }
+        } else {
+            # Healthy: warn only if the lockfile is older than package.json (possible drift).
+            $pkg  = Join-Path $appDir 'package.json'
+            $lock = Join-Path $nm '.package-lock.json'
+            if ((Test-Path $pkg) -and (Test-Path $lock) -and
+                ((Get-Item $pkg).LastWriteTime -gt (Get-Item $lock).LastWriteTime)) {
+                Write-Host ("  [deps] {0}: package.json is newer than the installed lockfile - consider `npm install`." -f $wt) -ForegroundColor Yellow
+            } else {
+                Write-Host ("  [deps] {0}: dependencies OK." -f $wt) -ForegroundColor Green
+            }
+        }
+    } finally { Pop-Location }
+}
+foreach ($wt in @($StableRoot, $DevRoot)) { Test-WorktreeDeps $wt }
+
+# --- Workstream hooks (dynamic per-lane PR gate) -----------------------------
+# Install the monoworkstream git hooks as part of quickstart so the dynamic
+# per-human lanes (alex/, kriskin/, mookman11/, any NAME/ - one open PR each)
+# plus the slop + change-record gates are active. The main checkout's .git/hooks
+# is shared by every linked worktree (stable :4177, dev :4178) via the common git
+# dir, so installing once here covers them all. Best-effort: a hook-install hiccup
+# must never block the servers from coming up.
+try {
+    $hookInstaller = Join-Path $RepoRoot "scripts\Install-MonoworkstreamHooks.ps1"
+    if (Test-Path $hookInstaller) {
+        Push-Location $RepoRoot
+        try { & $hookInstaller | Out-Null } finally { Pop-Location }
+        Write-Host "Workstream hooks installed (dynamic per-lane PR gate active)." -ForegroundColor Green
+    } else {
+        Write-Host "Workstream hook installer not found - skipping (lane gate not enforced locally)." -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host ("Workstream hooks install skipped: {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+}
 
 # --- Hydrate persistent environment (so the servers get their keys) ----------
 # Keys/credentials live in the Machine/User environment, not a committed .env.
@@ -175,5 +240,23 @@ if ($pythonExists) {
 } else {
     Write-Host "MCP server requires Python. Install with: python -m pip install -r requirements.txt" -ForegroundColor DarkGray
 }
+# --- Watchdog: keep the servers alive after this launcher returns --------------
+# Start-DualServers is fire-and-forget; without a supervisor a crashed server
+# stays down until a human notices (issue #1785). Launch the watchdog detached so
+# it health-checks both ports and resurrects only the one that died.
+if (-not $NoWatchdog) {
+    $watchdog = Join-Path $PSScriptRoot "Watch-DualServers.ps1"
+    if (Test-Path $watchdog) {
+        Remove-Item env:PORT -ErrorAction SilentlyContinue
+        Start-Process -FilePath "powershell" `
+            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-File",$watchdog,"-StableRoot",$StableRoot,"-DevRoot",$DevRoot `
+            -WindowStyle Hidden | Out-Null
+        Write-Host "  Watchdog        (supervisor) auto-restarts a crashed server -> logs/watchdog.log" -ForegroundColor DarkGray
+    } else {
+        Write-Host "  Watchdog script not found ($watchdog); servers run unsupervised." -ForegroundColor Yellow
+    }
+}
+Write-Host ""
+
 Write-Host ""
 # Servers run detached (Start-Process); this launcher returns instead of blocking.

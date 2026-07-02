@@ -1421,6 +1421,129 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
 
         return sendJson(res, result, 200), true;
       }
+
+      // ── Σ₀ council (Converge) + PAPER/REPLAY decks ─────────────────────────
+      // These surfaces are paper-only: none reach kalshi.placeOrder, so they are
+      // intentionally NOT behind the live TRADING-PAUSE gate. The kill-switch keeps
+      // the real-order path halted; this is where the loop collects data + trains.
+
+      // GET — Kalshi council snapshot: Brier calibration + per-signal realized edge
+      // over the historical-trained outcomes, plus the honest after-fee search verdict.
+      if (url.pathname === '/api/trading/kalshi/council' && req.method === 'GET') {
+        const kc = require('../lib/kalshi-council');
+        try { return sendJson(res, kc.snapshot(), 200), true; }
+        catch (e) { return sendJson(res, { error: 'council failed', details: e.message, graded: 0 }, 200), true; }
+      }
+
+      // GET — Replay deck: deterministic swipeable cards rebuilt from the recorded
+      // tight-band history, graded instantly vs the known outcome. Always works.
+      if (url.pathname === '/api/trading/kalshi/replay-deck' && req.method === 'GET') {
+        const kc = require('../lib/kalshi-council');
+        const limit = q.limit ? Number(q.limit) : 20;
+        const offset = q.offset ? Number(q.offset) : 0;
+        const cards = kc.buildReplayCards(limit, offset);
+        return sendJson(res, {
+          cards, count: cards.length, mode: 'replay',
+          generatedAt: new Date().toISOString(),
+          note: 'Replay deck — historical markets, graded vs known outcome. PAPER / training only; live trading remains paused.',
+        }, 200), true;
+      }
+
+      // POST — grade a swiped replay card against its recorded outcome (Verify→Converge).
+      if (url.pathname === '/api/trading/kalshi/replay-grade' && req.method === 'POST') {
+        const kc = require('../lib/kalshi-council');
+        const body = await collectRequestBody(req);
+        const { ticker, side, entryCents } = body ? JSON.parse(body) : {};
+        if (!ticker || !side) return sendJson(res, { error: 'ticker and side required' }, 400), true;
+        return sendJson(res, kc.gradeReplay({ ticker, side, entryCents }), 200), true;
+      }
+
+      // GET — Paper deck: live candidate markets, paper-only, with honest fee-aware EV
+      // (most negative). Empty when Kalshi markets are closed or creds are absent.
+      if (url.pathname === '/api/trading/kalshi/paper-deck' && req.method === 'GET') {
+        const cryptoSuggest = require('../lib/kalshi-crypto-suggester');
+        const suggest = require('../lib/kalshi-suggest');
+        const fees = require('../lib/kalshi-fees');
+        const kc = require('../lib/kalshi-council');
+        const collector = deps.kalshiCollector || null;
+        const limit = q.limit ? Number(q.limit) : 20;
+        try {
+          const [cry, sug] = await Promise.all([
+            cryptoSuggest.getCryptoSuggestions({ limit, collector }).catch(() => ({ cards: [] })),
+            suggest.getSuggestions({ limit, collector }).catch(() => ({ cards: [] })),
+          ]);
+          const raw = [...(cry.cards || []), ...(sug.cards || [])]
+            .filter(c => c.kind !== 'exit' && c.kind !== 'position' && c.favAsk != null);
+          const seen = new Set();
+          const cards = [];
+          for (const c of raw) {
+            if (seen.has(c.ticker)) continue;
+            seen.add(c.ticker);
+            const pWin = kc.pWinModel(c.favAsk);
+            const ev = fees.netEvCents(c.favAsk, pWin);
+            cards.push({
+              ...c, mode: 'paper',
+              sigma0: c.sigma0 || {
+                score: ev, end_state: c.favSide === 'yes' ? 'YES' : 'NO', p_win: pWin,
+                loss_odds: Math.round((1 - pWin) * 100) / 100, ev_cents: ev,
+                reward_cents: 100 - c.favAsk, confidence: pWin,
+                verdict: ev > 0 ? 'STRONG' : 'SKIP_NEG_EV',
+              },
+            });
+            if (cards.length >= limit) break;
+          }
+          return sendJson(res, {
+            cards, count: cards.length, mode: 'paper',
+            generatedAt: new Date().toISOString(),
+            note: 'Paper deck — live candidate markets, paper-only (no real orders). Honest fee-EV shown; live trading remains paused.',
+          }, 200), true;
+        } catch (e) {
+          return sendJson(res, { cards: [], count: 0, mode: 'paper', error: e.message }, 200), true;
+        }
+      }
+
+      // GET — Grounded deck: near-term groundable EVENT markets (weather first),
+      // web-researched P(YES) vs market price, fee-aware EV. Paper-only; renders from
+      // cache instantly and grounds misses in the background. The profitable arm —
+      // edge from information the thin market hasn't priced (vs momentum, which has none).
+      if (url.pathname === '/api/trading/kalshi/grounded-deck' && req.method === 'GET') {
+        const eventSuggester = require('../lib/kalshi-event-suggester');
+        const limit = q.limit ? Number(q.limit) : 12;
+        try {
+          const out = await eventSuggester.getGroundedSuggestions({ limit });
+          return sendJson(res, out, 200), true;
+        } catch (e) {
+          return sendJson(res, { cards: [], count: 0, mode: 'grounded', error: e.message }, 200), true;
+        }
+      }
+
+      // POST — ground a single market on demand { ticker } (Re-ground button).
+      if (url.pathname === '/api/trading/kalshi/ground' && req.method === 'POST') {
+        const grounding = require('../lib/kalshi-grounding');
+        const eventSuggester = require('../lib/kalshi-event-suggester');
+        const kapi = require('../lib/kalshi-api');
+        const body = await collectRequestBody(req);
+        const { ticker } = body ? JSON.parse(body) : {};
+        if (!ticker) return sendJson(res, { error: 'ticker required' }, 400), true;
+        try {
+          const r = await kapi.getMarket(ticker);
+          const m = r && r.data && r.data.market;
+          if (!m) return sendJson(res, { error: 'market not found', ticker }, 404), true;
+          const g = await grounding.groundMarket(m, { force: true });
+          const card = eventSuggester.toCard(m, g, Date.now());
+          return sendJson(res, { ticker, grounding: g, card }, 200), true;
+        } catch (e) {
+          return sendJson(res, { error: e.message, ticker }, 200), true;
+        }
+      }
+
+      // GET — grade resolved grounded paper picks into the council (forward Verify→Converge).
+      if (url.pathname === '/api/trading/kalshi/grounded-sync' && req.method === 'GET') {
+        const kc = require('../lib/kalshi-council');
+        try { return sendJson(res, await kc.groundedSync(), 200), true; }
+        catch (e) { return sendJson(res, { error: e.message }, 200), true; }
+      }
+
       // GET /api/trading/kalshi/positions-deck?exitsOnly=true
       // Open positions as swipe cards: entry price, current bid, P&L, exit tag.
       // exitsOnly=true: only show positions marked for exit (STOP-LOSS/TAKE-PROFIT/CONVERGENCE)

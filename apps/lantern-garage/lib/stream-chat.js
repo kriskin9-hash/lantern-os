@@ -10,13 +10,14 @@ const path = require("path");
 const { llmAgent } = require("./insecure-tls");
 
 const { AGENT_PERSONAS, DREAM_DOORS, selectAgent, parseBangCommand, verifyResponse, isVerifyEnabled } = require("./dream-chat");
-const { modelFor } = require("./provider-models");
+const { modelFor: defaultModelFor, isAllowedModel } = require("./provider-models");
 const { readRecentDreams, normalizeDreamerUser } = require("./dreamer-store");
 const { appendConversationEntry } = require("./conversation-store");
 const { getProviderState, recordProviderSuccess, recordProviderFailure } = require("./provider-cache");
 const { swarmOrchestrate } = require("./swarm-orchestrator");
 const { emitConvergenceRecord } = require("./convergence-records");
-const { recordConvergance } = require("./csf-memory-writer");
+const { recordConvergance, recordLifeFact } = require("./csf-memory-writer");
+const { extractFact, categorize, keywordsFromFact } = require("./life-memory");
 const { resolveCodingRoute } = require("./route-contract");
 const { unifiedAgentStreamSSE } = require("./unified-agent");
 const sse = require("./stream-chat/sse");
@@ -28,7 +29,7 @@ const { verifyExec } = require("./exec-verify");
 const { assembleSessionContext } = require("./session-summary-store");
 const { formatCSFContextForPrompt, formatCSFContextForPromptAsync, saveDoorChoice } = require("./csf-memory");
 const { formatGrounding: oracleFormatGrounding } = require("./convergence-oracle");
-const { resolveGrounding, formatGroundingForPrompt } = require("./mesh-grounding");
+const { resolveGrounding, formatGroundingForPrompt, generateXpDoorImagePrompt } = require("./mesh-grounding");
 const { defaultRings } = require("./grounding-rings");
 const { route: converganceRoute, buildBehaviorPreamble } = require("./convergance-os/model-router");
 const { THREE_DOORS_PREAMBLE } = require("./convergance-os/profiles");
@@ -37,7 +38,7 @@ const { analyzeImage } = require("./vision");
 const { webSearchMcp, formatGroundingContext, needsGrounding, extractSearchQuery } = require("./web-search-client");
 const { chatDilation, groundingPolicy, isGroundingDue, GROUNDING_TICK_MS } = require("./grounding-policy");
 // #1012 boiling-frog defense: ms epoch of the last mandatory external-grounding tick.
-// Module-level so the cadence spans requests for this server process.
+// Module-level so the cadence spans requests for this server process. #1012
 let _lastGroundingTickMs = 0;
 const { generatePlan, generatePatch } = require("./self-edit-engine");
 const { selectProvider, selectKernelProvider, recordProviderSuccess: recordProviderSuccessRouter, recordProviderFailure: recordProviderFailureRouter } = require("./provider-router");
@@ -48,7 +49,7 @@ const serving = require("./serving-modes");
 const { convergeMessage } = require("./convergence-adapter");
 const { keystoneRun, KEYSTONE_SYSTEM_PROMPT } = require("./keystone-runtime");
 const { unifiedAgentStreamSSE: unifiedStreamSSE } = require("./unified-agent");
-// Extracted helper modules (split out of this file for smaller-context editing):
+// Extracted helper modules (split out of this file for smaller-context editing): 
 const { compactHistory, buildProviderMessages } = require("./stream-chat/history");
 const { FALLBACK_DOORS, extractDoors, stripModelArtifacts, doorsOrFallback, generateWebSuggestions } = require("./stream-chat/doors");
 const { anthropicToolTurn, openaiCompatibleToolTurn, geminiToolTurn } = require("./stream-chat/tool-turns");
@@ -111,6 +112,25 @@ function _extractRunnable(reply) {
   return { language: "python", code, test };
 }
 
+// Verify-gated distillation flywheel: when KEYSTONE_LOCAL_FIRST=1, record cloud-solved + verified
+// coding episodes as a corpus for local model improvement. This is a persistent learning mechanism
+// via retrieval/experience, not weight retraining of the base model. It also triggers a local-adapter
+// refresh and measures the lift via CAP-1. This is enabled via an environment variable.
+const KEYSTONE_LOCAL_FIRST = process.env.KEYSTONE_LOCAL_FIRST === "1";
+const OURO_LOCAL_FIRST_CORPUS = path.resolve(repoRoot, "data/ouro-local-first-corpus.jsonl");
+async function keystoneLocalFirst(instruction, reply, result) {
+  if (!KEYSTONE_LOCAL_FIRST) return;
+  if (!result || !result.verified || !result.runnable) return;
+  try {
+    await appendJsonlQueued(OURO_LOCAL_FIRST_CORPUS, {
+      instruction: instruction.slice(0, 200),
+      code: result.runnable.code,
+      test: result.runnable.test,
+      source: "keystone-local-first", ts: Date.now(),
+    });
+  } catch (e) { console.error("[keystoneLocalFirst] failed to record:", e.message); }
+}
+
 // Per-request grounding (web search + live GitHub project context) is best-effort
 // enrichment that runs BEFORE the model is called. If the network or the `gh` CLI
 // is slow/hung, an unbounded await there stalls the ENTIRE chat reply (no tokens,
@@ -140,17 +160,26 @@ function withTimeout(promise, ms, fallback) {
 
 
 // Non-blocking image generation sidecar for Three Doors mode
-function triggerImageGeneration({ cleanText, suggestions, surfaceMode, symbolMesh }) {
+function triggerImageGeneration({ cleanText, doors, suggestions, surfaceMode, symbolMesh, sceneType }) {
   if (surfaceMode !== "three-doors") return null;
-  
+  if (sceneType && sceneType !== "three-doors" && sceneType !== "future-doors") return null;
+
   const entryId = Date.now().toString();
-  generateDoorSceneImage({ cleanText, doors: suggestions, symbolMesh, entryId })
+  const doorList = doors || suggestions || [];
+
+  // XP Door glitch aesthetic: adjust prompt when present (guarded — helper may not exist)
+  let imagePrompt = cleanText;
+  if (typeof generateXpDoorImagePrompt === "function" && doorList.some(d => d && d.type === "xp-door")) {
+    imagePrompt = generateXpDoorImagePrompt(cleanText, doorList);
+  }
+
+  generateDoorSceneImage({ cleanText: imagePrompt, doors: doorList, symbolMesh, entryId, sceneType })
     .then(result => {
       // Image generation completes asynchronously; failure is non-blocking
     })
     .catch(err => {
       // Image generation errors are non-blocking
-    });
+    }); 
   
   return entryId;
 }
@@ -250,6 +279,35 @@ async function handleStreamChat(req, url, res) {
   });
   let { message, user, requestedAgent, requestedProvider, history, mcpFlag, routeIntent } = parsed;
   const attachments = Array.isArray(parsed.attachments) ? parsed.attachments : [];
+  // Model pin (#1127 work item 1): a UI-selected model is honoured only when the
+  // user ALSO pinned its provider and the id is on the provider-models allowlist —
+  // a stray/retired id can never hijack routing. This `modelFor` shadows the module
+  // import for every provider call site in this handler: pinned model for the pinned
+  // provider, normal default for everyone else (fallback providers keep their own
+  // defaults when the backstop chain walks past the pin).
+  const { _PROVIDER_ALIASES } = require("./stream-chat/provider-order");
+  const _pinnedInternal = _PROVIDER_ALIASES[String(requestedProvider || "").toLowerCase()] || null;
+  const _modelPin = (parsed.requestedModel && _pinnedInternal && isAllowedModel(_pinnedInternal, parsed.requestedModel))
+    ? { provider: _pinnedInternal, model: parsed.requestedModel }
+    : null;
+  const modelFor = (p) => (_modelPin && p === _modelPin.provider) ? _modelPin.model : defaultModelFor(p);
+
+  // Remember-stage hook (#1429): a declarative personal-fact statement ("my kid's shoe size
+  // is 7") gets persisted into the ONE canonical CSF memory, same pattern as recordConvergance
+  // below — no dedicated store, no dedicated recall UI. formatCSFContextForPromptAsync (below)
+  // already retrieves + IDF-ranks it into later turns automatically. Best-effort, non-blocking.
+  if (message) {
+    try {
+      const fact = extractFact(message);
+      if (fact) {
+        const category = categorize(message);
+        await recordLifeFact({
+          ...fact, category, keywords: keywordsFromFact(fact),
+          rawText: message, sessionId: user || "chat", surface: "dream-chat-stream",
+        });
+      }
+    } catch (e) { console.error("[life-memory] capture failed (non-fatal):", e.message); }
+  }
   // Image attachments (#1606): every downstream consumer on this path treats an attachment
   // as TEXT, so an uploaded image (which carries no extractable text) used to vanish silently
   // and the model would honestly report it received "0 files". Resolve each image to a text
@@ -299,7 +357,40 @@ async function handleStreamChat(req, url, res) {
   const logConversation = (entry) => appendConversationEntry({ ...entry, sessionId });
 
   // Handle bang commands
-  const cmd = parseBangCommand(message);
+  let cmd = parseBangCommand(message);
+
+  // Natural-language research intent: Keystone chat shouldn't require knowing the
+  // `!research` bang syntax for a "long-running task, work it until it's done"
+  // ask. A plain "research X" / "look into X" / "investigate X" opener routes
+  // into the exact same persisted, resumable research-task loop (lib/research-task.js)
+  // as the explicit command — same code path, just a friendlier entry point.
+  if (!cmd) {
+    // Strip conversational openers ("hey", "so", "ok can you...") before matching —
+    // a real person doesn't open with the trigger verb, they lead with a greeting.
+    const stripped = message.trim().replace(
+      /^(?:hey|hi|hello|yo|so|hmm|ok|okay|alright|well)[,!.\s]+/i, ""
+    );
+    const nlMatch = stripped.match(
+      /^(?:please\s+|can you\s+|could you\s+|would you\s+|i (?:need|want) you to\s+)?(?:do (?:a |some )?(?:deep[- ]?)?research on|deep[- ]?research(?:ing)? on|research|look into|investigate|dig into|find out (?:everything |all )?about)\s+(.{3,})/i
+    );
+    if (nlMatch) {
+      cmd = { name: "research", args: nlMatch[1].trim() };
+    } else if (sessionId) {
+      // Plain continuation ("keep going", "keep digging on that", "continue") —
+      // a real person doesn't remember or paste the task id back. Resume the
+      // most recently-updated still-running research task for THIS session, if
+      // one exists; otherwise fall through to normal chat as usual.
+      const continueMatch = stripped.match(
+        /^(?:yeah\s+|yes\s+|ok\s+|okay\s+|sure\s+)?(?:keep (?:going|digging|researching|looking)(?:\s+on that|\s+into it)?|continue(?:\s+(?:researching|digging|that|it))?|dig deeper|more on that|do (?:another|one more) round)\b/i
+      );
+      if (continueMatch) {
+        const researchTask = require("./research-task");
+        const latest = researchTask.findLatestRunningTask(sessionId);
+        if (latest) cmd = { name: "research", args: `continue ${latest.id}` };
+      }
+    }
+  }
+
   if (cmd) {
     // Three Doors mode
     if (cmd.name === "three-doors" || cmd.name === "threedoors" || cmd.name === "three_doors") {
@@ -355,6 +446,90 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
+    if (cmd.name === "choose-future-door") {
+      // This command is triggered by the frontend when a Tomorrow Door path is chosen.
+      // It does not directly correspond to a user message, but rather an action.
+      const { doorName, currentScene, history, playerProgress } = JSON.parse(cmd.args);
+
+      sse.writeStreamHeaders(res);
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendImageId = (id) => sse.sendEvent(res, "image_id", { id });
+      const sendFutureAnalysis = (analysis) => sse.sendEvent(res, "future_analysis", { analysis });
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+
+      try {
+        // 1. Generate an image for the chosen future path
+        const imagePrompt = `A vivid, imaginative scene depicting the consequences or unfolding of choosing the "${doorName}" path, starting from the current situation: "${currentScene.description}". Focus on the immediate future, showing what might happen next.`;
+        const imageEntryId = Date.now().toString();
+        generateDoorSceneImage({
+          cleanText: imagePrompt,
+          doors: [{ name: doorName }],
+          symbolMesh: currentScene.symbolMesh,
+          entryId: imageEntryId,
+          sceneType: "future-doors",
+        }).then(result => {
+          if (result && result.id) {
+            sendImageId(result.id);
+          }
+        }).catch(err => {
+          console.error("Future Door image generation failed:", err);
+        });
+
+        // 2. Analyze the chosen future path and its implications
+        const analysisPrompt = `Given the user chose the "${doorName}" path from the Tomorrow Door, and the current scene is "${currentScene.description}", describe the likely immediate future in a "creed voice" and "true cast" manner. Focus on potential outcomes, challenges, and opportunities this choice opens up. Be evocative and slightly mysterious, hinting at branching possibilities. Incorporate elements from the generated image (if available) into the analysis.`;
+
+        // Use a dedicated agent for future analysis
+        const futureAgent = AGENT_PERSONAS.creed;
+        const futureSystemPrompt = `${futureAgent.systemPrompt}\n\nYour role is to analyze a chosen future path from the Tomorrow Door. Speak in a "creed voice" and "true cast" manner, offering evocative insights into the potential outcomes, challenges, and opportunities of this choice. Be slightly mysterious, hinting at branching possibilities.`;
+
+        const messages = [
+          { role: "system", content: futureSystemPrompt },
+          ...history,
+          { role: "user", content: analysisPrompt },
+        ];
+
+        const stream = unifiedAgentStreamSSE({
+          messages,
+          user,
+          modelFor,
+          logConversation,
+          agent: futureAgent,
+          provider: requestedProvider,
+          sessionId,
+          surfaceMode,
+        });
+
+        let fullAnalysisText = "";
+        stream.on("data", (data) => {
+          if (data.type === "token") {
+            fullAnalysisText += data.text;
+            sendToken(data.text);
+          } else if (data.type === "done") {
+            sendFutureAnalysis(fullAnalysisText); // Send the full analysis text as a separate event
+            sendDone("creed-future-analysis", {
+              agent: futureAgent.name,
+              provider: data.provider,
+              model: data.model,
+              online: true,
+              analysis: fullAnalysisText,
+            });
+          }
+        });
+
+        stream.on("error", (err) => {
+          console.error("Future Door analysis stream error:", err);
+          sendToken(`An error occurred during future analysis: ${err.message}`);
+          sendDone("error", { error: err.message });
+        });
+
+      } catch (e) {
+        console.error("Error processing choose-future-door:", e);
+        sendToken(`An unexpected error occurred: ${e.message}`);
+        sendDone("error", { error: e.message });
+      }
+      return;
+    }
+
     if (cmd.name === "search" || cmd.name === "web-search") {
       const searchQuery = cmd.args.trim() || message.replace(/!\w+\s*/, "").trim();
       if (!searchQuery) {
@@ -368,6 +543,11 @@ async function handleStreamChat(req, url, res) {
         "Connection": "keep-alive",
         "Access-Control-Allow-Origin": "*",
         "X-Accel-Buffering": "no",
+      });
+
+      const preamble = buildBehaviorPreamble(requestedAgent, message, history, {
+        surfaceMode,
+        threeDoorsPreamble: THREE_DOORS_PREAMBLE,
       });
       const sendToken = (token) => res.write(`event: token\ndata: ${JSON.stringify({ token })}\n\n`);
       const sendDone = (source, meta) => res.write(`event: done\ndata: ${JSON.stringify({ done: true, source, ...meta })}\n\n`);
@@ -385,6 +565,7 @@ async function handleStreamChat(req, url, res) {
           sendToken(`Search failed: ${result.error || "unknown error"}\n`);
           sendDone("web_search", { agent: "WebSearch", online: false, error: result.error });
         }
+        // keystoneLocalFirst(issue, result.text, runnableResult); // This was a misplaced call, removed.
       } catch (e) {
         sendToken(`Search error: ${e.message}\n`);
         sendDone("web_search", { agent: "WebSearch", online: false, error: e.message });
@@ -392,15 +573,17 @@ async function handleStreamChat(req, url, res) {
       res.end();
       return;
     }
-
     // Keystone Kernel Mode: File-grounded, tool-driven code execution
     if (cmd.name === "keystone") {
       const issue = cmd.args.trim() || message.replace(/!keystone\s*/i, "").trim();
-
       if (!issue) {
         res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
         res.end(JSON.stringify({ error: "issue_required", message: "Usage: !keystone <issue description>" }));
         return;
+      }
+      // If KEYSTONE_LOCAL_FIRST is enabled, route through keystoneRun to enable the distillation flywheel
+      if (KEYSTONE_LOCAL_FIRST) {
+        return keystoneRun(req, url, res, issue, history, logConversation, keystoneLocalFirst);
       }
 
       res.writeHead(200, {
@@ -441,7 +624,7 @@ async function handleStreamChat(req, url, res) {
         const localFirst = rolloverMode === "default" || process.env.KEYSTONE_LOCAL_FIRST !== "0";
         const providers = localFirst
           ? kernelEscalationChain()
-          : [{ provider, model: kernelModel || "claude-opus-4-8" }];
+          : [{ provider, model: kernelModel || "claude-sonnet-5" }];
 
         const { result, providerUsed, escalations, landedBy, verified } = await runKernelWithEscalation({
           providers,
@@ -616,6 +799,118 @@ async function handleStreamChat(req, url, res) {
       return;
     }
 
+    // !research <topic> | !research continue <taskId>: a persisted, resumable
+    // research TASK — not one search, a job that keeps going round after round
+    // (each round targets the gaps the last one left open) until the gap-check
+    // says nothing's left or the round cap is hit. State is saved to
+    // data/research-tasks/<id>.json after every round, so a task that runs long
+    // survives across chat turns (and server restarts): send
+    // `!research continue <taskId>` to keep an unfinished task moving. Built on
+    // lib/wide-search's Observe→Reason→Verify→Converge loop (the same engine
+    // autowork uses to ground issue research). Unlike !search (one query, raw
+    // result list) or the single-shot version of !research, this is the actual
+    // long-running-task pattern: it doesn't stop until the job is done.
+    if (cmd.name === "research" || cmd.name === "deep-research") {
+      const researchTask = require("./research-task");
+      const args = (cmd.args || "").trim() || message.replace(/^!\S+\s*/, "").trim();
+      const continueMatch = args.match(/^continue\s+(\S+)/i);
+
+      let task;
+      if (continueMatch) {
+        task = researchTask.loadTask(continueMatch[1]);
+        if (!task) {
+          res.writeHead(404, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "research_task_not_found", taskId: continueMatch[1] }));
+          return;
+        }
+      } else {
+        if (!args) {
+          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+          res.end(JSON.stringify({ error: "research_topic_required", message: "Usage: !research <topic>" }));
+          return;
+        }
+        task = researchTask.createTask(args, { sessionId });
+      }
+
+      sse.writeStreamHeaders(res);
+      sse.sendRoute(res, { label: "Research · Σ₀ task loop", agentName: "Keystone", surface: surfaceMode });
+      const sendToken = (token) => sse.sendToken(res, token);
+      const sendDone = (source, meta) => sse.sendDone(res, source, meta);
+      const STAGE_LABEL = {
+        expanding: "  Breaking the topic into angled sub-questions…\n",
+        fanning_out: "  Searching the web across every angle…\n",
+        low_pass_start: "  Pruning the source pool for relevance…\n",
+        high_pass_start: "  Synthesizing a grounded, cited answer…\n",
+        gap_check_start: "  Checking what's still missing…\n",
+      };
+      // Rounds run inside THIS request are capped so one HTTP turn can't hang
+      // forever; a task that isn't done after this many rounds is left
+      // "running" and the user is told the resume command. The task keeps its
+      // own MAX_TOTAL_ROUNDS ceiling across however many turns it takes.
+      const ROUNDS_PER_TURN = parseInt(process.env.RESEARCH_ROUNDS_PER_TURN || "3", 10);
+
+      try {
+        sendToken(`🔎 Research task \`${task.id}\`: "${task.topic}"\n`);
+        let ranThisTurn = 0;
+        while (task.status === "running" && ranThisTurn < ROUNDS_PER_TURN) {
+          sendToken(`\n**Round ${task.rounds.length + 1}**${task.gaps.length ? ` — covering: ${task.gaps.join(", ")}` : ""}\n`);
+          await researchTask.runRound(task, (stage, status) => {
+            const label = STAGE_LABEL[status];
+            if (label) sendToken(label);
+          });
+          ranThisTurn++;
+        }
+
+        sendToken(`\n${task.latestAnswer}\n`);
+        if (task.sources && task.sources.length) {
+          sendToken(`\n**Sources (${task.sources.length}):**\n`);
+          for (const s of task.sources) sendToken(`[${s.n}] ${s.title || s.url} — ${s.url}\n`);
+        }
+        sendToken(`\n_Confidence: ${task.confidence}_\n`);
+
+        let recordId = null;
+        if (task.status === "done") {
+          sendToken(`\n✦ Task complete after ${task.rounds.length} round(s).\n`);
+          try {
+            const rec = await emitConvergenceRecord({
+              hypothesis: task.topic.slice(0, 300),
+              result: String(task.latestAnswer).slice(0, 2000),
+              confidence: task.confidence,
+              evidence_ids: task.sources.map((s) => s.url).filter(Boolean),
+              reasoner: "research-task",
+              verified: task.confidence >= 0.5,
+              verification_notes: `Σ₀ research task ${task.id} over ${task.rounds.length} round(s), ${task.sources.length} source(s) kept`,
+              source: `research-task/${task.id}`,
+            });
+            recordId = rec && rec.id;
+          } catch (_e) { /* record emit is best-effort */ }
+          try {
+            await recordConvergance({
+              question: task.topic,
+              answer: task.latestAnswer,
+              confidence: task.confidence,
+              recordId,
+              synthesizer: "research-task",
+              surface: surfaceMode || "chat",
+            });
+          } catch (_e) { /* CSF ingest is best-effort — never break chat */ }
+        } else {
+          sendToken(`\n⧗ Still open (round ${task.rounds.length}/${researchTask.MAX_TOTAL_ROUNDS}, gaps: ${task.gaps.join(", ") || "none flagged"}). Send \`!research continue ${task.id}\` to keep going.\n`);
+        }
+
+        sendDone("keystone", {
+          agent: "Keystone",
+          online: true,
+          routeLabel: "Research · Σ₀ task loop",
+          research: { taskId: task.id, status: task.status, rounds: task.rounds.length, confidence: task.confidence, sources: task.sources.length, recordId },
+        });
+      } catch (err) {
+        sendToken(`\nResearch failed: ${err.message}\n`);
+        sendDone("failed", { agent: "Keystone", online: false, error: err.message });
+      }
+      return;
+    }
+
     if (cmd.name === "converge" || cmd.name === "convergance") {
       // Σ₀ convergence (real, not a length vote): run a multi-provider COUNCIL —
       // creative + critic + a Sonnet synthesizer — then EMIT a Convergence Record so
@@ -629,9 +924,30 @@ async function handleStreamChat(req, url, res) {
         const sendToken = (token) => sse.sendToken(res, token);
         const sendDone = (source, meta) => sse.sendDone(res, source, meta); // ends the response
         sendToken("Σ₀ converging across providers…\n\n");
+        // Ground the council in real sources first (Σ₀ external-reality rule) via
+        // the same research-task loop `!research` and autowork use, bounded to 2
+        // rounds so convergence stays interactive. Best-effort: a failed/slow
+        // research pass degrades to the council's own (ungrounded) synthesis
+        // rather than blocking or erroring the whole !convergance turn.
+        let groundingTaskId = null;
+        let groundedQuestion = question;
+        try {
+          sendToken("Grounding in live sources…\n");
+          const researchTask = require("./research-task");
+          const groundTask = researchTask.createTask(question, { sessionId });
+          await researchTask.runRound(groundTask);
+          if (groundTask.status === "running") await researchTask.runRound(groundTask);
+          groundingTaskId = groundTask.id;
+          if (groundTask.sources.length) {
+            const sourceLines = groundTask.sources.map((s) => `[${s.n}] ${s.title || s.url} — ${s.url}`).join("\n");
+            groundedQuestion = `${question}\n\n--- Research grounding (task ${groundTask.id}) ---\n${groundTask.latestAnswer}\n\nSources:\n${sourceLines}\n--- End grounding ---\n\nUsing the grounding above where relevant, answer the original question.`;
+          }
+        } catch (e) {
+          console.error("[convergance] research-task grounding failed, council proceeds ungrounded:", e.message);
+        }
         const convSystem = "You are a Σ₀ convergence engine. Weigh the perspectives, then give the single most accurate, well-grounded answer — comprehensive, with sources as Markdown links [title](url) when you can. End with exactly one final line: CONFIDENCE: <a number 0-1 for how well-supported the answer is>.";
         try {
-          const result = await swarmOrchestrate({ job: "chat", mode: "council", systemPrompt: convSystem, message: question, history });
+          const result = await swarmOrchestrate({ job: "chat", mode: "council", systemPrompt: convSystem, message: groundedQuestion, history });
           let conf = 0.6;
           const cm = String(result.text).match(/CONFIDENCE:\s*([0-9]*\.?[0-9]+)/i);
           if (cm) conf = Math.max(0, Math.min(1, parseFloat(cm[1])));
@@ -647,7 +963,7 @@ async function handleStreamChat(req, url, res) {
               evidence_ids: members.map((m) => m.provider),
               reasoner: "convergance-council",
               verified: true,
-              verification_notes: `Σ₀ council convergence over ${members.length} member(s) [${members.map((m) => `${m.role}:${m.provider}`).join(", ")}]; synthesizer=${result.provider}/${result.model}` + (dissent.length ? `; dissent: ${dissent.join(" | ")}` : "; dissent: none"),
+              verification_notes: `Σ₀ council convergence over ${members.length} member(s) [${members.map((m) => `${m.role}:${m.provider}`).join(", ")}]; synthesizer=${result.provider}/${result.model}; grounding_task=${groundingTaskId || "none"}` + (dissent.length ? `; dissent: ${dissent.join(" | ")}` : "; dissent: none"),
               source: `council/${result.provider}/${result.model}`,
             });
             recordId = rec && rec.id;
@@ -683,7 +999,7 @@ async function handleStreamChat(req, url, res) {
           // Council unavailable (e.g. no provider keys) — fall back to a single provider
           // so the user still gets an answer. Headers are already SSE, so do NOT fall through.
           try {
-            const fb = await swarmOrchestrate({ job: "chat", mode: "single", systemPrompt: convSystem, message: question, history });
+            const fb = await swarmOrchestrate({ job: "chat", mode: "single", systemPrompt: convSystem, message: groundedQuestion, history });
             const ans = String(fb.text).replace(/\n*CONFIDENCE:\s*[0-9]*\.?[0-9]+\s*$/i, "").trim() || String(fb.text);
             try {
               await recordConvergance({
@@ -1191,6 +1507,9 @@ async function handleStreamChat(req, url, res) {
   // signature when a local model answers — so the auto-swap is visible, not silent.
   // Declared up here because sendDone() (defined next) closes over it.
   let _localModelSwap = null;
+  // #1554: conversation-gate reason (router-gate.js), captured when ROUTER_GATE=1
+  // so sendDone() can surface WHY a turn escalated. Stays null when the gate is off.
+  let _gateReason = null;
 
   // Consistent sendDone with Σ₀ PCSF signature for all responses
   const sendDone = (source, extra = {}) => {
@@ -1212,6 +1531,18 @@ async function handleStreamChat(req, url, res) {
     // lead wasn't serving and the chain fell through.
     if ((source === "ollama" || source === "offline") && _localModelSwap) {
       signature.modelSwap = { ..._localModelSwap, served: extra.model || _localModelSwap.lead };
+    }
+    // #1554 — capability-gated routing, made observable: surface WHY this turn
+    // routed to this model. primaryProviderHint carries the task classification and
+    // the provider-selection reason; _gateReason adds the conversation-gate note
+    // (ROUTER_GATE=1). The chosen model itself is already in signature.provider/.model
+    // (and .modelSwap for local). Together the UI can show "which model + why".
+    if (primaryProviderHint && (primaryProviderHint.reason || primaryProviderHint.taskType)) {
+      signature.routeReason = {
+        taskType: primaryProviderHint.taskType || null,
+        why: primaryProviderHint.reason || null,
+        gate: _gateReason || null,
+      };
     }
     // ── Degraded-local indicator (issue #740, narrowed by #1167) ────────────
     // In Auto mode (no explicit provider) the cloud chain (Gemini→Claude→OpenAI→
@@ -1628,6 +1959,7 @@ async function handleStreamChat(req, url, res) {
         const gate = gateDecision([...priorTurns, { role: "user", text: message }]);
         const keywordTaskType = taskType;
         const applied = gate.escalate && taskType !== "coding" && taskType !== "reasoning";
+        _gateReason = gate.reason;
         if (applied) {
           console.warn(`[router-gate] escalate -> reasoning (${gate.reason})`);
           taskType = "reasoning";
@@ -1802,9 +2134,16 @@ async function handleStreamChat(req, url, res) {
   const _msgT = message.trim();
   const _wordCount = _msgT.split(/\s+/).length;
   const _isIdentityOrSocial = /\b(who (are|r) (you|u|ya)|what (are|r) (you|u)|how (are|r) (you|u|ya)|what'?s up)\b/i.test(_msgT);
+  // Capability questions ("what can you do", "what do you do", "how can you
+  // help", "what are you capable of") are about the assistant's own abilities —
+  // they must be answered by the model (which can enumerate real skills), never
+  // by a raw doc section. "what can you do" scored a spurious near-hit against
+  // CLAUDE.md#Node.js and rendered its empty ```bash fence instead (#1778).
+  const _isCapabilityQuery = /\b(what|how)\b.{0,20}\b(can|could|do|are)\b.{0,20}\b(you|u)\b.{0,20}\b(do|help|capable|able|good at|offer|assist)\b/i.test(_msgT)
+    || /\bwhat('?s| is| are)?\b.{0,20}\byour\b.{0,20}\b(capabilit|skill|feature|abilit|function)/i.test(_msgT);
   const _isPureGreeting = /^(hi|hey+|hello|yo|sup|howdy|greetings|good (morning|afternoon|evening)|thanks?|thank you|ty|np|ok(ay)?|cool|nice|lol)\b[\s!.?,]*$/i.test(_msgT)
     || (/^(hi|hey+|hello|yo|sup|howdy|greetings|good (morning|afternoon|evening))\b/i.test(_msgT) && _wordCount <= 6);
-  const isGreetingOrChitchat = _isIdentityOrSocial || _isPureGreeting;
+  const isGreetingOrChitchat = _isIdentityOrSocial || _isCapabilityQuery || _isPureGreeting;
   if (kbAnswer && kbAnswer.hit && !isKeystoneDebug && !isRpMode && !requestedProvider && !wantsLiveData
       && !isGreetingOrChitchat
       && !routeDecision.requires_convergence
@@ -1844,10 +2183,18 @@ async function handleStreamChat(req, url, res) {
     try {
       const http = require("http");
       const { loopedReason } = require("./loop-reasoner");
-      const u = new URL(process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434");
       const loopModel = modelChain[0];
+      // Per-model endpoint (lib/local-model-registry.js): the sole local coder
+      // keystone-sigma0-plt serves on its own shim (:11435); the kernel/dream models
+      // stay on :11434. Falls back to OLLAMA_BASE_URL for unmanaged models.
+      const u = new URL(require("./local-model-registry").endpointFor(loopModel));
       const callLLM = (p, sys) => new Promise((resolve, reject) => {
-        const body = JSON.stringify({ model: loopModel, stream: false, messages: buildProviderMessages(sys, compacted, p) });
+        // #1609: the loop-reasoner local path was the one Ollama call site that
+        // built its body with no `options`, so the served model ran with Ollama's
+        // weak defaults (repeat_last_n=64) and could spiral into mid-generation
+        // repetition. Apply the same anti-repetition decode params as every other
+        // local call site.
+        const body = JSON.stringify({ model: loopModel, stream: false, messages: buildProviderMessages(sys, compacted, p), options: serving.applyOllamaDecodeParams({}) });
         const rq = http.request({ hostname: u.hostname, port: u.port || 11434, path: "/api/chat", method: "POST",
           headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) } }, (resp) => {
           let d = ""; resp.on("data", (c) => (d += c));
@@ -1911,7 +2258,9 @@ async function handleStreamChat(req, url, res) {
           // FAST-mode anti-repetition decode params (issue #729). Suppresses ✅✅✅ loops.
           options: serving.applyOllamaDecodeParams({}),
         });
-        const ollamaUrl = new URL(ollamaBase);
+        // Per-model endpoint routing (lib/local-model-registry.js): the sole local
+        // coder keystone-sigma0-plt serves on :11435; kernel/dream stay on :11434.
+        const ollamaUrl = new URL(require("./local-model-registry").endpointFor(ollamaModel));
         await new Promise((resolve, reject) => {
           const req2 = http.request({
             hostname: ollamaUrl.hostname,
@@ -1987,7 +2336,7 @@ async function handleStreamChat(req, url, res) {
               // Stream one follow-up Ollama turn, returning its text (tokens already sent).
               const streamOllamaFollow = (messages) => new Promise((resolve) => {
                 const fp = JSON.stringify({ model: ollamaModel, stream: true, messages, options: serving.applyOllamaDecodeParams({}) });
-                const fu = new URL(ollamaBase);
+                const fu = new URL(require("./local-model-registry").endpointFor(ollamaModel));
                 let t = "";
                 const r3 = http.request({ hostname: fu.hostname, port: fu.port || 11434, path: "/api/chat", method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(fp) } }, (up) => {
                   if (up.statusCode !== 200) { up.resume(); resolve(""); return; }
@@ -2323,7 +2672,9 @@ async function handleStreamChat(req, url, res) {
   if (_p === "anthropic" && anthropicKey) {
     try {
       let claudeModel = "claude-haiku-4-5-20251001";
-      if (requestedProvider === "claude-sonnet") {
+      if (_modelPin && _modelPin.provider === "anthropic") {
+        claudeModel = _modelPin.model; // UI model pin (#1127) — validated allowlist id
+      } else if (requestedProvider === "claude-sonnet") {
         claudeModel = process.env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-4-6";
       } else {
         claudeModel = process.env.ANTHROPIC_MODEL || claudeModel;
@@ -2763,6 +3114,123 @@ async function handleStreamChat(req, url, res) {
     }
   }
 
+  // Provider: Cohere (streaming — via Cohere's OpenAI-compatible endpoint) (#cohere)
+  // Cohere's native /v2/chat SSE uses its own event shape; its OpenAI-compat surface
+  // (api.cohere.ai/compatibility/v1) speaks the exact choices[].delta.content wire the
+  // openai/xai paths already parse, so we reuse that machinery instead of a bespoke parser.
+  const cohereKey = process.env.COHERE_API_KEY;
+  if (_p === "cohere" && cohereKey) {
+    const COHERE_HOST = "api.cohere.ai";
+    const COHERE_PATH = "/compatibility/v1/chat/completions";
+    // ── Native tool-use loop (opt-in via CHAT_TOOL_EXEC=1) — Cohere compat is
+    // OpenAI-shaped, so it reuses the same turn helper + registry/executor.
+    if (process.env.CHAT_TOOL_EXEC === "1") {
+      try {
+        const toolRunner = require("./tool-runner");
+        const { isOperatorRequest } = require("./request-auth");
+        const operator = isOperatorRequest(req);
+        const tools = toolRunner.openaiTools({ operator });
+        if (tools.length) {
+          const cohereModelName = modelFor("cohere");
+          const messages = buildProviderMessages(systemPrompt, compacted, message);
+          const MAX_TOOL_ITERS = 6;
+          let toolCalls = 0;
+          for (let iter = 0; iter < MAX_TOOL_ITERS; iter++) {
+            const turn = await openaiCompatibleToolTurn({
+              host: COHERE_HOST, path: COHERE_PATH, apiKey: cohereKey, model: cohereModelName,
+              messages, tools, onToken: (t) => { fullReply += t; sendToken(t); },
+            });
+            if (!turn.toolCalls.length) break;
+            messages.push(turn.assistantMessage);
+            for (const tc of turn.toolCalls) {
+              toolCalls++;
+              sse.writeData(res, { type: "tool", phase: "call", name: tc.name, input: tc.input });
+              const r = await toolRunner.runTool(tc.name, tc.input, { operator });
+              const out = r.ok ? r.result : `ERROR(${r.reason || "error"}): ${r.error}`;
+              sse.writeData(res, { type: "tool", phase: "result", name: tc.name,
+                ok: !!r.ok, status: r.status, reason_code: r.reason_code,
+                receipt: r.receipt, preview: String(out).slice(0, 240) });
+              messages.push({ role: "tool", tool_call_id: tc.id, content: String(out).slice(0, 6000) });
+            }
+          }
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+          await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cleanText.slice(0, maxConversationTextLength), meta: { provider: "cohere", model: cohereModelName, agent: doneAgentName } }).catch(() => {});
+          recordProviderSuccess("cohere");
+          recordProviderSuccessRouter("cohere");
+          const cohereReceipt = buildPcsfReceipt("cohere", cohereModelName, true);
+          sendReceipt(cohereReceipt);
+          sendDone("cohere", { agent: doneAgentName, provider: "cohere", model: cohereModelName, online: true, cleanText, suggestions, webSuggestions, receipt: cohereReceipt, toolCalls });
+          return;
+        }
+      } catch (err) {
+        recordProviderFailure("cohere", `tool_loop: ${err.message}`);
+        if (fullReply) {
+          const { cleanText, suggestions } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+          recordProviderSuccess("cohere");
+          sendDone("cohere", { agent: doneAgentName, provider: "cohere", model: modelFor("cohere"), online: true, cleanText, suggestions, webSuggestions });
+          return;
+        }
+        if (_hardPin) { sendError(humanError(err)); sendFail(err.message); return; }
+        // else: fall through to single-shot
+      }
+    }
+    try {
+      const cohereModel = modelFor("cohere");
+      // Cohere compat accepts the OpenAI decode params (top_p + frequency_penalty).
+      // No per-token logprobs request — the compat surface does not expose them.
+      const payload = JSON.stringify(serving.applyOpenAIDecodeParams({
+        model: cohereModel, stream: true,
+        messages: buildProviderMessages(systemPrompt, compacted, message),
+      }));
+      await new Promise((resolve, reject) => {
+        const req2 = https.request({
+          agent: llmAgent,
+          hostname: COHERE_HOST, path: COHERE_PATH, method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${cohereKey}`, "Content-Length": Buffer.byteLength(payload) },
+        }, (upstream) => {
+          if (upstream.statusCode !== 200) { upstream.resume(); reject(new Error(`cohere_status_${upstream.statusCode}`)); return; }
+          let buf = "";
+          upstream.on("data", (chunk) => {
+            buf += chunk.toString();
+            const lines = buf.split("\n"); buf = lines.pop();
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const raw = line.slice(6).trim();
+              if (raw === "[DONE]" || !raw) continue;
+              try { const evt = JSON.parse(raw); const t = evt.choices?.[0]?.delta?.content || ""; if (t) { fullReply += t; sendToken(t); } } catch { /* skip */ }
+            }
+          });
+          upstream.on("end", resolve); upstream.on("error", reject);
+        });
+        req2.on("error", reject);
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error("cohere_timeout")); });
+        req2.write(payload); req2.end();
+      });
+      // 200 OK with no tokens is not an answer — cascade instead of finalizing empty.
+      if (isEmptyReply(fullReply)) throw new Error("cohere_empty_response");
+      const { cleanText: cohereClean, suggestions: cohereDoors } = doorsOrFallback(fullReply, isKeystoneDebug || !isRpMode);
+      await logConversation({ recordedAt: new Date().toISOString(), surface: "dream-chat-stream", role: "lantern", text: cohereClean.slice(0, maxConversationTextLength), meta: { provider: "cohere", model: cohereModel, agent: doneAgentName } }).catch(() => {});
+      recordProviderSuccess("cohere");
+      recordProviderSuccessRouter("cohere");
+      await recordConvergenceSignature("cohere", cohereModel, cohereClean, true);
+      const cohereReceipt = buildPcsfReceipt("cohere", cohereModel, true);
+      sendReceipt(cohereReceipt);
+      sendDone("cohere", { agent: doneAgentName, provider: "cohere", model: cohereModel, online: true, cleanText: cohereClean, suggestions: cohereDoors, webSuggestions, receipt: cohereReceipt });
+      return;
+    } catch (err) {
+      const errorCode = err.message.includes("cohere_status_") ? err.message : "unknown";
+      recordProviderFailure("cohere", err.message);
+      recordProviderFailureRouter("cohere", errorCode);
+      try { recordModelOutcome("cohere", leaderboardTaskType, false, Date.now() - _turnStart); } catch { /* never break a reply */ }
+      if (_hardPin) {
+        sendError(humanError(err));
+        sendFail(err.message);
+        return;
+      }
+      console.warn(`[stream-chat] cohere auto-cascade failed — trying next provider (${err.message})`);
+    }
+  }
+
   // Provider: Ollama (streaming) — last-resort
   if (_p === "ollama") {
     // Attempt 1: Unified Agent Connector (health-checked, provider-ranked, Python-side SSE)
@@ -2821,7 +3289,10 @@ async function handleStreamChat(req, url, res) {
         // FAST-mode anti-repetition decode params (issue #729). Suppresses ✅✅✅ loops.
         options: serving.applyOllamaDecodeParams({}),
       });
-      const ollamaUrl = new URL(ollamaBase);
+      // Per-model endpoint routing (endpointFor falls back to OLLAMA_BASE_URL when the
+      // model is unmanaged/undefined, so this is behavior-preserving except that the sole
+      // local coder keystone-sigma0-plt now correctly targets its :11435 shim).
+      const ollamaUrl = new URL(require("./local-model-registry").endpointFor(ollamaModel));
       const ollamaOpts = {
         hostname: ollamaUrl.hostname,
         port: ollamaUrl.port || 11434,

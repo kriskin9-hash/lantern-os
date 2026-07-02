@@ -81,6 +81,51 @@ function routeQuality(decisions, leaderboard) {
   };
 }
 
+// 4. Distillation flywheel (#1421/#1555) — is local->cloud escalation actually feeding local
+// improvement? Reuses the EXISTING flywheel primitives in keystone-escalation.js
+// (recordDistillationPair()'s corpus, readRolloverShare()'s landed-work aggregation) rather
+// than a new store — this function only adds the "observable" half that was missing: a
+// corpus-size number and the local/cloud landed-work share as one tile-ready metric.
+function distillationFlywheelMetrics(distillPairs, convergenceRecords) {
+  const { readRolloverShare } = require("./keystone-escalation");
+  const share = readRolloverShare(convergenceRecords);
+  const corpus = (distillPairs || []).filter((r) => r && r.meta && r.meta.source === "escalation-distill");
+  return {
+    corpusSize: corpus.length,
+    keystoneShare: share.keystoneShare,        // fraction of landed work the LOCAL model won
+    escalationRate: share.escalationRate,       // fraction of attempts that had to escalate off local
+    landed: share.landed, escalations: share.escalations,
+    status: (corpus.length === 0 && share.landed === 0) ? "insufficient_data" : "ok",
+  };
+}
+
+// 5. Adaptive-depth (Ouro Q-exit) telemetry (#1423) — the recurrent-depth gate already
+// computes mean_depth/exit_reason/canary_* per generation (src/sigma0/loop_lm.py) and
+// scripts/ouro_serve.py already persists it to the SAME eval leaderboard routeQuality()
+// reads for latency (data/eval/leaderboard.jsonl, benchmark:"ouro-deep") — no new store.
+// Honest scope: this reflects OURO_NATIVE=1 (native/deep-mode) runs only. The default
+// live chat-serving path is the fast cached generate() and never computes this — see
+// ADR-0012 for why flipping that default is a product decision, not a bug fix.
+function adaptiveDepthMetrics(leaderboardRecords) {
+  const rows = (leaderboardRecords || []).filter((r) => r && r.benchmark === "ouro-deep");
+  const n = rows.length;
+  const depths = rows.map((r) => r.mean_depth).filter((d) => typeof d === "number");
+  const meanDepth = depths.length ? depths.reduce((a, b) => a + b, 0) / depths.length : null;
+  const exitReasons = {};
+  for (const r of rows) {
+    const reason = r.exit_reason || "unknown";
+    exitReasons[reason] = (exitReasons[reason] || 0) + 1;
+  }
+  const signaled = rows.filter((r) => r.canary_signal && r.canary_signal !== "none").length;
+  return {
+    n,
+    meanDepth: meanDepth == null ? null : Math.round(meanDepth * 100) / 100,
+    exitReasons,
+    canarySignalRate: pct(signaled, n),
+    status: statusFor(n > 0 ? 1 : null, n),
+  };
+}
+
 // Aggregate from the live append-only logs.
 function computeOutcomeMetrics(repoRoot) {
   const root = repoRoot || DEFAULT_REPO_ROOT;
@@ -96,20 +141,24 @@ function computeOutcomeMetrics(repoRoot) {
     const blob = `${r.result || ""} ${r.verification_notes || ""}`;
     return /\b(patch|git apply|apply_failed|FAIL_TO_PASS|tests?\s+(passed|failed))\b/i.test(blob);
   };
+  const convergenceRecords = readJsonl(d("convergence", "records.jsonl"));
   const patchRecords = [
     ...readJsonl(d("convergence", "issue-work-records.jsonl")),
-    ...readJsonl(d("convergence", "records.jsonl")),
+    ...convergenceRecords,
     ...readJsonl(d("convergence-autonomous-work.jsonl")),
   ].filter(isPatchRecord);
   const reviews = readJsonl(d("convergence", "council-reviews.jsonl"));
   const decisions = readJsonl(d("router-gate-decisions.jsonl"));
   const leaderboard = readJsonl(d("eval", "leaderboard.jsonl"));
+  const distillPairs = readJsonl(d("distill", "escalation-wins.jsonl"));
 
   return {
     generatedAt: new Date().toISOString(),
     verifiedPatchRate: verifiedPatchRate(patchRecords),
     honestyRate: honestyRate(reviews),
     routeQuality: routeQuality(decisions, leaderboard),
+    distillationFlywheel: distillationFlywheelMetrics(distillPairs, convergenceRecords),
+    adaptiveDepth: adaptiveDepthMetrics(leaderboard),
   };
 }
 
@@ -127,6 +176,12 @@ function loadOrCaptureBaseline(metrics, repoRoot) {
       verifiedPatchRate: metrics.verifiedPatchRate.rate,
       honestyRate: metrics.honestyRate.rate,
       escalationRate: metrics.routeQuality.escalationRate,
+      // #1421/#1555: local-vs-cloud landed-work share + corpus size at capture time, so
+      // "local model closed X% of the gap this week" has a real fixed reference point.
+      flywheelKeystoneShare: metrics.distillationFlywheel.keystoneShare,
+      flywheelCorpusSize: metrics.distillationFlywheel.corpusSize,
+      // #1423: canary-signal rate across native-mode (OURO_NATIVE=1) runs at capture time.
+      adaptiveDepthCanaryRate: metrics.adaptiveDepth.canarySignalRate,
     };
     fs.writeFileSync(file, JSON.stringify(baseline, null, 2));
     return baseline;
@@ -138,6 +193,8 @@ module.exports = {
   verifiedPatchRate,
   honestyRate,
   routeQuality,
+  distillationFlywheelMetrics,
+  adaptiveDepthMetrics,
   computeOutcomeMetrics,
   loadOrCaptureBaseline,
 };

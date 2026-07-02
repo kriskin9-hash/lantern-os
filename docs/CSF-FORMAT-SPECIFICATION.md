@@ -71,13 +71,26 @@ documentation (whitepaper, backend notes, CADD, code docstrings).
   "compressed": true, "file_count": 3,
   "files": [
     {"path": "src/a.txt", "size": 1050, "csize": 60,
-     "sha256": "…", "offset": 0, "compressed": true}
+     "sha256": "…", "offset": 0, "compressed": true,
+     "description": "one-line gloss of what this file is",
+     "metadata": {"loop_stage": "Remember", "verdict": "grounded"}}
   ]
 }
 ```
 - `path` — POSIX-relative arc path (directory structure preserved on unpack).
 - `size`/`csize` — original / stored byte length; `offset` is relative to the blob region.
 - `sha256` — digest of the **original** bytes; verified on unpack.
+- `description` *(optional)* — human-readable summary of the member (Σ₀ gloss).
+- `metadata` *(optional)* — JSON-serialisable dict of grounding (purpose, loop
+  stage, verdict, confidence, source). Both are **omitted when absent**, so
+  annotating is fully backward compatible — un-annotated archives are byte-identical
+  to before the fields existed, and older readers ignore the extra keys.
+
+Attach them at pack time with `annotations={arc_path: {"description": ..., "metadata": ...}}`
+(a bare string value is shorthand for description-only), and read them back with
+`csf.list_archive`, `csf.file_annotation(archive, path)`, or `csf.annotations(archive)`
+(the searchable grounding index of every annotated member). Existing archives can be
+regenerated with descriptions via `scripts/annotate_csf_archive.py`.
 
 ### 2.3 Integrity & safety
 - **Footer digest** (sha256 of everything before the footer) is verified *before*
@@ -96,6 +109,12 @@ csf.pack(["mydir"], "out.csf", codec="zstd", use_dict=True)  # shared dict, keep
 csf.list_archive("out.csf")                          # manifest (no extract)
 csf.unpack("out.csf", "dest_dir")                    # -> [written paths]
 data = csf.read_file("out.csf", "file.bin")          # verified single member
+
+# per-file grounding (Σ₀): description + metadata, retrievable without extract
+csf.pack(["mydir"], "out.csf",
+         annotations={"mydir/a.py": {"description": "…", "metadata": {"loop_stage": "Act"}}})
+csf.file_annotation("out.csf", "mydir/a.py")         # {"description": …, "metadata": …}
+csf.annotations("out.csf")                            # {arc_path: {description, metadata}} index
 
 # lightweight single-blob stream (1-byte codec header, no manifest)
 blob = csf.compress(b"...")                           # -> bytes

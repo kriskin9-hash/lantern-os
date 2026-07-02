@@ -46,8 +46,17 @@ Manifest JSON
       "format": "csf-pack", "version": "0.8", "created_at": <epoch>,
       "compressed": bool, "codec": "zstd"|"zlib"|"store", "file_count": int,
       "shared_dict": {"offset": int, "size": int, "codec": "zstd"}?,   # optional
-      "files": [{"path", "size", "csize", "sha256", "offset", "compressed", "codec"}]
+      "files": [{"path", "size", "csize", "sha256", "offset", "compressed", "codec",
+                 "description"?, "metadata"?}]   # description/metadata optional, per-file
     }
+
+Per-file grounding (Σ₀)
+-----------------------
+Each file entry may carry an optional ``description`` (str) and ``metadata``
+(dict) — a lossless place to record *what* an archived file/script is and *why*
+it exists (purpose, loop-stage, verdict, evidence, confidence, source). They are
+omitted when absent, so annotating is fully backward compatible: read them with
+``list_archive`` / ``file_annotation(archive, path)`` / ``annotations(archive)``.
 
 CLI
 ---
@@ -213,9 +222,32 @@ def _safe_join(dest: Path, arc_path: str) -> Path:
 # Pack
 # ---------------------------------------------------------------------------
 
+def _annotation_for(annotations: dict | None, arc: str):
+    """Return (description, metadata) for arc_path, tolerating either an
+    ``{arc: {"description":..., "metadata":...}}`` shape or a bare
+    ``{arc: "one-line description"}`` shape. Missing → (None, None)."""
+    if not annotations:
+        return None, None
+    ann = annotations.get(arc)
+    if ann is None:
+        return None, None
+    if isinstance(ann, str):
+        return ann, None
+    if isinstance(ann, dict):
+        return ann.get("description"), ann.get("metadata")
+    return None, None
+
+
 def _write_archive(items, out_path: str, compress: bool, extra_meta: dict | None,
-                   codec: str | None = None, use_dict: bool = False) -> dict:
-    """Core writer. items = iterable of (arc_path, raw_bytes)."""
+                   codec: str | None = None, use_dict: bool = False,
+                   annotations: dict | None = None) -> dict:
+    """Core writer. items = iterable of (arc_path, raw_bytes).
+
+    ``annotations`` optionally attaches a per-file ``description`` (str) and/or
+    ``metadata`` (JSON-serialisable dict) to each manifest entry, keyed by
+    arc_path. Both are optional and omitted from an entry when absent, so
+    archives written without annotations are byte-identical to before.
+    """
     if not compress:
         codec = "store"
     elif codec is None:
@@ -234,11 +266,17 @@ def _write_archive(items, out_path: str, compress: bool, extra_meta: dict | None
     for arc, raw in raws:
         sha = hashlib.sha256(raw).hexdigest()
         stored = _compress_blob(raw, codec, dict_data)
-        files.append({
+        entry = {
             "path": arc, "size": len(raw), "csize": len(stored),
             "sha256": sha, "offset": len(blob),
             "compressed": codec != "store", "codec": codec,
-        })
+        }
+        desc, md = _annotation_for(annotations, arc)
+        if desc:
+            entry["description"] = desc
+        if md:
+            entry["metadata"] = md
+        files.append(entry)
         blob.extend(stored)
 
     manifest = {
@@ -268,17 +306,30 @@ def _write_archive(items, out_path: str, compress: bool, extra_meta: dict | None
 
 
 def pack(paths: Iterable[str], out_path: str, compress: bool = True,
-         codec: str | None = None, use_dict: bool = False) -> dict:
-    """Pack arbitrary files/dirs into a CSF-Pack archive. Returns the manifest."""
+         codec: str | None = None, use_dict: bool = False,
+         annotations: dict | None = None) -> dict:
+    """Pack arbitrary files/dirs into a CSF-Pack archive. Returns the manifest.
+
+    ``annotations`` (optional) attaches a per-file ``description`` and/or
+    ``metadata`` to the manifest, keyed by arc_path — the same arc_path the
+    reader lists (e.g. ``"README.md"`` for a top-level file, or
+    ``"<dir>/<rel>"`` for members of a packed directory).
+    """
     items = ((arc, Path(abs_path).read_bytes()) for abs_path, arc in _iter_files(paths))
-    return _write_archive(items, out_path, compress, None, codec=codec, use_dict=use_dict)
+    return _write_archive(items, out_path, compress, None, codec=codec,
+                          use_dict=use_dict, annotations=annotations)
 
 
 def pack_blobs(blobs: dict, out_path: str, compress: bool = True, extra_meta: dict | None = None,
-               codec: str | None = None, use_dict: bool = False) -> dict:
-    """Pack in-memory {arc_path: bytes} blobs (e.g. generated manifests). Returns manifest."""
+               codec: str | None = None, use_dict: bool = False,
+               annotations: dict | None = None) -> dict:
+    """Pack in-memory {arc_path: bytes} blobs (e.g. generated manifests). Returns manifest.
+
+    ``annotations`` (optional) attaches a per-file ``description`` and/or
+    ``metadata`` to each manifest entry, keyed by arc_path.
+    """
     return _write_archive(blobs.items(), out_path, compress, extra_meta,
-                          codec=codec, use_dict=use_dict)
+                          codec=codec, use_dict=use_dict, annotations=annotations)
 
 
 # ---------------------------------------------------------------------------
@@ -321,6 +372,33 @@ def list_archive(archive: str) -> dict:
     """Return the manifest without extracting."""
     _, manifest, _, _, _ = _read_container(archive)
     return manifest
+
+
+def file_annotation(archive: str, arc_path: str) -> dict:
+    """Return ``{"description": str|None, "metadata": dict|None}`` for one member.
+
+    Raises ``KeyError`` if the member is absent. Both values are ``None`` for
+    members packed without annotations (older archives, or files not annotated).
+    """
+    _, manifest, _, _, _ = _read_container(archive)
+    for fe in manifest["files"]:
+        if fe["path"] == arc_path:
+            return {"description": fe.get("description"), "metadata": fe.get("metadata")}
+    raise KeyError(arc_path)
+
+
+def annotations(archive: str) -> dict:
+    """Return the archive's grounding index: ``{arc_path: {"description", "metadata"}}``
+    for every member that carries a description or metadata. Members packed
+    without annotations are omitted, so an un-annotated archive yields ``{}``."""
+    _, manifest, _, _, _ = _read_container(archive)
+    out = {}
+    for fe in manifest["files"]:
+        desc = fe.get("description")
+        md = fe.get("metadata")
+        if desc or md:
+            out[fe["path"]] = {"description": desc, "metadata": md}
+    return out
 
 
 def read_file(archive: str, arc_path: str) -> bytes:
@@ -413,7 +491,10 @@ def _main(argv=None):
         print(f"CSF-Pack v{m['version']} — {m['file_count']} file(s), "
               f"compressed={m['compressed']}, codec={m.get('codec', 'zlib')}")
         for f in m["files"]:
-            print(f"  {f['path']}  {f['size']}B  sha256={f['sha256'][:12]}…")
+            line = f"  {f['path']}  {f['size']}B  sha256={f['sha256'][:12]}…"
+            if f.get("description"):
+                line += f"\n      ↳ {f['description']}"
+            print(line)
     return 0
 
 

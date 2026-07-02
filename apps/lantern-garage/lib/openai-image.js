@@ -1,7 +1,8 @@
 // OpenAI image generation (Node, no python). Calls the OpenAI Images API directly with the
 // server-side key and saves the result locally, so it serves from /images/{file} — the key
 // never reaches the browser, and a local image dodges local TLS interception. Tries the newest
-// model (gpt-image-1) and falls back to dall-e-3 when the org lacks gpt-image-1 access.
+// model (gpt-image-2) and falls back to dall-e-3 for older orgs/keys that still have it
+// (gpt-image-1 is retired — both models now 404 with "model does not exist" on new keys).
 //
 // Wired into dream-chat's "draw me X" flow (lib stays provider-agnostic — this is the OpenAI tool).
 const { saveImage } = require("./image-handler");
@@ -50,13 +51,13 @@ async function generateImage(prompt, opts = {}) {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), opts.timeoutMs || 60000);
   try {
-    let out, model = "gpt-image-1";
+    let out, model = "gpt-image-2";
     try {
-      out = await _callOpenAI("gpt-image-1", p, size, apiKey, ctrl.signal);
+      out = await _callOpenAI("gpt-image-2", p, size, apiKey, ctrl.signal);
     } catch (e) {
       if (e.name === "AbortError") throw e;
-      // gpt-image-1 needs a verified org on many keys → fall back to the widely-available dall-e-3.
-      console.warn(`[openai-image] gpt-image-1 unavailable (${e.message}); falling back to dall-e-3`);
+      // Fall back for orgs/keys that only ever had access to the older dall-e-3.
+      console.warn(`[openai-image] gpt-image-2 unavailable (${e.message}); falling back to dall-e-3`);
       model = "dall-e-3";
       out = await _callOpenAI("dall-e-3", p, size, apiKey, ctrl.signal);
     }
