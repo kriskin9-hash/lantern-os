@@ -7,10 +7,13 @@ account** placed opposing orders and churned it to death on market-order spread 
 observed 2026-07-02 as rapid BUY→SELL round-trips (AAPL flipped in 3–7s) and a negative day
 P&L with ~$0 realized edge.
 
-Two-layer fix:
-- **Singleton guard** (`scripts/start-ai-trader.js`): `startAITrader()` now checks the trader
-  health port first and refuses to spawn a duplicate if one is already healthy — attaching as
-  a passive monitor instead.
+Fix:
+- **Per-account run lock** (`scripts/start-ai-trader.js`): before spawning, the manager takes
+  an atomic lock keyed on `sha256(ALPACA_API_KEY)` in the OS temp dir. The **same account**
+  can only run on **one server at a time** (a second server is refused); **different accounts**
+  hash to different locks and may run concurrently. A live owner blocks; a stale (dead-owner)
+  lock is reclaimed; the lock releases on exit. The machine-wide health-port check (skip if a
+  trader is already healthy on :5555) is kept as a secondary guard.
 - **Dev never trades** (`apps/lantern-garage/server-dev.js`): the :4178 dev boot defaults
   `LANTERN_DISABLE_TRADING=1`, so only stable :4177 owns the real-money trader. Opt back in
   explicitly with `LANTERN_DISABLE_TRADING=0` (e.g. a paper account).

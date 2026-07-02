@@ -7,11 +7,64 @@ const { spawn } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
+
+// Best-effort .env load so a standalone run (`node scripts/start-ai-trader.js`) sees
+// ALPACA_API_KEY for the per-account lock. When spawned by server.js the env is already
+// populated; dotenv won't override existing vars, so this is a no-op there.
+try { require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') }); } catch (_) {}
 
 const AI_TRADER_PATH = process.env.AI_TRADER_PATH || 'C:\\Independant AI Trader';
 const AI_TRADER_HOST = process.env.AI_TRADER_HOST || '127.0.0.1';
 const AI_TRADER_PORT = process.env.AI_TRADER_PORT || 5555;
 const logsDir = path.join(__dirname, '..', 'logs');
+
+// ── Per-account run lock ──────────────────────────────────────────────────────
+// The trader is bound to ONE Alpaca account (its API key, read from env by main.py /
+// agents.py). The SAME account must never run on two servers at once — they would place
+// opposing orders on the shared account and churn it. DIFFERENT accounts hash to DIFFERENT
+// lock files and may run concurrently. The lock is held by THIS manager process for the
+// trader's lifetime and released on exit; a stale lock (dead owner) is taken over.
+const _acctHash = process.env.ALPACA_API_KEY
+  ? crypto.createHash('sha256').update(process.env.ALPACA_API_KEY).digest('hex').slice(0, 12)
+  : 'no-key';
+const LOCK_PATH = path.join(os.tmpdir(), `lantern-ai-trader-${_acctHash}.lock`);
+let _lockHeld = false;
+
+function acquireAccountLock() {
+  const mine = JSON.stringify({ pid: process.pid, host: os.hostname(),
+    port: AI_TRADER_PORT, acct: _acctHash, startedAt: new Date().toISOString() });
+  try {
+    const fd = fs.openSync(LOCK_PATH, 'wx'); // atomic create-exclusive
+    fs.writeSync(fd, mine); fs.closeSync(fd);
+    _lockHeld = true;
+    return { ok: true };
+  } catch (e) {
+    if (e.code !== 'EEXIST') return { ok: false, reason: `lock error: ${e.message}` };
+    let owner = {};
+    try { owner = JSON.parse(fs.readFileSync(LOCK_PATH, 'utf8')); } catch (_) {}
+    if (owner.pid && owner.host === os.hostname()) {
+      try { process.kill(owner.pid, 0); // 0 = liveness probe, doesn't signal
+        return { ok: false, reason: `account already running here (pid ${owner.pid} since ${owner.startedAt})` };
+      } catch (_) { /* owner dead → stale lock, fall through and take over */ }
+    } else if (owner.pid) {
+      return { ok: false, reason: `account locked by host ${owner.host} (pid ${owner.pid}); refusing duplicate` };
+    }
+    try { fs.writeFileSync(LOCK_PATH, mine); _lockHeld = true; return { ok: true, tookOver: true }; }
+    catch (e2) { return { ok: false, reason: `could not claim stale lock: ${e2.message}` }; }
+  }
+}
+
+function releaseAccountLock() {
+  if (!_lockHeld) return;
+  try {
+    const o = JSON.parse(fs.readFileSync(LOCK_PATH, 'utf8'));
+    if (o.pid === process.pid) fs.unlinkSync(LOCK_PATH);
+  } catch (_) { /* already gone / unreadable */ }
+  _lockHeld = false;
+}
+process.on('exit', releaseAccountLock);
 
 // Ensure logs directory exists
 if (!fs.existsSync(logsDir)) {
@@ -97,7 +150,15 @@ async function startAITrader() {
     return;
   }
 
-  log(`Starting AI Trader (attempt ${restartCount + 1})...`);
+  // Per-account lock: refuse to spawn a second trader for the SAME Alpaca account.
+  const lock = acquireAccountLock();
+  if (!lock.ok) {
+    log(`✗ Not starting AI Trader — ${lock.reason}. (account ${_acctHash}; per-account singleton)`);
+    return;
+  }
+  if (lock.tookOver) log(`↺ Took over a stale account lock for ${_acctHash}.`);
+
+  log(`Starting AI Trader (attempt ${restartCount + 1})... (account ${_acctHash})`);
 
   // Pass environment variables to AI Trader
   const childEnv = {
