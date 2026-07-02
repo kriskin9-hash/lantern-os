@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
@@ -20,13 +21,13 @@
       }
     })();
   </script>
-  <title>Documents &amp; Knowledge Center — Keystone OS</title>
+  <title>Documents &amp; Knowledge Center — unisona.ai</title>
   <link rel="stylesheet" href="/css/site.css">
   <link rel="stylesheet" href="/css/narrator.css">
   <style>
     /* ── Knowledge Center: a curated hero + one unified, searchable/filterable
        document library. Uses only site.css tokens (--bg/--surface/--border/--text
-       /--muted/--accent/--radius) so it stays in lock-step with Keystone OS. ── */
+       /--muted/--accent/--radius) so it stays in lock-step with unisona.ai. ── */
     .kc-page { max-width: 1100px; margin: 0 auto; padding: 12px 24px 96px; }
 
     /* Hero — same centred treatment as explore.html / index.html */
@@ -122,6 +123,9 @@
     .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .chip .n { opacity: 0.65; font-weight: 500; margin-left: 4px; }
     .doc-count { font-size: 0.8rem; color: var(--muted); margin: 6px 0 16px; }
+    .doc-ext { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px;
+      font-size: 0.66rem; font-weight: 600; color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); }
 
     .doc-grid {
       display: grid;
@@ -179,7 +183,7 @@
     <div class="kc-eyebrow">Documents &amp; Knowledge</div>
     <h1>Everything, in one place</h1>
     <p>Start with the essentials, then search and filter the full library — every guide,
-       research note, architecture decision, and report Keystone OS ships.</p>
+       research note, architecture decision, and report unisona.ai ships.</p>
   </div>
 
   <!-- ── Start here (curated essential pages + docs) ── -->
@@ -190,6 +194,12 @@
       <p>Four quick ways in. You don't need an account or an API key to try it.</p>
     </div>
     <div class="link-grid">
+      <a class="link-card tile-rose" href="/whats-new.html">
+        <span class="icon">★</span>
+        <h3>What's new in Unisona 1.8</h3>
+        <p>The personal reasoning cockpit goes public — a user-facing surface at every stage of the loop.</p>
+        <span class="go">See the release →</span>
+      </a>
       <a class="link-card tile-cyan" href="/dream-chat.html">
         <span class="icon">✦</span>
         <h3>Open Keystone Chat</h3>
@@ -217,32 +227,6 @@
     </div>
   </section>
 
-  <!-- ── Live tools (curated pages, not documents) ── -->
-  <section class="section">
-    <div class="section-head">
-      <div class="label">Live internals</div>
-      <h2>Watch the system think</h2>
-      <p>Interactive views of the architecture as it runs — not documents, but the best way to see how the pieces fit.</p>
-    </div>
-    <div class="link-grid">
-      <a class="link-card tile-cyan" href="/rag-house.html">
-        <span class="icon">🏠</span>
-        <h3>RAG House</h3>
-        <p>Living map of the architecture — Status Cube, Convergence IO, CSF, and agents.</p>
-      </a>
-      <a class="link-card tile-violet" href="/observer-mesh-cube.html">
-        <span class="icon">🧊</span>
-        <h3>Observer Mesh Cube</h3>
-        <p>The 3D status cube — beliefs and observers across the mesh.</p>
-      </a>
-      <a class="link-card tile-gold" href="/orchestration.html">
-        <span class="icon">🧭</span>
-        <h3>Orchestration</h3>
-        <p>Stateless router — intent classification, convergence gate, provider fallback.</p>
-      </a>
-    </div>
-  </section>
-
   <!-- ── Document library (unified, searchable + filterable) ── -->
   <section class="section" id="documents">
     <div class="section-head">
@@ -266,16 +250,29 @@
     <div class="doc-chips" id="doc-chips" role="tablist" aria-label="Filter by category">
       <button class="chip active" data-cat="all">All</button>
       <button class="chip" data-cat="guides">Guides</button>
+      <button class="chip" data-cat="setup">Setup &amp; integrations</button>
+      <button class="chip" data-cat="trading">Trading</button>
+      <button class="chip" data-cat="training">Training &amp; models</button>
+      <button class="chip" data-cat="creator">Creator suite</button>
+      <button class="chip" data-cat="ops">Operations</button>
       <button class="chip" data-cat="architecture">Architecture (ADR)</button>
       <button class="chip" data-cat="research">Research &amp; theory</button>
       <button class="chip" data-cat="convergence-io">Convergence IO</button>
-      <button class="chip" data-cat="reports">Reports</button>
+      <button class="chip" data-cat="hff">Convergence (HFF)</button>
+      <button class="chip" data-cat="lore">Lore</button>
+      <button class="chip" data-cat="reports">Audits &amp; reports</button>
+      <button class="chip" data-cat="library">Library</button>
     </div>
     <div class="doc-count" id="doc-count"></div>
 
     <div class="doc-grid" id="doc-grid">
 
       <!-- Guides -->
+      <a class="doc-card" data-cat="guides" data-type="md" href="/repo/docs/UNISONA-1.8.md">
+        <span class="doc-ico">★</span>
+        <span class="doc-body"><span class="doc-title">Unisona 1.8 Release Notes</span><span class="doc-sum">What shipped in 1.8 — the personal reasoning cockpit, stage by stage.</span></span>
+        <span class="doc-meta"><span class="doc-cat">Guides</span><span class="doc-fmt">MD</span></span>
+      </a>
       <a class="doc-card" data-cat="guides" data-type="md" href="/repo/AGENTS.md">
         <span class="doc-ico">🤖</span>
         <span class="doc-body"><span class="doc-title">Agents Guide</span><span class="doc-sum">How AI agents and the per-agent workstream lanes work.</span></span>
@@ -343,6 +340,11 @@
         <span class="doc-body"><span class="doc-title">ADR-0003 · One canonical CSF module</span><span class="doc-sum">A single CSF serialization module — no parallel forks of the format.</span><span class="doc-status">Proposed</span></span>
         <span class="doc-meta"><span class="doc-cat">ADR</span><span class="doc-fmt">MD</span></span>
       </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" href="/repo/docs/MEMORY-RETRIEVAL.md">
+        <span class="doc-ico">🧠</span>
+        <span class="doc-body"><span class="doc-title">How Keystone Remembers</span><span class="doc-sum">The CSF memory & retrieval system — tiers, IDF-ranked recall, durable indexing. LongMemEval recall@5 0.43→0.81.</span></span>
+        <span class="doc-meta"><span class="doc-cat">Memory</span><span class="doc-fmt">MD</span></span>
+      </a>
       <a class="doc-card" data-cat="architecture" data-type="md" href="/repo/docs/adr/0004-append-only-memory.md">
         <span class="doc-ico">♻️</span>
         <span class="doc-body"><span class="doc-title">ADR-0004 · Append-only memory</span><span class="doc-sum">JSONL + CSF archive as the only memory systems — append, never mutate.</span><span class="doc-status">Proposed</span></span>
@@ -383,6 +385,11 @@
       <a class="doc-card" data-cat="research" data-type="md" href="/repo/docs/SIGMA0-COLLAPSE-CERTIFICATE.md">
         <span class="doc-ico">📐</span>
         <span class="doc-body"><span class="doc-title">Σ₀ Collapse Certificate</span><span class="doc-sum">Lyapunov-collapse theorem, the Σ₀ trigger, and the anti-collapse operator. Freeze-prevention now proven for all A (normal & non-normal); Theorem 1 contraction still scoped to normal A.</span></span>
+        <span class="doc-meta"><span class="doc-cat">Research</span><span class="doc-fmt">MD</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" href="/repo/docs/SIGMA0-EV-GATE.md">
+        <span class="doc-ico">⚖️</span>
+        <span class="doc-body"><span class="doc-title">Σ₀ EV Gate (Trader)</span><span class="doc-sum">The trader's Converge stage: one transparent expected-value model over weighted evidence (Grok, Claude, zone, structure, pattern, trend, news). Grok + Claude are now graded council members, not gates; Σ₀ EV is the sole ENTER/SKIP decider.</span></span>
         <span class="doc-meta"><span class="doc-cat">Research</span><span class="doc-fmt">MD</span></span>
       </a>
       <a class="doc-card" data-cat="research" data-type="md" href="/repo/docs/SIGMA0-C3-NONCOLLAPSE-NORMAL.md">
@@ -502,6 +509,1188 @@
         <span class="doc-body"><span class="doc-title">D — Time-Dilation Field</span><span class="doc-sum">Slows uncertain regions, speeds confident ones — maps to how much grounding to buy.</span></span>
         <span class="doc-meta"><span class="doc-cat">Convergence IO</span><span class="doc-fmt">MD</span></span>
       </a>
+
+<!-- LIBRARY:AUTO:START (generated by scripts/build_doc_library.js — do not hand-edit) -->
+      <!-- In-repo library (catalog-driven; scraped by build_knowledge_index.py → grounding corpus + Explore) -->
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="ungrounded" href="/repo/AGENTS.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Agents &amp; Contributor Guide</span>
+        <span class="doc-sum">Required-reading operating guide: the per-lane one-PR monoworkstream rules, git workflow, route map, and how the convergence agent fleet is coordinated.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="partial" href="/repo/PROVIDERS.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS — AI Provider Chain Documentation</span>
+        <span class="doc-sum">Provider inventory, keys, PCSF-backed routing and decode/serving params; provider status table stale (marks Anthropic/OpenAI/xAI active when only Gemini is funded).</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="partial" href="/repo/SKILLS.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS Skills &amp; Capabilities</span>
+        <span class="doc-sum">Reference for live skills, agent personas, and provider chain; persona table and provider-status column are stale.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="grounded" href="/repo/SECURITY.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Security Policy</span>
+        <span class="doc-sum">Required-reading security policy: secret handling, local-first verification, fixed vulnerabilities, and agent-safety rules with honest enforced/policy status flags.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/ARCHITECTURE.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS — Architecture (Current State)</span>
+        <span class="doc-sum">Canonical current-state architecture snapshot with file:line evidence and an honest known-divergences section.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/adr/README.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Architecture Decision Records (ADRs)</span>
+        <span class="doc-sum">Index and authoring rules for the append-only ADR log; approval gate and status values. Each ADR listed exactly once (0008 collision reconciled 2026-07-01).</span>
+        <span class="doc-foot"><span class="doc-cat">ADR · Index</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jul 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/RESEARCH-CANON.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Living Research Canon — Convergence 12</span>
+        <span class="doc-sum">Curated per-component reference trail for the Convergence 12; uses dead &#39;Lantern OS&#39; branding and some &#39;beat-zstd&#39; framing is aspirational.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/BENCHMARKS.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">BENCHMARKS — External Marks Registry</span>
+        <span class="doc-sum">Living registry of external benchmarks Keystone runs: HumanEval/MBPP Run, SWE-bench/LongMemEval Partial, ARC-AGI/HLE/OSWorld Planned, with evidence ledgers.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/CONVERGANCE-SIGMA0-BRIEFING.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">!CONVERGANCE Σ₀</span>
+        <span class="doc-sum">Immutable North Star: the one loop Observe→Remember→Reason→Act→Verify→Converge, four objects, Convergence-12 map. Uses dead &#39;Lantern OS&#39; branding in prose.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/MEMORY-RETRIEVAL.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">How Keystone Remembers — The CSF Memory &amp; Retrieval System</span>
+        <span class="doc-sum">Remember-stage guide: append-only JSONL + CSF memory, tiers, IDF-weighted retrieval, with a LongMemEval recall@5 benchmark table.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-OURO-CODER.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Ouro Coder — the local coding agent</span>
+        <span class="doc-sum">Single source of truth for the local Ouro-1.4B + Σ₀ QLoRA coder: adaptive Q-exit depth, serving, honest scope, training status.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="trading" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-EV-GATE.md">
+        <span class="doc-top"><span class="doc-ico">📈</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ EV Gate — the trader&#39;s Converge stage</span>
+        <span class="doc-sum">The live expected-value gate that decides ENTER/SKIP on trades; Grok/Claude are graded council members, not gates. Backed by convergence_ev.py + tests.</span>
+        <span class="doc-foot"><span class="doc-cat">Trading</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="reports" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/UNISONA-1.8.md">
+        <span class="doc-top"><span class="doc-ico">📋</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Unisona 1.8 — the personal reasoning cockpit goes public</span>
+        <span class="doc-sum">Release note for unisona.ai 1.8: per-loop-stage cockpits (Explore, memory decay, cockpits, autowork steering, verify surfaces) consolidating the 1.7.1xx line.</span>
+        <span class="doc-foot"><span class="doc-cat">Audits &amp; reports</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/KEYSTONE-PRODUCT.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone Chat — Product Definition &amp; Operating Contract</span>
+        <span class="doc-sum">Product contract for the member-facing operator console: grounded, tool-wired, fast chat; includes the fast/deep Ouro serving decision and measured 3070 latency baseline. Some &#39;Lantern OS&#39; phrasing.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/convergence-io/README.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Convergence IO — the Typed Primitive Stack</span>
+        <span class="doc-sum">Index of the P1-P10 governance primitives (DCF, NAP, AAPF, PCSF, CCF, CEG, dilation); how they compose and an honest note that not every primitive is on the live JS hot path.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="ungrounded" href="/repo/CONTRIBUTING.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Contributing to Keystone OS</span>
+        <span class="doc-sum">Contributor guide: fork/branch workflow, monoworkstream lane rule, ES6/2-space code style, WCAG-AA and i18n checklists, pytest + PR process.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/EXPLORE-FEED.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Explore Feed — single-pane, PCSF-ranked content</span>
+        <span class="doc-sum">As-built spec for the Explore page: one PCSF-ranked content stream reusing the provider leaderboard, with data flow, API contract, and known gaps.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/KEYSTONE-LIMITATIONS.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone — What It Can&#39;t Do (Yet)</span>
+        <span class="doc-sum">Evidence-tagged audit of current limitations (no live web fetch default, loop not end-to-end in serving, autowork branch reuse, weak local kernel ~10% pass@1, 4 real skills).</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/KEYSTONE-BRAND-GUIDELINES.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone Chat — Brand Guidelines</span>
+        <span class="doc-sum">Brand, color-token, typography, component, and voice spec sourced from site.css; correctly retires &#39;Lantern OS&#39; as user-facing.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/fallout-radio-backlog.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone Radio — Feature Backlog</span>
+        <span class="doc-sum">Feature+backlog log for the fallout-radio.html jukebox: 273-track offline library, CRT UI, gitignored audio fetched via script.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="living" data-grounding="ungrounded" href="/repo/docs/PRIVACY_GOVERNANCE.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Privacy Governance — Keystone OS</span>
+        <span class="doc-sum">Policy on never showcasing private/personal data; prohibited vs approved demo data, handling rules, and commit/CI enforcement.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/ACCESSIBILITY.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Accessibility (WCAG 2.1 AA) Standards</span>
+        <span class="doc-sum">WCAG 2.1 AA checklist, keyboard/screen-reader testing guide, and PR-review a11y list; uses dead &#39;Lantern OS&#39; branding in prose.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/ACTION-POOLING-AND-BATCHING.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Action Pooling and Action Batching</span>
+        <span class="doc-sum">Operating-method policy for batching low-risk actions and holding purchases/account/hardware actions; legal-asset and hardware-expansion loops.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/CODE_OF_CONDUCT.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Contributor Covenant Code of Conduct</span>
+        <span class="doc-sum">Standard Contributor Covenant v2.0 code of conduct: expected behavior, unacceptable behavior, and reporting via GitHub issue.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/SCRIPTS.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS — Script Inventory</span>
+        <span class="doc-sum">Reference index of runnable scripts (startup, Discord bot, orchestrator, tests, tunnels); some entries may lag current script set.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/UX_STANDARDS.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS — UX &amp; Wording Standards</span>
+        <span class="doc-sum">UX and wording standards for all pages: spacing/typography/color tokens, tone, section-naming, WCAG-AA contrast checklist. Some &#39;Lantern&#39; example copy is stale.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="guides" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/CONVERGENCE-LOOP.md">
+        <span class="doc-top"><span class="doc-ico">📘</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS Convergence Loop</span>
+        <span class="doc-sum">The 12-step operating/release-decision method for a convergence loop (inspect→map claims→validate→fix→promote/hold/reject), with promotion states.</span>
+        <span class="doc-foot"><span class="doc-cat">Guides</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/adr/0006-dual-boot-worktree-topology.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0006: Dual-Boot 4177/4178 Worktree Topology</span>
+        <span class="doc-sum">ADR: two servers from two git worktrees (4177 stable auto-deploys master, 4178 dev); matches current dual-boot setup. Status: Proposed.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/convergence-core-mapping.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Code → Convergence Core Mapping</span>
+        <span class="doc-sum">Canon architecture map of code to the four objects + six-stage loop; carries a real-time status banner correcting stale-branded body.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/KEYSTONE-COCKPIT.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone Cockpit — the Human-in-the-Loop Spine</span>
+        <span class="doc-sum">Built+tested spine for the personal-AI flow: editable approved/proposed Profile, ActionGate holding send/schedule/submit/spend, and smallest-useful-question surfacing.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/KEYSTONE-IP-AND-BUILDOUT.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS — IP Register &amp; 2-Year Buildout Plan</span>
+        <span class="doc-sum">Defensive-publication IP register + 8-quarter roadmap; honestly tags each invention [implemented]/[design]; most milestones planned.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/ROLLOVER.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Rollover — Staging the Keystone Kernel as Primary Coding Agent</span>
+        <span class="doc-sum">Staged, gated plan to move the coding agent from Claude to the local Ouro kernel; env-flag stages with measurable promotion gates.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SURFACE-BOUNDARY.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Surface Boundary — Core Loop vs. Extensions</span>
+        <span class="doc-sum">Living registry classifying every public HTML surface as CORE (loop stage) or EXTENSION (module/flag); 18:30 ratio, gated by test:boundary.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/AGENT.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">The Convergence Agent (the one agent)</span>
+        <span class="doc-sum">Canonical spec of the single Convergence-Core product agent; each capability tagged wired/coded/designed with honest gaps.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-MODEL-ADAPTER.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Local-Model Adapter</span>
+        <span class="doc-sum">Implemented local-model registry contract: VRAM-gated selection, selfConverges wrap, resolveLocalLead pin precedence; feeds loop-reasoner.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0001-record-architecture-decisions.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0001: Record Architecture Decisions</span>
+        <span class="doc-sum">Foundational ADR establishing the append-only ADR practice and the owner-approval gate; status Proposed, awaiting Alex&#39;s approval.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0002-single-convergence-core.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0002: Single Convergence Core — Reject Architectural Sprawl</span>
+        <span class="doc-sum">ADR mandating one Convergence Core and extension-over-addition; forbids parallel subsystems. Status Proposed, pending approval.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0003-one-canonical-csf-module.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0003: One canonical CSF module</span>
+        <span class="doc-sum">Records the v2 decision to keep exactly one CSF module (pack/unpack, legacy read-only); honestly flags the zstd-19 codec claim vs zlib-bound reality as open debt.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0004-append-only-memory.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0004: Append-only JSONL + CSF Archive as the Only Memory Systems</span>
+        <span class="doc-sum">ADR fixing memory to append-only JSONL logs plus one CSF archive; bars a third store. Status Proposed, pending approval.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/adr/0005-interchangeable-model-providers.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0005: Models Are Interchangeable — Provider Abstraction with Fallback</span>
+        <span class="doc-sum">ADR (Proposed) making providers config-not-code with a fallback chain; describes intended Gemini→Claude→OpenAI→Ollama routing (only Gemini/Vertex funded today).</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0007-monoworkstream-one-pr-lane-per-agent.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0007: Monoworkstream — One Open PR Lane per Agent</span>
+        <span class="doc-sum">ADR for the one-open-PR-lane-per-agent workstream rule with options, trade-offs, and evidence; status Proposed, awaiting approval.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0009-one-routing-contract-cloud-primary-coding.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0009: One routing contract — cloud-primary for coding, local as verified backstop</span>
+        <span class="doc-sum">Accepted ADR: coding routes cloud-primary when a cloud key is reachable, local is the verified offline backstop, resolved in one pure route-contract resolver.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/convergence-routing-architecture.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Convergence Routing Architecture</span>
+        <span class="doc-sum">Explains the deterministic intent router + pattern cache; provider-chain section lists Claude/OpenAI/Grok as live though only Gemini is funded.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/CSF-FORMAT-SPECIFICATION.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">CSF Format Specification</span>
+        <span class="doc-sum">Canonical binary spec for CSF-Pack v0.8 (one zstd-backed format); documents v2 consolidation and read-only legacy path.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/adr/0010-verify-gated-continual-learning-last-resort.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Distillation is a Deferred Last Resort — Verify-Gated, Never the Target</span>
+        <span class="doc-sum">ADR (Proposed, awaiting Alex): preserves LoRA distillation as a guard-railed last-resort escape hatch to North Star &#39;never retrain&#39;, with collapse tripwire.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/MCP-DREAM-CHAT-TOOL-PARITY.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">MCP and Dream Chat tool parity</span>
+        <span class="doc-sum">Reference spec for the shared tool surface: tool-runner.js as canon, MCP bridge, gates (CHAT_TOOL_EXEC), receipt shape, contract tests.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/adr/0008-end-product-personal-ai-wrapper.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0008: The end product is a personal AI wrapper — capabilities are Tools + Skills in the one loop</span>
+        <span class="doc-sum">ADR defining Keystone OS as a local-first personal AI cockpit; capabilities added as Tools+Skills not subsystems. Status Proposed, awaiting approval.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/adr/0011-proprietary-sigma0-base-model.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0011: Own a proprietary Σ₀ base model</span>
+        <span class="doc-sum">Proposed (not approved): fork a PLT looped-coder into a Keystone-owned Σ₀ base, adapter-only, council+CSF native; staged, each stage gated on on-box evidence.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="draft" data-grounding="grounded" href="/repo/docs/adr/0013-subsystem-register-one-loop-gate.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-0013: Subsystem register + one-loop gate — every surface names a loop stage or is scheduled for extraction</span>
+        <span class="doc-sum">ADR (Proposed, awaiting Alex): every public surface is registered CORE (one loop stage) or gated EXTENSION in lib/surface-registry.js, enforced by test:boundary + audit:orphans; consolidates three colliding 0001 drafts from PR #1813.</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jul 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/CONVERGENCE-HOOKS.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Convergence Hooks: Σ₀ Loop Across All Steps</span>
+        <span class="doc-sum">Design of the hook framework routing every action through the six-stage loop into a ConvergenceRecord; git integration wired, kernel/test/API/dashboard hooks still planned.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="architecture" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/SUPERFLEET-SWARM-DESIGN.md">
+        <span class="doc-top"><span class="doc-ico">🏛️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Superfleet Swarm — Design</span>
+        <span class="doc-sum">Design for scaling the Convergence Core into a bounded local worker swarm; Phase 0-1 marked done, Phases 2-7 (supervisor/executor/researcher/mesh) still unbuilt.</span>
+        <span class="doc-foot"><span class="doc-cat">Architecture</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-29-csf-beating-zstd.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Beating zstd-19 in CSF — a grounded theorization</span>
+        <span class="doc-sum">Grounded analysis of what can beat zstd-19 on the project&#39;s logs; concludes only the schema-columnar transform wins today, neural/retrieval variants deferred or refuted by a real probe.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-28-csf-tesseract-novelty-and-e1-kill.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">CSF / Tesseract / Lapse — Novelty Review and the E1 Kill</span>
+        <span class="doc-sum">Kills the tesseract/quantum-compression branch with external lit + run experiments; salvages only the per-token surprise signal.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/gpu-training-pipeline-diagnosis-2026-06-25.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">GPU Training Pipeline Diagnosis — Why Ouro Fine-Tunes Weren&#39;t Landing</span>
+        <span class="doc-sum">Grounded diagnosis of five dispatch→CUDA bugs (all fixed on master) and the finding that Kaggle&#39;s pre-Ampere GPUs lack bf16, so Lightning A10 must be the primary target.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/ANTI-COLLAPSE-HARDENING.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Hardening the Reasoning Loop Against Collapse</span>
+        <span class="doc-sum">CSF-native anti-collapse defense-in-depth plan (19 items, red-team gaps); working ledger with reconcile notes marking landed fixes and remaining G1 gap.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-30-surprise-leak-layer1-result.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Opening the Leak, Layer 1: Surprise Separates Hallucination</span>
+        <span class="doc-sum">Measured result: raw per-token surprise separates hallucination (AUROC 0.76-0.81) but the shipped tailMass field was chance; fixed to a perplexity blend.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-30-surprise-valve-opened.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Opening the Leak, Layer 1.5: Surprise Valve Wired Into Serving</span>
+        <span class="doc-sum">Implemented+proven: flag-gated per-token logprob accumulator wired into stream-chat groundedness canary with per-model calibration; Layers 2-3 still unrun.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-19-kernel-model-frontier.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Re-grounding the Keystone OS Kernel Model Question — Ouro LoopLM vs the 2026 Small-Model Frontier</span>
+        <span class="doc-sum">Primary-source-verified benchmark plan comparing Ouro-1.4B LoopLM against the current small-model frontier on Keystone&#39;s own metrics.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-22-frozen-weights-grounding-loop.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">The Frozen-Weights, Memory-Grounding Convergence Loop</span>
+        <span class="doc-sum">Grounded design for the safe runtime loop: frozen weights, memory+calibration adapts, Σ₀ re-ground; wiring status per file:line.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-30-pumped-lossy-resonator.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">The Loop Is a Pumped, Lossy Resonator — a Laser, Not an Echo Chamber</span>
+        <span class="doc-sum">Design principle mapping laser physics to the loop (pump=Observe, leak=Verify); shows the surprise &#39;leak&#39; is wired but unspent.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/question-machine.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">The Question Machine — Bidirectional Consolidation of the Loop</span>
+        <span class="doc-sum">Built+tested math core: backward costate + forward-backward consolidation surfacing the seam as a question, CAP/NAP gated; channels still stubs.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-C3-NONCOLLAPSE-NORMAL.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Theorem C3 — Σ₀⁻¹ Prevents Permanent Freeze (all A)</span>
+        <span class="doc-sum">Machine-checked proof that the anti-collapse operator can&#39;t latch a permanent freeze; freeze-prevention closed for all A, contraction still scoped.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/research/2026-06-19-convergence-core-agent-spine.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Wiring the rest of the agent — the Convergence Core is coded but doesn&#39;t run end-to-end</span>
+        <span class="doc-sum">File-by-file grounded design note on the Convergence Core: four objects + six-stage loop coded in Python, gaps are wiring.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-COLLAPSE-CERTIFICATE.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ — The Collapse Certificate</span>
+        <span class="doc-sum">Stability-certificate theory for convergence collapse; freeze-prevention proven for all A, non-normal contraction still a draft route.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-COLLAPSE-EXPLAINER.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ — The Collapse Certificate, Explained</span>
+        <span class="doc-sum">Plain-English explainer of the collapse/grounding math: PROVEN freeze theorem, MEASURED anti-collapse operator, HEURISTIC trigger; non-normal proof still open.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/SIGMA0-WORKLIST.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Worklist — Council, Evals, and the Coder Swap</span>
+        <span class="doc-sum">Living backlog from the 2026-06-29 Σ₀ session: council-as-route+verify thesis, done items (unified council, SWE harness), and prioritized next steps (Qwen swap, real SWE number, RAG).</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/2026-06-29-best-in-slot-local-coder.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Best-in-slot local coder — the grounding gate</span>
+        <span class="doc-sum">Decision: register LoopCoder-v2 behind a verified flag (vendor 64.4 SWE unreproduced); Ouro stays default; probe never run on-box.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/CLAUDE-CODE-MULTI-AGENT-SPAWNING.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Claude Code Multi-Agent Spawning — Validation</span>
+        <span class="doc-sum">Verification record: Claude Code (harness/SDK) can spawn/coordinate/merge sub-agents (GA); raw Claude API cannot auto-spawn. Notes multi-agent cost is high.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/regulatory-oracle-grounding.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Grounding the Convergence IO Oracle in Real Cross-Border Regulation</span>
+        <span class="doc-sum">Deep-research validation mapping convergence-io primitives to in-force regulation (OFAC/DORA/GDPR); 24/25 claims confirmed on primary sources.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/SIGMA0-L2-ANISOTROPY-LIFT-PROOF.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lemma L2 — the one-step anisotropy lift (closed form, proven)</span>
+        <span class="doc-sum">Closed-form + machine-checked proof that one Σ₀⁻¹ covariance bump breaks the collapse freeze trigger for all A; explicitly does not touch Theorem-1 contraction for non-normal A.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/PREDICTION-MARKET-GROUNDING-SURVEY.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Prediction Markets as External Grounding / Reward Signal — Literature Survey</span>
+        <span class="doc-sum">Cited literature survey on using prediction-market prices as a calibrated grounding signal; verified references, viable-as-grounding verdict.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/research/2026-06-21-convergence-plan-refinement.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Refining the !convergence plan against the 2026 frontier</span>
+        <span class="doc-sum">Web-grounded refinement of the convergence build order: calibrated outcome grader, step-wise Act gate, live canary, relevance-gated memory. Sources flagged medium-confidence.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/convergence-oracle.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">The Convergence Oracle — time-banded observer slices</span>
+        <span class="doc-sum">Built+tested grounding capability: locates a question in cosmic time, returns cited knowns and honest unknowns per era; CLI + 6 tests.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/2026-06-21-overfitted-brain-dreams-generalization.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">The Overfitted Brain Hypothesis — why dreaming is a reasoning strategy</span>
+        <span class="doc-sum">Research note grounding the &#39;no dream engine&#39; rule and Σ₀ anti-collapse in Hoel 2020; cites the source in full and flags the analogy-not-mechanism caveat.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/SIGMA0-T1-NONNORMAL-DICHOTOMY.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Theorem 1 (non-normal) — the spectral-dichotomy extension</span>
+        <span class="doc-sum">Proves the contraction half of Theorem 1 for non-normal A via the Riesz spectral dichotomy; machine-checked (600-matrix sweep + pytest), scoped to the local linear Jacobian.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/SIGMA0-QUANTUM-RELATIVITY-ANALYSIS.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Collapse Certificate as an Analogy for QM–GR Incompleteness</span>
+        <span class="doc-sum">Speculative essay: QM–GR incompleteness as metaphor for Σ₀ collapse; explicitly not a derivation; AI-safety section is the grounded keeper.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/SIGMA0-REAL-DATA-GROUNDING.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Real-Data Grounding — the Parrot Attractor on a Real Log</span>
+        <span class="doc-sum">Runs the committed Σ₀ collapse-certificate + surprise monitor on a real conversation log; honest real-vs-synthetic provenance for each result.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/2026-06-21-sigma0-serving-validation.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Serving &amp; Embedding — Web-Grounded Validation</span>
+        <span class="doc-sum">Adversarially web-grounded validation of Ouro Σ₀ serving options (vLLM/SGLang/ONNX-DirectML/llama.cpp) with per-claim confidence and primary sources.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/SIGMA0-K1-KERNEL-SPEC.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀-K1 — The first buildable convergence kernel (spec)</span>
+        <span class="doc-sum">Frozen spec for the Ouro-1.4B convergence kernel; honest that the core model is weak (pass@1 0.1); components built+tested, loop closure not live.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/research/explore-content-machine.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Explore as a Σ₀-Ranked, Profile-Fed Content Machine</span>
+        <span class="doc-sum">Design proposal to collapse Explore into one ranked card feed via PCSF leaderboard + interest log; web-grounded on Meta/HSTU recsys patterns.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/research/2026-06-28-keystone-chat-frontier-stack.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone Chat — Frontier Dev Stack (Research + Design)</span>
+        <span class="doc-sum">Proposed design: capability-gated local-first harness (Qwen-27B ≥24GB else Claude cloud); harness-is-product bet; not an accepted ADR.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/KEYSTONE-SIGMA0-SUSTAINED-WORK-DESIGN.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone-Σ₀: Self-Converging Local Kernel + Chat Harness for Sustained Work</span>
+        <span class="doc-sum">Design for wiring depth/halt/surprise telemetry through serving→chat→autowork; honest about Stage-0 parity gap and refuted &#39;ahead&#39; claims.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/research/2026-06-29-sigma0-nested-adaptive-reason.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Nested Adaptive Reason — Q-exit × fidelity escalation gated by stability canaries</span>
+        <span class="doc-sum">Proposed design wiring within-model Q-exit and cross-model escalation into one Reason stage via a shared ReasonVerdict; not yet wired, ADR to follow.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/research/2026-06-21-sigma0-onnx-directml-spike.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ ONNX Runtime + DirectML Embedded Export — Spike Scope</span>
+        <span class="doc-sum">Time-boxed GO/NO-GO spike plan to export Ouro-1.4B&#39;s adaptive-depth loop to ONNX+DirectML for in-process Windows inference; not yet run.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="research" data-type="md" data-status="draft" data-grounding="aspirational" href="/repo/docs/SIGMA0-V10-THEORY-GROUNDING.md">
+        <span class="doc-top"><span class="doc-ico">🧪</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ V10 Video Scoring — Theory-to-Implementation Mapping</span>
+        <span class="doc-sum">Maps collapse-certificate math onto the V10 video scorer; the doc itself flags most guarantees as aspirational/not-computed-at-runtime.</span>
+        <span class="doc-foot"><span class="doc-cat">Research</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="aspirational">Aspirational</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/AAPF.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">AAPF — Agent Action Provenance Format</span>
+        <span class="doc-sum">Spec for the append-only ActionRecord/ProvenanceLedger audit trail (P3); implemented+unit-tested in Python, a reference contract not on the live JS chat path.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/CCF.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">CCF — Capability Claim Format</span>
+        <span class="doc-sum">Spec for the P4 Capability Claim Format primitive: time-boxed claims, honesty tracker, and a capability gate; implemented and unit-tested but not on the live JS path.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/CEG.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">CEG — Convergence Execution Graph</span>
+        <span class="doc-sum">Spec for the typed graph substrate (nodes/edges/optimizer/executor) the convergence-io stack plugs into; implemented+tested in Python, not on the live 4177 JS chat path.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/DILATION.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">D — Time Dilation Field</span>
+        <span class="doc-sum">Reference spec for the dilation field primitive (D in CEG): field function, grounding-policy bridge, dwell caps, swap guard.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/DCF.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">DCF — Data Classification Format</span>
+        <span class="doc-sum">Convergence-io P1 primitive: every datum carries propagating class labels so downstream CCF/NAP gates decide use. Python-tested reference; JS chat path doesn&#39;t import it.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/NAP.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">NAP — Negative Authority Profiles</span>
+        <span class="doc-sum">Spec for the P2 denial-form authority gate: hard denials override capability claims, compose with deny-lists; implemented+tested in Python, not on JS chat path.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="convergence-io" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/convergence-io/PCSF.md">
+        <span class="doc-top"><span class="doc-ico">🔭</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">PCSF — Provider Capacity State Format</span>
+        <span class="doc-sum">Spec for the P4 provider-capacity router (states, circuit breaker, quota, fallback chain); honestly notes the live JS chat path routes providers itself.</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence IO</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/research/2026-06-22-ouro-subquadratic-attention.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Sub-Quadratic Attention for Ouro-1.4B UT</span>
+        <span class="doc-sum">Ouro-1.4B attention-cost plan: SDPA training fix shipped; SWA/linear-attention/ragged-depth KV cache scoped as research with VRAM measurements.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-CONTINUAL-TRAINING.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Continual-Training Loop — the closed flywheel</span>
+        <span class="doc-sum">Offline opt-in harvest→verify→train→eval→promote loop for the local Ouro coder; gates built+tested, full-HumanEval rerun still pending.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/OURO-MULTISOURCE-SESSION-DATASET.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Ouro Multi-Source Session Dataset</span>
+        <span class="doc-sum">How to build the private multi-source Ouro training dataset (Claude/Codex/ChatGPT tool trajectories) from local sessions; provenance/redaction rules and Kaggle mount path.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/2026-06-26-ouro-humaneval-training.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Ouro-1.4B HumanEval Training Research</span>
+        <span class="doc-sum">Training-cycle findings: 75% champion was a labeling bug, harness fix 10→35%, format-beats-volume, overfitting curve, HumanEval contamination caveat.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/SERVING-ARCHITECTURE-2026.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Serving Architecture 2026: Fast Default + Deep Research Mode</span>
+        <span class="doc-sum">FAST cached vs DEEP Σ₀ Q-exit serving-mode decision with decode params and benchmark contract; calls itself Lantern OS (stale brand).</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/WEEKLY-TRAINING-SETUP.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Weekly Training Orchestration</span>
+        <span class="doc-sum">Setup guide for the scheduled weekly Ouro training + HumanEval loop across free GPU providers; procedural, but provider mix overtaken by the Kaggle-bf16 diagnosis and unverified pass@k targets.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/SERVING-DEEP-MODE-GUIDE.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">When to use FAST vs DEEP mode</span>
+        <span class="doc-sum">Decision guide for FAST vs DEEP serving modes; honest that connector DEEP only swaps decode params and benchmarks are unrun TODO.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/SIGMA0-AGENT-PORTFOLIO-UPDATE.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Coder Serving Architecture — Staff Portfolio Update (v2)</span>
+        <span class="doc-sum">Peer-review plan for a swappable Ouro coder serving topology (cloud floor + ONNX embedded spike); honestly flags adaptive engine unmeasured and Ouro not yet the live coder.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/SIGMA0-CODER-DEVBOX-SETUP.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Ouro Coder — Dev-Box Setup &amp; Handoff</span>
+        <span class="doc-sum">Setup/handoff to run the local Ouro-1.4B Σ₀ coder + Claude-Code bridge on a second box; pinned env, adapter/dataset moves, key-leak hygiene; notes 1.4B adapter still under-triggers.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/2026-06-21-fc-retraining-web-grounded-refinement.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Ouro Coder — FC Retraining Plan: Web-Grounded Refinement</span>
+        <span class="doc-sum">Web-grounded plan for retraining the local Ouro coder&#39;s tool-calling; five cited papers, an in-domain eval gate shipped, GPU loop still to run.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/research/2026-06-21-sigma0-serving-perf.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Serving Performance — Debug, Research, and the First Upgrade</span>
+        <span class="doc-sum">Code-grounded debug of the native Q-exit O(N²) decode, the shipped KV-cache fix, and the truncation-vs-cache tradeoff; parity number still needs GPU validation.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/SIGMA0-CONVERGENCE-ADAPTER.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Convergence Adapter — spec, data, eval, GPU program</span>
+        <span class="doc-sum">Proposed verification-gated fine-tune spec teaching a model native Σ₀ discipline; generator landed, eval + adapter not yet built.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/V10-TRAINING-QUICKSTART.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ V10 Training Pipeline — Quickstart</span>
+        <span class="doc-sum">Runbook to train the XGBoost V10 video scorer from YouTube Shorts; runs on mock data, real-API integration into the scorer still a to-do.</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="training" data-type="md" data-status="unreviewed" href="/repo/docs/SIGMA0-PLT-HANDOFF.md">
+        <span class="doc-top"><span class="doc-ico">🧠</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone-Σ₀ PLT — Handoff (2026-07-01)</span>
+        <span class="doc-sum">What this is: the pick-up sheet for the &quot;loopcoder swap&quot; — bootstrapping our own</span>
+        <span class="doc-foot"><span class="doc-cat">Training &amp; models</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="trading" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/KALSHI-API-SPEC.md">
+        <span class="doc-top"><span class="doc-ico">📈</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Kalshi Trading API Specification</span>
+        <span class="doc-sum">REST endpoint reference for the Kalshi trading API; stale-branded &#39;Lantern OS&#39;; overlaps the fuller docs/trading-api-reference.md.</span>
+        <span class="doc-foot"><span class="doc-cat">Trading</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="trading" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/PORTFOLIO-SETUP.md">
+        <span class="doc-top"><span class="doc-ico">📈</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Portfolio Integration Setup (IBKR)</span>
+        <span class="doc-sum">Setup guide for connecting IBKR/Alpaca portfolio data; system serves mock data until IBKR Gateway runs. Cites a port-5050 trading service.</span>
+        <span class="doc-foot"><span class="doc-cat">Trading</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="trading" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/trading-api-reference.md">
+        <span class="doc-top"><span class="doc-ico">📈</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Trading API Reference</span>
+        <span class="doc-sum">Endpoint reference for the 60+ Kalshi/trading REST routes in routes/trading.js: markets, swipe deck, convergence model, monitor, crypto, history, AI trader.</span>
+        <span class="doc-foot"><span class="doc-cat">Trading</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="trading" data-type="md" data-status="unreviewed" href="/repo/docs/research/2026-06-30-sigma0-weather-oracle-kalshi-edge.md">
+        <span class="doc-top"><span class="doc-ico">📈</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Weather Oracle — a Kalshi daily-high edge, grounded in the settlement source</span>
+        <span class="doc-sum">Kalshi KXHIGHNY settles on the NWS Daily Climatological Report for Central</span>
+        <span class="doc-foot"><span class="doc-cat">Trading</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/creator-v10/learning-pipeline-research.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Creator Dashboard — Learning Pipeline Research</span>
+        <span class="doc-sum">Honest reframe of a viral-editing pipeline; documents that &#39;viral&#39; Σ₀ features are title-text proxies and the 5000-shorts study was synthetic/retracted.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="living" data-grounding="partial" href="/repo/docs/creator-v10/editing-analysis-model-research.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Editing &amp; Analysis Model Research — Improvement Plan</span>
+        <span class="doc-sum">Research + progress log for the creator dashboard&#39;s analysis/editing models (shot detection, retention curves, Whisper, novelty scoring), with A1-B4 items marked done in code.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/creator-v10/editing-discovery-engine.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Editing Discovery Engine</span>
+        <span class="doc-sum">Creator discovery engine that mines recurring editing role-sequences into a playbook; structural core shipped+tested, performance gated as insufficient_data.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/SIGMA0-OPEN-VIDEO-RESEARCH.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Σ₀ Open-Video Research Loop</span>
+        <span class="doc-sum">Design + status of a delete-after-analysis flywheel that learns observable editing priors from open-license video; explicit honesty boundary and empty seed store, no live corpus yet.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/creator-v10/caption-engine-v3.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">CaptionEngineV3</span>
+        <span class="doc-sum">Spec for the event-driven caption engine: signal-derived event taxonomy, 50+ data-defined styles, ffmpeg effects; behind a default-off flag.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/creator-dashboard.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Creator Dashboard — Design &amp; User Guide</span>
+        <span class="doc-sum">Design/user guide for the creator upload+analysis page (/create.html); accurate feature/API spec but &#39;Production Ready&#39; framing and &#39;Lantern&#39; branding are stale.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/creator-v10/creator-intelligence-architecture.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Creator Intelligence — Subsystem Architecture</span>
+        <span class="doc-sum">Architecture of src/creator-intelligence: data-first modules with an insufficient_data honesty contract (no invented metrics) and per-video vs population truth split.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/creator-v10/export-validator.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ExportValidator</span>
+        <span class="doc-sum">Spec for the ffprobe-backed hard gate that blocks a short-form export failing resolution/fps/codec/duration/caption checks; flag on by default, blocks rather than passes when ffprobe absent.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/FACECAM_DETECTION.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Facecam Detection + Top-Locking</span>
+        <span class="doc-sum">How the creator render pipeline detects a facecam by its seam (not skin) and locks it to the top band; before/after corners and real-clip ffmpeg verification.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/creator-v10/research-dataset-schema.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Research Dataset Schema</span>
+        <span class="doc-sum">Row-shape spec for the Creator Intelligence dataset (GeneralShort/GamingShort/EditEvent), storage layout, opt-in ToS-respecting collection, and sufficiency thresholds; ships empty.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/creator-v10/safe-zone-v2.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">SafeZoneDetectorV2</span>
+        <span class="doc-sum">Spec for a multi-frame safe-zone detector that protects facecam/HUD/crosshair when reframing gameplay to 9:16; fixes the V9 zone-discard bug, flag-gated, honest confidence.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/THREE-DOORS-SD-PROMPT-USER-GUIDE.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Three Doors Kingdome: Stable Diffusion Prompt User Guide</span>
+        <span class="doc-sum">How-to for generating canon-aligned Three Doors imagery locally via Automatic1111/ComfyUI + DreamShaper XL, with per-stage prompts.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="creator" data-type="md" data-status="draft" data-grounding="partial" href="/repo/docs/creator-v10/variant-engine-v2.md">
+        <span class="doc-top"><span class="doc-ico">🎬</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">VariantEngineV2</span>
+        <span class="doc-sum">Spec for a creator variant engine (A–E edit recipes + honest insufficient_data ranking) behind the LANTERN_CI_VARIANT_V2 flag; implementation steps listed.</span>
+        <span class="doc-foot"><span class="doc-cat">Creator suite</span><span class="doc-badge b-status" data-s="draft">Draft</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/CHATGPT-CONNECTOR-SETUP.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ChatGPT Custom Connector Setup for MCP</span>
+        <span class="doc-sum">Setup guide for wiring ChatGPT to the OAuth2/PKCE MCP server; stale-branded &#39;Lantern OS&#39;, assumes live OpenAI keys, and awaits an unresolved Cloudflare tunnel fix.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/CLOUDFLARE-TUNNEL-DEPLOYMENT.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Cloudflare Tunnel Deployment Guide</span>
+        <span class="doc-sum">Stale-branded (&#39;Lantern OS&#39;): how to expose the local server + MCP publicly via cloudflared to lantern-os.net; procedure still valid, product name outdated to unisona.ai.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/CLAUDE-CHATGPT-MCP-SETUP.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Connect Claude &amp; ChatGPT to the MCP Server</span>
+        <span class="doc-sum">OAuth2/SSE connector setup for wiring Claude and ChatGPT to the MCP server; stale-branded (lantern-os.net) but the OAuth flow is a stable procedure.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/convergence-router-deployment-guide.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Convergence Router Deployment Guide</span>
+        <span class="doc-sum">Endpoint+caching reference for the deterministic convergence router; lists the removed 6 RP personas, so the intent-routing section is stale.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/KEYSTONE-MCP.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone ↔ MCP / live project context</span>
+        <span class="doc-sum">How keystone-context.js injects live repo state (open issues/PRs via gh, MCP tool inventory, branch) into the chat system prompt, provider-agnostically; context-injection not tool-calling.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/DREAM-JOURNAL-QUICKSTART.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS Dream Journal — Lightweight Deployment</span>
+        <span class="doc-sum">Quickstart for the standalone 229MB Dream Journal Docker image and its dream/chat API endpoints; mentions Grok interpretation which is no longer a live provider.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/MCP-CONNECTOR.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS MCP Connector</span>
+        <span class="doc-sum">Safety contract + verification runbook for the local-first MCP connector: evidence classes, held items, and a promotion gate before any agent trusts the surface.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/mcp-client-setup.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">MCP Client Setup</span>
+        <span class="doc-sum">Guide to connect ChatGPT, Claude Desktop, Grok, and Cursor to the Keystone MCP server via OAuth or Bearer token.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/MEDIA-HOSTING-R2.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Media Hosting — Cloudflare R2</span>
+        <span class="doc-sum">Setup guide for serving gallery/showcase media from Cloudflare R2 with a git-tracked manifest and rclone sync.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/PATREON-OAUTH.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Patreon OAuth 2.0 Integration</span>
+        <span class="doc-sum">Setup guide for the Patreon OAuth login: app registration, env vars, tier-to-role mapping, endpoints, and troubleshooting.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/USER-PROFILES.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">User Profiles — Local-First Backend</span>
+        <span class="doc-sum">API+storage reference for the local JSONL/CSF user-profile system with Patreon roles; uses dead &#39;Lantern OS&#39; branding in prose.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="setup" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/YOUTUBE-API-SETUP.md">
+        <span class="doc-top"><span class="doc-ico">🔌</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">YouTube Data API v3 Setup Guide</span>
+        <span class="doc-sum">Step-by-step guide to enable the YouTube Data API v3, create/restrict a key, manage quota, and wire the Shorts collector for the creator training pipeline.</span>
+        <span class="doc-foot"><span class="doc-cat">Setup &amp; integrations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="living" data-grounding="ungrounded" href="/repo/docs/ADMIN-FEATURE-FLAGS.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Admin Feature Flags &amp; Navigation Visibility</span>
+        <span class="doc-sum">Guide to the admin-only feature-flag + nav-visibility surface (/admin-flags.html): declarative/imperative flag use, wiring, and the flags/nav-config API.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/BACKLOG-REVIEW-STANDARDS.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Backlog, Issue &amp; PR Review Standards</span>
+        <span class="doc-sum">Living policy for triaging the backlog: label taxonomy, one-loop sprawl gate, PR standards, and a definition-of-done.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="living" data-grounding="grounded" href="/repo/CHANGELOG.MD">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Changelog</span>
+        <span class="doc-sum">Canonical reverse-chronological release history (Keep a Changelog); actively maintained, top entry is today&#39;s 1.8.3, with per-entry verification evidence.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="living" data-grounding="ungrounded" href="/repo/docs/MESH-HUB.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Mesh Hub — N-User Contributor Mesh</span>
+        <span class="doc-sum">Guide to the multi-contributor mesh: per-node keys, sovereign branch lanes, heartbeat presence, and hub API. Uses stale &#39;Lantern OS&#39; branding and &#39;Triforce&#39; lane naming.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="living" data-grounding="grounded" href="/repo/THIRD-PARTY-NOTICES.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Third-Party Notices</span>
+        <span class="doc-sum">License-attribution registry for third-party code ported into Keystone (currently Aider repo-map clean-room); permissive-only porting policy.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/ACCESSIBILITY-AUDIT-SYSTEM.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Accessibility &amp; Site Audit System</span>
+        <span class="doc-sum">Reference for the WCAG 2.1 AA a11y test scripts and site-audit/sitemap CI; calls the product Lantern OS (stale brand).</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/AGENT-ORCHESTRATION-OPERATOR-GUIDE.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Agent Orchestration — Operator Guide</span>
+        <span class="doc-sum">Operator runbook for the autonomous agent-orchestration fleet (queue, slots, worker loop, monitoring); stale-branded &#39;Lantern OS&#39;.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/DEV-SERVER-WORKTREE.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Dev server runs from a dedicated worktree</span>
+        <span class="doc-sum">Why/how the 4178 dev server runs from an isolated worktree (via .dev-worktree junction) so automation&#39;s git resets on the main checkout can&#39;t yank code mid-test.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/INNOVATOR-EVIDENCE-METHOD.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Innovator Evidence Method</span>
+        <span class="doc-sum">Release-decision method: name artifact, tie claim to evidence class, classify capability/boundary/rollback, record validation; deprecates the Seven check.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/V1-READINESS-GATES.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS v1.0.0 Readiness Gates</span>
+        <span class="doc-sum">Nine gates (repo cleanliness, honesty, loop evidence, owner approval) that define v1.0.0 as a gate not a date; still a valid release-readiness rubric.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/MONOWORKSTREAM.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Monoworkstream: One Open PR Per Agent Lane</span>
+        <span class="doc-sum">Explains the one-open-PR-per-lane rule, enforcement (hooks, CI gate, auto-merge) and recovery; predates dynamic per-human lanes now in CLAUDE.md but core rule holds.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/PII-LOCAL-SCRUB-RUNBOOK.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">PII Local-History Scrub — Runbook</span>
+        <span class="doc-sum">One-time destructive runbook to scrub four bank-statement PDFs from local git history; origin already clean, so this is local hygiene.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="ops" data-type="md" data-status="reference" data-grounding="ungrounded" href="/repo/docs/runbooks/history-rewrite-condense.md">
+        <span class="doc-top"><span class="doc-ico">⚙️</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Runbook — History Rewrite to Shrink .git After Corpus Condense</span>
+        <span class="doc-sum">Prepared-not-executed runbook to purge large blobs from git history via filter-repo mirror clone; blast radius and deployer-pause steps.</span>
+        <span class="doc-foot"><span class="doc-cat">Operations</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="reports" data-type="md" data-status="living" data-grounding="grounded" href="/repo/docs/KNOWLEDGE-CENTER-AUDIT-2026-06-30.md">
+        <span class="doc-top"><span class="doc-ico">📋</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Knowledge Center — Σ₀ Grounding Baseline (2026-06-30)</span>
+        <span class="doc-sum">Baseline record for the full Σ₀-grounding pass: what was kept vs removed, the CRLF frontmatter fix, and the convergence record. Source of truth: doc-catalog.json.</span>
+        <span class="doc-foot"><span class="doc-cat">Audits &amp; reports</span><span class="doc-badge b-status" data-s="living">Living</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="reports" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/EDITOR_LEARNING_AUDIT.md">
+        <span class="doc-top"><span class="doc-ico">📋</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Editor Learning Audit — where Σ₀ V10 scores, ranks, and adapts</span>
+        <span class="doc-sum">Grounded audit of the V10 editor scoring weights, thresholds, ranking, and where open-video priors feed in.</span>
+        <span class="doc-foot"><span class="doc-cat">Audits &amp; reports</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="reports" data-type="md" data-status="reference" data-grounding="partial" href="/repo/docs/memory-recall-benchmark.md">
+        <span class="doc-top"><span class="doc-ico">📋</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Memory Recall Benchmark (LongMemEval) — methodology + how to run</span>
+        <span class="doc-sum">Re-runnable harness measuring Keystone&#39;s live memory retrieval on LongMemEval vs Letta/Mem0/Zep; committed fixture is synthetic, real dataset gitignored, incumbents wired not run.</span>
+        <span class="doc-foot"><span class="doc-cat">Audits &amp; reports</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="partial">Partial</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="library" data-type="md" data-status="reference" data-grounding="grounded" href="/repo/docs/caad/architecture/grounding/grounding-manifest.md">
+        <span class="doc-top"><span class="doc-ico">📄</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Grounding Knowledge Base — Provenance Manifest</span>
+        <span class="doc-sum">Tracked provenance record of 14 real-world industry reference manuals (NIST, NASA, FAA, etc.) with measured SHA-256, pages, licenses; PDFs gitignored.</span>
+        <span class="doc-foot"><span class="doc-cat">Library</span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="grounded">Grounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="library" data-type="md" data-status="unreviewed" href="/repo/docs/adr/0012-nested-adaptive-reason.md">
+        <span class="doc-top"><span class="doc-ico">📄</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">0012 nested adaptive reason</span>
+        <span class="doc-sum">APPROVAL GATE: leave status Proposed and approved-by pending. An ADR is not</span>
+        <span class="doc-foot"><span class="doc-cat">ADR</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="library" data-type="md" data-status="unreviewed" href="/repo/docs/research/2026-07-01-hff-500y-merge-convergence.md">
+        <span class="doc-top"><span class="doc-ico">📄</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Convergence Record — HFF / Lantern OS 500-Year Hardening Merge</span>
+        <span class="doc-sum">Lantern OS&#39;s existing Remember/Verify-stage patterns (External Reality Rule, CSF long-memory archive) are directly reusable inside the HFF…</span>
+        <span class="doc-foot"><span class="doc-cat">Library</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="library" data-type="md" data-status="unreviewed" href="/repo/docs/FRONTIER-DIRECTIONS-2026-H2.md">
+        <span class="doc-top"><span class="doc-ico">📄</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Frontier Directions — Deep Research + Design (2026 H2)</span>
+        <span class="doc-sum">We evaluated four candidate frontier directions for Keystone OS. The pattern is consistent and uncomfortable: each direction began with a…</span>
+        <span class="doc-foot"><span class="doc-cat">Library</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="library" data-type="md" data-status="unreviewed" href="/repo/docs/research/2026-07-01-surprise-leak-layer2-result.md">
+        <span class="doc-top"><span class="doc-ico">📄</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Layer 2: does modelUncertainty change the canary&#39;s classification? Not on this dataset — and the code shows exactly why</span>
+        <span class="doc-sum">Loop stages: Verify (the leak).</span>
+        <span class="doc-foot"><span class="doc-cat">Library</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="library" data-type="md" data-status="unreviewed" href="/repo/docs/research/2026-07-01-surprise-leak-judge-regrade.md">
+        <span class="doc-top"><span class="doc-ico">📄</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">LLM-judge re-grade of the surprise-leak dataset — and a real bug the re-grade surfaced</span>
+        <span class="doc-sum">Loop stages: Verify (the leak).</span>
+        <span class="doc-foot"><span class="doc-cat">Library</span><span class="doc-badge b-status" data-s="unreviewed">Unreviewed</span></span>
+      </a>
+      <a class="doc-card" data-cat="lore" data-type="md" data-status="lore" data-grounding="ungrounded" href="/repo/docs/lore/CAST.md">
+        <span class="doc-top"><span class="doc-ico">📜</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Keystone OS — Canonical Character Cast</span>
+        <span class="doc-sum">Canon visual+voice descriptions for the four mascot characters (Lantern, Blinkbug, Eclipse, Keystone); symbolic identity, not live personas.</span>
+        <span class="doc-foot"><span class="doc-cat">Lore</span><span class="doc-badge b-status" data-s="lore">Lore</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="lore" data-type="md" data-status="lore" data-grounding="ungrounded" href="/repo/lore/LANTERN-CHARACTERS-AND-REALMS.md">
+        <span class="doc-top"><span class="doc-ico">📜</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern OS Lore: Characters and Realms</span>
+        <span class="doc-sum">Symbolic characters and dream realms (Blinkbug, Mary/Waterfall, Xenon, Kingdome of Hearts) for Dream Journal, not live features.</span>
+        <span class="doc-foot"><span class="doc-cat">Lore</span><span class="doc-badge b-status" data-s="lore">Lore</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="lore" data-type="md" data-status="lore" data-grounding="ungrounded" href="/repo/lore/LORE.md">
+        <span class="doc-top"><span class="doc-ico">📜</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lore &amp; Symbolic Sandbox</span>
+        <span class="doc-sum">Governance charter for the symbolic sandbox: symbols stay poetic until a promotion gate earns operational stakes; keeps imagination out of authority/proof.</span>
+        <span class="doc-foot"><span class="doc-cat">Lore</span><span class="doc-badge b-status" data-s="lore">Lore</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="lore" data-type="md" data-status="lore" data-grounding="ungrounded" href="/repo/lore/quarantine/README.md">
+        <span class="doc-top"><span class="doc-ico">📜</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Quarantine</span>
+        <span class="doc-sum">One-paragraph policy for the quarantine folder: preserve symbolic material without promoting/amplifying it until calm review.</span>
+        <span class="doc-foot"><span class="doc-cat">Lore</span><span class="doc-badge b-status" data-s="lore">Lore</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+      <a class="doc-card" data-cat="lore" data-type="md" data-status="lore" data-grounding="ungrounded" href="/repo/lore/SAFETY.md">
+        <span class="doc-top"><span class="doc-ico">📜</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Safety Boundary</span>
+        <span class="doc-sum">Symbolic-sandbox safety boundary: allowed/blocked content, quarantine triggers, review questions, and an emergency-care note for the fiction lore space.</span>
+        <span class="doc-foot"><span class="doc-cat">Lore</span><span class="doc-badge b-status" data-s="lore">Lore</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span><span class="doc-date">Jun 2026</span></span>
+      </a>
+
+      <!-- External: Human Flourishing Frameworks (committed external-sources.json; links to GitHub source) -->
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/CONVERGENCE-EVIDENCE-REPORT.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">CONVERGENCE EVIDENCE REPORT</span>
+        <span class="doc-sum">Human Flourishing Frameworks · CONVERGENCE-EVIDENCE-REPORT.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/LOCAL-LLM-STORAGE-FORMAT.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Local LLM Storage Format — Permanent Archive &amp; Mesh HDD Backup</span>
+        <span class="doc-sum">Human Flourishing Frameworks · LOCAL-LLM-STORAGE-FORMAT.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/ORCHESTRATOR-CONVERGENCE-POLICY-v2.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Orchestrator Convergence Policy v2</span>
+        <span class="doc-sum">Human Flourishing Frameworks · ORCHESTRATOR-CONVERGENCE-POLICY-v2.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/ORCHESTRATOR-POLICY.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Orchestrator-Backed Deployment Policy</span>
+        <span class="doc-sum">Human Flourishing Frameworks · ORCHESTRATOR-POLICY.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/README.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern — Local-First AI Chat + Media Curator for Households</span>
+        <span class="doc-sum">Human Flourishing Frameworks · README.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/UNIFIED-DEPLOYMENT-MANIFEST.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Unified Deployment Manifest — Lantern OS v1.0</span>
+        <span class="doc-sum">Human Flourishing Frameworks · UNIFIED-DEPLOYMENT-MANIFEST.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/apps_bettersafe-pilot_bettersafe-feature-schema.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">BetterSafe Feature Schema — Local-First Data Model</span>
+        <span class="doc-sum">Human Flourishing Frameworks · apps_bettersafe-pilot_bettersafe-feature-schema.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/apps_bettersafe-pilot_bettersafe-local-first-architecture.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">BetterSafe — Local-First Architecture</span>
+        <span class="doc-sum">Human Flourishing Frameworks · apps_bettersafe-pilot_bettersafe-local-first-architecture.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/apps_bettersafe-pilot_social-services-registry-schema.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Social Services Registry — Waynesville &amp; Spring Valley, Ohio</span>
+        <span class="doc-sum">Human Flourishing Frameworks · apps_bettersafe-pilot_social-services-registry-schema.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/apps_lantern-discord-radio_README.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern Discord Radio Bot</span>
+        <span class="doc-sum">Human Flourishing Frameworks · apps_lantern-discord-radio_README.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/apps_rhythm-os_DEPLOYMENT.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Rhythm OS Deployment Guide</span>
+        <span class="doc-sum">Human Flourishing Frameworks · apps_rhythm-os_DEPLOYMENT.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/apps_rhythm-os_README.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Rhythm OS — Music + AI Convergence</span>
+        <span class="doc-sum">Human Flourishing Frameworks · apps_rhythm-os_README.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/deploy_README.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Multi-Platform Deploy — HFF Dashboard</span>
+        <span class="doc-sum">Human Flourishing Frameworks · deploy_README.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_CLAIM-PACKET-SCIENTIFIC-RIGOR.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Claim Packet Scientific Rigor Standard</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_CLAIM-PACKET-SCIENTIFIC-RIGOR.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_CLAIM-PACKET-TEMPLATE.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Claim Packet Template</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_CLAIM-PACKET-TEMPLATE.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_CONVERGENCE-LOOP.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern OS Convergence Loop</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_CONVERGENCE-LOOP.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_INNOVATOR-EVIDENCE-METHOD.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Innovator Evidence Method</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_INNOVATOR-EVIDENCE-METHOD.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_LANTERN-ORCHESTRATOR-DEPENDENCY.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Orchestrator Dependency Contract</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_LANTERN-ORCHESTRATOR-DEPENDENCY.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_MCP-CONNECTOR-REVIEW-2026-06-17.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">MCP Connector Review — 2026-06-17</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_MCP-CONNECTOR-REVIEW-2026-06-17.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_V1-READINESS-GATES.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern OS v1.0.0 Readiness Gates</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_V1-READINESS-GATES.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_adr_ADR-1-EVENT-SOURCING.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-1: Event Sourcing for Immutable Audit Trail</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_adr_ADR-1-EVENT-SOURCING.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_adr_ADR-2-BYZANTINE-CONSENSUS.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-2: Byzantine Fault Tolerant Consensus for Research Queue Acceptance</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_adr_ADR-2-BYZANTINE-CONSENSUS.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_adr_ADR-3-DISCORD-ARCHITECTURE.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">ADR-3: Discord Bot Architecture — Continuous Playback + Reaction Control</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_adr_ADR-3-DISCORD-ARCHITECTURE.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_arc-reactor-mining-lab_README.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Arc Reactor Mining Lab</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_arc-reactor-mining-lab_README.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_bettersafe-capability-profile-views.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">BetterSafe Capability Profile Views</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_bettersafe-capability-profile-views.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_internationalization-and-accessibility.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Internationalization and Accessibility Posture</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_internationalization-and-accessibility.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_live-polling-readiness.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Live Polling Readiness</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_live-polling-readiness.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_public-ux-baseline.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Public UX Baseline</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_public-ux-baseline.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/docs_repo-layout.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">HFF Repository Layout</span>
+        <span class="doc-sum">Human Flourishing Frameworks · docs_repo-layout.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/lantern_os_master_push_rag_house_plan.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern OS Master Push + RAG House Convergence Report</span>
+        <span class="doc-sum">Human Flourishing Frameworks · lantern_os_master_push_rag_house_plan.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/lore_LANTERN-CHARACTERS-AND-REALMS.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern OS Lore: Characters and Realms</span>
+        <span class="doc-sum">Human Flourishing Frameworks · lore_LANTERN-CHARACTERS-AND-REALMS.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/lore_LORE.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Lantern OS Lore &amp; Symbolic Sandbox</span>
+        <span class="doc-sum">Human Flourishing Frameworks · lore_LORE.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/manifests_dual-boot.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Dual Boot Manifest</span>
+        <span class="doc-sum">Human Flourishing Frameworks · manifests_dual-boot.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <a class="doc-card" data-cat="hff" data-type="md" data-status="reference" data-grounding="ungrounded" href="https://github.com/human-flourishing-frameworks/human-flourishing-frameworks/blob/master/manifests_windows-surfaces.md" target="_blank" rel="noopener">
+        <span class="doc-top"><span class="doc-ico">🌍</span><span class="doc-fmt">MD</span></span>
+        <span class="doc-title">Windows Surface Manifest</span>
+        <span class="doc-sum">Human Flourishing Frameworks · manifests_windows-surfaces.md</span>
+        <span class="doc-foot"><span class="doc-cat">Convergence · HFF<span class="doc-ext">↗ HFF</span></span><span class="doc-badge b-status" data-s="reference">Reference</span><span class="doc-badge b-ground" data-g="ungrounded">Ungrounded</span></span>
+      </a>
+      <!-- LIBRARY:AUTO:END -->
 
       <!-- Reports (PDFs) are injected here from /api/pdfs -->
 

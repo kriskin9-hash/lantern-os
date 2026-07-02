@@ -7,7 +7,7 @@
 function persistToolTurn(role, text, meta) {
   if (!text) return;
   try {
-    const sessionId = localStorage.getItem('lantern_chat_session') || null;
+    const sessionId = localStorage.getItem('lantern_chat_session') || null; // #1268
     fetch('/api/conversations', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role, text, surface: 'garage', sessionId, ...(meta ? { meta } : {}) }),
@@ -37,6 +37,10 @@ function renderToolReplay(tool) {
     return `Here are videos for <b>${esc(tool.query || '')}</b>:`
       + `<iframe src="${esc(embed)}" width="100%" height="240" style="border:0;border-radius:8px;margin:6px 0;max-width:480px;display:block" `
       + `allow="encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>`
+      + `<a href="${esc(searchUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a>`;
+  }
+  if (tool.kind === 'xenon-starship-art' && tool.url) {
+    const searchUrl = tool.url; // Assuming tool.url is the direct link to the generated art
       + `<a href="${esc(searchUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a>`;
   }
   if (tool.kind === 'document' && tool.url) {
@@ -513,11 +517,12 @@ const COMMANDS = [
   { name: 'issues',      group: 'Build',   usage: '!issues',           desc: 'Browse open issues — one click runs autowork', aliases: ['backlog'] },
   { name: 'work',        group: 'Build',   usage: '!work #123',        desc: 'Run keystone autowork on an issue → linked PR', aliases: ['edit'] },
   { name: 'review',      group: 'Build',   usage: '!review #123',      desc: 'Review a pull request’s diff right in the chat' },
+  { name: 'prs',         group: 'Build',   usage: '!prs',              desc: 'Browse open PRs — one click reviews each (also: “review pull requests”)', aliases: ['pull-requests', 'pullrequests', 'review-prs'] },
   { name: 'convergence', group: 'Build',   usage: '!convergence',      desc: 'Run the convergence loop + fleet/version status', aliases: ['convergance', 'converge'] },
   { name: 'code',        group: 'Build',   usage: '!code <task>',      desc: 'Coding turn on the cloud coder' },
   { name: 'self-edit',   group: 'Build',   usage: '!self-edit <task>', desc: 'Plan an edit to Keystone’s own code', aliases: ['selfedit'] },
   { name: 'swarm',       group: 'Build',   usage: '!swarm <task>',     desc: 'Multi-agent swarm (council/consensus) on a task' },
-  { name: 'radio',       group: 'Explore', usage: '!radio',            desc: 'Summon Keystone Radio inline (also: “play fallout radio”)', aliases: ['play'] },
+  { name: 'radio',       group: 'Explore', usage: '!radio',            desc: 'Summon Radio inline (also: “play fallout radio”)', aliases: ['play'] },
   { name: 'videos',      group: 'Explore', usage: '!videos',           desc: 'Fresh videos feed', aliases: ['watch'] },
   { name: 'discover',    group: 'Explore', usage: '!discover',         desc: 'Discover reads/news feed', aliases: ['news', 'reads', 'feed'] },
   { name: 'build',       group: 'Explore', usage: '!build',            desc: 'Repo build activity (releases + commits)', aliases: ['github', 'releases', 'commits'] },
@@ -594,6 +599,75 @@ async function renderIssues() {
   }
 }
 
+// ── Open-PR browser (!prs / "review pull requests") ───────────────────────────
+// PR analogue of renderIssues: lists the open PRs with a one-click "Review →" that
+// runs the existing !review #N flow. Listing is a plain gh call (no LLM), so this
+// works even when every provider is down — which is exactly the dead-end this fixes:
+// a plural "review pull requests" used to fall through to the AI-unavailable fallback.
+async function renderPRs() {
+  hideEmptyState();
+  const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
+  const messages = document.getElementById('messages');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Loading open pull requests…</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+  const bubble = row.querySelector('.bubble');
+  const ghLink = '<a href="https://github.com/alex-place/lantern-os/pulls" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Open on GitHub →</a>';
+  try {
+    const r = await fetch(`${base}/api/dream/prs?limit=20`, { cache: 'no-store' });
+    const d = await r.json();
+    if (!d.ok || !Array.isArray(d.prs) || !d.prs.length) {
+      bubble.innerHTML = `No open pull requests to show${d && d.error ? ` (${esc(d.error)})` : ''}. ${ghLink}`;
+      return;
+    }
+    const rows = d.prs.map(p => {
+      const draft = p.isDraft
+        ? `<span style="font-size:10px;background:var(--surface2);padding:1px 6px;border-radius:8px;opacity:0.8">draft</span>` : '';
+      return `<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">
+        <a href="https://github.com/alex-place/lantern-os/pull/${p.number}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);font-weight:600;font-size:12px;text-decoration:none">#${p.number}</a>
+        <span style="flex:1;font-size:12.5px">${esc(p.title)} ${draft}</span>
+        <button class="pr-review-btn" data-pr="${p.number}" style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:6px;background:transparent;color:var(--accent);cursor:pointer;white-space:nowrap">Review →</button>
+      </div>`;
+    }).join('');
+    bubble.innerHTML = `<b>Open pull requests</b> · ${d.prs.length} · ${ghLink}${rows}`;
+    bubble.querySelectorAll('.pr-review-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const n = parseInt(btn.getAttribute('data-pr'), 10);
+        fillAndSend('!review #' + n);   // reuse the server-side !review #N reviewer
+      });
+    });
+  } catch (e) {
+    bubble.innerHTML = `Couldn’t load pull requests (${esc(e.message)}). ${ghLink}`;
+  }
+}
+
+// ── Natural-language PR review intent ─────────────────────────────────────────
+// "review pull requests" / "review prs" / "!prs" → list open PRs (the deterministic,
+// provider-free browser above). "review pr #1410" / "review #1410" → route to the
+// server's !review #N reviewer. Returns { kind:'list' } | { kind:'one', number } | null.
+// Deliberately narrow so it never hijacks an ordinary turn — "review my essay" stays an
+// LLM chat. !review #N (with a number) is left to the server handler (returns null).
+function detectPrReviewIntent(text) {
+  const t = String(text || '').trim();
+  // Bang/slash forms. `!review #N` is left to the server reviewer (return null → fall through).
+  let m = t.match(/^[!/](review|prs?|pull[\s-]?requests?|review[\s-]?prs?)\b\s*#?(\d+)?\s*$/i);
+  if (m) {
+    if (m[2]) return /^review$/i.test(m[1]) ? null : { kind: 'one', number: parseInt(m[2], 10) };
+    return { kind: 'list' };
+  }
+  // "review pr #1410" / "review pull request 1410" / "review #1410"
+  m = t.match(/^review\s+(?:the\s+)?(?:pull\s*request|pr)\s*#?(\d+)\s*$/i)
+   || t.match(/^review\s+#(\d+)\s*$/i);
+  if (m) return { kind: 'one', number: parseInt(m[1], 10) };
+  // "review pull requests" / "review the open prs" / "list/show/browse open pull requests"
+  m = t.match(/^(?:review|list|show|browse|see|view|check|open)\s+(?:(?:the|all|my|open|any)\s+)*(?:pull\s*requests?|prs?)\s*\??$/i);
+  if (m) return { kind: 'list' };
+  return null;
+}
+
 // ── Autowork live-step panel (issue #527 / autonomous-work/stream) ─────────────
 // Consumes the SSE stream and renders each phase as it happens, so the user can
 // watch plan → patch → tests → commit → push → PR in real time.
@@ -646,6 +720,102 @@ function ensureAutoworkStyles() {
     '@media (max-width:520px){.aw-desc{display:none}.aw-extra{margin-left:0}}',
   ].join('\n');
   document.head.appendChild(st);
+}
+
+// In-chat review actions for an autowork draft PR (#1503): Approve (mark ready +
+// squash-merge), Rework (re-run autowork on the same issue), Discard (close + delete
+// branch). Approve/Discard hit POST /api/convergence/pr-action behind a confirm;
+// Rework just re-invokes runAutowork. No-op when there's no PR to act on.
+function renderAutoworkActions(fin, prUrl, issue, btn, base) {
+  if (!fin || !prUrl) return;
+  if (fin.querySelector('.aw-actions')) return;   // don't double-render on reconnect
+  const bar = document.createElement('div');
+  bar.className = 'aw-actions';
+  bar.style.cssText = 'margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+  const mk = (label, title, color) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.title = title;
+    b.style.cssText = `font:600 11px var(--font-sans,sans-serif);padding:4px 10px;border-radius:8px;border:1px solid ${color};background:transparent;color:${color};cursor:pointer`;
+    return b;
+  };
+  const approve = mk('✓ Approve', 'Mark ready for review & squash-merge', '#4ade80');
+  const rework  = mk('↻ Rework',  'Re-run autowork on this issue (supersedes this attempt)', '#a78bfa');
+  const discard = mk('✕ Discard', 'Close the PR & delete its branch', '#f87171');
+  const all = [approve, rework, discard];
+  const setMsg = (txt, color) => {
+    let m = bar.querySelector('.aw-action-msg');
+    if (!m) { m = document.createElement('span'); m.className = 'aw-action-msg'; m.style.cssText = 'font-size:11px;margin-left:4px'; bar.appendChild(m); }
+    m.style.color = color || ''; m.textContent = txt;
+  };
+  async function doAction(action, confirmText) {
+    if (!window.confirm(confirmText)) return;
+    all.forEach(b => b.disabled = true);
+    setMsg('Working…', '');
+    try {
+      const r = await (await fetch(`${base}/api/convergence/pr-action`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prUrl, action }),
+      })).json();
+      if (r && r.ok) { setMsg('✓ ' + (r.message || 'Done'), '#4ade80'); approve.remove(); discard.remove(); rework.remove(); }
+      else { setMsg('✗ ' + ((r && r.error) || 'Failed'), '#f87171'); all.forEach(b => b.disabled = false); }
+    } catch (e) { setMsg('✗ ' + (e && e.message || 'request failed'), '#f87171'); all.forEach(b => b.disabled = false); }
+  }
+  approve.onclick = () => doAction('approve', `Approve and squash-merge this PR?\n\n${prUrl}`);
+  discard.onclick = () => doAction('discard', `Discard (close) this PR and delete its branch?\n\n${prUrl}`);
+  rework.onclick = () => {
+    if (!window.confirm(`Re-run autowork on issue #${issue}? This supersedes the current attempt.`)) return;
+    if (typeof runAutowork === 'function' && btn) runAutowork(parseInt(issue, 10) || issue, btn, base).catch(e => console.error('[autowork rework]', e));
+  };
+  all.forEach(b => bar.appendChild(b));
+  fin.appendChild(bar);
+}
+
+// In-chat accept/reject for a pull request being REVIEWED (#1503 follow-up). The
+// `!review #N` / `!prs` flow renders a diff + verdict but, until now, offered no way
+// to act on it — so "review a PR in chat, then accept it in chat" dead-ended at
+// GitHub. This attaches the same Approve / Discard actions the autowork run panel
+// gives a fresh draft PR (POST /api/convergence/pr-action), keyed by PR number, to
+// ANY reviewed PR — closing the work → review → accept loop in one surface. No Rework
+// button here: a bare PR review isn't tied to a known issue/run to re-drive.
+function renderPrReviewActions(container, prNum, base) {
+  if (!container || !prNum) return;
+  if (container.querySelector('.pr-review-actions')) return;   // don't double-render on re-render
+  base = base || ((typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  const prUrl = `https://github.com/alex-place/lantern-os/pull/${prNum}`;
+  const bar = document.createElement('div');
+  bar.className = 'pr-review-actions';
+  bar.style.cssText = 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+  const mk = (label, title, color) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.title = title;
+    b.style.cssText = `font:600 11px var(--font-sans,sans-serif);padding:4px 10px;border-radius:8px;border:1px solid ${color};background:transparent;color:${color};cursor:pointer`;
+    return b;
+  };
+  const approve = mk('✓ Approve & merge', 'Mark ready for review & squash-merge', '#4ade80');
+  const discard = mk('✕ Discard', 'Close the PR & delete its branch', '#f87171');
+  const all = [approve, discard];
+  const setMsg = (txt, color) => {
+    let m = bar.querySelector('.pr-action-msg');
+    if (!m) { m = document.createElement('span'); m.className = 'pr-action-msg'; m.style.cssText = 'font-size:11px;margin-left:4px'; bar.appendChild(m); }
+    m.style.color = color || ''; m.textContent = txt;
+  };
+  async function doAction(action, confirmText) {
+    if (!window.confirm(confirmText)) return;
+    all.forEach(b => b.disabled = true);
+    setMsg('Working…', '');
+    try {
+      const r = await (await fetch(`${base}/api/convergence/pr-action`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pr: prNum, action }),
+      })).json();
+      if (r && r.ok) { setMsg('✓ ' + (r.message || 'Done'), '#4ade80'); approve.remove(); discard.remove(); }
+      else { setMsg('✗ ' + ((r && r.error) || 'Failed'), '#f87171'); all.forEach(b => b.disabled = false); }
+    } catch (e) { setMsg('✗ ' + (e && e.message || 'request failed'), '#f87171'); all.forEach(b => b.disabled = false); }
+  }
+  approve.onclick = () => doAction('approve', `Approve and squash-merge PR #${prNum}?\n\n${prUrl}`);
+  discard.onclick = () => doAction('discard', `Discard (close) PR #${prNum} and delete its branch?\n\n${prUrl}`);
+  all.forEach(b => bar.appendChild(b));
+  container.appendChild(bar);
 }
 
 // `target` is either an issue number (number/numeric string — `!work #N`) or a
@@ -735,7 +905,7 @@ async function runAutowork(target, btn, base) {
     const handleEvent = (evName, data) => {
       let d = {};
       try { d = JSON.parse(data); } catch { return; }
-      if (evName === 'run') { awRunId = d.runId; return; }
+      if (evName === 'run') { awRunId = d.runId; AW_LOCAL_RUNS.add(d.runId); return; }
       if (evName === 'step') {
         let extra = '';
         if (d.phase === 'tests' && d.status === 'done') extra = d.passed ? 'passed' : (d.ran ? 'failed' : 'none');
@@ -793,6 +963,7 @@ async function runAutowork(target, btn, base) {
       fin.innerHTML = finalDone.prUrl
         ? `✓ Auto-worked #${esc(finalDone.issue || issue)} — <a href="${esc(finalDone.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a>`
         : `✓ ${esc(finalDone.message || 'Done')}`;
+      renderAutoworkActions(fin, finalDone.prUrl, finalDone.issue || issue, btn, base);
       setActivity('Complete', finalDone.prUrl ? 'opened a pull request' : 'autonomous work finished', false);
       if (actImg) actImg.src = '/mandala.svg'; // steady (no spin)
     } else {
@@ -839,6 +1010,7 @@ async function runAutowork(target, btn, base) {
             setActivity('Complete', 'recovered after a dropped connection', false);
             fin.style.color = '#4ade80';
             fin.innerHTML = `✓ Auto-worked #${esc(s.message && s.message.match(/#(\d+)/) ? RegExp.$1 : (issue || ''))} — <a href="${esc(s.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a> <span style="opacity:.6;font-size:11px">(reconnected)</span>`;
+            renderAutoworkActions(fin, s.prUrl, (s.message && s.message.match(/#(\d+)/) ? RegExp.$1 : issue), btn, base);
           } else {
             setActivity('Stopped', s.message || 'run ended', false);
             fin.style.color = '#f87171';
@@ -862,6 +1034,124 @@ async function runAutowork(target, btn, base) {
     if (typeof scrollToBottom === 'function') scrollToBottom();
   }
 }
+
+// ── Background autowork watcher ────────────────────────────────────────────────
+// Autowork is never headless-invisible: runs started OUTSIDE this chat client (the
+// auto-dispatch daemon, CI/fleet POSTs, another tab) are discovered via
+// /api/convergence/autonomous-work/active and get the same live step panel in-chat,
+// driven by polling /autonomous-work/status (which carries the full step history).
+const AW_LOCAL_RUNS = new Set();     // runIds this client started (already have a panel)
+const AW_WATCHED_RUNS = new Set();   // background runIds already given a panel
+
+function attachBackgroundAutoworkPanel(run, base) {
+  hideEmptyState();
+  const messages = document.getElementById('messages');
+  if (!messages) return;
+  ensureAutoworkStyles();
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const srcLabel = run.source === 'auto-dispatch' ? 'Auto-dispatch' : (run.source || 'background');
+  const issue = run.issue;
+  const phases = AUTOWORK_PHASES.filter(([k]) => k !== 'create_issue');
+  const PHASE_INFO = Object.fromEntries(AUTOWORK_PHASES.map((p) => [p[0], { label: p[1], desc: p[2] }]));
+  const row = document.createElement('div');
+  row.className = 'msg-row agent';
+  row.innerHTML =
+    `<div class="msg-label">Keystone · ${esc(srcLabel)} · Autowork #${esc(issue)}</div>`
+    + `<div class="bubble aw-panel">`
+    + `<div class="aw-activity"><img src="/mandala.svg" class="aw-spin" alt=""><div class="aw-act-text"><b>Background autowork on #${esc(issue)}</b> <span>${esc(run.title || 'started by ' + srcLabel.toLowerCase() + ' — attaching live')}</span></div></div>`
+    + `<div class="aw-steps">${phases.map(([k, label, desc]) =>
+        `<div class="aw-step" data-phase="${k}"><div class="aw-ico">○</div><div class="aw-body">`
+        + `<div class="aw-row1"><span class="aw-label">${esc(label)}</span><span class="aw-desc">${esc(desc)}</span><span class="aw-extra"></span></div>`
+        + `<div class="aw-detail" style="display:none"></div></div></div>`).join('')}</div>`
+    + `<div class="aw-final" style="margin-top:8px;font-weight:600"></div>`
+    + `</div>`;
+  messages.appendChild(row);
+  if (typeof scrollToBottom === 'function') scrollToBottom();
+
+  const actImg = row.querySelector('.aw-activity img');
+  const actText = row.querySelector('.aw-act-text');
+  const setActivity = (label, desc, spinning) => {
+    if (actText) actText.innerHTML = '<b>' + esc(label) + '</b>' + (desc ? ' <span>— ' + esc(desc) + '</span>' : '');
+    if (actImg) actImg.classList.toggle('aw-spin', spinning !== false);
+  };
+  const setStep = (phase, status, extra, detail) => {
+    const el = row.querySelector(`.aw-step[data-phase="${phase}"]`);
+    if (!el) return;
+    el.classList.remove('is-active', 'is-done', 'is-error', 'is-retry');
+    const ico = el.querySelector('.aw-ico');
+    ico.style.color = '';
+    if (status === 'start')        { el.classList.add('is-active'); ico.innerHTML = '<img src="/mandala.svg" class="aw-spin" alt="">'; }
+    else if (status === 'done')    { el.classList.add('is-done');  ico.textContent = '✓'; ico.style.color = '#4ade80'; }
+    else if (status === 'error')   { el.classList.add('is-error'); ico.textContent = '✗'; ico.style.color = '#f87171'; }
+    else if (status === 'retry')   { el.classList.add('is-retry'); ico.textContent = '↻'; ico.style.color = '#facc15'; }
+    else if (status === 'skipped') { ico.textContent = '⊘'; ico.style.color = '#facc15'; el.style.opacity = '1'; }
+    if (extra) el.querySelector('.aw-extra').textContent = extra;
+    if (detail) {
+      const det = el.querySelector('.aw-detail');
+      det.textContent = detail;
+      det.style.display = 'block';
+      det.style.color = (status === 'error') ? '#f87171' : (status === 'retry') ? '#facc15' : '';
+    }
+  };
+  const applySteps = (steps) => {
+    for (const s of steps || []) {
+      let extra = '';
+      if (s.phase === 'tests' && s.status === 'done') extra = s.passed ? 'passed' : (s.ran ? 'failed' : 'none');
+      else if (s.phase === 'research' && s.status === 'done') extra = `${s.filesFound || 0} files · ${s.webSourcesFound || 0} web`;
+      else if (s.phase === 'pr' && s.status === 'done') extra = 'PR opened';
+      else if (s.status === 'retry') extra = `retry ${s.attempt || ''}`.trim();
+      setStep(s.phase, s.status, extra, s.detail || s.error);
+      const info = PHASE_INFO[s.phase];
+      if (info && s.status === 'start') setActivity(info.label + '…', info.desc, true);
+    }
+  };
+
+  (async () => {
+    const fin = row.querySelector('.aw-final');
+    for (let i = 0; i < 480; i++) {   // up to ~40 min at 5s — matches the daemon ceiling
+      let s = null;
+      try { s = await (await fetch(`${base}/api/convergence/autonomous-work/status?runId=${encodeURIComponent(run.runId)}`)).json(); } catch (_e) { /* transient */ }
+      if (s && s.found) {
+        applySteps(s.steps);
+        if (s.done) {
+          if (s.succeeded && s.prUrl) {
+            setActivity('Complete', 'background run opened a pull request', false);
+            fin.style.color = '#4ade80';
+            fin.innerHTML = `✓ Auto-worked #${esc(issue)} — <a href="${esc(s.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a>`;
+            renderAutoworkActions(fin, s.prUrl, issue, row.querySelector('.aw-ico'), base);
+          } else {
+            setActivity('Stopped', s.message || 'run ended', false);
+            fin.style.color = '#f87171';
+            fin.textContent = `✗ ${(s.message || ('run ended at ' + (s.latestPhase || 'an unknown step')))}`;
+          }
+          if (typeof scrollToBottom === 'function') scrollToBottom();
+          return;
+        }
+      }
+      await new Promise(r => setTimeout(r, 5000));
+    }
+    setActivity('Detached', 'stopped watching after 40 minutes — check GitHub for the PR', false);
+  })();
+}
+
+function startBackgroundAutoworkWatcher() {
+  const base = (typeof serverBase !== 'undefined') ? serverBase : window.location.origin;
+  const poll = async () => {
+    if (document.hidden) return;
+    if (!document.getElementById('messages')) return;
+    let d = null;
+    try { d = await (await fetch(`${base}/api/convergence/autonomous-work/active`)).json(); } catch (_e) { return; }
+    for (const run of (d && d.active) || []) {
+      if (!run.runId || run.source === 'chat') continue;              // chat runs already have a live panel
+      if (AW_LOCAL_RUNS.has(run.runId) || AW_WATCHED_RUNS.has(run.runId)) continue;
+      AW_WATCHED_RUNS.add(run.runId);
+      attachBackgroundAutoworkPanel(run, base);
+    }
+  };
+  setTimeout(poll, 4000);            // shortly after load, then steady cadence
+  setInterval(poll, 20000);
+}
+try { startBackgroundAutoworkWatcher(); } catch (_e) { /* watcher is best-effort */ }
 
 // ── Image requests ─────────────────────────────────────────────────────────────
 // Detect when the user is asking for a picture and return the subject prompt, else
@@ -1273,17 +1563,27 @@ function safeEmbedSrc(u) {
 // Launch verbs that signal "open this thing now". A single embed token (e.g. "radio")
 // only summons when one of these is present; a multi-word name ("fallout radio") fires
 // on its own. Keeps "I love the radio" from blasting audio at you.
-const SUMMON_VERBS = /\b(play|summon|open|launch|start|run|boot|listen(?:\s+to)?|tune\s+(?:in|into|to)?|put\s+on|turn\s+on|fire\s+up|load|cue\s+up|watch)\b/i;
+const SUMMON_VERBS = /\b(play|summon|open|launch|start|run|boot|listen(?:\s+to)?|tune\s+(?:in|into|to)?|put\s+on|turn\s+on|fire\s+up|load|cue\s+up|watch|show(?:\s+me)?|pull\s+up|bring\s+up|display)\b/i;
 
 // The flagship stays summonable even before /api/explore/embeds is deployed (a new
 // route 404s on a stale server). kind: listen|game|watch drives the verb + icon.
 const EMBED_SEED = [
   {
-    slug: 'keystone-radio', title: 'Keystone Radio', kind: 'listen',
-    src: '/fallout-radio.html', height: 620, source: 'Keystone Radio',
+    slug: 'keystone-radio', title: 'Radio', kind: 'listen',
+    src: '/fallout-radio.html', height: 620, source: 'Radio',
     url: '/fallout-radio.html',
     lore: 'A retro Pip-Boy tuner spinning public-domain 1940s radio — the songs that play at the end of the world. Press play; tune the dial.',
     aliases: ['fallout radio', 'keystone radio', 'pip-boy radio', 'radio'],
+  },
+  {
+    // #1617: "show me the panels from the trade screen" used to send the local
+    // tool-calling model into a read-the-HTML loop that dumped raw markup. Summoning
+    // the real terminal inline frames the live panels instead.
+    slug: 'kalshi-terminal', title: 'Kalshi Trade Terminal', kind: 'app',
+    src: '/kalshi-terminal.html', height: 640, source: 'Keystone Trading',
+    url: '/kalshi-terminal.html',
+    lore: 'The live Kalshi trade screen — swipe-deck panels for decisive entries, open positions, and market signals.',
+    aliases: ['trade screen', 'trade panels', 'trading terminal', 'kalshi terminal', 'trade deck', 'kalshi'],
   },
 ];
 
@@ -1391,8 +1691,8 @@ function renderChatEmbed(embed, userText) {
     return;
   }
   if (activeChatEmbed && activeChatEmbed.stop) { try { activeChatEmbed.stop(); } catch {} activeChatEmbed = null; }
-  const icon = embed.kind === 'listen' ? '📻' : embed.kind === 'watch' ? '🎬' : '🕹️';
-  const verb = embed.kind === 'watch' ? 'Now showing' : 'Now playing';
+  const icon = embed.kind === 'listen' ? '📻' : embed.kind === 'watch' ? '🎬' : embed.kind === 'app' ? '📊' : '🕹️';
+  const verb = (embed.kind === 'watch' || embed.kind === 'app') ? 'Now showing' : 'Now playing';
   const h = Math.max(160, Math.min(640, Number(embed.height) || 360));
   row.innerHTML =
     `<div class="msg-label">Keystone</div>` +
@@ -1448,6 +1748,10 @@ async function sendMessage(opts = {}) {
   // box — so we must not read or clear the box on this path.
   const overrideText = (opts && typeof opts.text === 'string') ? opts.text : null;
   const forceGround = !!(opts && opts.forceGround);
+  // Auto-escalation (#1732): the groundedness canary fired this re-ground itself because
+  // the prior reply was confident + unanchored (red band) — not a human click. Rides the
+  // same forceGround path; used only to label the turn honestly.
+  const autoVerify = !!(opts && opts.auto);
   // ── Single send entry ── These two checks used to be window.sendMessage WRAPPERS
   // (gatedSendMessage in dream-chat.html + the !convergance shim in convergance-sync.js);
   // they're folded in here so there is exactly one sendMessage, no monkey-patching.
@@ -1525,7 +1829,7 @@ async function sendMessage(opts = {}) {
     return;
   }
 
-  // !radio summons Keystone Radio; !play <name> summons any Explore embed by name.
+  // !radio summons Radio; !play <name> summons any Explore embed by name.
   // (Slash forms /radio and /play work too — /radio normalizes via the command list.)
   const summonCmd = text.match(/^[!/](radio|play)\b\s*(.*)$/i);
   if (summonCmd) {
@@ -1651,6 +1955,19 @@ async function sendMessage(opts = {}) {
     return;
   }
 
+  // PR review intent — "review pull requests" / "!prs" lists the open PRs (deterministic,
+  // no LLM, works while every provider is down); "review pr #N" runs the !review reviewer.
+  // Placed before the LLM path so the plural ask no longer dead-ends at "AI unavailable".
+  const prIntent = detectPrReviewIntent(text);
+  if (prIntent) {
+    input.value = '';
+    input.style.height = 'auto';
+    if (prIntent.kind === 'one') { fillAndSend('!review #' + prIntent.number); return; }
+    addUserBubble(text);
+    renderPRs().catch(e => console.error('[prs]', e));
+    return;
+  }
+
   // Explore embeds — surface videos / discover feed / GitHub activity / Patreon
   // tiers inline when asked (bang commands or a "show/what/latest" NL framing).
   // Deterministic, no LLM cost; same server-cached routes as the Explore page.
@@ -1672,7 +1989,9 @@ async function sendMessage(opts = {}) {
   const abortTimer = setTimeout(() => ac.abort(), 90000);
   showStopButton(() => { userStopped = true; ac.abort(); });
 
-  addUserBubble(forceGround && overrideText != null ? text + '  ↻ grounding' : text);
+  addUserBubble(forceGround && overrideText != null
+    ? text + (autoVerify ? '  ↻ auto-verifying' : '  ↻ grounding')
+    : text);
   // Don't clear the input box on a "Ground this" retry — the user didn't type this.
   if (overrideText == null) { input.value = ''; input.style.height = 'auto'; }
   history.push({ role: 'user', text });
@@ -1690,6 +2009,8 @@ async function sendMessage(opts = {}) {
   let doneProvider = '';
   let doneIntent = '';      // routed intent (coding_change, trading, …) — drives the autowork suggestion
   let doneModel = '';       // actual model id from the PCSF receipt (e.g. claude-haiku-4-5)
+  let doneModelSwap = null; // capability-gated local-model swap decision (which local model led + why)
+  let doneRouteReason = null; // #1554: why this turn routed here (taskType + provider-selection reason + gate)
   let doneTimestamp = '';   // receipt generatedAt — the signature timestamp
   let doneOnline = true;    // false when no model answered (offline path)
   // #930: coalesce per-token DOM writes into one render per animation frame instead
@@ -1712,11 +2033,21 @@ async function sendMessage(opts = {}) {
   const toolResults = [];  // <tool_call> events arrive mid-stream; re-applied after the final render (which rebuilds the cards empty)
   const nativeToolCalls = [];  // cloud-model (Claude/OpenAI/Gemini) tool *calls* — they emit no <tool_call> text, so we synthesize the cards at finalize
   const requestedProvider = document.getElementById('provider-select')?.value || '';
+  // Model pin (#1127): only meaningful alongside a pinned provider; the server
+  // re-validates against its allowlist, so this is a preference, not authority.
+  const requestedModel = requestedProvider ? (document.getElementById('model-select')?.value || '') : '';
 
   try {
     const provider = requestedProvider;
     // Files attached via the "+" work tool — sent with this one turn, then cleared.
-    const sentAttachments = (window.pendingAttachments || []).filter(a => a && a.text).map(a => ({ name: a.name, text: a.text }));
+    // Forward text files AND images. Images carry a data URL (no extracted text) and the
+    // server resolves them via the vision model — without this they were dropped here and
+    // the model would report it received "0 files" despite a visible attachment (#1606).
+    const sentAttachments = (window.pendingAttachments || [])
+      .filter(a => a && (a.text || a.image))
+      .map(a => (a.image && !a.text)
+        ? { name: a.name, image: a.image, mimeType: a.mimeType }
+        : { name: a.name, text: a.text });
     const resp = await fetch('/api/dream/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1724,6 +2055,7 @@ async function sendMessage(opts = {}) {
         message: text,
         user: 'dream-chat',
         provider,
+        model: requestedModel || undefined,
         attachments: sentAttachments,
         history: history.slice(-10),
         personalContext: sanitizePersonalContext(personalContext || {}),
@@ -1802,6 +2134,8 @@ async function sendMessage(opts = {}) {
             doneProvider = evt.source || evt.provider || (evt.receipt && evt.receipt.provider) || '';
             doneIntent = evt.intent || (evt.receipt && evt.receipt.intent) || '';
             doneModel = evt.model || (evt.receipt && evt.receipt.model) || '';
+            doneModelSwap = evt.modelSwap || null;
+            doneRouteReason = evt.routeReason || (evt.receipt && evt.receipt.routeReason) || null;
             doneTimestamp = evt.timestamp || (evt.receipt && evt.receipt.generatedAt) || '';
             doneOnline = evt.online !== false;
             if (Array.isArray(evt.actions) && evt.actions.length) doneActions = evt.actions;
@@ -1814,6 +2148,12 @@ async function sendMessage(opts = {}) {
                 bubble.dataset.ungroundedRisk = String(evt.sigma0_grounding.risk);
               }
             }
+            // 3-band groundedness verdict (#1731): green=pass · amber=offer · red=auto-verify.
+            if (evt.groundedness && evt.groundedness.band) {
+              bubble.dataset.groundednessBand = evt.groundedness.band;
+            }
+            // #1733: a forced grounding pass found no source → honest abstention framing.
+            if (evt.abstained) bubble.dataset.abstained = '1';
             // Σ₀ council: the unified 4-way answerability verdict + disagreement Δ.
             if (evt.council && evt.council.verdict) {
               bubble.dataset.councilVerdict = String(evt.council.verdict);
@@ -1920,29 +2260,54 @@ async function sendMessage(opts = {}) {
   // Σ₀ groundedness canary: confident claims, no external anchor (the 42-state).
   // Honest signal to the user — internally consistent but unverified. Suppressed
   // when Σ₀ verify already grounded the reply.
-  if (bubble.dataset.ungrounded && !bubble.dataset.sigma0Corrected) {
+  if (bubble.dataset.abstained) {
+    // #1733 honest abstention: a forced grounding pass found no external source for the
+    // claims. Fail closed (BetterSafe doctrine) — say so plainly rather than re-badging
+    // "ungrounded". The verified "could not ground" negative was logged server-side.
+    const note = document.createElement('span');
+    note.title = "I couldn't find an external source to verify these claims. Treat this as unverified.";
+    note.style.cssText = 'font-size:10px;margin-left:6px;vertical-align:middle;color:#f5a623;cursor:help;opacity:0.95';
+    note.textContent = '⚠ unverified — no source found';
+    bubble.appendChild(note);
+  } else if (bubble.dataset.ungrounded && !bubble.dataset.sigma0Corrected) {
     const risk = bubble.dataset.ungroundedRisk;
-    const badge = document.createElement('span');
-    badge.title = 'Confident claims with no external source — self-consistent but unverified.'
-      + (risk ? ` (Σ₀ groundedness risk ${risk})` : '');
-    badge.style.cssText = 'font-size:10px;opacity:0.7;margin-left:6px;vertical-align:middle;color:#f5a623;cursor:help';
-    badge.textContent = '⚠ ungrounded';
-    bubble.appendChild(badge);
-    // Actionable half: offer a one-click retry that re-runs THIS question with forced
-    // web grounding — detect → actually ground, the 42-state loop closed in the UI.
-    // Suppressed when we're online-less (web search can't reach reality) or when this
-    // turn was already a forced-grounding retry (don't invite an endless re-ground).
-    if (doneOnline !== false && !forceGround) {
-      const reground = document.createElement('button');
-      reground.type = 'button';
-      reground.textContent = '🌐 Ground this';
-      reground.title = 'Re-answer this question with a live web search for sources.';
-      reground.style.cssText = 'font-size:10px;margin-left:8px;vertical-align:middle;color:var(--accent);background:none;border:1px solid currentColor;border-radius:4px;padding:1px 6px;cursor:pointer;opacity:0.85';
-      reground.addEventListener('click', () => {
-        reground.disabled = true;
-        sendMessage({ text, forceGround: true });
-      });
-      bubble.appendChild(reground);
+    const band = bubble.dataset.groundednessBand;
+    // RED band — high-risk confident-unanchored — and we're online and this isn't already
+    // a grounding retry: AUTO-ESCALATE. Fire the grounding pass without a human click, so
+    // the loop self-corrects (Verify→Converge, #1732). The re-run carries forceGround:true,
+    // so the `!forceGround` guard below stops it from escalating a second time.
+    if (band === 'red' && doneOnline !== false && !forceGround) {
+      const note = document.createElement('span');
+      note.title = 'Confident claims with no external source — automatically re-answering with a live web search.';
+      note.style.cssText = 'font-size:10px;margin-left:6px;vertical-align:middle;color:#f5a623;opacity:0.9';
+      note.textContent = '↻ auto-verifying an unsourced claim…';
+      bubble.appendChild(note);
+      sendMessage({ text, forceGround: true, auto: true });
+    } else {
+      // AMBER (or red while offline): the honest passive badge. Unchanged from before the
+      // active gate — internally consistent but unverified, surfaced to the user.
+      const badge = document.createElement('span');
+      badge.title = 'Confident claims with no external source — self-consistent but unverified.'
+        + (risk ? ` (Σ₀ groundedness risk ${risk})` : '');
+      badge.style.cssText = 'font-size:10px;opacity:0.7;margin-left:6px;vertical-align:middle;color:#f5a623;cursor:help';
+      badge.textContent = '⚠ ungrounded';
+      bubble.appendChild(badge);
+      // Actionable half: offer a one-click retry that re-runs THIS question with forced
+      // web grounding — detect → actually ground, the 42-state loop closed in the UI.
+      // Suppressed when we're online-less (web search can't reach reality) or when this
+      // turn was already a forced-grounding retry (don't invite an endless re-ground).
+      if (doneOnline !== false && !forceGround) {
+        const reground = document.createElement('button');
+        reground.type = 'button';
+        reground.textContent = '🌐 Ground this';
+        reground.title = 'Re-answer this question with a live web search for sources.';
+        reground.style.cssText = 'font-size:10px;margin-left:8px;vertical-align:middle;color:var(--accent);background:none;border:1px solid currentColor;border-radius:4px;padding:1px 6px;cursor:pointer;opacity:0.85';
+        reground.addEventListener('click', () => {
+          reground.disabled = true;
+          sendMessage({ text, forceGround: true });
+        });
+        bubble.appendChild(reground);
+      }
     }
   }
 
@@ -1997,6 +2362,15 @@ async function sendMessage(opts = {}) {
     }
   }
 
+  // In-chat PR review (#1503 follow-up): when this turn was a `!review #N` (the server
+  // tags the done event source "review"), attach Approve / Discard so the user can
+  // accept or reject the reviewed PR without leaving chat — closing the
+  // work → review → accept loop in one surface. PR number comes from the sent text.
+  if (doneProvider === 'review' && !didError) {
+    const _prm = String(text || '').match(/#?(\d+)/);
+    if (_prm) renderPrReviewActions(bubble, parseInt(_prm[1], 10), (typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  }
+
   // Signature line: always show a human-readable label + time. Raw provider/model id
   // goes in a collapsed <details> so curious users can inspect it without it cluttering
   // every reply for normal users. (#1141)
@@ -2015,18 +2389,50 @@ async function sendMessage(opts = {}) {
       const pm = [doneProvider, doneModel].filter(Boolean).join('/');
       // Visible part: label + time only.
       const visibleText = [displayLabel, time].filter(Boolean).join(' · ');
+      // Capability-gated local-model swap (lib/local-model-registry.js): when a
+      // LOCAL model answered, show WHICH model led so the auto-swap is visible —
+      // the cockpit telling you what's under the hood, not a warning. The model is
+      // interchangeable by design (Σ₀ North Star); the reason is a hover tooltip.
+      let swapChip = '', swapTitle = '', swapDebug = '';
+      if (doneModelSwap && (doneModelSwap.served || doneModelSwap.lead)) {
+        const _e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+        const served = doneModelSwap.served || doneModelSwap.lead;
+        const fellThrough = doneModelSwap.lead && served !== doneModelSwap.lead;
+        swapTitle = `Auto-selected ${served} — ${doneModelSwap.reason || 'local model'}` +
+          (fellThrough ? ` (lead ${doneModelSwap.lead} wasn't serving)` : '') +
+          '. Models are interchangeable (Σ₀); pick a provider in Settings to override.';
+        swapChip = ` · <span class="model-swap-chip" title="${_e(swapTitle)}" style="opacity:0.6">⇄ ${_e(served)}</span>`;
+        const cand = Array.isArray(doneModelSwap.candidates) ? doneModelSwap.candidates.join(' → ') : '';
+        swapDebug = `<div style="margin-top:2px">swap: ${_e(doneModelSwap.reason || '')}${cand ? ' · chain: ' + _e(cand) : ''}</div>`;
+      }
+      // #1554 — capability-gated routing, observable: assemble WHY this turn routed
+      // to this model (server routeReason = task classification + provider-selection
+      // reason + optional conversation-gate note). Surfaced as a hover tooltip on the
+      // signature label and expanded in the route disclosure below.
+      const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+      let routeReasonText = '';
+      if (doneRouteReason && (doneRouteReason.why || doneRouteReason.taskType)) {
+        const rp = [];
+        if (doneRouteReason.taskType) rp.push(doneRouteReason.taskType);
+        if (doneRouteReason.why) rp.push(doneRouteReason.why);
+        if (doneRouteReason.gate) rp.push('gate: ' + doneRouteReason.gate);
+        routeReasonText = rp.join(' · ');
+      }
+      const routeTitle = routeReasonText ? ` title="routed: ${esc(routeReasonText)}"` : '';
+      const routeDebug = routeReasonText ? `<div style="margin-top:2px">route: ${esc(routeReasonText)}</div>` : '';
       if (pm) {
-        // Wrap provider/model in a disclosure so it's accessible but not noisy.
+        // Wrap provider/model + route reason in a disclosure so it's accessible but
+        // not noisy; the visible label carries the reason as a hover tooltip (#1554).
         sig.innerHTML =
-          `<span>${visibleText}</span>` +
+          `<span${routeTitle}>${visibleText}${swapChip}</span>` +
           `<details class="sig-debug" style="display:inline-block;margin-left:6px">` +
-          `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none" aria-label="Debug details">▸ debug</summary>` +
-          `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${pm}</span>` +
+          `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none" aria-label="Route and model details">▸ route</summary>` +
+          `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${pm}${swapDebug}${routeDebug}</span>` +
           `</details>`;
-        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}; model: ${pm}`);
+        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}; model: ${pm}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
       } else {
-        sig.textContent = visibleText;
-        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}`);
+        sig.innerHTML = `<span${routeTitle}>${visibleText}${swapChip}</span>`;
+        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
       }
     }
     msg.appendChild(sig);
@@ -2234,7 +2640,6 @@ document.getElementById('input').addEventListener('input', e => {
       // Try to set the selected provider
       if (select.querySelector(`option[value="${provider}"]`)) {
         select.value = provider;
-        console.log(`[dream-chat] Provider set to: ${provider}`);
       } else if (provider !== 'auto') {
         // Provider not available; log but don't break
         console.warn(`[dream-chat] Requested provider '${provider}' not available, using router default`);
@@ -2243,6 +2648,57 @@ document.getElementById('input').addEventListener('input', e => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     }
   } catch (e) { /* no-op */ }
+})();
+
+// ── Model dropdown (#1127 work item 1) ──────────────────────────────────────
+// Follows the provider selection: cloud providers with server-listed choices show
+// a Model select (default = the server's effective modelFor() resolution); Auto,
+// local and keystone-ft hide it. Selection persists per provider in localStorage.
+(function wireModelSelect() {
+  const providerSel = document.getElementById('provider-select');
+  const modelSel = document.getElementById('model-select');
+  const group = document.getElementById('model-select-group');
+  if (!providerSel || !modelSel || !group) return;
+  let catalog = null; // { claude: {default, options:[{id,label}]}, ... }
+
+  function storeKey(p) { return `lantern_model_pin_${p}`; }
+
+  function render() {
+    const p = providerSel.value;
+    const entry = catalog && p ? catalog[p] : null;
+    if (!entry || !entry.options || !entry.options.length) {
+      group.style.display = 'none';
+      modelSel.innerHTML = '<option value="">Default</option>';
+      return;
+    }
+    const saved = localStorage.getItem(storeKey(p)) || '';
+    modelSel.innerHTML = '';
+    const def = document.createElement('option');
+    def.value = '';
+    def.textContent = `Default (${entry.default})`;
+    modelSel.appendChild(def);
+    for (const m of entry.options) {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.label || m.id;
+      if (m.id === saved) o.selected = true;
+      modelSel.appendChild(o);
+    }
+    group.style.display = '';
+  }
+
+  modelSel.addEventListener('change', () => {
+    const p = providerSel.value;
+    if (!p) return;
+    if (modelSel.value) localStorage.setItem(storeKey(p), modelSel.value);
+    else localStorage.removeItem(storeKey(p));
+  });
+  providerSel.addEventListener('change', render);
+
+  fetch('/api/providers/models')
+    .then(r => (r.ok ? r.json() : null))
+    .then(data => { catalog = (data && data.providers) || null; render(); })
+    .catch(() => { /* endpoint absent → dropdown stays hidden */ });
 })();
 
 // ── Observer side panel ───────────────────────────────────────────────────────
