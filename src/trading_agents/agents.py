@@ -495,6 +495,14 @@ def init_lessons_db():
         con.execute("ALTER TABLE trade_history ADD COLUMN closed_ts TEXT")
     except Exception:
         pass  # column already exists
+    # Migration: add risk_pct (the entry stop distance as a %) so realized R can be
+    # computed EXACTLY per trade (R = pnl_pct / risk_pct) instead of proxied from
+    # avg win% / avg loss% (which silently assumes a uniform stop distance). Legacy
+    # rows have NULL risk_pct and fall back to the pnl_pct proxy at read time.
+    try:
+        con.execute("ALTER TABLE trade_history ADD COLUMN risk_pct REAL")
+    except Exception:
+        pass  # column already exists
     # Success patterns from winning trades — complement to lessons (losses)
     con.execute("""
         CREATE TABLE IF NOT EXISTS success_patterns (
@@ -585,17 +593,25 @@ def clear_position_state(symbol: str):
 
 def log_trade_history(symbol: str, action: str, qty: float,
                       entry_price: float, confidence: int,
-                      reasoning: str, style: str):
-    """Log a new entry trade to persistent history."""
+                      reasoning: str, style: str, stop_pct: float = None):
+    """Log a new entry trade to persistent history.
+
+    `stop_pct` is the entry stop distance as a % (from calculate_smart_levels);
+    stored as risk_pct so realized R can be computed exactly on close.
+    """
+    try:
+        risk_pct = abs(float(stop_pct)) if stop_pct is not None else None
+    except (TypeError, ValueError):
+        risk_pct = None
     try:
         con = sqlite3.connect(LESSONS_DB)
         con.execute(
             "INSERT INTO trade_history "
             "(ts,symbol,action,qty,entry_price,exit_price,pnl_pct,"
-            "pnl_usd,confidence,reasoning,close_reason,style,status) "
-            "VALUES (?,?,?,?,?,NULL,NULL,NULL,?,?,NULL,?,'open')",
+            "pnl_usd,confidence,reasoning,close_reason,style,status,risk_pct) "
+            "VALUES (?,?,?,?,?,NULL,NULL,NULL,?,?,NULL,?,'open',?)",
             (datetime.now().isoformat(), symbol, action, qty,
-             entry_price, confidence, reasoning, style)
+             entry_price, confidence, reasoning, style, risk_pct)
         )
         con.commit()
         con.close()
@@ -5135,7 +5151,8 @@ def execute_watch_mode_entry(ticker: str, side: str, trigger_level: float,
             entry_price = current_price,
             confidence  = confidence,
             reasoning   = f"Watch mode entry — broke trigger ${trigger_level:.4f}",
-            style       = profile["style"]
+            style       = profile["style"],
+            stop_pct    = levels.get("stop_pct"),
         )
         log_agent("system", "WATCH",
             f"{ticker} levels set: Stop ${levels['stop_price']:.4f} | "
@@ -7392,27 +7409,47 @@ def _ev_recent_win_rate(ticker: str):
 
 
 def _ev_realized_rr(ticker: str):
-    """Realized reward:risk (avg win % / avg |loss %|) for the EV `target_r`.
+    """Realized reward:risk for the EV `target_r`.
 
     The trade actually taken is a 3R structural setup (calculate_smart_levels),
     but trailing / zone exits usually close winners before 3R — so the *planned*
-    3.0 is optimistic. Feeding the EV the empirically realized win/loss ratio
-    keeps ENTER/SKIP honest and self-limiting: if winners trail out small, the
-    edge shrinks and marginal trades stop qualifying. Last 30 closed trades for
-    the ticker, else portfolio-wide last 40. None (→ caller uses planned 3.0)
-    when there isn't a win AND a loss in a ≥10 sample.
+    3.0 is optimistic. Feeding the EV the empirically realized reward:risk keeps
+    ENTER/SKIP honest and self-limiting: if winners trail out small, the edge
+    shrinks and marginal trades stop qualifying.
+
+    EXACT when trades carry risk_pct (the entry stop distance): per-trade
+    R = pnl_pct / risk_pct, then avg(win R) / avg(|loss R|). This is unit-correct
+    even when stop distances vary trade-to-trade. Falls back to the avg-win% /
+    avg-loss% PROXY for legacy rows that predate the risk_pct column. Last 30
+    closed trades for the ticker, else portfolio-wide last 40. None (→ caller
+    uses planned 3.0) when there isn't a win AND a loss in a ≥10 sample.
     """
     try:
         con = sqlite3.connect(LESSONS_DB)
         rows = con.execute(
-            "SELECT pnl_pct FROM trade_history WHERE symbol=? AND status='closed' "
-            "AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 30", (ticker,)).fetchall()
+            "SELECT pnl_pct, risk_pct FROM trade_history WHERE symbol=? "
+            "AND status='closed' AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 30",
+            (ticker,)).fetchall()
         if len(rows) < 10:
             rows = con.execute(
-                "SELECT pnl_pct FROM trade_history WHERE status='closed' "
+                "SELECT pnl_pct, risk_pct FROM trade_history WHERE status='closed' "
                 "AND pnl_pct IS NOT NULL ORDER BY id DESC LIMIT 40").fetchall()
         con.close()
-        pnls = [r[0] for r in rows if r[0] is not None]
+
+        # Preferred: EXACT per-trade R when ≥10 trades carry a real stop distance.
+        exact = [(p, r) for (p, r) in rows if p is not None and r and r > 0]
+        if len(exact) >= 10:
+            rs = [p / r for (p, r) in exact]
+            wins = [x for x in rs if x > 0]
+            losses = [abs(x) for x in rs if x <= 0]
+            if wins and losses:
+                avg_win = sum(wins) / len(wins)
+                avg_loss = sum(losses) / len(losses)
+                if avg_loss > 0:
+                    return max(0.5, min(3.0, avg_win / avg_loss))
+
+        # Fallback: avg-win% / avg-loss% proxy over whatever closed rows we have.
+        pnls = [p for (p, _r) in rows if p is not None]
         wins = [p for p in pnls if p > 0]
         losses = [abs(p) for p in pnls if p <= 0]
         if len(pnls) < 10 or not wins or not losses:
@@ -7421,11 +7458,63 @@ def _ev_realized_rr(ticker: str):
         avg_loss = sum(losses) / len(losses)
         if avg_loss <= 0:
             return None
-        # Clamp to a sane band: never below 0.5R (a real setup risks ~1R) and
-        # never above the planned 3.0R the executor targets.
         return max(0.5, min(3.0, avg_win / avg_loss))
     except Exception:
         return None
+
+
+_EV_WEIGHTS_CACHE = {"ts": 0.0, "weights": None}
+
+
+def _ev_adapted_weights():
+    """EV weights re-scaled by the trader's own realized per-signal edge, or None.
+
+    Closes the learning loop the council only *measured*: reads the graded
+    convergence outcomes (data/convergence/trader-outcomes.jsonl — the same file
+    sigma0-trader-council.js grades) and calls convergence_ev.adapt_weights,
+    which is conservative by construction (needs ≥20 graded rows, ≥5 in each
+    strong/weak bucket per signal, ±50% cap). Returns None (→ score_convergence
+    uses static base weights) when immature or disabled. Gated by
+    SIGMA0_ADAPT_WEIGHTS (default on); cached 5 min so a 1-min scan is light.
+    """
+    if os.getenv("SIGMA0_ADAPT_WEIGHTS", "1") == "0":
+        return None
+    import time as _t
+    now = _t.time()
+    if _EV_WEIGHTS_CACHE["weights"] is not None and now - _EV_WEIGHTS_CACHE["ts"] < 300:
+        return _EV_WEIGHTS_CACHE["weights"]
+    if now - _EV_WEIGHTS_CACHE["ts"] < 300 and _EV_WEIGHTS_CACHE["ts"] > 0:
+        return None  # recently checked, still immature — don't re-read every scan
+    weights = None
+    try:
+        from convergence_ev import adapt_weights, WEIGHTS
+        path = os.path.join(os.path.dirname(__file__), "..", "..",
+                            "data", "convergence", "trader-outcomes.jsonl")
+        rows = []
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as fh:
+                for ln in fh.readlines()[-500:]:
+                    ln = ln.strip()
+                    if not ln:
+                        continue
+                    try:
+                        rows.append(json.loads(ln))
+                    except Exception:
+                        pass
+        adapted = adapt_weights(rows)
+        # Only return a dict when it actually DIFFERS from base (i.e. it matured
+        # and moved something) — otherwise keep None so behaviour is unchanged.
+        if adapted and adapted != dict(WEIGHTS):
+            weights = adapted
+            _changed = {k: v for k, v in adapted.items() if v != WEIGHTS.get(k)}
+            log_agent("system", "SIGMA0",
+                f"EV weights adapted from realized edge: {_changed}")
+    except Exception as _e:
+        log.warning("adapt_weights failed: %s", _e)
+        weights = None
+    _EV_WEIGHTS_CACHE["ts"] = now
+    _EV_WEIGHTS_CACHE["weights"] = weights
+    return weights
 
 
 def _ev_news_sentiment(ticker: str):
@@ -7989,7 +8078,7 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             "target_r":          _tr,
         }
         analysis["_sigma0_ev_input"] = _ev_input
-        _ev = _score_ev(_ev_input)
+        _ev = _score_ev(_ev_input, weights=_ev_adapted_weights())
         _ev["instruction"] = {
             "ticker": ticker, "direction": analysis.get("direction"),
             "entry":  round(price, 4),
@@ -8586,7 +8675,7 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
         else:
             _claude_conf = 15            # opposes the trade direction
         _ev2_input = dict(_ev_input); _ev2_input["claude_conf"] = _claude_conf
-        _ev2 = _score_ev(_ev2_input)
+        _ev2 = _score_ev(_ev2_input, weights=_ev_adapted_weights())
         _ev2["instruction"] = (analysis.get("sigma0") or {}).get("instruction")
         analysis["sigma0"] = _ev2       # graded + persisted on the entry record
         log_agent("system", "SIGMA0",
@@ -8741,7 +8830,8 @@ def scan_ticker(ticker: str, notify_fn=None, open_positions: dict = None,
             entry_price= price,
             confidence = analysis.get("confidence", 0),
             reasoning  = decision.get("reasoning", ""),
-            style      = profile["style"]
+            style      = profile["style"],
+            stop_pct   = levels.get("stop_pct"),
         )
 
     if notify_fn and result.get("status") in ("placed", "simulated"):

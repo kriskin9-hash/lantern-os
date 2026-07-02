@@ -17,7 +17,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src" / "trading_agents"))
 
-from convergence_ev import edge_risk_multiplier, score_convergence, EV_MIN, P_MIN
+from convergence_ev import (
+    edge_risk_multiplier, score_convergence, EV_MIN, P_MIN,
+    per_signal_lift, adapt_weights, WEIGHTS,
+)
 
 
 # ── edge_risk_multiplier ───────────────────────────────────────────────────────
@@ -89,3 +92,60 @@ def test_enter_requires_both_ev_and_pwin_bars():
     out = score_convergence(_base_candidate(3.0))
     if out["decision"] == "ENTER":
         assert out["ev_r"] >= EV_MIN and out["p_win"] >= P_MIN
+
+
+def test_custom_weights_override_base():
+    cand = _base_candidate(3.0)
+    base = score_convergence(cand)
+    # Zero out every weight → p_win collapses to the base_rate (0.5 here).
+    flat = score_convergence(cand, weights={k: 0.0 for k in WEIGHTS})
+    assert flat["p_win"] == pytest.approx(0.5, abs=1e-9)
+    assert base["p_win"] > flat["p_win"]        # real weights add edge
+
+
+# ── per_signal_lift / adapt_weights (closed learning loop) ─────────────────────
+
+def _row(zone_strong, win):
+    # A graded outcome row: zone fired strong/weak, structure always neutral.
+    return {"signals": {"zone": 0.9 if zone_strong else 0.3, "structure": 0.5},
+            "outcome": bool(win)}
+
+
+def test_per_signal_lift_detects_predictive_signal():
+    # zone strong → win, zone weak → loss: a clean +1.0 lift.
+    rows = [_row(True, True) for _ in range(10)] + [_row(False, False) for _ in range(10)]
+    edge = per_signal_lift(rows)
+    assert edge["zone"]["lift"] == pytest.approx(1.0)
+    assert edge["zone"]["strong_wr"] == 1.0 and edge["zone"]["weak_wr"] == 0.0
+
+
+def test_adapt_weights_noop_when_immature():
+    # < ADAPT_MIN_ROWS rows → weights untouched.
+    rows = [_row(True, True) for _ in range(10)]
+    assert adapt_weights(rows) == dict(WEIGHTS)
+    assert adapt_weights([]) == dict(WEIGHTS)
+
+
+def test_adapt_weights_boosts_predictive_signal_bounded():
+    rows = [_row(True, True) for _ in range(12)] + [_row(False, False) for _ in range(12)]
+    adapted = adapt_weights(rows)
+    # zone predicted perfectly → its weight goes UP, capped at +50% (bound 1.5).
+    assert adapted["zone"] > WEIGHTS["zone"]
+    assert adapted["zone"] == pytest.approx(WEIGHTS["zone"] * 1.5, abs=1e-4)
+    # structure never varied (all 0.5 → all "weak") → one bucket empty → untouched.
+    assert adapted["structure"] == WEIGHTS["structure"]
+
+
+def test_adapt_weights_penalizes_anti_predictive_signal():
+    # zone strong → LOSS, weak → WIN: negative lift → weight scaled DOWN to floor.
+    rows = [_row(True, False) for _ in range(12)] + [_row(False, True) for _ in range(12)]
+    adapted = adapt_weights(rows)
+    assert adapted["zone"] == pytest.approx(WEIGHTS["zone"] * 0.5, abs=1e-4)
+
+
+def test_adapt_weights_respects_min_bucket():
+    # 20 rows but only 2 with zone strong → below ADAPT_MIN_BUCKET → zone untouched.
+    rows = ([_row(True, True) for _ in range(2)]
+            + [_row(False, False) for _ in range(18)])
+    adapted = adapt_weights(rows)
+    assert adapted["zone"] == WEIGHTS["zone"]
