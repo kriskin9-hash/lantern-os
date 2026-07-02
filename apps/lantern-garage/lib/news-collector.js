@@ -110,6 +110,43 @@ async function fetchRss(symbols) {
   }
 }
 
+// Yahoo retired the free RSS headline feed (feeds.finance.yahoo.com/rss/2.0/
+// headline now 404s). Its current news lives on the JSON search endpoint —
+// query1.finance.yahoo.com/v1/finance/search — the same host the trader's bar
+// feed already uses. Query by symbol and normalise to the {headline,url,
+// published,source,id} shape recordNewsItem expects. (#1583 / news-not-loading)
+function fetchYahooNews(symbols) {
+  const q = encodeURIComponent((symbols && symbols[0]) || "SPY");
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${q}&newsCount=12&quotesCount=0&lang=en-US&region=US`;
+  return new Promise((resolve) => {
+    const req = https.get(url, { timeout: 10000, headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
+      let body = "";
+      res.on("data", (c) => (body += c));
+      res.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          const items = (data.news || [])
+            .map((n) => ({
+              headline: n.title,
+              url: n.link,
+              published: n.providerPublishTime
+                ? new Date(n.providerPublishTime * 1000).toISOString()
+                : new Date().toISOString(),
+              source: n.publisher || "Yahoo Finance",
+              id: n.uuid || n.link,
+            }))
+            .filter((it) => it.headline && it.url);
+          resolve(items);
+        } catch (e) {
+          resolve([]);
+        }
+      });
+    });
+    req.on("error", () => resolve([]));
+    req.on("timeout", () => { req.destroy(); resolve([]); });
+  });
+}
+
 // Fetch the dashboard's news JSON over localhost HTTP. Resolves to a parsed
 // object (or null on any failure — offline dashboard, bad JSON, timeout).
 function fetchDashboardNews() {
@@ -145,9 +182,8 @@ class NewsCollector {
   }
 
   async _collectFor(symbols, tag) {
-    const xml = await fetchRss(symbols);
-    if (!xml) return 0;
-    const items = parseRssItems(xml).slice(0, 8);
+    const items = (await fetchYahooNews(symbols)).slice(0, 8);
+    if (!items.length) return 0;
     let recorded = 0;
     for (const item of items) {
       const rec = await tradingNews.recordNewsItem({
