@@ -367,6 +367,15 @@
     <div id="gpuKeysList" class="key-grid"><div class="placeholder">Loading accounts…</div></div>
   </section>
 
+  <!-- ── Financial Account Keys (editable) ── -->
+  <section class="panel">
+    <h2>💰 Financial Keys <span class="section-meta" id="financialKeysSummary"></span>
+      <button class="btn-secondary" onclick="renderFinancialKeys()" style="margin-left:auto;font-size:0.72rem;padding:4px 9px;">⟳ Refresh</button>
+    </h2>
+    <p class="panel-sub">Connect broker/exchange accounts so the trading agents can read positions and place orders. Saved to this computer's Windows user account only — never uploaded.</p>
+    <div id="financialKeysList" class="key-grid"><div class="placeholder">Loading accounts…</div></div>
+  </section>
+
   <!-- ── Provider Chains (read-only reference) ── -->
   <section class="panel">
     <h2>🔗 Provider Chains <span class="section-meta" id="providersSummary"></span></h2>
@@ -975,6 +984,77 @@
     finally { setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 1600); }
   }
 
+  // ── Financial Account Keys (editable) ─────────────────────────────────────
+  const FINANCIAL_PROVIDERS = [
+    { id: "ibkr", icon: "🏦", name: "Interactive Brokers", blurb: "Direct REST API — live quotes, positions, orders. No Gateway needed.", get: "https://www.interactivebrokers.com/en/trading/ib-api.php", keys: [{ env: "IBKR_ACCOUNT_ID", label: "Account ID" }, { env: "IBKR_API_KEY", label: "API key" }, { env: "IBKR_API_SECRET", label: "API secret" }] },
+    { id: "alpaca", icon: "🦙", name: "Alpaca", blurb: "Commission-free stocks/options/crypto — developer-first REST + paper trading.", get: "https://alpaca.markets/", keys: [{ env: "ALPACA_API_KEY", label: "API key" }, { env: "ALPACA_SECRET_KEY", label: "Secret key" }] },
+    { id: "kalshi", icon: "🎯", name: "Kalshi", blurb: "Event-contract exchange — RSA-signed requests power the swipe-deck terminal.", get: "https://kalshi.com/account/profile", keys: [{ env: "KALSHI_API_KEY_ID", label: "API key ID" }, { env: "KALSHI_PRIVATE_KEY_PATH", label: "Private key path" }] },
+    { id: "finnhub", icon: "📈", name: "Finnhub", blurb: "Free real-time stocks, forex (10 brokers), crypto (15+ exchanges) + news/sentiment + fundamentals. Best general-purpose free tier.", get: "https://finnhub.io/dashboard", keys: [{ env: "FINNHUB_API_KEY", label: "API key" }] },
+    { id: "alphavantage", icon: "📊", name: "Alpha Vantage", blurb: "Free stocks/options/forex/crypto + 50+ technical indicators + 20 yrs history.", get: "https://www.alphavantage.co/support/#api-key", keys: [{ env: "ALPHA_VANTAGE_API_KEY", label: "API key" }] },
+    { id: "fred", icon: "🏛️", name: "FRED", blurb: "Federal Reserve macro data — free, no practical rate limit. CPI, rates, unemployment for economy/politics contract reasoning.", get: "https://fredaccount.stlouisfed.org/apikeys", keys: [{ env: "FRED_API_KEY", label: "API key" }] },
+  ];
+
+  async function renderFinancialKeys() {
+    const el = $("financialKeysList");
+    let data = null;
+    try {
+      const r = await fetch("/api/financial-keys", { cache: "no-store", signal: AbortSignal.timeout(20000) });
+      if (r.ok) data = await r.json();
+    } catch {}
+    if (!data || !Array.isArray(data.keys)) {
+      el.innerHTML = '<div class="placeholder">Couldn\'t load account status — <button class="btn-secondary" type="button" onclick="renderFinancialKeys()" style="font-size:0.72rem;padding:3px 8px;">retry</button></div>';
+      return;
+    }
+    const setMap = {};
+    data.keys.forEach(k => { setMap[k.key] = k; });
+    const connected = FINANCIAL_PROVIDERS.filter(p => p.keys.every(k => setMap[k.env]?.set)).length;
+    setText("financialKeysSummary", `${connected}/${FINANCIAL_PROVIDERS.length} connected`);
+    el.innerHTML = FINANCIAL_PROVIDERS.map(p => {
+      const anySet = p.keys.some(k => setMap[k.env]?.set);
+      const allSet = p.keys.every(k => setMap[k.env]?.set);
+      const cls = allSet ? "set" : "unset";
+      const badge = allSet ? '<span class="key-badge-set">✓ connected</span>' : anySet ? '<span class="key-badge-partial">partly set</span>' : '<span class="key-badge-unset">not connected</span>';
+      const rows = p.keys.map(k => {
+        const info = setMap[k.env] || {};
+        const placeholder = info.set ? `saved · ${escapeHtml(info.masked || "••••")}` : "paste key…";
+        return `<div class="key-input-row">
+          <label>${escapeHtml(k.label)}</label>
+          <input type="password" autocomplete="off" data-finkeyenv="${k.env}" placeholder="${placeholder}">
+          <button class="key-save-btn" type="button" data-savefinkey="${k.env}">Save</button>
+        </div>`;
+      }).join("");
+      return `<div class="key-card ${cls}">
+        <div class="key-head"><span>${p.icon}</span><strong>${p.name}</strong><span style="margin-left:auto;">${badge}</span></div>
+        <div class="key-blurb">${p.blurb}</div>
+        <a class="key-get" href="${p.get}" target="_blank" rel="noopener">Get your key ↗</a>
+        ${rows}
+      </div>`;
+    }).join("");
+    el.querySelectorAll("button[data-savefinkey]").forEach(btn => {
+      btn.addEventListener("click", () => saveFinancialKey(btn.dataset.savefinkey, el, btn));
+    });
+    el.querySelectorAll("input[data-finkeyenv]").forEach(inp => {
+      inp.addEventListener("keydown", (e) => { if (e.key === "Enter") el.querySelector(`button[data-savefinkey="${inp.dataset.finkeyenv}"]`)?.click(); });
+    });
+  }
+
+  async function saveFinancialKey(env, scope, btn) {
+    const input = scope.querySelector(`input[data-finkeyenv="${env}"]`);
+    const value = input ? input.value.trim() : "";
+    if (!value) { input?.focus(); return; }
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = "Saving…";
+    try {
+      const r = await fetch("/api/financial-keys", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: env, value }),
+      });
+      const result = await r.json();
+      if (result.error) { btn.textContent = "✕ failed"; }
+      else { btn.textContent = result.persisted ? "✓ saved" : "✓ (session)"; await renderFinancialKeys(); }
+    } catch { btn.textContent = "✕ error"; }
+    finally { setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 1600); }
+  }
+
   // ── Read-only wired panels ────────────────────────────────────────────────
   async function renderLocalModel() {
     const el = $("localModelBody");
@@ -1486,6 +1566,7 @@
     refreshProviderStatus();
     renderTrainingSection();
     renderGpuKeys();
+    renderFinancialKeys();
     renderReliance();
     renderMerit();
     renderCalibration();

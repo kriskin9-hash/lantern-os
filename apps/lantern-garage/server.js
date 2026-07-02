@@ -193,6 +193,7 @@ const routes = [
   require("./routes/csf"),
   require("./routes/training"),
   require("./routes/gpu-training"),
+  require("./routes/financial-keys"), // Broker/exchange credentials (IBKR/Alpaca/Kalshi) for orchestration.html
   require("./routes/token-audit"),
   require("./routes/trading"),
   require("./routes/agent-performance"),

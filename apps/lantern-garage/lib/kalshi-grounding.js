@@ -28,6 +28,7 @@ const https = require("https");
 
 const { webSearch } = require("./web-search-client");
 const { geminiTransport } = require("./gemini-transport");
+const marketData = require("./market-data-client");
 let _callLlm = null;
 try { _callLlm = require("./self-edit-engine").callLlm; } catch { /* optional */ }
 
@@ -80,6 +81,114 @@ function _extractJson(text) {
     confidence: conf ? Number(conf[1]) : 0.5,
     rationale: rat ? rat[1] : "",
   };
+}
+
+// ── Macro grounding (FRED / Alpha Vantage + Finnhub) ─────────────────────────
+// Economy/politics-flavoured event markets (CPI prints, Fed decisions, jobs
+// numbers, GDP, mortgage rates) can be grounded on the SAME authoritative series
+// the market is about to resolve against — real numbers the thin market may not
+// have priced. We map resolution-text keywords to macro aliases (and a Finnhub
+// quote for an explicit $TICKER), fetch the latest reading + MoM/YoY via the
+// unified marketData.macroLatest() (FRED if its key is set, else the free Alpha
+// Vantage economic feed), and return evidence lines the forecaster sees. This is
+// the External-Reality Rule applied to macro contracts: [claim, evidence, source].
+// NOTE: these are PREFIX matches (leading \b, no trailing \b) on purpose — real
+// Kalshi market text says "unemployment"/"unemployed"/"payrolls"/"yields", so a
+// trailing \b (e.g. /\bunemploy\b/) would fail to match the very words that appear.
+const MACRO_KEYWORD_SERIES = [
+  [/\b(cpi|inflation|consumer price)/i, ["cpi", "core_cpi"]],
+  [/\b(unemploy|jobless|jobs report|nonfarm|payroll)/i, ["unemployment", "payrolls"]],
+  [/\b(fed funds|federal funds|interest rate|rate (hike|cut|decision)|fomc|fed )/i, ["fed_funds"]],
+  [/\b(gdp|recession|economic growth)/i, ["real_gdp", "yield_curve"]],
+  [/\bmortgage/i, ["mortgage_30y"]],
+  [/\b(treasury|10[- ]?year|yield)/i, ["ten_year"]],
+];
+
+// Aliases where a relative YoY % is the meaningful headline (level indices). Rates
+// and spreads (fed_funds, ten_year, yield_curve, mortgage_30y, unemployment) fall
+// through to a raw year-ago-level comparison instead — see _macroEvidence.
+const YOY_PCT_ALIASES = new Set(["cpi", "core_cpi", "payrolls", "real_gdp", "gdp", "retail_sales"]);
+
+// Map a market's text to the macro aliases it references. Pure (no I/O, no keys) so
+// the keyword rules are unit-testable on their own — this is where the "unemployment
+// must match, not just nonfarm" contract lives.
+function _macroAliases(market) {
+  const text = `${market.title || ""} ${market.rules_primary || ""} ${market.ticker || ""}`;
+  const aliases = new Set();
+  for (const [re, series] of MACRO_KEYWORD_SERIES) {
+    if (re.test(text)) series.forEach((s) => aliases.add(s));
+  }
+  return aliases;
+}
+
+// Returns { lines:[str], evidence:[{title,url,snippet}], sources:[url] } — empty
+// when nothing macro matched or no macro provider is connected. Never throws.
+async function _macroEvidence(market) {
+  const text = `${market.title || ""} ${market.rules_primary || ""} ${market.ticker || ""}`;
+  const aliases = _macroAliases(market);
+  const out = { lines: [], evidence: [], sources: [] };
+  if (aliases.size && (marketData.hasFred() || marketData.hasAlphaVantage())) {
+    const results = await Promise.all([...aliases].map((a) => marketData.macroLatest(a).catch(() => null)));
+    for (const r of results) {
+      if (!r || !r.latest) continue;
+      const parts = [`${r.latest.value} as of ${r.latest.date}`];
+      // Year-over-year framing depends on series type: a relative % is meaningful
+      // for level indices (CPI, payrolls, GDP) — that's literally what a "CPI YoY >
+      // 3%" market resolves on — but nonsense for rates/spreads (a yield going
+      // 0.10→0.31 is not "+210%"). For rates we show the raw year-ago level instead,
+      // so the forecaster always gets a correct, verifiable trend.
+      if (r.yearAgo) {
+        if (YOY_PCT_ALIASES.has(r.alias) && r.yoyPct != null) {
+          parts.push(`YoY ${r.yoyPct >= 0 ? "+" : ""}${r.yoyPct}% (was ${r.yearAgo.value} on ${r.yearAgo.date})`);
+        } else {
+          parts.push(`year ago ${r.yearAgo.value} (${r.yearAgo.date})`);
+        }
+      }
+      const snippet = parts.join(", ");
+      out.lines.push(`${r.label}: ${snippet} (${r.source})`);
+      out.evidence.push({ title: `${r.label} — ${r.source}`, url: r.url, snippet });
+      if (r.url) out.sources.push(r.url);
+    }
+
+    // Release timing (FRED only): when does this series next PRINT? An econ market
+    // resolves on the print date — if the next release lands on/before the market
+    // closes, fresh data will settle it (the current reading is provisional); if it
+    // lands after, the current reading is effectively final. Dedupe by release so
+    // CPI + core CPI (same release) add ONE timing line, not two.
+    if (marketData.hasFred()) {
+      const fredAliases = results.filter((r) => r && r.source === "FRED").map((r) => r.alias);
+      const rels = await Promise.all(fredAliases.map((a) => marketData.fredNextRelease(a).catch(() => null)));
+      const closeDate = market.close_time ? String(market.close_time).slice(0, 10) : null;
+      const seenRel = new Set();
+      for (const rel of rels) {
+        if (!rel || seenRel.has(rel.releaseId)) continue;
+        seenRel.add(rel.releaseId);
+        let line = `Next ${rel.releaseName} release: ${rel.nextDate} (in ${rel.daysUntil} day${rel.daysUntil === 1 ? "" : "s"})`;
+        if (closeDate) {
+          line += rel.nextDate <= closeDate
+            ? " — BEFORE this market closes, so fresh data will settle it (current reading is provisional)"
+            : " — after this market closes, so the current reading is effectively final";
+        }
+        out.lines.push(line);
+        out.evidence.push({
+          title: `${rel.releaseName} release schedule — FRED`,
+          url: `https://fred.stlouisfed.org/release/dates?rid=${rel.releaseId}`,
+          snippet: `next release ${rel.nextDate} (in ${rel.daysUntil}d)`,
+        });
+      }
+    }
+  }
+  // Explicit equity ticker in the market (e.g. "$AAPL above 250")? Add a live quote.
+  const tm = text.match(/\$([A-Z]{1,5})\b/);
+  if (tm && marketData.hasFinnhub()) {
+    const q = await marketData.finnhubQuote(tm[1]).catch(() => null);
+    if (q && q.price) {
+      const snippet = `${q.symbol} $${q.price} (${q.changePct >= 0 ? "+" : ""}${q.changePct}% today)`;
+      out.lines.push(`Live quote: ${snippet}`);
+      out.evidence.push({ title: `${q.symbol} live quote — Finnhub`, url: `https://finnhub.io/`, snippet });
+    }
+  }
+  return out;
 }
 
 function _researchQuery(market) {
@@ -170,11 +279,18 @@ async function groundMarket(market, { force = false } = {}) {
     if (ws && ws.success) evidence = (ws.results || []).slice(0, 5).map(r => ({ title: r.title, url: r.url, snippet: r.snippet }));
   } catch { /* non-fatal */ }
 
+  // 1b) authoritative macro data (FRED) + live quotes (Finnhub) for econ markets.
+  // Prepended to evidence so the real numbers lead, and its sources are merged in.
+  let macro = { lines: [], evidence: [], sources: [] };
+  try { macro = await _macroEvidence(market); } catch { /* non-fatal */ }
+  if (macro.evidence.length) evidence = [...macro.evidence, ...evidence];
+
   const userPrompt =
     `Market: ${market.title || ticker}\n` +
     `Resolution rule (YES if true): ${(market.rules_primary || "n/a").slice(0, 400)}\n` +
     (market.close_time ? `Closes: ${market.close_time}\n` : "") +
     (marketPct != null ? `Market currently prices YES at ${marketPct}%.\n` : "") +
+    (macro.lines.length ? `\nLive macro data (FRED/Finnhub, authoritative):\n${macro.lines.map((l) => `- ${l}`).join("\n")}\n` : "") +
     (evidence.length ? `\nWeb evidence:\n${evidence.map((e, i) => `[${i + 1}] ${e.title}: ${e.snippet}`).join("\n").slice(0, 1500)}\n` : "") +
     `\nEstimate the true probability of YES.`;
 
@@ -212,6 +328,12 @@ async function groundMarket(market, { force = false } = {}) {
       }
     } catch { /* fall through */ }
   }
+  // FRED-backed macro data is authoritative live external reality — as legitimate a
+  // grounding as a googleSearch source (arguably stronger). An econ estimate fed the
+  // actual current CPI/rate/jobs number counts as web-grounded and may assert an edge.
+  const macroGrounded = macro.lines.length > 0;
+  if (macroGrounded) webGrounded = true;
+
   // A non-web-grounded estimate is weak evidence by construction — cap its confidence
   // so it can't masquerade as a high-conviction edge.
   if (!webGrounded) confidence = Math.min(confidence, 0.4);
@@ -224,13 +346,14 @@ async function groundMarket(market, { force = false } = {}) {
     return result; // not cached — retry next cycle
   }
 
-  // merge web-evidence urls into sources for the audit trail
-  const allSources = Array.from(new Set([...(sources || []), ...evidence.map(e => e.url).filter(Boolean)]));
+  // merge web-evidence + FRED/Finnhub macro urls into sources for the audit trail
+  const allSources = Array.from(new Set([...(sources || []), ...macro.sources, ...evidence.map(e => e.url).filter(Boolean)]));
   const result = {
     ticker, p_yes: Math.round(p_yes * 1000) / 1000,
     confidence: Math.round(confidence * 100) / 100,
     rationale, evidence, sources: allSources, model, query,
     ts: new Date().toISOString(), grounded: true, web_grounded: webGrounded,
+    macro_grounded: macroGrounded,
   };
   _cache.set(ticker, { result, expires: Date.now() + TTL_MS });
   _persist(result);
@@ -260,3 +383,6 @@ async function groundMany(markets, { concurrency = 4, force = false } = {}) {
 }
 
 module.exports = { groundMarket, groundMany, peek, CACHE_FILE, TTL_MS };
+// Exported for tests: macro/quote evidence builder + the pure keyword matcher.
+module.exports._macroEvidence = _macroEvidence;
+module.exports._macroAliases = _macroAliases;

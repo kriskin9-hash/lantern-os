@@ -21,6 +21,9 @@ const marketData = require("./market-data-client");
 
 const WATCHLIST_PATH = path.resolve(__dirname, "..", "..", "..", "data", "lantern-garage", "trading", "watchlist.json");
 const BROAD_MARKET_SYMBOLS = ["^GSPC", "^DJI", "^IXIC", "^VIX"];
+// Alpha Vantage's free tier is 25 requests/day — throttle its news pull to once
+// per 6h (≤4/day) so the collector's 10-min loop can't exhaust the daily quota.
+const AV_NEWS_THROTTLE_MS = 6 * 60 * 60 * 1000;
 
 // Primary source: the locally-running AI Trader dashboard (dashboard.py), whose
 // /api/news-feed serves REAL Alpaca news per watchlist ticker. Plain localhost
@@ -291,10 +294,49 @@ class NewsCollector {
     return recorded;
   }
 
+  // Alpha Vantage NEWS_SENTIMENT — sentiment-scored headlines (what Finnhub charges
+  // for). AV's free tier is capped at 25 requests/DAY, so this is deliberately NOT
+  // run every cycle: a module-level throttle limits it to once per 6h (≤4 calls/day),
+  // leaving the rest of the daily quota for the more valuable Σ₀ macro grounding.
+  // The market-data client's own per-day AV budget is the backstop. Sentiment
+  // magnitude lifts the recorded impact so strongly-signed news ranks higher.
+  async _collectFromAlphaVantage() {
+    if (!marketData.hasAlphaVantage()) return 0;
+    const now = Date.now();
+    if (now - NewsCollector._lastAvNewsAt < AV_NEWS_THROTTLE_MS) return 0;
+    NewsCollector._lastAvNewsAt = now; // reserve the slot before the await
+    let items = [];
+    try {
+      items = (await marketData.alphaVantageNewsSentiment({ topics: "financial_markets", limit: 50 })).slice(0, 20);
+    } catch (e) { console.error("[NewsCollector] Alpha Vantage news error:", e.message); return 0; }
+    let recorded = 0;
+    for (const it of items) {
+      const mag = Math.abs(Number(it.sentimentScore) || 0);
+      const sentImpact = mag >= 0.35 ? 75 : mag >= 0.15 ? 55 : 35;
+      const rec = await tradingNews.recordNewsItem({
+        id: it.id,
+        headline: it.headline,
+        source: it.source || "Alpha Vantage",
+        url: it.url || "",
+        published: it.published || "",
+        date: (it.published || "").slice(0, 10),
+        symbols: it.symbols || [],
+        impact: Math.max(scoreImpact(it.headline), sentImpact),
+        summary: it.summary || "",
+        image: it.image || "",
+      }).catch((e) => { console.error("[NewsCollector] AV record error:", e.message); return null; });
+      if (rec && rec.tier === "entity") recorded++;
+    }
+    if (recorded > 0) console.log(`[NewsCollector] Recorded ${recorded} sentiment-scored headline(s) from Alpha Vantage`);
+    return recorded;
+  }
+
   async collectOnce() {
-    // Finnhub (free, reliable) is the primary source; the local Alpaca dashboard
-    // and Yahoo RSS remain as supplements/fallbacks. All three dedup by id/url.
+    // Finnhub (free, reliable) is the primary source; Alpha Vantage adds throttled
+    // sentiment-scored news; the local Alpaca dashboard and Yahoo RSS remain
+    // supplements/fallbacks. All sources dedup by id/url in recordNewsItem.
     let total = await this._collectFromFinnhub();
+    total += await this._collectFromAlphaVantage();
     total += await this._collectFromDashboard();
 
     // Stock-style tickers only (e.g. excludes BTCUSD/ETHUSD/SOLUSD, which
@@ -336,5 +378,9 @@ class NewsCollector {
     console.log("[NewsCollector] Stopped");
   }
 }
+
+// Last Alpha Vantage news pull (epoch ms). Static so the 6h throttle is shared
+// across every NewsCollector instance in the process. 0 → first cycle runs it.
+NewsCollector._lastAvNewsAt = 0;
 
 module.exports = NewsCollector;
