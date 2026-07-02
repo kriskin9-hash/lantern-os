@@ -589,6 +589,35 @@ module.exports = async function tradingRoutes(req, res, url, deps) {
     return true;
   }
 
+  // GET/POST /api/trading/ai-trader/enabled — the master ON/OFF for autonomous trading.
+  // Backed by a flag file the Python orchestrator reads before every order-placing job
+  // (src/trading_agents/orchestrator.py trading_enabled()). Cross-process: the UI button
+  // (node) writes it, the trader (python) reads it. Missing file = ON. Existing-position
+  // safety (EOD close, stop-loss) is NOT gated, so OFF never strands open risk.
+  if (url.pathname === '/api/trading/ai-trader/enabled') {
+    const fs = require('fs');
+    const flagPath = require('path').join(__dirname, '..', '..', '..', 'data', 'lantern-garage', 'trading', 'ai-trader-enabled.json');
+    const readFlag = () => {
+      try { return !!JSON.parse(fs.readFileSync(flagPath, 'utf8')).enabled; }
+      catch { return true; } // missing/unreadable → ON by default
+    };
+    if (req.method === 'POST') {
+      try {
+        const raw = await collectRequestBody(req);
+        const enabled = !!(raw ? JSON.parse(raw) : {}).enabled;
+        fs.mkdirSync(require('path').dirname(flagPath), { recursive: true });
+        fs.writeFileSync(flagPath, JSON.stringify(
+          { enabled, updated_at: new Date().toISOString(), source: 'ui-toggle' }, null, 2));
+        sendJson(res, { enabled }, 200);
+      } catch (error) {
+        sendJson(res, { error: 'failed to set trader state', details: error.message }, 500);
+      }
+      return true;
+    }
+    sendJson(res, { enabled: readFlag() }, 200);
+    return true;
+  }
+
   // GET /api/trading/llm-usage — daily Σ₀ model-read tally (made vs saved by the
   // scan cache + grounding pre-gate), so the API-spend reduction is observable.
   if (url.pathname === '/api/trading/llm-usage' && req.method === 'GET') {

@@ -418,6 +418,12 @@
   <div class="hstat"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
   <div class="hstat"><div class="l">Positions</div><div class="v" id="hPos">—</div></div>
   <div class="hstat"><div class="l">Market</div><div class="v" id="hMkt">—</div></div>
+  <button id="aiTraderToggle" class="chart-ctrl" onclick="toggleAiTrader()" aria-pressed="false" data-on="1"
+          title="Turn the autonomous AI trader on or off"
+          style="cursor:pointer;font-family:var(--mono);font-size:10px;display:flex;align-items:center;gap:6px">
+    <span id="aiTraderDot" style="width:8px;height:8px;border-radius:50%;background:var(--text2);display:inline-block"></span>
+    <span id="aiTraderLabel">AI: —</span>
+  </button>
   <button id="zoomBackBtn" class="chart-ctrl" style="display:none;cursor:pointer" onclick="closeFullscreenChart()" title="Back to the chart grid">← Back to grid</button>
   <select id="chartLayoutSelect" class="chart-ctrl" aria-label="Number of charts to show" onchange="setSlotCount(this.value)" title="How many charts to show — fewer = bigger">
     <option value="0">⊞ All</option>
@@ -2589,6 +2595,31 @@ function startDashboard(){
   setInterval(loadOrders,          60000);
   setInterval(loadCouncil,         60000);   // Σ₀ Converge: calibration + per-signal edge
   setInterval(refreshOvernightScan, 60000);  // reflect the auto-reset at market open
+  setInterval(refreshAiTrader,     30000);   // master AI-trader ON/OFF state
+  refreshAiTrader();                          // show current state immediately
+}
+// ── Master AI-trader ON/OFF toggle ──────────────────────────────────────────
+function _setAiTraderUi(on){
+  const dot=document.getElementById('aiTraderDot');
+  const label=document.getElementById('aiTraderLabel');
+  const btn=document.getElementById('aiTraderToggle');
+  if(!dot||!label||!btn) return;
+  dot.style.background = on ? 'var(--green,#26a269)' : 'var(--red,#e01b24)';
+  label.textContent = on ? 'AI: ON' : 'AI: OFF';
+  btn.dataset.on = on ? '1' : '0';
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
+async function refreshAiTrader(){
+  try{ const j=await (await fetch('/api/trading/ai-trader/enabled')).json(); _setAiTraderUi(!!j.enabled); }catch(e){}
+}
+async function toggleAiTrader(){
+  const btn=document.getElementById('aiTraderToggle');
+  const next = btn.dataset.on !== '1';
+  if(!next && !confirm('Turn the autonomous AI trader OFF?\n\nIt stops opening new trades. Open positions stay protected by stop-loss + end-of-day close.')) return;
+  try{
+    const j=await (await fetch('/api/trading/ai-trader/enabled',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enabled:next})})).json();
+    _setAiTraderUi(!!j.enabled);
+  }catch(e){ alert('Failed to change AI trader state: '+e.message); }
 }
 // 🌙 Overnight (market-closed) crypto scanning toggle (#1714)
 function _setOvnBtn(on){

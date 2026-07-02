@@ -114,6 +114,24 @@ paused     = [False]
 _scan_lock   = threading.Lock()
 _scan_queued = [False]   # set when job_scan_market fires mid-scan — runs once the current scan finishes
 
+# ── AI-trader ON/OFF — cross-process toggle driven by the UI button ─────────────
+# The node server writes data/lantern-garage/trading/ai-trader-enabled.json when the
+# operator flips the toggle; every order-placing job checks it here. A missing file
+# means ON (preserves the default auto-trade behavior). This is the authoritative
+# on/off for autonomous trading; existing-position safety (EOD close, price-watcher
+# stop-loss) is intentionally NOT gated so turning off never strands open risk.
+import json as _json
+_ENABLED_FLAG = os.path.join(_REPO_ROOT, "data", "lantern-garage", "trading", "ai-trader-enabled.json")
+
+def trading_enabled() -> bool:
+    try:
+        with open(_ENABLED_FLAG, encoding="utf-8") as f:
+            return bool(_json.load(f).get("enabled", True))
+    except FileNotFoundError:
+        return True          # unset → ON by default
+    except Exception:
+        return True          # unreadable → fail safe to ON (don't silently halt)
+
 # ── Market hours ──────────────────────────────────────────────────────────────
 
 def is_market_open_alpaca() -> bool:
@@ -263,8 +281,8 @@ def job_premarket():
 def job_scan_market():
     global _scan_count, _last_market_cond, _last_pnl, _first_scan_done
 
-    if paused[0]:
-        log.info("Bot is paused — skipping scan")
+    if paused[0] or not trading_enabled():
+        log.info("AI trader is paused/OFF — skipping scan")
         return
 
     # Drawdown circuit breaker — check before doing anything
@@ -897,8 +915,8 @@ def job_scan_crypto():
     confidence scoring, VIX regime, dual direction, and Telegram notifications.
     The scan lock prevents overlap with job_scan_market.
     """
-    if paused[0]:
-        log.info("Bot is paused — skipping crypto scan")
+    if paused[0] or not trading_enabled():
+        log.info("AI trader is paused/OFF — skipping crypto scan")
         return
     if not _scan_lock.acquire(blocking=False):
         log.info("Scan already in progress — skipping crypto scan slot")
@@ -1032,6 +1050,8 @@ def job_watch_mode():
     loop for the active trading window.
     """
     try:
+        if paused[0] or not trading_enabled():
+            return
         now_et = datetime.now(ET)
         if now_et.weekday() >= 5:
             return
@@ -1177,7 +1197,7 @@ def job_riley_premarket_zones():
 
 
 def trigger_emergency_scan():
-    if paused[0]:
+    if paused[0] or not trading_enabled():
         return
     log.info("[WATCHER] Emergency scan triggered")
     active = [t for t in watchlist if should_scan(t)]
