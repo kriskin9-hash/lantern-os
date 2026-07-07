@@ -11,9 +11,17 @@
   // Keep in lock-step with PUBLIC_PAGES in routes/pages.js. '/' and '/index.html'
   // are served publicly there, so they must not bounce here either — a missing '/'
   // is why a guest landing on the home page got redirected to /auth.html?returnTo=%2F.
-  const PUBLIC = ['/', '/index.html', '/auth.html', '/auth', '/explore.html', '/knowledgecenter.html', '/dream-chat.html'];
+  // /stock-trader.html is public: guests (and paid tiers without "trade") get the
+  // SAME terminal in read-only "guest mode" — charts + watchlist + market data, no
+  // trading actions. So it must NOT bounce here, and is NOT a TRADE_PAGE (a
+  // logged-in non-trade user should see the read-only view, not be sent home).
+  // /orchestration.html is public read-only too: guests/non-admins see the fleet
+  // STATUS panels; the control panels (keys, training, auto-pull) are hidden via
+  // body.is-guest and their endpoints are admin-gated server-side. So it must not
+  // bounce here either.
+  const PUBLIC = ['/', '/index.html', '/auth.html', '/auth', '/explore.html', '/knowledgecenter.html', '/dream-chat.html', '/stock-trader.html', '/orchestration.html'];
   // Pages that require the "trade" entitlement (kept in sync with routes/pages.js).
-  const TRADE_PAGES = ['/trading.html', '/trading-news.html', '/stock-trader.html', '/kalshi-terminal.html'];
+  const TRADE_PAGES = ['/trading.html', '/kalshi-terminal.html'];
   const pathname = window.location.pathname;
   const isPublic = PUBLIC.includes(pathname);
 
@@ -40,7 +48,10 @@
   // Apply { path: { hidden, disabled } } overrides to every nav link.
   function applyNavVisibility(navigation) {
     if (!navigation) return;
-    document.querySelectorAll('nav a[href]').forEach((a) => {
+    // Covers the header <nav> AND the site footer, so an extension hidden from the
+    // loop-foregrounded default (e.g. Trader/Create when their flag is off) doesn't
+    // reappear in the footer. Links not in the nav-config map are left untouched.
+    document.querySelectorAll('nav a[href], .site-footer a[href]').forEach((a) => {
       const cfg = navigation[hrefPath(a.getAttribute('href'))];
       if (!cfg) return;
       if (cfg.hidden) { a.style.display = 'none'; return; }
@@ -68,21 +79,13 @@
     document.dispatchEvent(new CustomEvent('lantern-flags-ready', { detail: { flags } }));
   }
 
-  // Admins get an Admin link into the page's primary nav (and any opt-in
-  // [data-admin-only] elements revealed). Reuses the session we already fetched
-  // — no second /api/auth/session round-trip.
+  // Admins reveal any opt-in [data-admin-only] elements on the page. The Admin
+  // control-surface entry point (admin-flags.html) intentionally lives ONLY on
+  // the profile page now — it is no longer injected into every page's top nav.
+  // Reuses the session we already fetched — no second /api/auth/session round-trip.
   function injectAdminLink(session) {
     if (!session || session.role !== 'admin') return;
     document.querySelectorAll('[data-admin-only]').forEach((el) => { el.style.display = ''; });
-    const links = document.querySelector('.nav-links') || document.querySelector('nav');
-    if (links && !links.querySelector('a[href="/admin-flags.html"]')) {
-      const a = document.createElement('a');
-      a.href = '/admin-flags.html';
-      a.textContent = 'Admin';
-      a.className = 'nav-admin-link';
-      const anchor = links.querySelector('.sep') || links.querySelector('.nav-support');
-      if (anchor) links.insertBefore(a, anchor); else links.appendChild(a);
-    }
   }
 
   // Best-effort: a fetch failure leaves the nav fully visible (fail-open for UX;
@@ -151,6 +154,13 @@
       updateNav(session);
       wireLogout();
       applyAdminControls(session);
+      // Expose auth state to page CSS. `is-admin` reveals admin-only control
+      // panels (e.g. orchestration keys/training/auto-pull); `is-guest` marks a
+      // logged-out visitor so pages can show a read-only banner. Both default to
+      // the safe (locked-down) state until the session resolves.
+      const isAdminUser = !!(session && session.authenticated && session.role === 'admin');
+      document.body.classList.toggle('is-admin', isAdminUser);
+      document.body.classList.toggle('is-guest', !(session && session.authenticated));
       const canTrade = !!(session && session.entitlements && session.entitlements.trade);
       if (!canTrade) hideTradeNav();
       // When an admin disables the Patreon gate (server reports authRequired:false),

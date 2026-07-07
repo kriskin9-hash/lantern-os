@@ -135,10 +135,6 @@ function updatePersonalInsights(cube) {
 loadPersonalCube();
 setInterval(loadPersonalCube, 300000);
 
-// ── Modal controls ────────────────────────────────────────────────────────────
-function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
-function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
-
 function startVoiceInput() {
   if (!window.voiceMode || !window.recognition) return;
   try { window.recognition.start(); } catch (e) { console.error('Failed to start recognition:', e); }
@@ -166,23 +162,29 @@ function focusKey(inputId) {
   if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
 }
 
+// The MCP connector talks to an MCP server on the operator's OWN machine
+// (127.0.0.1:8772), so it only makes sense when the page is served locally. On a
+// hosted deploy (cloud VM / unisona.ai) 127.0.0.1 is the visitor's box, not ours —
+// hide the card instead of firing pointless cross-origin requests at it.
+const isLocalHost = ['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname);
+
 async function updateConnectorStatuses() {
-  try {
-    const r = await fetch('http://127.0.0.1:8772/health', { method: 'GET', mode: 'cors', cache: 'no-store' });
-    const mcpStatus = document.getElementById('mcp-status');
-    const mcpBtn = document.getElementById('mcp-btn');
-    if (r.ok) {
-      mcpStatus.textContent = 'Connected';
-      mcpStatus.className = 'connector-card-status ok';
-      mcpBtn.textContent = 'Disconnect';
-      mcpBtn.onclick = disconnectMcp;
-      mcpBtn.classList.remove('primary');
-    } else { throw new Error('HTTP ' + r.status); }
-  } catch (e) {
-    const mcpStatus = document.getElementById('mcp-status');
-    const mcpBtn = document.getElementById('mcp-btn');
-    if (mcpStatus) { mcpStatus.textContent = 'Disconnected'; mcpStatus.className = 'connector-card-status pending'; }
-    if (mcpBtn) { mcpBtn.textContent = 'Connect'; mcpBtn.onclick = connectMcp; mcpBtn.classList.add('primary'); }
+  const mcpStatus = document.getElementById('mcp-status');
+  const mcpBtn = document.getElementById('mcp-btn');
+  if (!isLocalHost) {
+    const card = mcpBtn ? mcpBtn.closest('.connector-card') : null;
+    if (card) card.style.display = 'none';
+  } else {
+    try {
+      const r = await fetch('http://127.0.0.1:8772/health', { method: 'GET', mode: 'cors', cache: 'no-store' });
+      if (r.ok) {
+        if (mcpStatus) { mcpStatus.textContent = 'Connected'; mcpStatus.className = 'connector-card-status ok'; }
+        if (mcpBtn) { mcpBtn.textContent = 'Disconnect'; mcpBtn.onclick = disconnectMcp; mcpBtn.classList.remove('primary'); }
+      } else { throw new Error('HTTP ' + r.status); }
+    } catch (e) {
+      if (mcpStatus) { mcpStatus.textContent = 'Disconnected'; mcpStatus.className = 'connector-card-status pending'; }
+      if (mcpBtn) { mcpBtn.textContent = 'Connect'; mcpBtn.onclick = connectMcp; mcpBtn.classList.add('primary'); }
+    }
   }
 
   // Provider connector badges — authoritative source is server /api/settings/providers.
@@ -216,6 +218,7 @@ async function updateConnectorStatuses() {
 }
 
 async function connectMcp() {
+  if (!isLocalHost) { alert('The MCP connector is a local-only feature — open this page from your own machine (http://127.0.0.1:4177) to connect.'); return; }
   const mcpStatus = document.getElementById('mcp-status');
   const mcpBtn = document.getElementById('mcp-btn');
   mcpStatus.textContent = 'Connecting…';
@@ -246,6 +249,7 @@ function disconnectMcp() {
 }
 
 async function testWebSearch() {
+  if (!isLocalHost) { alert('The MCP web-search test is a local-only feature — open this page from your own machine (http://127.0.0.1:4177) to use it.'); return; }
   const btn = event.target;
   const original = btn.textContent;
   btn.textContent = 'Testing…'; btn.disabled = true;
@@ -253,7 +257,7 @@ async function testWebSearch() {
     const r = await fetch('http://127.0.0.1:8772/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'web_search', arguments: { query: 'Keystone OS', max_results: 3 } } }),
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'web_search', arguments: { query: 'Unisona OS', max_results: 3 } } }),
     });
     const data = await r.json();
     if (data.result && data.result.success) {
@@ -264,10 +268,6 @@ async function testWebSearch() {
   } catch (e) { alert('Web search test failed: ' + e.message); }
   finally { btn.textContent = original; btn.disabled = false; }
 }
-
-// Refresh connector statuses when settings opens
-const _origOpenSettings = openSettings;
-openSettings = function() { _origOpenSettings(); updateConnectorStatuses(); };
 
 // Broken / hallucinated image URLs used to hide themselves with display:none.
 // When the answer is image-ONLY (model replied with just `![alt](url)`), that
@@ -381,6 +381,12 @@ function renderMarkdown(text) {
   h = h.replace(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})[^\s<>"')\x00]*/g, (_, vid) =>
     _put(`<iframe src="https://www.youtube-nocookie.com/embed/${vid}" width="100%" height="220" style="border:0;border-radius:8px;margin:6px 0;max-width:480px;display:block" allow="encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>`));
 
+  // Wiki-style [[label]](url) — some models double the brackets; collapse to one
+  // anchor. Must run before the single-bracket rule (whose label class excludes ']'
+  // so it can't match a doubled bracket) or the doubled form renders as raw text.
+  h = h.replace(/\[\[([^\]\n]+)\]\]\(((?:https?:\/\/|\/)[^\s)"]+)\)/g, (_, label, url) =>
+    _put(`<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">${label}</a>`));
+
   // Markdown links [label](url) → new-tab anchors.
   h = h.replace(/\[([^\]\n]+)\]\(((?:https?:\/\/|\/)[^\s)"]+)\)/g, (_, label, url) =>
     _put(`<a href="${safeUrl(url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">${label}</a>`));
@@ -441,11 +447,11 @@ function hideStopButton() {
 }
 
 const FALLBACKS = [
-  "No AI providers are set up. Add an API key in Settings (⚙) to get started.",
-  "All providers offline. Check Settings to add an API key or start a local model.",
-  "Connection quiet. Try again in a moment, or check Settings for API keys.",
-  "No provider answered. Open Settings (⚙) to configure Gemini, Claude, or OpenAI.",
-  "AI unavailable. Add a provider key in Settings, or run: ollama serve for local mode.",
+  "No AI providers are set up. Add an API key in Profile → Orchestrator to get started.",
+  "All providers offline. Check Profile → Orchestrator to add an API key or start a local model.",
+  "Connection quiet. Try again in a moment, or check Profile → Orchestrator for API keys.",
+  "No provider answered. Open Profile → Orchestrator to configure Gemini, Claude, or OpenAI.",
+  "AI unavailable. Add a provider key in Profile → Orchestrator, or run: ollama serve for local mode.",
 ];
 
 // ── Quick-start chip helpers ──────────────────────────────────────────────────
@@ -468,6 +474,19 @@ function fillAndSend(text) {
 function hideEmptyState() {
   const el = document.getElementById('empty-state');
   if (el) el.style.display = 'none';
+}
+
+// #1926: route/model developer chrome is opt-in. ON when the operator sets
+// localStorage `lantern_chat_debug` = "1" (persists), or appends ?debug=1 to the URL
+// (one-off, also persists it so a refresh keeps it). OFF for every normal user, so
+// the default reply footer is just "Unisona · chat · <time>", no route internals.
+function debugChromeOn() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debug') === '1') { localStorage.setItem('lantern_chat_debug', '1'); return true; }
+    if (params.get('debug') === '0') { localStorage.removeItem('lantern_chat_debug'); return false; }
+    return localStorage.getItem('lantern_chat_debug') === '1';
+  } catch { return false; }
 }
 
 function addUserBubble(text) {
@@ -520,7 +539,7 @@ const COMMANDS = [
   { name: 'prs',         group: 'Build',   usage: '!prs',              desc: 'Browse open PRs — one click reviews each (also: “review pull requests”)', aliases: ['pull-requests', 'pullrequests', 'review-prs'] },
   { name: 'convergence', group: 'Build',   usage: '!convergence',      desc: 'Run the convergence loop + fleet/version status', aliases: ['convergance', 'converge'] },
   { name: 'code',        group: 'Build',   usage: '!code <task>',      desc: 'Coding turn on the cloud coder' },
-  { name: 'self-edit',   group: 'Build',   usage: '!self-edit <task>', desc: 'Plan an edit to Keystone’s own code', aliases: ['selfedit'] },
+  { name: 'self-edit',   group: 'Build',   usage: '!self-edit <task>', desc: 'Plan an edit to Unisona’s own code', aliases: ['selfedit'] },
   { name: 'swarm',       group: 'Build',   usage: '!swarm <task>',     desc: 'Multi-agent swarm (council/consensus) on a task' },
   { name: 'radio',       group: 'Explore', usage: '!radio',            desc: 'Summon Radio inline (also: “play fallout radio”)', aliases: ['play'] },
   { name: 'videos',      group: 'Explore', usage: '!videos',           desc: 'Fresh videos feed', aliases: ['watch'] },
@@ -554,7 +573,7 @@ function renderHelp() {
   }).join('');
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px"><b>Commands</b> · type <code>!</code> or <code>/</code> in the box for autocomplete${sections}</div>`;
+  row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px"><b>Commands</b> · type <code>!</code> or <code>/</code> in the box for autocomplete${sections}</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
 }
@@ -565,7 +584,7 @@ async function renderIssues() {
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Loading open issues…</div>`;
+  row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Loading open issues…</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
@@ -611,7 +630,7 @@ async function renderPRs() {
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Loading open pull requests…</div>`;
+  row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Loading open pull requests…</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
@@ -849,7 +868,7 @@ async function runAutowork(target, btn, base) {
   // Activity line = a live, streamed-feel header: the mandala spins while a step runs
   // and the text names what's happening right now (addresses "shows little/no info").
   row.innerHTML =
-    `<div class="msg-label">Keystone · Autowork ${esc(panelLabel)}</div>`
+    `<div class="msg-label">Unisona · Autowork ${esc(panelLabel)}</div>`
     + `<div class="bubble aw-panel">`
     + `<div class="aw-activity"><img src="/mandala.svg" class="aw-spin" alt=""><div class="aw-act-text"><b>Starting autowork…</b> <span>${esc(taskMode ? 'filing the task as an issue' : 'on issue ' + panelLabel)}</span></div></div>`
     + `<div class="aw-steps">${stepRowsHtml}</div>`
@@ -1056,7 +1075,7 @@ function attachBackgroundAutoworkPanel(run, base) {
   const row = document.createElement('div');
   row.className = 'msg-row agent';
   row.innerHTML =
-    `<div class="msg-label">Keystone · ${esc(srcLabel)} · Autowork #${esc(issue)}</div>`
+    `<div class="msg-label">Unisona · ${esc(srcLabel)} · Autowork #${esc(issue)}</div>`
     + `<div class="bubble aw-panel">`
     + `<div class="aw-activity"><img src="/mandala.svg" class="aw-spin" alt=""><div class="aw-act-text"><b>Background autowork on #${esc(issue)}</b> <span>${esc(run.title || 'started by ' + srcLabel.toLowerCase() + ' — attaching live')}</span></div></div>`
     + `<div class="aw-steps">${phases.map(([k, label, desc]) =>
@@ -1187,7 +1206,7 @@ function renderWebImage(prompt, wantRealPhoto) {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">${wantRealPhoto ? 'Searching for a photo of' : 'Generating an image of'} <b>${esc(prompt)}</b>…</div>`;
+  row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">${wantRealPhoto ? 'Searching for a photo of' : 'Generating an image of'} <b>${esc(prompt)}</b>…</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
@@ -1200,7 +1219,7 @@ function renderWebImage(prompt, wantRealPhoto) {
       img.alt = prompt;
       bubble.appendChild(img);
       if (typeof scrollToBottom === 'function') scrollToBottom();
-      persistToolTurn('lantern', `Image of "${prompt}"${sourceNote ? ` (${sourceNote})` : ''}: ${url}`, { agent: 'Keystone', provider: 'image-tool', model: sourceNote || 'openai', tool: { kind: 'image', url, prompt, label, note: sourceNote || '' } });
+      persistToolTurn('lantern', `Image of "${prompt}"${sourceNote ? ` (${sourceNote})` : ''}: ${url}`, { agent: 'Unisona', provider: 'image-tool', model: sourceNote || 'openai', tool: { kind: 'image', url, prompt, label, note: sourceNote || '' } });
     };
     img.onerror = () => keylessFallback();   // local/openai image failed to load → keyless
     img.referrerPolicy = 'no-referrer';
@@ -1226,7 +1245,7 @@ function renderWebImage(prompt, wantRealPhoto) {
       if (i >= sources.length) {
         bubble.innerHTML = `Sorry — couldn't reach an image service for <b>${esc(prompt)}</b> right now. Please try again.`;
         if (typeof scrollToBottom === 'function') scrollToBottom();
-        persistToolTurn('lantern', `Couldn't find or generate an image for "${prompt}" — no image service reachable.`, { agent: 'Keystone', provider: 'image-tool' });
+        persistToolTurn('lantern', `Couldn't find or generate an image for "${prompt}" — no image service reachable.`, { agent: 'Unisona', provider: 'image-tool' });
         return;
       }
       const { url, label, note } = sources[i++];
@@ -1241,7 +1260,7 @@ function renderWebImage(prompt, wantRealPhoto) {
         img.alt = prompt;
         bubble.appendChild(img);
         if (typeof scrollToBottom === 'function') scrollToBottom();
-        persistToolTurn('lantern', `Image of "${prompt}" (${note}): ${url}`, { agent: 'Keystone', provider: 'image-tool', model: note, tool: { kind: 'image', url, prompt, label, note } });
+        persistToolTurn('lantern', `Image of "${prompt}" (${note}): ${url}`, { agent: 'Unisona', provider: 'image-tool', model: note, tool: { kind: 'image', url, prompt, label, note } });
       };
       img.onerror = () => { if (!settled) { settled = true; clearTimeout(to); tryNext(); } };
       img.referrerPolicy = 'no-referrer';
@@ -1294,7 +1313,7 @@ function renderVisionAnswer(prompt, attachment) {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Looking at <b>${esc(attachment.name)}</b>…</div>`;
+  row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Looking at <b>${esc(attachment.name)}</b>…</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
@@ -1307,15 +1326,15 @@ function renderVisionAnswer(prompt, attachment) {
       if (d && d.ok && d.text) {
         bubble.innerHTML = (typeof renderMarkdown === 'function' ? renderMarkdown(d.text) : esc(d.text))
           + `<div style="opacity:.5;font-size:11px;margin-top:4px">👁 vision · ${esc(d.model || 'vision')}</div>`;
-        persistToolTurn('lantern', d.text, { agent: 'Keystone', provider: 'vision', model: d.model || 'vision' });
+        persistToolTurn('lantern', d.text, { agent: 'Unisona', provider: 'vision', model: d.model || 'vision' });
       } else {
         const errMsg = `Couldn't analyze ${attachment.name}: ${(d && d.error) || 'vision unavailable'}`;
         bubble.innerHTML = `Couldn't analyze <b>${esc(attachment.name)}</b>: ${esc((d && d.error) || 'vision unavailable')}`;
-        persistToolTurn('lantern', errMsg, { agent: 'Keystone', provider: 'vision' });
+        persistToolTurn('lantern', errMsg, { agent: 'Unisona', provider: 'vision' });
       }
       if (typeof scrollToBottom === 'function') scrollToBottom();
     })
-    .catch(e => { bubble.innerHTML = `Vision error: ${esc(e.message)}`; if (typeof scrollToBottom === 'function') scrollToBottom(); persistToolTurn('lantern', `Vision error analyzing ${attachment.name}: ${e.message}`, { agent: 'Keystone', provider: 'vision' }); });
+    .catch(e => { bubble.innerHTML = `Vision error: ${esc(e.message)}`; if (typeof scrollToBottom === 'function') scrollToBottom(); persistToolTurn('lantern', `Vision error analyzing ${attachment.name}: ${e.message}`, { agent: 'Unisona', provider: 'vision' }); });
 }
 
 // ── Document generation ──────────────────────────────────────────────────────────
@@ -1354,7 +1373,7 @@ function renderDocGen(prompt, format) {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Writing &amp; rendering a document about <b>${esc(prompt)}</b>… (this takes a few seconds)</div>`;
+  row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Writing &amp; rendering a document about <b>${esc(prompt)}</b>… (this takes a few seconds)</div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
@@ -1368,14 +1387,14 @@ function renderDocGen(prompt, format) {
         const kb = d.bytes ? ' · ' + Math.round(d.bytes / 1024) + ' KB' : '';
         bubble.innerHTML = `✓ Generated <b>${esc(d.title || 'document')}</b> <span style="opacity:.6;font-size:11px">(${esc(d.format)}${kb})</span><br>`
           + `<a href="${esc(d.url)}" download="${esc(d.filename)}" style="display:inline-block;margin-top:6px;padding:6px 12px;border:1px solid var(--accent,#06b6d4);border-radius:8px;color:var(--accent,#06b6d4);text-decoration:none;font-weight:600">⬇ Download ${esc(d.filename)}</a>`;
-        persistToolTurn('lantern', `Generated document "${d.title || 'document'}" (${d.format}${kb}): ${d.url}`, { agent: 'Keystone', provider: 'document-generator', model: d.format, tool: { kind: 'document', url: d.url, title: d.title || 'document', filename: d.filename, format: d.format, bytes: d.bytes } });
+        persistToolTurn('lantern', `Generated document "${d.title || 'document'}" (${d.format}${kb}): ${d.url}`, { agent: 'Unisona', provider: 'document-generator', model: d.format, tool: { kind: 'document', url: d.url, title: d.title || 'document', filename: d.filename, format: d.format, bytes: d.bytes } });
       } else {
         bubble.innerHTML = `Couldn't generate the document: ${esc((d && d.error) || 'unavailable')}`;
-        persistToolTurn('lantern', `Couldn't generate the document for "${prompt}": ${(d && d.error) || 'unavailable'}`, { agent: 'Keystone', provider: 'document-generator' });
+        persistToolTurn('lantern', `Couldn't generate the document for "${prompt}": ${(d && d.error) || 'unavailable'}`, { agent: 'Unisona', provider: 'document-generator' });
       }
       if (typeof scrollToBottom === 'function') scrollToBottom();
     })
-    .catch(e => { bubble.innerHTML = `Document error: ${esc(e.message)}`; if (typeof scrollToBottom === 'function') scrollToBottom(); persistToolTurn('lantern', `Document generation error for "${prompt}": ${e.message}`, { agent: 'Keystone', provider: 'document-generator' }); });
+    .catch(e => { bubble.innerHTML = `Document error: ${esc(e.message)}`; if (typeof scrollToBottom === 'function') scrollToBottom(); persistToolTurn('lantern', `Document generation error for "${prompt}": ${e.message}`, { agent: 'Unisona', provider: 'document-generator' }); });
 }
 
 // ── Video requests ──────────────────────────────────────────────────────────────
@@ -1408,14 +1427,14 @@ function renderYoutube(query) {
   const row = document.createElement('div');
   row.className = 'msg-row agent';
   row.innerHTML =
-    `<div class="msg-label">Keystone</div>` +
+    `<div class="msg-label">Unisona</div>` +
     `<div class="bubble" style="font-size:13px">Here are videos for <b>${esc(query)}</b>:` +
     `<iframe src="${embed}" width="100%" height="240" style="border:0;border-radius:8px;margin:6px 0;max-width:480px;display:block" ` +
     `allow="encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>` +
     `<a href="${searchUrl}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a></div>`;
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
-  persistToolTurn('lantern', `YouTube results for "${query}": ${searchUrl}`, { agent: 'Keystone', provider: 'youtube-search', tool: { kind: 'youtube', query, url: searchUrl } });
+  persistToolTurn('lantern', `YouTube results for "${query}": ${searchUrl}`, { agent: 'Unisona', provider: 'youtube-search', tool: { kind: 'youtube', query, url: searchUrl } });
 }
 
 // ── Explore embed helpers ─────────────────────────────────────────────────────
@@ -1499,7 +1518,7 @@ async function renderExploreEmbed(kind, userText) {
   const messages = document.getElementById('messages');
   const row = document.createElement('div');
   row.className = 'msg-row agent';
-  row.innerHTML = '<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Pulling that up…</div>';
+  row.innerHTML = '<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Pulling that up…</div>';
   messages.appendChild(row);
   if (typeof scrollToBottom === 'function') scrollToBottom();
   const bubble = row.querySelector('.bubble');
@@ -1580,7 +1599,7 @@ const EMBED_SEED = [
     // tool-calling model into a read-the-HTML loop that dumped raw markup. Summoning
     // the real terminal inline frames the live panels instead.
     slug: 'kalshi-terminal', title: 'Kalshi Trade Terminal', kind: 'app',
-    src: '/kalshi-terminal.html', height: 640, source: 'Keystone Trading',
+    src: '/kalshi-terminal.html', height: 640, source: 'Unisona Trading',
     url: '/kalshi-terminal.html',
     lore: 'The live Kalshi trade screen — swipe-deck panels for decisive entries, open positions, and market signals.',
     aliases: ['trade screen', 'trade panels', 'trading terminal', 'kalshi terminal', 'trade deck', 'kalshi'],
@@ -1685,7 +1704,7 @@ function renderChatEmbed(embed, userText) {
   row.className = 'msg-row agent';
   const src = safeEmbedSrc(embed.src);
   if (!src) {
-    row.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Couldn't summon <b>${embedEsc(embed.title)}</b> — that embed isn't framable.</div>`;
+    row.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Couldn't summon <b>${embedEsc(embed.title)}</b> — that embed isn't framable.</div>`;
     messages.appendChild(row);
     if (typeof scrollToBottom === 'function') scrollToBottom();
     return;
@@ -1695,7 +1714,7 @@ function renderChatEmbed(embed, userText) {
   const verb = (embed.kind === 'watch' || embed.kind === 'app') ? 'Now showing' : 'Now playing';
   const h = Math.max(160, Math.min(640, Number(embed.height) || 360));
   row.innerHTML =
-    `<div class="msg-label">Keystone</div>` +
+    `<div class="msg-label">Unisona</div>` +
     `<div class="bubble" style="font-size:13px">` +
       `<div class="chat-embed" style="border:1px solid var(--border,#2a2a3a);border-radius:10px;overflow:hidden;max-width:480px">` +
         `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(92,200,255,.10);color:var(--accent,#5cc8ff);font-weight:600;font-size:12.5px">` +
@@ -1731,7 +1750,7 @@ function renderChatEmbed(embed, userText) {
 
   // Persist so a reload / session-switch restores the live embed (renderToolReplay 'embed').
   persistToolTurn('lantern', `${verb} — ${embed.title}: ${embed.url || src}`, {
-    agent: 'Keystone', provider: 'explore-embed',
+    agent: 'Unisona', provider: 'explore-embed',
     tool: { kind: 'embed', src, title: embed.title, height: h, embedKind: embed.kind, lore: embed.lore || '', url: embed.url || src },
   });
 }
@@ -1843,7 +1862,7 @@ async function sendMessage(opts = {}) {
     const m = document.getElementById('messages');
     const r = document.createElement('div');
     r.className = 'msg-row agent';
-    r.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Couldn't find an embed called <b>${embedEsc(arg)}</b>. Try “play fallout radio”, or browse <a href="/explore.html" style="color:var(--accent)">Explore →</a>.</div>`;
+    r.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Couldn't find an embed called <b>${embedEsc(arg)}</b>. Try “play fallout radio”, or browse <a href="/explore.html" style="color:var(--accent)">Explore →</a>.</div>`;
     m.appendChild(r);
     if (typeof scrollToBottom === 'function') scrollToBottom();
     return;
@@ -1875,7 +1894,7 @@ async function sendMessage(opts = {}) {
     addUserBubble(text);
     const sysRow = document.createElement('div');
     sysRow.className = 'msg-row agent';
-    sysRow.innerHTML = '<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Running convergence loop…</div>';
+    sysRow.innerHTML = '<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Running convergence loop…</div>';
     messages.appendChild(sysRow);
     if (typeof scrollToBottom === 'function') scrollToBottom();
     const runLoop      = fetch(`${base}/api/actions/run-loop`, { method: 'POST' });
@@ -2379,12 +2398,12 @@ async function sendMessage(opts = {}) {
     sig.className = 'msg-route-sig';
     const t = doneTimestamp ? new Date(doneTimestamp) : new Date();
     const time = isNaN(t) ? '' : t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    // Human-readable label: "Keystone · chat" or the agent route label.
-    const displayLabel = routeLabel || 'Keystone · chat';
+    // Human-readable label: "Unisona · chat" or the agent route label.
+    const displayLabel = routeLabel || 'Unisona · chat';
     if (doneOnline === false) {
       // Offline path: make it explicit for the user.
       sig.textContent = `${displayLabel} · offline${time ? ' · ' + time : ''}`;
-      sig.setAttribute('aria-label', `Keystone replied offline${time ? ' at ' + time : ''}`);
+      sig.setAttribute('aria-label', `Unisona replied offline${time ? ' at ' + time : ''}`);
     } else {
       const pm = [doneProvider, doneModel].filter(Boolean).join('/');
       // Visible part: label + time only.
@@ -2420,7 +2439,13 @@ async function sendMessage(opts = {}) {
       }
       const routeTitle = routeReasonText ? ` title="routed: ${esc(routeReasonText)}"` : '';
       const routeDebug = routeReasonText ? `<div style="margin-top:2px">route: ${esc(routeReasonText)}</div>` : '';
-      if (pm) {
+      // #1926: the provider/model + route-reason disclosure is developer chrome — it
+      // reads as "debug route" internals to a normal user. Keep it available for
+      // operators (#1554 made routing observable on purpose) but OFF by default: render
+      // it only when the debug toggle is set (localStorage `lantern_chat_debug` = "1",
+      // or ?debug=1 on the URL). The visible label + swap chip (the cockpit "which model"
+      // signal) always show; only the route internals are gated.
+      if (pm && debugChromeOn()) {
         // Wrap provider/model + route reason in a disclosure so it's accessible but
         // not noisy; the visible label carries the reason as a hover tooltip (#1554).
         sig.innerHTML =
@@ -2429,10 +2454,10 @@ async function sendMessage(opts = {}) {
           `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none" aria-label="Route and model details">▸ route</summary>` +
           `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${pm}${swapDebug}${routeDebug}</span>` +
           `</details>`;
-        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}; model: ${pm}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
+        sig.setAttribute('aria-label', `Unisona replied${time ? ' at ' + time : ''}; model: ${pm}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
       } else {
         sig.innerHTML = `<span${routeTitle}>${visibleText}${swapChip}</span>`;
-        sig.setAttribute('aria-label', `Keystone replied${time ? ' at ' + time : ''}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
+        sig.setAttribute('aria-label', `Unisona replied${time ? ' at ' + time : ''}` + (routeReasonText ? `; routed: ${routeReasonText}` : '') + (swapTitle ? `; ${swapTitle}` : ''));
       }
     }
     msg.appendChild(sig);
@@ -2453,7 +2478,21 @@ async function sendMessage(opts = {}) {
     /\b(find|show|view|read|open|get|look\s*up|summar|explain|describe|what'?s?|tell me about|details? (on|of|about))\b/i.test(text) &&
     /\b(issue|pr|pull request|ticket|bug report)\b\s*#?\d+/i.test(text) &&
     !/\b(fix|implement|add|change|edit|patch|refactor|rewrite|update the code|resolve|close|work on|build|create a)\b/i.test(text);
-  if (!didError && doneOnline !== false && CODING_INTENTS.includes(doneIntent) && !_looksLikeLookup) {
+  // #1964: personal document work ("update my resume", "make me a cover letter")
+  // keyword-classifies as a code intent via change-verbs like "update" — but it is
+  // not repo work, so offering to file an issue + open a PR is nonsense there.
+  // Server-side the document_request intent now catches these; this is the belt
+  // for older servers / misclassified turns.
+  // #1925: also cover the job-search vocabulary the transcript called out. A message
+  // like "review my job application" or "help me apply for this GitHub job" trips a
+  // code intent (via "review"/"github") yet is career work, not repo work. Kept
+  // narrow — bare "apply"/"application" is NOT matched (they mean apply-a-patch /
+  // web-application in real coding asks); only explicit job-search phrasing is.
+  const _looksLikeDocument =
+    /\b(resume|cover letter|cover-letter|cv|docx|word (doc|document)|essay|memo|spreadsheet|presentation|slide deck|personal statement|letter of (intro|introduction|interest|recommendation))\b/i.test(text) ||
+    /\b(job (application|applications|posting|postings|search|hunt|offer)|interview prep)/i.test(text) ||
+    /\bapply(ing)? (for|to)\b.{0,40}?\b(job|position|role|internship|posting|opening|vacancy)\b/i.test(text);
+  if (!didError && doneOnline !== false && CODING_INTENTS.includes(doneIntent) && !_looksLikeLookup && !_looksLikeDocument) {
     const offer = document.createElement('div');
     offer.className = 'autowork-offer';
     offer.style.cssText = 'margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
@@ -2537,6 +2576,48 @@ async function sendMessage(opts = {}) {
     if (window.narrateReplies) startSpeaking();
   }
 
+  // Per-message feedback (#1965) — the Observe-stage preference signal. Each verdict is
+  // attributable to the provider/model that actually served this turn (done receipt), so
+  // per-provider win rates are measurable from the ledger. Best-effort: never breaks chat.
+  if (!didError && fullText) {
+    const fbTurnIndex = history.length; // this assistant turn's transcript index (user turn already pushed)
+    const fbRow = document.createElement('div');
+    fbRow.className = 'msg-feedback';
+    fbRow.style.cssText = 'display:flex;gap:2px;margin-top:2px;';
+    const fbBtn = (verdict, glyph, label) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'feedback-btn';
+      b.dataset.verdict = verdict;
+      b.style.cssText = 'background:none;border:none;cursor:pointer;font-size:13px;opacity:0.6;padding:2px 4px;';
+      b.textContent = glyph;
+      b.title = label;
+      b.setAttribute('aria-label', label);
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => {
+        for (const o of fbRow.querySelectorAll('.feedback-btn')) { o.style.opacity = '0.6'; o.setAttribute('aria-pressed', 'false'); }
+        b.style.opacity = '1';
+        b.setAttribute('aria-pressed', 'true');
+        fetch('/api/dream/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            verdict,
+            turnIndex: fbTurnIndex,
+            sessionId: localStorage.getItem('lantern_chat_session') || undefined,
+            provider: doneProvider, model: doneModel, intent: doneIntent, routeLabel,
+            userPreview: text.slice(0, 160), replyPreview: fullText.slice(0, 160),
+            surface: 'dream-chat',
+          }),
+        }).catch(() => {}); // ledger append is best-effort; a miss must never break the chat
+      });
+      return b;
+    };
+    fbRow.appendChild(fbBtn('up', '👍', 'Good reply'));
+    fbRow.appendChild(fbBtn('down', '👎', 'Bad reply'));
+    msg.appendChild(fbRow);
+  }
+
   if (!didError) history.push({ role: 'assistant', text: fullText });
 }
 
@@ -2617,7 +2698,7 @@ document.getElementById('input').addEventListener('input', e => {
 })();
 
 // ── Handoff prefill (?seed=) ──────────────────────────────────────────────────
-// Lets other surfaces (e.g. /orchestration.html) hand a task into Keystone chat.
+// Lets other surfaces (e.g. /orchestration.html) hand a task into Unisona chat.
 // Prefills the composer but never auto-sends — the human reviews/edits first.
 (function applySeedPrompt() {
   try {
@@ -2629,25 +2710,93 @@ document.getElementById('input').addEventListener('input', e => {
   } catch (e) { /* no-op */ }
 })();
 
-// ── Provider selection handoff (?provider=) ─────────────────────────────────────
-// Allows orchestration.html to route chat through a specific AI provider.
-// Non-auto selections override the router's fallback chain for this session.
-(function applyProviderSelection() {
-  try {
-    const provider = new URLSearchParams(location.search).get('provider');
-    const select = document.getElementById('provider-select');
-    if (provider && select) {
-      // Try to set the selected provider
-      if (select.querySelector(`option[value="${provider}"]`)) {
-        select.value = provider;
-      } else if (provider !== 'auto') {
-        // Provider not available; log but don't break
-        console.warn(`[dream-chat] Requested provider '${provider}' not available, using router default`);
+// ── Provider dropdown: built dynamically from /api/providers/status ─────────────
+// The provider list is NOT hardcoded. It is built from what the running server can
+// actually dispatch to, so a provider only appears when its key is live, and the
+// local Σ₀ (Ouro) option appears only when a model is really being served on :11434
+// — labeled with the real model, never a static fiction. Auto is always present and
+// the default. This also absorbs the old ?provider= handoff (from home/orchestration):
+// the requested provider is honored only if it is a live option now.
+(function buildProviderDropdown() {
+  const select = document.getElementById('provider-select');
+  if (!select) return;
+  // dropdown value → { label, bucket } where bucket is the /api/providers/status key.
+  // keystone-ft is a local fine-tune served through ollama, so it shares that bucket
+  // (and is only offered when a matching tag is actually being served).
+  const CATALOG = [
+    { value: 'claude',      label: 'Claude',      bucket: 'anthropic'  },
+    { value: 'openai',      label: 'ChatGPT',     bucket: 'openai'     },
+    { value: 'gemini',      label: 'Gemini',      bucket: 'gemini'     },
+    { value: 'grok',        label: 'Grok',        bucket: 'xai'        },
+    { value: 'deepseek',    label: 'DeepSeek',    bucket: 'deepseek'   },
+    { value: 'mistral',     label: 'Mistral',     bucket: 'mistral'    },
+    { value: 'perplexity',  label: 'Perplexity',  bucket: 'perplexity' },
+    { value: 'cohere',      label: 'Cohere',      bucket: 'cohere'     },
+    { value: 'ollama',      label: 'Local Σ₀',    bucket: 'ollama', local: true },
+    { value: 'keystone-ft', label: 'Keystone FT', bucket: 'ollama', local: true },
+  ];
+
+  function applyRequestedProvider() {
+    // Honor ?provider= handoff, but only if that provider is a live option now;
+    // otherwise fall back to Auto/router default rather than dispatch-failing.
+    try {
+      const provider = new URLSearchParams(location.search).get('provider');
+      if (provider) {
+        if (select.querySelector(`option[value="${provider}"]`)) select.value = provider;
+        else if (provider !== 'auto') console.warn(`[dream-chat] Requested provider '${provider}' not live, using router default`);
       }
-      // Dispatch change event so any listeners update
-      select.dispatchEvent(new Event('change', { bubbles: true }));
+    } catch { /* no-op */ }
+    select.dispatchEvent(new Event('change', { bubbles: true })); // let the Model sub-dropdown + gating update
+  }
+
+  // The page's boot burst can abort a single status fetch (connection-pool
+  // starvation), so retry a few times before giving up — otherwise the dropdown
+  // silently falls back to the full catalog on every load, reintroducing the very
+  // fake "Local Σ₀" option this is meant to remove.
+  async function fetchStatus() {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const r = await fetch('/api/providers/status', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+        if (r.ok) return (await r.json()).providers || null;
+      } catch { /* boot-burst abort / status down — retry */ }
+      await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
     }
-  } catch (e) { /* no-op */ }
+    return null;
+  }
+
+  async function build() {
+    const providers = await fetchStatus();
+    select.innerHTML = '<option value="">Auto (pick best)</option>';
+    for (const entry of CATALOG) {
+      const p = providers && providers[entry.bucket];
+      // With status: show only what's genuinely available. Without it (rare, after
+      // retries): show cloud providers optimistically (dispatch falls back if needed)
+      // but NEVER an unconfirmed local option — advertising one is the fake-option bug.
+      const isLive = providers ? !!(p && p.available) : !entry.local;
+      if (!isLive) continue;
+      let label = entry.label;
+      if (entry.bucket === 'ollama' && p) {
+        if (entry.value === 'ollama') {
+          const m = p.active_model || p.model;
+          label = (m && m !== 'auto') ? `Local Σ₀ (${m})` : 'Local Σ₀';
+        } else if (entry.value === 'keystone-ft') {
+          // Only offer keystone-ft when a matching tag is actually served.
+          const served = (p.served_models || []).map((s) => String(s).toLowerCase());
+          if (!served.some((s) => s.includes('keystone') || s.includes('-ft'))) continue;
+        }
+      }
+      const o = document.createElement('option');
+      o.value = entry.value;
+      o.textContent = label;
+      const model = p && p.model;
+      if (model && model !== 'auto') o.title = model; // concrete model id on hover
+      select.appendChild(o);
+    }
+    applyRequestedProvider();
+    if (typeof window.gateProviderOptions === 'function') window.gateProviderOptions();
+  }
+
+  build();
 })();
 
 // ── Model dropdown (#1127 work item 1) ──────────────────────────────────────

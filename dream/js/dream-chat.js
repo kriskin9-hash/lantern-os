@@ -59,7 +59,7 @@
     media: "🎬 Media search",
   };
 
-  // Agent is contextual — Keystone is default, others triggered by name in message
+  // Agent is contextual — Unisona is default, others triggered by name in message
   function detectAgent(msg) {
     const lower = (msg || "").toLowerCase();
     if (lower.includes("keystone") || lower.includes("debug")) return "keystone";
@@ -158,9 +158,12 @@
     }
   });
 
-  // On static hosts (GitHub Pages, file://) the API server isn't running.
-  // Point at the expected local address and surface a clear banner if unreachable.
-  const isStaticHost = window.location.hostname !== "127.0.0.1" && window.location.hostname !== "localhost";
+  // On genuinely static hosts (GitHub Pages, file://) there is no backend at this
+  // origin, so fall back to the local dev server and surface a banner. Anywhere the
+  // page is served by the Node backend — localhost OR a real deploy (cloud VM behind
+  // Cloudflare, e.g. unisona.ai) — the API is same-origin, so use window.location.origin.
+  const isStaticHost = window.location.protocol === "file:" ||
+    window.location.hostname.endsWith("github.io");
   let serverBase = isStaticHost ? "http://127.0.0.1:4177" : window.location.origin;
 
   // Load version badge from version.json (bump minor in each PR)
@@ -169,7 +172,7 @@
     .then(v => {
       if (v?.version) {
         const el = document.getElementById("app-version");
-        if (el) el.textContent = `Keystone OS v${v.version} · private · local`;
+        if (el) el.textContent = `Unisona OS v${v.version} · private · local`;
       }
     })
     .catch(() => {});
@@ -258,7 +261,7 @@
         if (!isUser && entry.meta && (entry.meta.provider || entry.meta.model)) {
           const pm = [entry.meta.provider, entry.meta.model].filter(Boolean).join("/");
           sig = `<div class="msg-route-sig" aria-label="model: ${escapeHtml(pm)}">` +
-            `<span>${escapeHtml(entry.meta.agent || "Keystone")} · chat${time ? " · " + time : ""}</span>` +
+            `<span>${escapeHtml(entry.meta.agent || "Unisona")} · chat${time ? " · " + time : ""}</span>` +
             `<details class="sig-debug" style="display:inline-block;margin-left:6px">` +
             `<summary style="display:inline;cursor:pointer;font-size:10px;opacity:0.45;list-style:none">▸ debug</summary>` +
             `<span class="sig-debug-body" style="font-size:10px;opacity:0.55;margin-left:4px">${escapeHtml(pm)}</span>` +
@@ -276,10 +279,15 @@
           const rich = window.renderToolReplay(entry.meta.tool);
           if (rich) bubbleHtml = rich;
         }
-        row.innerHTML = `<div class="msg-label">${isUser ? "You" : "Keystone"}${time ? " · " + time : ""}</div><div class="bubble">${bubbleHtml}</div>${sig}`;
+        row.innerHTML = `<div class="msg-label">${isUser ? "You" : "Unisona"}${time ? " · " + time : ""}</div><div class="bubble">${bubbleHtml}</div>${sig}`;
         fragment.appendChild(row);
       }
-      messagesEl.appendChild(fragment);
+      // Insert at the TOP, not the bottom. The `?q=` auto-submit handler
+      // (dream-chat.html — home starter chips like "Check the news" navigate
+      // here with ?q=…) can fire before this async fetch resolves and append a
+      // live turn first; appending history then would drop older turns *below*
+      // the new one. Prepending keeps chronology correct regardless of the race.
+      messagesEl.insertBefore(fragment, messagesEl.firstChild);
       scrollToBottom();
     } catch { /* non-critical — fresh session is fine */ }
   }
@@ -327,7 +335,6 @@
   }
   window.switchSession = switchSession;
 
-  let sessionsOperator = false;
   async function loadSessions() {
     const listEl = document.getElementById("sessions-list");
     if (!listEl) return;
@@ -335,24 +342,26 @@
     try {
       const r = await fetch(`${serverBase}/api/conversations/sessions`, { signal: AbortSignal.timeout(4000) });
       const data = r.ok ? await r.json() : { sessions: [] };
-      sessionsOperator = !!data.operator;
       renderSessions(data.sessions || []);
     } catch {
       listEl.innerHTML = '<div class="sessions-empty">Could not load sessions.</div>';
     }
   }
 
+  // Recents render a bounded list with a "Show more" expander instead of one
+  // endless scroll (#1953 follow-up); each session is its own bordered panel.
+  const SESSIONS_PAGE = 10;
+  let sessionsShowAll = false;
   function renderSessions(sessions) {
     const listEl = document.getElementById("sessions-list");
     if (!listEl) return;
-    const clearAllBtn = document.getElementById("clear-all-btn");
-    if (clearAllBtn) clearAllBtn.style.display = sessionsOperator ? "" : "none";
     if (!sessions.length) {
       listEl.innerHTML = '<div class="sessions-empty">No saved sessions yet. Start chatting to create one.</div>';
       return;
     }
     listEl.innerHTML = "";
-    for (const s of sessions) {
+    const visible = sessionsShowAll ? sessions : sessions.slice(0, SESSIONS_PAGE);
+    for (const s of visible) {
       const isCurrent = s.sessionId === chatSessionId;
       const when = s.lastActivity
         ? new Date(s.lastActivity).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -368,10 +377,17 @@
       const title = document.createElement("span");
       title.className = "session-title";
       title.textContent = s.title || "(untitled session)";
+      open.appendChild(title);
+      // Short description: the session's latest message snippet (server `preview`).
+      if (s.preview && s.preview !== s.title) {
+        const desc = document.createElement("span");
+        desc.className = "session-desc";
+        desc.textContent = s.preview;
+        open.appendChild(desc);
+      }
       const meta = document.createElement("span");
       meta.className = "session-meta";
       meta.textContent = `${when}${s.turnCount ? " · " + s.turnCount + " turns" : ""}${isCurrent ? " · current" : ""}`;
-      open.appendChild(title);
       open.appendChild(meta);
       open.addEventListener("click", () => switchSession(s.sessionId));
       // ⋯ menu button (and right-click anywhere on the row) opens the context menu.
@@ -392,6 +408,18 @@
       row.appendChild(open);
       row.appendChild(menuBtn);
       listEl.appendChild(row);
+    }
+    if (sessions.length > SESSIONS_PAGE) {
+      const more = document.createElement("button");
+      more.className = "sessions-show-more";
+      more.textContent = sessionsShowAll
+        ? "Show less"
+        : `Show ${sessions.length - SESSIONS_PAGE} more`;
+      more.addEventListener("click", () => {
+        sessionsShowAll = !sessionsShowAll;
+        renderSessions(sessions);
+      });
+      listEl.appendChild(more);
     }
   }
 
@@ -480,18 +508,6 @@
     if (id === chatSessionId) newChat();
     loadSessions();
   }
-
-  // Clearing ALL history is operator-gated server-side (loopback / OPERATOR_TOKEN).
-  async function clearAllHistory() {
-    if (!confirm("Clear ALL chat history across every session? This archives, then wipes the whole log.")) return;
-    try {
-      const r = await fetch(`${serverBase}/api/conversations`, { method: "DELETE" });
-      if (r.status === 403) { alert("Clearing all history requires operator access (run Keystone locally)."); return; }
-    } catch { /* best-effort */ }
-    newChat();
-    loadSessions();
-  }
-  window.clearAllHistory = clearAllHistory;
 
   // The sidebar is permanently visible on desktop; on narrow screens it's an
   // off-canvas drawer toggled by the ☰ button (CSS: .chat-sidebar.open).
@@ -598,7 +614,7 @@
       inputEl.value = "";
       const sysRow = document.createElement("div");
       sysRow.className = "msg-row agent";
-      sysRow.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble" style="font-size:13px">Running convergence loop…</div>`;
+      sysRow.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble" style="font-size:13px">Running convergence loop…</div>`;
       messagesEl.appendChild(sysRow);
       scrollToBottom();
 
@@ -685,7 +701,7 @@
       inputEl.value = "";
       const sysRow = document.createElement("div");
       sysRow.className = "msg-row agent";
-      sysRow.innerHTML = `<div class="msg-label">Keystone</div><div class="bubble">Logging issue…</div>`;
+      sysRow.innerHTML = `<div class="msg-label">Unisona</div><div class="bubble">Logging issue…</div>`;
       messagesEl.appendChild(sysRow);
       scrollToBottom();
       fetch(`${serverBase}/api/dream/chat`, {
@@ -764,7 +780,7 @@
     sendBtn.disabled = true;
     setThinking(true);
 
-    const agentName = directModeEnabled ? "Model" : (agents.find((a) => a.id === detectAgent(message))?.name || "Keystone");
+    const agentName = directModeEnabled ? "Model" : (agents.find((a) => a.id === detectAgent(message))?.name || "Unisona");
     const msgTime = new Date();
     const row = document.createElement("div");
     row.className = "msg-row agent";
@@ -1090,6 +1106,21 @@
       // can weigh it accordingly, instead of trusting an off-tone local reply.
       if (routeLabel) {
         const isDegraded = /degraded/i.test(routeLabel);
+        const isLocalCap = /local model|may be limited|complex coding/i.test(routeLabel); // #1556 [CAP-4]
+        // #1556 [CAP-4]: when a local model answered — either the degraded cloud→
+        // local fallback (#740) or the coding-on-local fast path (#1167) — show a
+        // plain capability notice so the user weighs the answer rather than
+        // trusting a possibly-fabricated local reply. A readable line, not just an
+        // amber route color they might miss.
+        if (isDegraded || isLocalCap) {
+          const notice = document.createElement("div");
+          notice.className = "msg-capability-notice";
+          notice.setAttribute("role", "status");
+          notice.textContent = isDegraded
+            ? "⚠ Answered by the local model (cloud was unreachable) — quality may be lower. Ask me to retry, or name a provider to escalate."
+            : "ⓘ Local model — complex coding may be limited or wrong. Say “escalate” (or pick a provider) to use a cloud model.";
+          row.appendChild(notice);
+        }
         const sig = document.createElement("div");
         sig.className = isDegraded ? "msg-route-sig degraded" : "msg-route-sig";
         if (/debug route/i.test(routeLabel)) sig.classList.add("route-debug");
@@ -1192,7 +1223,7 @@
       logBtn.onclick = async () => {
         logBtn.disabled = true;
         logBtn.textContent = "Saving…";
-        const fullConv = conversationHistory.map(h => `${h.role === "user" ? "You" : "Keystone"}: ${h.text}`).join("\n");
+        const fullConv = conversationHistory.map(h => `${h.role === "user" ? "You" : "Unisona"}: ${h.text}`).join("\n");
         try {
           const r = await fetch(`${serverBase}/api/dream/create`, {
             method: "POST",
@@ -1206,7 +1237,7 @@
       row.appendChild(logBtn);
     }
 
-    // Keystone MCP: extract code blocks as executable commands
+    // Unisona MCP: extract code blocks as executable commands
     if (directModeEnabled && text) {
       const codeBlocks = text.match(/```(?:bash|powershell|sh)?\n([\s\S]*?)```/g) || [];
       codeBlocks.forEach(block => {
@@ -1230,7 +1261,7 @@
             const outRow = document.createElement("div");
             outRow.className = "msg-row agent";
             const isErr = !d.ok;
-            const label = isErr ? "KEYSTONE EXEC ✗" : "KEYSTONE EXEC ✓";
+            const label = isErr ? "UNISONA EXEC ✗" : "UNISONA EXEC ✓";
             const color = isErr ? "#e05555" : "#4caf82";
             const bg = isErr ? "#1a0a0a" : "#0a1a0e";
             const border = isErr ? "#3d1a1a" : "#1a3d2a";
@@ -1521,7 +1552,7 @@
           connBadge.className = `connector-card-status ${configured ? "ok" : "err"}`;
         }
       }
-      document.getElementById("settings-btn").classList.toggle("has-error", anyMissing && data._any === false);
+      document.getElementById("settings-btn")?.classList.toggle("has-error", anyMissing && data._any === false);
       // Discord Bot status
       const discordToken = !!(data["DISCORD_BOT_TOKEN"]);
       const discordGuild = !!(data["LANTERN_DISCORD_GUILD_ID"]);

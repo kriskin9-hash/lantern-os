@@ -3,6 +3,7 @@
 <head>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta charset="utf-8">
+  <meta name="loop-stage" content="act">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
   <script>
@@ -45,6 +46,9 @@
     .panel h2 { margin: 0; font-size: 0.98rem; color: var(--accent); display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; }
     .panel-sub { font-size: 0.78rem; color: var(--muted); margin: -2px 0 8px; line-height: 1.5; }
     .section-meta { font-size: 0.72rem; color: var(--muted); font-weight: 400; }
+    .band-title { font-size: 0.74rem; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); font-weight: 800; margin: 30px 2px 10px; opacity: .85; }
+    .band-title:first-of-type { margin-top: 6px; }
+    .subhead { font-size: 0.84rem; color: var(--accent); font-weight: 700; margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
     .btn-secondary {
       width: auto !important; padding: 7px 13px;
@@ -207,22 +211,26 @@
     .research-action.delegate { border-color: #a855f7; color: #a855f7; }
     .research-action.delegate:hover { background: color-mix(in srgb, #a855f7 12%, transparent); }
 
-    /* ── Auto-pull kill switch ── */
-    .ap-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
-    .ap-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
-    .ap-track { width: 38px; height: 22px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); position: relative; transition: background .18s, border-color .18s; flex-shrink: 0; }
-    .ap-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform .18s, background .18s; }
-    .ap-switch input:checked + .ap-track { background: color-mix(in srgb, var(--green) 30%, transparent); border-color: var(--green); }
-    .ap-switch input:checked + .ap-track .ap-thumb { transform: translateX(16px); background: var(--green); }
-    .ap-switch input:focus-visible + .ap-track { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .ap-label { font-size: 0.78rem; font-weight: 700; color: var(--muted); min-width: 22px; }
-    .ap-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 10px; }
-    .ap-guards { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
-    .ap-guard { font-size: 0.66rem; padding: 2px 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
-    .ap-hist-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; padding: 6px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; margin-bottom: 4px; font-size: 0.78rem; }
-    .ap-hist-row .ok { color: var(--green); } .ap-hist-row .no { color: #f87171; }
+    /* ── Read-only guest mode ──────────────────────────────────────────────
+       auth-gate.js tags <body> with .is-admin / .is-guest once the session
+       resolves. Admin-only control panels (keys, training) are hidden
+       for everyone EXCEPT admins, so a logged-out / non-admin visitor sees only
+       the read-only fleet status. Hidden by default (no class yet) so secrets
+       never flash before the session check completes. */
+    .admin-only { display: none; }
+    body.is-admin .admin-only { display: block; }
+    .guest-banner { display: none; }
+    body.is-guest .guest-banner {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      margin: 0 0 14px; padding: 11px 16px; border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      color: var(--text); font-size: 0.86rem;
+    }
+    .guest-banner a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    .guest-banner a:hover { text-decoration: underline; }
   </style>
-  <title>Orchestration — unisona.ai</title>
+  <title>Settings — unisona.ai</title>
 </head>
 <body>
 
@@ -236,8 +244,7 @@
   <div class="nav-links">
     <a href="/dream-chat.html">Chat</a>
     <a href="/stock-trader.html">Trader</a>
-    <a href="/operations.html">Ops Hub</a>
-    <a href="/orchestration.html" class="active">Orchestration</a>
+    <a href="/orchestration.html" class="active">Settings</a>
     <a href="/work.html">Work</a>
     <a href="/explore.html">Explore</a>
   </div>
@@ -248,7 +255,13 @@
 
 <main class="orch-main" id="main-content">
 
-  <h1 class="visually-hidden">Orchestration — Control Center</h1>
+  <h1 class="visually-hidden">Settings — Control Center</h1>
+
+  <!-- ── Read-only guest banner (shown only to logged-out visitors) ── -->
+  <div class="guest-banner" role="status">
+    <span>👁️ <strong>Read-only view.</strong> You're seeing live fleet status. Sign in as an admin to control training, keys, and the autonomous fleet.</span>
+    <a href="/auth.html?returnTo=%2Forchestration.html" style="margin-left:auto;">Sign in →</a>
+  </div>
 
   <!-- ── Slim status line ── -->
   <div class="orch-status">
@@ -260,6 +273,87 @@
     <span class="stitle">Control Center · <span id="refreshTime">loading…</span></span>
   </div>
 
+  <!-- ── Broker connection (IBKR) — per-user, ADR-0022 ── -->
+  <style>
+    #broker .broker-status{display:flex;align-items:center;gap:9px;font-size:.85rem;font-weight:600;margin:2px 0 12px}
+    #broker .bdot{width:9px;height:9px;border-radius:50%;background:var(--text2)}
+    #broker .bdot.on{background:#22c55e;box-shadow:0 0 8px #22c55e}#broker .bdot.off{background:#ef4444}
+    #broker .bdot.wait{background:#f59e0b;box-shadow:0 0 8px #f59e0b}
+    #broker .bsaved-note{margin:0 0 12px;padding:9px 12px;border-radius:8px;font-size:.76rem;line-height:1.5;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.08);color:#bbf7d0}
+    #broker .broker-gate{margin:0 0 12px;padding:10px 13px;border-radius:9px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.1);color:#fca5a5;font-size:.82rem}
+    #broker .broker-gate a{color:var(--accent)}
+    #broker .bfield{margin-bottom:10px}
+    #broker label{display:block;font-size:.62rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin:0 0 4px}
+    #broker input,#broker textarea{width:100%;box-sizing:border-box;padding:8px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg0);color:var(--text0);font-size:.82rem;font-family:inherit}
+    #broker textarea{min-height:78px;font-family:var(--mono);font-size:.72rem;resize:vertical}
+    #broker .brow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:640px){#broker .brow{grid-template-columns:1fr}}
+    #broker .bhint{font-size:.68rem;color:var(--text2);margin-top:3px}
+    #broker .bbanner{display:none;margin:0 0 12px;padding:9px 12px;border-radius:8px;font-size:.78rem}
+    #broker .bbanner.show{display:block}#broker .bbanner.err{border:1px solid rgba(239,68,68,.45);background:rgba(239,68,68,.1);color:#fca5a5}
+    #broker .bbanner.ok{border:1px solid rgba(34,197,94,.45);background:rgba(34,197,94,.1);color:#bbf7d0}
+    #broker .bactions{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
+    #broker .bgen{border:1px solid var(--border);border-radius:10px;background:var(--bg0);padding:13px 15px;margin:0 0 14px}
+    #broker .bgen-head{font-size:.9rem;margin-bottom:4px}#broker .bgen-sub{color:var(--text2);font-weight:400;font-size:.72rem}
+    #broker .bgen-p{font-size:.78rem;color:var(--text1);line-height:1.55;margin:0 0 10px}
+    #broker .bgen-msg{margin-left:10px;font-size:.76rem;color:#22c55e}
+    #broker .bgen-files{margin-top:12px;display:flex;flex-direction:column;gap:7px}
+    #broker .bgen-files-h{font-size:.76rem;color:var(--text1);margin-bottom:2px}
+    #broker .bfile-btn{font-family:var(--mono);font-size:.76rem;text-align:left;padding:9px 12px;border-radius:8px;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--text0);cursor:pointer;transition:background .15s}
+    #broker .bfile-btn:hover{background:color-mix(in srgb,var(--accent) 20%,transparent)}
+    #broker .bfile-btn.done{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.12);color:#bbf7d0;cursor:default}
+    #broker .bgen-adv{margin-top:11px}#broker .bgen-adv summary{font-size:.74rem;color:var(--text2);cursor:pointer}
+  </style>
+  <section class="panel" id="broker">
+    <h2>🔗 Broker Connection <span class="section-meta">Interactive Brokers · your account</span></h2>
+    <p class="panel-sub">Trade your own IBKR account through unisona (self-service OAuth). Keys are stored <strong>encrypted</strong> and never leave the server. Start with a <strong>paper</strong> account (<code>DU…</code>). <a href="/ibkr-setup-guide.html" target="_blank" rel="noopener">📖 Setup guide →</a></p>
+    <div class="broker-status"><span class="bdot" id="bdot"></span><span id="bstatusText">Checking…</span></div>
+    <div class="broker-gate" id="bgate" hidden>Trading requires the <strong>Deep Dreamer ($20/mo)</strong> tier. <a href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener">Upgrade</a> to connect a broker.</div>
+
+    <!-- Step 1: no command line — generate keys in the browser -->
+    <div class="bgen">
+      <div class="bgen-head"><strong>Step 1 · Get your keys</strong> <span class="bgen-sub">no command line needed</span></div>
+      <p class="bgen-p">Click below and unisona makes your security keys right here in your browser and downloads <strong>3 files</strong>. You'll upload those to IBKR in step 2. The secret parts stay in this form — they never leave your computer except into unisona.</p>
+      <button type="button" class="btn-primary" id="bgenerate">🔑 Generate my keys</button>
+      <span id="bgenmsg" class="bgen-msg"></span>
+      <div id="bgenfiles" class="bgen-files" hidden></div>
+      <details class="bgen-adv"><summary>Prefer the command line? (advanced)</summary>
+        <p class="bgen-p" style="margin-top:8px">Run these, then paste the two <em>private</em> keys + DH prime yourself:</p>
+        <pre style="white-space:pre-wrap;font-family:var(--mono);font-size:.7rem;background:var(--bg0);border:1px solid var(--border);border-radius:8px;padding:10px">openssl genrsa -out private_signature.pem 2048
+openssl rsa -in private_signature.pem -pubout -out public_signature.pem
+openssl genrsa -out private_encryption.pem 2048
+openssl rsa -in private_encryption.pem -pubout -out public_encryption.pem
+openssl dhparam -out dhparam.pem 2048</pre>
+      </details>
+    </div>
+
+    <form id="brokerForm">
+      <div class="bbanner" id="bbanner"></div>
+      <div class="bsaved-note" id="bsavednote" hidden>✓ Your credentials are <strong>saved on file</strong> (encrypted). You don't need to re-enter them — refreshing is safe. Use <strong>Recheck connection</strong> to test again. Fill a field only to <em>replace</em> it.</div>
+      <div class="brow">
+        <div class="bfield"><label>Consumer key</label><input id="consumerKey" autocomplete="off"></div>
+        <div class="bfield"><label>Account ID</label><input id="accountId" placeholder="DU1234567" autocomplete="off"><div class="bhint">DU… = paper · U… = live</div></div>
+      </div>
+      <div class="brow">
+        <div class="bfield"><label>Access token</label><input id="accessToken" autocomplete="off"></div>
+        <div class="bfield"><label>Access token secret</label><input id="accessTokenSecret" autocomplete="off"></div>
+      </div>
+      <div class="bfield"><label>Signature private key (PEM)</label><textarea id="signaturePem" placeholder="-----BEGIN RSA PRIVATE KEY-----…" spellcheck="false"></textarea></div>
+      <div class="bfield"><label>Encryption private key (PEM)</label><textarea id="encryptionPem" placeholder="-----BEGIN RSA PRIVATE KEY-----…" spellcheck="false"></textarea></div>
+      <div class="brow">
+        <div class="bfield"><label>Diffie-Hellman prime (hex)</label><input id="dhPrime" autocomplete="off"></div>
+        <div class="bfield"><label>Realm</label><input id="realm" value="limited_poa" autocomplete="off"></div>
+      </div>
+      <div class="bactions">
+        <button type="submit" class="btn-primary" id="bconnect">Connect &amp; test</button>
+        <button type="button" class="btn-secondary" id="brecheck" hidden>Recheck connection</button>
+        <button type="button" class="btn-secondary" id="bdisconnect" hidden>Disconnect</button>
+      </div>
+    </form>
+  </section>
+
+  <p class="band-title">The loop, right now</p>
+
   <!-- ── Live Work Board (the team loop, real-time truth) ── -->
   <section class="panel" id="workBoardPanel">
     <h2>📋 Work Board <span class="section-meta" id="workBoardMeta">live queue + PR truth</span>
@@ -268,7 +362,7 @@
     <p class="panel-sub">Real-time state straight from GitHub + the on-disk queue — nothing cached or hand-edited. Open issues are pending work; PR lanes are in review; merged PRs are landed.</p>
     <div class="board-grid" id="boardStats">
       <div class="stat"><div class="stat-label">Open Issues</div><div class="stat-value" id="bStatPending">—</div><div class="stat-sub">unclaimed backlog</div></div>
-      <div class="stat"><div class="stat-label">In Progress</div><div class="stat-value muted" id="bStatProgress">—</div><div class="stat-sub">claimed locally</div></div>
+      <div class="stat"><div class="stat-label">In Progress</div><div class="stat-value muted" id="bStatProgress">—</div><div class="stat-sub" id="bStatProgressSub">in-flight (live)</div></div>
       <div class="stat"><div class="stat-label">Open PRs</div><div class="stat-value muted" id="bStatPRs">—</div><div class="stat-sub">awaiting review/merge</div></div>
       <div class="stat"><div class="stat-label">Landed</div><div class="stat-value" id="bStatLanded">—</div><div class="stat-sub">recent merges</div></div>
       <div class="stat"><div class="stat-label">Active Agents</div><div class="stat-value muted" id="bStatAgents">—</div><div class="stat-sub" id="bStatAgentsSub">of — slots</div></div>
@@ -283,26 +377,6 @@
     <div id="prLanesBody"><div class="placeholder">Loading PR lanes…</div></div>
   </section>
 
-  <!-- ── Auto-Pull Fleet (opt-in autonomous loop) ── -->
-  <section class="panel" id="autoPullPanel">
-    <h2>🤖 Auto-Pull Fleet <span class="section-meta" id="autoPullMeta">opt-in autonomous loop</span>
-      <label class="ap-switch" style="margin-left:auto;" title="Kill switch — flip off any time">
-        <input type="checkbox" id="autoPullToggle" onchange="toggleAutoPull(this.checked)" aria-label="Toggle the autonomous auto-pull loop">
-        <span class="ap-track"><span class="ap-thumb"></span></span>
-        <span id="autoPullToggleLabel" class="ap-label">Off</span>
-      </label>
-    </h2>
-    <p class="panel-sub">When on, the fleet pulls the top-priority open issue and works it into a draft PR unattended — <strong>one at a time, cloud-paused, one PR per lane, nothing auto-merges</strong>. This toggle is the kill switch (no restart needed); it persists across restarts.</p>
-    <div id="autoPullBody"><div class="placeholder">Loading…</div></div>
-  </section>
-
-  <!-- ── Pull Work moved to /work.html ── -->
-  <section class="panel" id="pullWorkLink">
-    <h2>📥 Manual Work <span class="section-meta">choose &amp; hand off issues</span></h2>
-    <p class="panel-sub">Picking issues by hand, researching them, copying coding-agent handoffs, and the "Recently Landed" shipped log now live on their own page — so this dashboard stays focused on the autonomous loop above.</p>
-    <a class="btn-secondary" href="/work.html" style="display:inline-block;">📥 Open Work page →</a>
-  </section>
-
   <!-- ── Agent Slots (who's working right now) ── -->
   <section class="panel" id="agentSlotsPanel">
     <h2>👥 Agent Slots <span class="section-meta" id="agentSlotsMeta"></span>
@@ -312,21 +386,14 @@
     <div id="agentSlotsBody" class="slot-grid"><div class="placeholder">Loading roster…</div></div>
   </section>
 
-  <!-- Recently Landed moved to /work.html; its count still feeds the Work Board "Landed" stat. -->
-
-  <!-- ── Research Team: repo memory (grounds the fleet) ── -->
-  <section class="panel" id="repoLearnPanel">
-    <h2>🔬 Research Team · Repo Memory <span class="section-meta" id="repoLearnMeta"></span>
-      <button class="btn-secondary" id="repoLearnRunBtn" onclick="runRepoLearn()" style="margin-left:auto;font-size:0.72rem;padding:4px 9px;">▶ Run learning pass</button>
+  <!-- ── Manual Work (slim link → /work.html) ── -->
+  <section class="panel" id="pullWorkLink">
+    <h2>📥 Manual Work <span class="section-meta">pick &amp; hand off issues — Recently Landed lives there too</span>
+      <a class="btn-secondary" href="/work.html" style="margin-left:auto;">Open Work →</a>
     </h2>
-    <p class="panel-sub">The fleet's grounding. Every doc + live module is learned into the <strong>one</strong> Convergence Memory as a grounded, evidence-cited record — so delegated agents and chat retrieve real repo facts instead of guessing. This is how "actually remember you" becomes true. Counts are read straight from the memory log; nothing is fabricated.</p>
-    <div class="board-grid" id="repoLearnStats">
-      <div class="stat"><div class="stat-label">Files Learned</div><div class="stat-value" id="rlFiles">—</div><div class="stat-sub">in repo manifest</div></div>
-      <div class="stat"><div class="stat-label">Grounded Memories</div><div class="stat-value muted" id="rlMems">—</div><div class="stat-sub">in Convergence Memory</div></div>
-      <div class="stat"><div class="stat-label">Last Pass</div><div class="stat-value muted" id="rlLast" style="font-size:1.1rem;">—</div><div class="stat-sub" id="rlLangs">—</div></div>
-    </div>
-    <div id="repoLearnResult" class="train-dispatch-result"></div>
   </section>
+
+  <p class="band-title">Brain &amp; compute</p>
 
   <!-- ── Local / Offline Model (the wired-in brain) ── -->
   <section class="panel">
@@ -336,7 +403,7 @@
   </section>
 
   <!-- ── Training Control (primary action) ── -->
-  <section class="panel">
+  <section class="panel admin-only">
     <h2>⚡ Training Control <span class="section-meta" id="trainSummary"></span></h2>
     <p class="panel-sub">Fire a self-improvement run on the free GPU providers. <b>Start</b> fans out to every automatable provider with quota; or dispatch one provider at a time.</p>
     <button class="train-start-btn" id="startTrainBtn" onclick="startTraining()">▶ Start Training Now — all providers</button>
@@ -349,17 +416,8 @@
     <div id="trainRecentJobs" style="margin-top:12px;"></div>
   </section>
 
-  <!-- ── AI Provider Keys (editable) ── -->
-  <section class="panel">
-    <h2>🔑 AI Provider Keys <span class="section-meta" id="providerKeysSummary"></span>
-      <button class="btn-secondary" onclick="refreshProviderStatus()" style="margin-left:auto;font-size:0.72rem;padding:4px 9px;">⟳ Refresh</button>
-    </h2>
-    <p class="panel-sub">Paste an API key to connect a model. Saved to this computer's Windows user account only — never uploaded.</p>
-    <div id="providerKeysList" class="key-grid"><div class="placeholder">Loading…</div></div>
-  </section>
-
   <!-- ── GPU Account Keys (editable) ── -->
-  <section class="panel">
+  <section class="panel admin-only">
     <h2>🖥️ GPU Account Keys <span class="section-meta" id="gpuKeysSummary"></span>
       <button class="btn-secondary" onclick="renderGpuKeys()" style="margin-left:auto;font-size:0.72rem;padding:4px 9px;">⟳ Refresh</button>
     </h2>
@@ -367,14 +425,21 @@
     <div id="gpuKeysList" class="key-grid"><div class="placeholder">Loading accounts…</div></div>
   </section>
 
-  <!-- ── Provider Chains (read-only reference) ── -->
-  <section class="panel">
-    <h2>🔗 Provider Chains <span class="section-meta" id="providersSummary"></span></h2>
-    <p class="panel-sub">Each task type tries providers in order — the first connected one wins. Set keys above to light these up.</p>
+  <!-- ── AI Providers (keys + fallback chains, merged) ── -->
+  <section class="panel admin-only">
+    <h2>🔑 AI Providers <span class="section-meta" id="providerKeysSummary"></span>
+      <button class="btn-secondary" onclick="refreshProviderStatus()" style="margin-left:auto;font-size:0.72rem;padding:4px 9px;">⟳ Refresh</button>
+    </h2>
+    <p class="panel-sub">Paste an API key to connect a model. Saved to this computer's Windows user account only — never uploaded.</p>
+    <div id="providerKeysList" class="key-grid"><div class="placeholder">Loading…</div></div>
+    <h3 class="subhead">🔗 Fallback chains <span class="section-meta" id="providersSummary"></span></h3>
+    <p class="panel-sub">Each task type tries providers in order — the first connected one wins.</p>
     <div id="providerChains"><div class="placeholder">Loading…</div></div>
   </section>
 
-  <!-- ── Provider Reliance (consolidated) ── -->
+  <p class="band-title">How well it's working</p>
+
+  <!-- ── AI Provider Reliance (+ per-model chat reliability, merged) ── -->
   <section class="panel">
     <h2>🤖 AI Provider Reliance <span class="section-meta" id="relianceSummary">who's actually doing the work</span>
       <span style="margin-left:auto;display:flex;gap:6px;">
@@ -386,12 +451,8 @@
     </h2>
     <p class="panel-sub">Share of real AI work (Claude Code engineering turns + chat model calls). Reliance = how much each provider carries; reliability = its success rate. Local is bucketed under one Ollama row.</p>
     <div id="relianceList"><div class="placeholder">Loading…</div></div>
-  </section>
-
-  <!-- ── Leaderboard (read-only) ── -->
-  <section class="panel">
-    <h2>🏆 Chat Model Reliability <span class="section-meta">per-model success rate · last 14 days</span></h2>
-    <p class="panel-sub">Granular view of the local/cloud models that serve chat — the small sliver above. Ranked by success rate.</p>
+    <h3 class="subhead">🏆 Per-model chat reliability <span class="section-meta">success rate · last 14 days</span></h3>
+    <p class="panel-sub">The granular local/cloud models that serve chat — the small sliver above. Ranked by success rate.</p>
     <div class="merit-list" id="meritList"><div class="placeholder">Loading…</div></div>
   </section>
 
@@ -411,7 +472,7 @@
 
   <!-- ── Rollover (read-only) ── -->
   <section class="panel">
-    <h2>🔀 Rollover · Keystone vs Claude <span class="section-meta">landed-work share</span>
+    <h2>🔀 Rollover · Unisona vs Claude <span class="section-meta">landed-work share</span>
       <span style="margin-left:auto;display:flex;gap:6px;">
         <button class="btn-secondary" id="band-24h" onclick="setRolloverBand('24h')" style="font-size:0.72rem;padding:4px 9px;">24h</button>
         <button class="btn-secondary" id="band-7d" onclick="setRolloverBand('7d')" style="font-size:0.72rem;padding:4px 9px;">7d</button>
@@ -420,6 +481,20 @@
       </span>
     </h2>
     <div id="rolloverBody"><div class="placeholder">Loading…</div></div>
+  </section>
+
+  <!-- ── Research Team · Repo Memory (grounding telemetry) ── -->
+  <section class="panel" id="repoLearnPanel">
+    <h2>🔬 Research Team · Repo Memory <span class="section-meta" id="repoLearnMeta"></span>
+      <button class="btn-secondary" id="repoLearnRunBtn" onclick="runRepoLearn()" style="margin-left:auto;font-size:0.72rem;padding:4px 9px;">▶ Run learning pass</button>
+    </h2>
+    <p class="panel-sub">The fleet's grounding. Every doc + live module is learned into the <strong>one</strong> Convergence Memory as a grounded, evidence-cited record — so delegated agents and chat retrieve real repo facts instead of guessing. This is how "actually remember you" becomes true. Counts are read straight from the memory log; nothing is fabricated.</p>
+    <div class="board-grid" id="repoLearnStats">
+      <div class="stat"><div class="stat-label">Files Learned</div><div class="stat-value" id="rlFiles">—</div><div class="stat-sub">in repo manifest</div></div>
+      <div class="stat"><div class="stat-label">Grounded Memories</div><div class="stat-value muted" id="rlMems">—</div><div class="stat-sub">in Convergence Memory</div></div>
+      <div class="stat"><div class="stat-label">Last Pass</div><div class="stat-value muted" id="rlLast" style="font-size:1.1rem;">—</div><div class="stat-sub" id="rlLangs">—</div></div>
+    </div>
+    <div id="repoLearnResult" class="train-dispatch-result"></div>
   </section>
 
   <div class="refresh-time" id="footerTime">
@@ -437,8 +512,7 @@
     <span class="sep">·</span>
     <a href="/">Home</a>
     <a href="/dream-chat.html">Chat</a>
-    <a href="/operations.html">Ops Hub</a>
-    <a href="/orchestration.html">Orchestration</a>
+    <a href="/orchestration.html">Settings</a>
     <span class="sep">·</span>
     <a href="https://github.com/alex-place/lantern-os" target="_blank" rel="noopener noreferrer">GitHub</a>
   </div>
@@ -451,7 +525,7 @@
   const $ = (id) => document.getElementById(id);
   let _cache = { providerData: null, gpuData: null };
 
-  async function fetchJson(path, timeoutMs = 6000) {
+  async function fetchJson(path, timeoutMs = 10000) {
     // Boot fires ~17 of these at once; the browser caps ~6 connections per host
     // so the rest queue. AbortSignal.timeout() counts from the fetch() call — not
     // from when the request hits the wire — so a request stuck behind slow ones
@@ -546,7 +620,7 @@
         <div class="research-actions">
           <a class="research-action" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Open issue</a>
           <button class="research-action delegate" type="button" data-delegate="${escapeHtml(item.issueNumber)}" title="Hand this issue to the autonomous fleet — it works it in an isolated worktree and opens a draft PR">🛰️ Delegate to fleet</button>
-          <button class="research-action primary" type="button" data-research="${escapeHtml(item.issueNumber)}">Research in Keystone Chat</button>
+          <button class="research-action primary" type="button" data-research="${escapeHtml(item.issueNumber)}">Research in Unisona Chat</button>
           <button class="research-action" type="button" data-copy-codex="${escapeHtml(item.issueNumber)}">Copy Codex handoff</button>
           <button class="research-action" type="button" data-copy-claude="${escapeHtml(item.issueNumber)}">Copy Claude Code handoff</button>
         </div>
@@ -1187,7 +1261,7 @@
       <div class="info-box" style="margin-bottom:12px;"><strong>Git attribution</strong> — merged PRs by lane (${escapeHtml(data.band || "30d")})
         ${[
           { label: "claude/", n: git.claude || 0, color: "#06b6d4" },
-          { label: "auto/ (Keystone)", n: git.keystone || 0, color: "#a855f7" },
+          { label: "auto/ (Unisona)", n: git.keystone || 0, color: "#a855f7" },
           { label: "gemini/", n: git.gemini || 0, color: "#22c55e" },
           { label: "codex/", n: git.codex || 0, color: "#f59e0b" },
           { label: "human", n: git.human || 0, color: "#64748b" },
@@ -1215,6 +1289,8 @@
     if (status && status.queue) {
       setText("bStatPending", status.queue.pending);
       setText("bStatProgress", status.queue.assigned);
+      const staleAssigned = status.queue.staleAssigned || 0;
+      setText("bStatProgressSub", staleAssigned > 0 ? `in-flight · ${staleAssigned} stale` : "in-flight (live)");
       const ag = status.agents || {};
       setText("bStatAgents", ag.activeCount ?? "—");
       setText("bStatAgentsSub", `of ${ag.totalSlots ?? "—"} slots`);
@@ -1292,7 +1368,7 @@
   }
 
   async function refreshWorkBoard() {
-    await Promise.all([renderWorkBoard(), renderPrLanes(), renderAgentSlots(), renderLanded(), renderAutoPull()]);
+    await Promise.all([renderWorkBoard(), renderPrLanes(), renderAgentSlots(), renderLanded()]);
   }
 
   // ── Fleet delegation (live streamed autonomous run) ───────────────────────
@@ -1383,54 +1459,6 @@
     }
   }
 
-  // ── Auto-Pull Fleet (opt-in autonomous loop) ──────────────────────────────
-  async function renderAutoPull() {
-    const d = await fetchJson("/api/convergence/auto-dispatch/status", 8000);
-    const toggle = $("autoPullToggle"), label = $("autoPullToggleLabel"), body = $("autoPullBody");
-    if (!d || !d.ok) { setText("autoPullMeta", "status unavailable"); if (body) body.innerHTML = '<div class="placeholder">Loop status unavailable.</div>'; return; }
-    if (toggle && document.activeElement !== toggle) toggle.checked = !!d.enabled;
-    if (label) { label.textContent = d.enabled ? "On" : "Off"; label.style.color = d.enabled ? "var(--green)" : "var(--muted)"; }
-    setText("autoPullMeta", d.enabled
-      ? (d.inFlight ? "running a job now" : (d.pauseReason ? `armed · paused: ${d.pauseReason}` : "armed · waiting for next tick"))
-      : "off");
-
-    const pick = d.lastPick;
-    const nextRun = d.enabled && d.nextRunAt ? relTime(d.nextRunAt).replace(" ago", "") + " (approx)" : "—";
-    const guards = (d.guardrails || []).map(g => `<span class="ap-guard">✓ ${escapeHtml(g)}</span>`).join("");
-    const hist = (d.history || []).map(h => `<div class="ap-hist-row">
-        <span class="${h.ok ? "ok" : "no"}">${h.ok ? "✓" : "✗"}</span>
-        <span>#${escapeHtml(String(h.issueNumber))} ${escapeHtml(h.title || "")}</span>
-        <span class="landed-meta">${h.ok && h.prUrl ? `<a href="${escapeHtml(h.prUrl)}" target="_blank" rel="noopener noreferrer">PR ↗</a>` : escapeHtml(h.stoppedAt || "")} · ${escapeHtml(relTime(h.at))}</span>
-      </div>`).join("");
-    body.innerHTML = `
-      <div class="ap-grid">
-        <div class="stat"><div class="stat-label">State</div><div class="stat-value ${d.enabled ? "" : "muted"}" style="font-size:1.15rem;">${d.enabled ? (d.inFlight ? "Working" : "Armed") : "Off"}</div><div class="stat-sub">control: ${escapeHtml(d.source)}</div></div>
-        <div class="stat"><div class="stat-label">Interval</div><div class="stat-value muted" style="font-size:1.15rem;">${Math.round((d.intervalMs || 0) / 1000)}s</div><div class="stat-sub">next: ${escapeHtml(nextRun)}</div></div>
-        <div class="stat"><div class="stat-label">Last Pick</div><div class="stat-value muted" style="font-size:1.1rem;">${pick ? "#" + escapeHtml(String(pick.issueNumber)) : "—"}</div><div class="stat-sub">${pick ? escapeHtml(relTime(pick.at)) : "none yet"}</div></div>
-      </div>
-      <div class="ap-guards">${guards}</div>
-      ${hist ? `<div class="section-meta" style="margin-bottom:6px;">Recent autonomous runs</div>${hist}` : '<div class="placeholder">No autonomous runs yet.</div>'}`;
-  }
-
-  async function toggleAutoPull(on) {
-    const toggle = $("autoPullToggle");
-    if (toggle) toggle.disabled = true;
-    try {
-      const r = await fetch("/api/convergence/auto-dispatch/toggle", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !!on }),
-      });
-      const d = await r.json();
-      if (!r.ok || !d.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    } catch (e) {
-      if (toggle) toggle.checked = !on;  // revert on failure
-      alert("Could not toggle auto-pull: " + e.message);
-    } finally {
-      if (toggle) toggle.disabled = false;
-      renderAutoPull();
-    }
-  }
-  window.toggleAutoPull = toggleAutoPull;
-
   // ── Research Team: repo memory ─────────────────────────────────────────────
   async function renderRepoLearn() {
     const d = await fetchJson("/api/research/repo/status", 8000);
@@ -1472,28 +1500,30 @@
   window.refreshProviderStatus = refreshProviderStatus;
 
   // ── Boot ──────────────────────────────────────────────────────────────────
-  document.addEventListener("DOMContentLoaded", () => {
-    // Order matters. The browser caps ~6 connections per host and
-    // AbortSignal.timeout() counts queue time, so whatever is requested first
-    // claims the connection slots. refreshWorkBoard() fans out to 5 sub-fetches
-    // and some (PR lanes) shell out to `gh` and hold a connection for seconds —
-    // firing it first starved the light one-shot panels below (reliance / merit
-    // / calibration / keystone / rollover), which then timed out *while queued*
-    // and — having no refresh interval — showed a permanent false "data
-    // unavailable" state. So request the light, fast, single-shot panels FIRST,
-    // then defer the heavy work-board a tick so its slow calls run behind them.
-    renderLocalModel();
-    refreshProviderStatus();
-    renderTrainingSection();
-    renderGpuKeys();
-    renderReliance();
-    renderMerit();
-    renderCalibration();
-    renderKeystoneTests();
-    renderRollover();
-    updateStatus();
-    renderRepoLearn();
-    setTimeout(refreshWorkBoard, 0);
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Boot in two phases to avoid connection-slot starvation. The browser caps
+    // ~6 connections/host and AbortSignal.timeout() counts queue time, so when
+    // all ~20 boot fetches raced in one tick the light one-shot analytics panels
+    // (reliance / merit / calibration / self-test / rollover / repo-memory)
+    // aborted *while still queued* behind the gh-backed work-board calls
+    // (PR lanes / recent-merges shell out to `gh` and hold a slot for seconds)
+    // and — having no refresh interval — showed a permanent false "unavailable".
+    //
+    // Phase 1: the light, one-shot panels — run in small concurrency-limited
+    // waves so a cold server's first (uncached) reads can't oversubscribe the
+    // ~6-connection pool and abort each other while queued. These panels have no
+    // refresh interval, so a single starved load left a permanent false
+    // "unavailable"; the batching + 10s timeout keep queued fetches alive.
+    const phase1 = [
+      renderLocalModel, refreshProviderStatus, renderTrainingSection, renderGpuKeys,
+      renderReliance, renderMerit, renderCalibration, renderKeystoneTests,
+      renderRollover, updateStatus, renderRepoLearn,
+    ];
+    for (let i = 0; i < phase1.length; i += 4) {
+      await Promise.allSettled(phase1.slice(i, i + 4).map((fn) => fn()));
+    }
+    // Phase 2: the heavy gh-backed work board (self-heals on its 20s interval).
+    refreshWorkBoard();
 
     setInterval(refreshWorkBoard, 20000);
     setInterval(renderRepoLearn, 60000);
@@ -1505,6 +1535,98 @@
 })();
 </script>
 
+<script>
+// ── Broker connection (IBKR) — per-user (ADR-0022) ──
+(function(){
+  const $=(id)=>document.getElementById(id);
+  const FIELDS=['consumerKey','accessToken','accessTokenSecret','signaturePem','encryptionPem','dhPrime','realm','accountId'];
+  const form=$('brokerForm'); if(!form) return;
+  function banner(m,k){ const b=$('bbanner'); b.textContent=m; b.className='bbanner show '+(k||'ok'); }
+  function setStatus(s){
+    const live=s&&s.live, connected=live&&live.connected, has=s&&s.hasCredentials;
+    const waiting=has&&!connected&&live&&live.reason==='not_activated_or_unauthorized';
+    $('bdot').className='bdot '+(connected?'on':waiting?'wait':has?'off':'');
+    $('bstatusText').textContent=connected
+      ? `Connected · ${s.accountId||(live&&live.accountId)||'account'} (${s.mode||'?'})`
+      : waiting ? 'Saved · waiting for IBKR to activate — retry later'
+      : has ? 'Saved · not connected — see the message below'
+      : 'Not connected';
+    $('bdisconnect').hidden=!has;
+    $('brecheck').hidden=!has;
+    // Reassure that saved creds aren't lost on refresh: show the note + mark empty
+    // fields as "on file" rather than blank.
+    const note=$('bsavednote'); if(note) note.hidden=!has;
+    if(has){ ['consumerKey','accessToken','accessTokenSecret','signaturePem','encryptionPem','dhPrime'].forEach(f=>{ const el=$(f); if(el&&!el.value) el.placeholder='•••••••• saved — leave blank to keep'; }); }
+  }
+  // Shared: turn a live-probe result into a banner (used by Connect + Recheck).
+  function showLive(live){
+    if(live&&live.connected){ banner('Connected to IBKR — live session verified.','ok'); return; }
+    const txt=(live&&live.reasonText)||'IBKR did not authenticate — check the keys and that your OAuth consumer is active (up to 24h).';
+    banner(txt, (live&&live.reason==='not_activated_or_unauthorized')?'ok':'err');
+  }
+  async function refresh(){
+    try{
+      const sess=await (await fetch('/api/auth/session',{credentials:'include'})).json();
+      const entitled=sess&&(sess.role==='admin'||(sess.entitlements&&sess.entitlements.trade));
+      $('bgate').hidden=!!entitled;
+      form.style.opacity=entitled?'1':'.5'; form.style.pointerEvents=entitled?'auto':'none';
+      if(!entitled){ setStatus({hasCredentials:false}); return; }
+      setStatus(await (await fetch('/api/trading/ibkr/connection',{credentials:'include'})).json());
+    }catch(e){ setStatus({hasCredentials:false}); }
+  }
+  form.addEventListener('submit',async(e)=>{
+    e.preventDefault(); const body={}; FIELDS.forEach(f=>body[f]=$(f).value.trim());
+    const btn=$('bconnect'); btn.disabled=true; const t=btn.textContent; btn.textContent='Testing…';
+    try{
+      const r=await fetch('/api/trading/ibkr/connect',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d=await r.json();
+      if(!r.ok) banner(({missing_consumerKey:'Consumer key is required',bad_signaturePem:'Signature key must be a PEM private key',bad_encryptionPem:'Encryption key must be a PEM private key',bad_dhPrime:'DH prime must be hex'}[d.error])||('Error: '+(d.error||r.status)),'err');
+      else { showLive(d.live); setStatus({...d.status,live:d.live}); }
+    }catch(_){ banner('Network error — please try again.','err'); }
+    finally{ btn.disabled=false; btn.textContent=t; refresh(); }
+  });
+  // Recheck — re-run the live probe against the stored (encrypted) credentials,
+  // no re-entry needed. Useful while waiting for IBKR to activate the consumer.
+  $('brecheck').addEventListener('click',async()=>{
+    const btn=$('brecheck'); btn.disabled=true; const t=btn.textContent; btn.textContent='Rechecking…';
+    try{
+      const s=await (await fetch('/api/trading/ibkr/connection',{credentials:'include'})).json();
+      if(!s.hasCredentials){ banner('No saved credentials to recheck.','err'); }
+      else { showLive(s.live); }
+      setStatus(s);
+    }catch(_){ banner('Network error — please try again.','err'); }
+    finally{ btn.disabled=false; btn.textContent=t; }
+  });
+  $('bdisconnect').addEventListener('click',async()=>{
+    if(!confirm('Disconnect your IBKR account?')) return;
+    await fetch('/api/trading/ibkr/disconnect',{method:'POST',credentials:'include'});
+    FIELDS.forEach(f=>{ if(f!=='realm') $(f).value=''; }); banner('Disconnected.','ok'); refresh();
+  });
+  // Step 1 — generate keys in-browser, download the 3 IBKR files, auto-fill the rest.
+  const gen=$('bgenerate');
+  if(gen) gen.addEventListener('click',async()=>{
+    const msg=$('bgenmsg'); gen.disabled=true; const t=gen.textContent; gen.textContent='Generating…'; msg.textContent='';
+    try{
+      const k=await window.IbkrKeygen.generate();
+      // Auto-fill the private half into the form (stays in this tab).
+      $('signaturePem').value=k.signPrivatePem; $('encryptionPem').value=k.encPrivatePem; $('dhPrime').value=k.dhPrimeHex;
+      // Browsers block 3 back-to-back auto-downloads — offer explicit buttons the
+      // user clicks (each click is a user gesture, so every file downloads).
+      const files=[['public_signature.pem',k.signPublicPem],['public_encryption.pem',k.encPublicPem],['dhparam.pem',k.dhParamPem]];
+      const box=$('bgenfiles'); box.hidden=false; box.innerHTML='<div class="bgen-files-h">Download all 3, then upload them to IBKR (step 2):</div>';
+      files.forEach(([name,content])=>{
+        const b=document.createElement('button'); b.type='button'; b.className='bfile-btn'; b.textContent='⬇ '+name;
+        b.addEventListener('click',()=>{ window.IbkrKeygen.download(name,content); b.classList.add('done'); b.textContent='✓ '+name+' (downloaded)'; });
+        box.appendChild(b);
+      });
+      msg.style.color='#22c55e'; msg.textContent='✓ Keys made. Download all 3 files below ↓';
+    }catch(e){ msg.style.color='#ef4444'; msg.textContent='Couldn’t generate — '+(e.message||'use the command-line option.'); }
+    finally{ gen.disabled=false; gen.textContent=t; }
+  });
+  refresh();
+})();
+</script>
+<script src="/js/ibkr-keygen.js"></script>
 <script src="/js/auth-gate.js" defer></script>
 </body>
 </html>

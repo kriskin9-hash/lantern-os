@@ -3,6 +3,7 @@
 <head>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta charset="utf-8">
+  <meta name="loop-stage" content="act">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
   <script>
@@ -87,7 +88,6 @@
   <div class="nav-links">
     <a href="/dream-chat.html">Chat</a>
     <a href="/stock-trader.html">Trader</a>
-    <a href="/operations.html">Ops Hub</a>
     <a href="/orchestration.html">Orchestration</a>
     <a href="/work.html" class="active">Work</a>
     <a href="/explore.html">Explore</a>
@@ -101,14 +101,14 @@
 
   <div style="margin-bottom:14px;">
     <h1 style="margin:0 0 4px;font-size:1.3rem;">📥 Manual Work</h1>
-    <p class="panel-sub" style="margin:0;">Choose work deliberately. Pick an open issue, research it in Keystone Chat, copy a bounded coding-agent handoff, or hand it to the fleet. Nothing here is auto-dispatched — that's the
+    <p class="panel-sub" style="margin:0;">Choose work deliberately. Pick an open issue, research it in Unisona Chat, copy a bounded coding-agent handoff, or hand it to the fleet. Nothing here is auto-dispatched — that's the
       <a href="/orchestration.html" style="color:var(--accent);">Orchestration</a> page.</p>
   </div>
 
   <!-- ── Pull Work (manual issue selection) ── -->
   <section class="panel" id="researchHandoffPanel">
     <h2>📥 Pull Work <span class="section-meta" id="researchSummary">live GitHub issues</span></h2>
-    <p class="panel-sub">Open issues are the pending-work source. Choose one deliberately, research it in Keystone Chat, or copy a bounded coding-agent handoff. Nothing is auto-dispatched.</p>
+    <p class="panel-sub">Open issues are the pending-work source. Choose one deliberately, research it in Unisona Chat, or copy a bounded coding-agent handoff. Nothing is auto-dispatched.</p>
     <div class="research-controls">
       <input id="researchSearch" type="search" placeholder="Search issue, title, or label" aria-label="Search open issues">
       <select id="researchPriority" aria-label="Filter by priority">
@@ -223,7 +223,7 @@
         <div class="research-actions">
           <a class="research-action" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Open issue</a>
           <button class="research-action delegate" type="button" data-delegate="${escapeHtml(item.issueNumber)}" title="Hand this issue to the autonomous fleet — isolated worktree, draft PR">🛰️ Delegate to fleet</button>
-          <button class="research-action primary" type="button" data-research="${escapeHtml(item.issueNumber)}">Research in Keystone Chat</button>
+          <button class="research-action primary" type="button" data-research="${escapeHtml(item.issueNumber)}">Research in Unisona Chat</button>
           <button class="research-action" type="button" data-copy-codex="${escapeHtml(item.issueNumber)}">Copy Codex handoff</button>
           <button class="research-action" type="button" data-copy-claude="${escapeHtml(item.issueNumber)}">Copy Claude Code handoff</button>
         </div>
@@ -283,7 +283,9 @@
     row.classList.toggle("done-ok", status === "done");
     row.querySelector(".fs-icon").textContent = FLEET_STEP_ICON[status] || "•";
     row.querySelector(".fs-phase").textContent = phase.replace(/_/g, " ");
-    const detail = extra.title || extra.error || extra.message || extra.branch || extra.files != null ? JSON.stringify(extra).slice(0, 200) : "";
+    const detail = extra.verdict
+      ? `verdict: ${extra.verdict}${extra.delta != null ? ` · Δ=${extra.delta}` : ""}${extra.groundedBy ? ` · via ${extra.groundedBy}` : ""}`
+      : (extra.title || extra.error || extra.message || extra.branch || extra.files != null ? JSON.stringify(extra).slice(0, 200) : "");
     row.querySelector(".fs-detail").textContent = detail;
     log.scrollTop = log.scrollHeight;
   }
@@ -321,7 +323,7 @@
           else if (event === "done") {
             const final = document.createElement("div"); final.className = "fleet-final";
             if (payload.ok && payload.prUrl) {
-              final.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ Delegated successfully</span> — draft PR opened: <a href="${escapeHtml(payload.prUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(payload.prUrl)}</a>${payload.testsPassed != null ? ` · tests ${payload.testsPassed ? "passed" : "failed"}` : ""}`;
+              final.innerHTML = `<span style="color:var(--green);font-weight:700;">✓ Delegated successfully</span> — draft PR opened: <a href="${escapeHtml(payload.prUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(payload.prUrl)}</a>${payload.testsPassed != null ? ` · tests ${payload.testsPassed ? "passed" : "failed"}` : ""}${payload.councilVerdict ? ` · council: ${escapeHtml(payload.councilVerdict)}${payload.councilDelta != null ? ` (Δ=${escapeHtml(String(payload.councilDelta))})` : ""}` : ""}`;
               loadResearchQueue(); renderLanded();
             } else {
               final.innerHTML = `<span style="color:#f87171;font-weight:700;">Run stopped</span> at <b>${escapeHtml(payload.stoppedAt || "unknown")}</b>${payload.message ? ` — ${escapeHtml(payload.message)}` : ""}. Nothing was pushed.`;

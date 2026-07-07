@@ -1,291 +1,301 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#06b6d4">
+  <link rel="manifest" href="/manifest.json">
   <title>unisona.ai — Sign In</title>
+  <script>
+    /* Theme bootstrap — set before first paint to avoid a flash of wrong theme
+       (mirrors index.html / dream-chat.html). */
+    (function () {
+      try {
+        var stored = localStorage.getItem('lantern-theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var isDark = stored ? stored === 'dark' : prefersDark;
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <link rel="stylesheet" href="/css/site.css">
   <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, rgba(6,182,212,.08) 0%, rgba(167,139,250,.06) 100%), var(--bg);
+    /* Shell — this page is locked to a single viewport (no scroll): the nav +
+       hero + sign-in card are sized to fit within 100dvh. Uses dvh so mobile
+       browser chrome doesn't clip. */
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      display: flex; flex-direction: column;
+      height: 100vh; height: 100dvh;
+      overflow: hidden;
     }
-    .auth-screen {
-      width: 100%;
-      max-width: 500px;
-      padding: 40px 20px;
-    }
-    .auth-hero {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-    .auth-hero img {
-      width: 80px;
-      height: 80px;
-      margin-bottom: 20px;
-      opacity: 0.9;
-    }
-    .auth-hero h1 {
-      font-size: 32px;
-      font-weight: 700;
-      margin: 0 0 12px;
-      color: var(--text);
-    }
-    .auth-hero p {
-      font-size: 16px;
-      color: var(--muted);
-      margin: 0;
-      line-height: 1.5;
-    }
-    .auth-gate {
-      margin: 40px auto 0;
-      max-width: 460px;
-      padding: 32px;
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      background:
-        radial-gradient(circle at top left, rgba(6,182,212,.12), transparent 40%),
-        radial-gradient(circle at bottom right, rgba(167,139,250,.10), transparent 35%),
-        rgba(10,15,25,.88);
-      box-shadow: 0 24px 80px rgba(0,0,0,.32);
-    }
-    .auth-gate-kicker {
-      color: var(--accent);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      letter-spacing: .12em;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-    .auth-gate h2 {
-      margin: 0 0 12px;
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .auth-gate p {
-      margin: 0 0 24px;
-      font-size: 15px;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-    .role-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-      gap: 12px;
-      margin: 24px 0;
-    }
-    .role-card {
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px;
-      background: rgba(255,255,255,.04);
-      text-align: center;
-    }
-    .role-card strong {
-      display: block;
-      color: var(--text);
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-    .role-card span {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.4;
-    }
-    .auth-actions {
+    .site-nav { flex-shrink: 0; }
+    /* This page is a single-screen sign-in; the footer just duplicates the nav
+       brand + links, so drop it to keep everything on one screen. */
+    .site-footer { display: none; }
+
+    .auth-main {
+      flex: 1 1 auto;
+      min-height: 0;              /* let the flex child shrink instead of forcing overflow */
+      overflow: hidden;
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-top: 24px;
-    }
-    .btn-patreon-primary {
-      display: flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: clamp(8px, 1.2vh, 13px);
       width: 100%;
-      border: none;
-      border-radius: 14px;
-      padding: 14px 20px;
-      background: #ff424d;
-      color: white;
-      font-size: 16px;
+      max-width: 440px;
+      margin: 0 auto;
+      padding: clamp(10px, 1.6vh, 18px) 18px;
+    }
+
+    /* Escape hatch — the page is locked to one screen (no scroll) wherever it fits.
+       On screens too short to hold the whole card (small phones, stubby laptop
+       windows) fall back to a clean scroll rather than clipping the buttons. */
+    @media (max-height: 945px) {
+      html, body { height: auto; min-height: 100%; overflow: visible; }
+      body { height: auto; min-height: 100dvh; overflow: visible; }
+      .auth-main { overflow: visible; justify-content: safe center; }
+    }
+
+    /* ── Hero — mandala logo + clean wordmark ── */
+    .auth-hero { text-align: center; }
+    .auth-hero__mandala {
+      display: block;
+      width: clamp(56px, 8vh, 84px);
+      height: auto; aspect-ratio: 1;
+      margin: 0 auto clamp(6px, 1.2vh, 12px);
+      pointer-events: none; user-select: none;
+      filter: drop-shadow(0 6px 20px color-mix(in srgb, var(--accent) 22%, transparent));
+    }
+    .auth-hero h1 {
+      margin: 0 0 5px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: clamp(1.5rem, 4.6vw, 1.9rem);
+      letter-spacing: -0.02em;
       font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-decoration: none;
-    }
-    .btn-patreon-primary:hover {
-      background: #ff5a63;
-      transform: translateY(-1px);
-    }
-    .btn-patreon-secondary {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px 20px;
-      background: rgba(255,255,255,.04);
       color: var(--text);
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.2s ease;
     }
-    .btn-patreon-secondary:hover {
-      background: rgba(255,255,255,.08);
-      border-color: var(--accent);
+    .auth-hero .motto {
+      font-size: clamp(0.85rem, 2.6vw, 0.96rem); letter-spacing: 0;
+      text-transform: none; color: var(--muted); margin: 0; line-height: 1.5;
     }
-    .auth-status {
-      margin-top: 16px;
-      padding: 12px;
-      border-radius: 10px;
-      background: rgba(255,255,255,.03);
-      font-size: 13px;
-      color: var(--muted);
-      text-align: center;
+
+    /* ── Sign-in card — surface panel like the home widgets ── */
+    .auth-card {
+      width: 100%;
+      padding: clamp(16px, 3vw, 22px);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      box-shadow: 0 18px 60px rgba(0,0,0,.18);
     }
-    .loading {
-      opacity: 0.6;
-      pointer-events: none;
+    html[data-theme="dark"] .auth-card { box-shadow: 0 24px 80px rgba(0,0,0,.32); }
+    .auth-card h2 {
+      margin: 0 0 4px; font-size: 20px; font-weight: 700; color: var(--text);
     }
+    .auth-card .sub { margin: 0 0 16px; font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+
+    /* Error banner */
+    .auth-error {
+      display: none; margin-bottom: 16px; padding: 11px 14px; border-radius: 12px;
+      border: 1px solid color-mix(in srgb, #ef4444 45%, transparent);
+      background: color-mix(in srgb, #ef4444 12%, transparent);
+      color: #fca5a5; font-size: 13px; line-height: 1.5;
+    }
+    .auth-error.show { display: block; }
+    .field-error { color: #f87171; font-size: 12px; min-height: 14px; }
+    /* Success / info banner (email confirmation) */
+    .auth-notice {
+      display: none; margin-bottom: 16px; padding: 11px 14px; border-radius: 12px;
+      border: 1px solid color-mix(in srgb, #34d399 45%, transparent);
+      background: color-mix(in srgb, #34d399 12%, transparent);
+      color: #bbf7d0; font-size: 13px; line-height: 1.5;
+    }
+    .auth-notice.show { display: block; }
+    .auth-notice a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+    /* Provider (OAuth) buttons */
+    .auth-actions { display: flex; flex-direction: column; gap: 7px; }
+    .provider-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 16px; font-size: 14.5px; font-weight: 600; cursor: pointer;
+      color: #fff; text-decoration: none; transition: transform .15s, filter .15s;
+    }
+    .provider-btn:hover { transform: translateY(-1px); filter: brightness(1.02); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
+    .provider-btn[data-provider="google"]  { background: #fff; color: #1f2937; border-color: #dadce0; }
+    .provider-btn[data-provider="discord"] { background: #5865F2; border-color: transparent; }
+    .provider-btn[data-provider="patreon"] { background: #f96854; border-color: transparent; }
+    .provider-btn .pi { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .provider-btn .pi svg { width: 100%; height: 100%; display: block; }
+
+    /* Local email + password */
+    .local-form { display: flex; flex-direction: column; gap: 7px; }
+    .local-form input {
+      width: 100%; box-sizing: border-box; padding: 10px 14px;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: var(--bg); color: var(--text); font-size: 16px; /* ≥16px: stops iOS zoom-on-focus */
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .local-form input:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+    }
+    .btn-local {
+      border: none; border-radius: 12px; padding: 11px 20px; font-size: 15px;
+      font-weight: 700; cursor: pointer; color: #fff;
+      background: var(--accent); transition: background .15s, transform .12s;
+    }
+    .btn-local:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    .btn-local:active { transform: translateY(0); }
+    .btn-local { margin-top: 2px; }
+    .local-toggle { text-align: center; font-size: 13px; color: var(--muted); margin-top: 6px; }
+    .local-toggle a { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+    /* Secondary / ghost button (Patreon support, continue as guest) */
+    .btn-ghost {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px 18px; background: transparent; color: var(--text);
+      font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none;
+      transition: border-color .15s, background .15s;
+    }
+    .btn-ghost:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+
+    /* Labelled dividers */
     .auth-divider {
-      text-align: center;
-      color: var(--muted);
-      font-size: 12px;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      margin: 20px 0 16px;
-      position: relative;
+      text-align: center; color: var(--muted); font-size: 11px;
+      letter-spacing: .1em; text-transform: uppercase;
+      margin: 10px 0 8px; position: relative;
     }
     .auth-divider::before, .auth-divider::after {
-      content: '';
-      position: absolute;
-      top: 50%;
-      width: 42%;
-      height: 1px;
-      background: var(--border);
+      content: ''; position: absolute; top: 50%; width: 40%; height: 1px; background: var(--border);
     }
     .auth-divider::before { left: 0; }
     .auth-divider::after  { right: 0; }
-    .guest-section { margin-bottom: 4px; }
-    .guest-label {
-      font-size: 12px; color: var(--muted);
-      text-align: center; margin: 0 0 12px;
+
+    /* ── Mobile ── */
+    @media (max-width: 520px) {
+      .auth-main { max-width: 100%; padding: 12px 14px 20px; gap: 10px; }
+      .auth-card { padding: 18px 16px; border-radius: 16px; }
+      .site-nav { padding-left: 14px; padding-right: 12px; }
+      /* Footer duplicates the nav brand + links; drop it on phones to reclaim
+         vertical space so the sign-in card needs little or no scroll. */
+      .site-footer { display: none; }
+      /* The nav already shows the wordmark, so shrink the hero on phones. */
+      .auth-hero__mandala { width: 48px; margin-bottom: 4px; }
+      .auth-hero h1 { font-size: 1.5rem; }
+      .auth-hero .motto { font-size: 0.6rem; }
     }
-    .guest-links {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+    /* Very short screens (landscape phones): trim the hero further so the card
+       and its buttons stay reachable without a long scroll. */
+    @media (max-height: 560px) {
+      .auth-hero__mandala { width: 44px; margin-bottom: 4px; }
+      .auth-hero h1 { font-size: 1.5rem; }
+      .auth-main { gap: 10px; padding-top: 10px; }
     }
-    .guest-link {
-      display: flex; align-items: center; gap: 10px;
-      padding: 12px 14px;
-      border: 1px solid var(--border); border-radius: 12px;
-      background: rgba(255,255,255,.03);
-      text-decoration: none;
-      transition: border-color .15s, background .15s;
-    }
-    .guest-link:hover { border-color: var(--accent); background: rgba(6,182,212,.06); }
-    .guest-link-icon { font-size: 20px; flex-shrink: 0; }
-    .guest-link-name { font-size: 13px; font-weight: 600; color: var(--text); }
-    .guest-link-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
   </style>
 </head>
 <body>
-<div class="auth-screen">
+
+<!-- ── Site nav (matches index.html) ── -->
+<nav class="site-nav">
+  <a class="nav-brand" href="/">
+    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:24px;height:24px;vertical-align:middle">
+    <span style="font-size:18px;font-weight:600">unisona.ai</span>
+  </a>
+  <div class="nav-actions">
+    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </div>
+</nav>
+
+<main class="auth-main" id="main-content">
+
+  <!-- ── Hero ── -->
   <div class="auth-hero">
-    <img src="/mandala.svg" alt="" aria-hidden="true">
-    <h1>unisona.ai</h1>
-    <p>Local-first personal operating system</p>
+    <img class="auth-hero__mandala" src="/mandala.svg" alt="unisona.ai" width="116" height="116">
+    <h1>Welcome to unisona.ai</h1>
+    <p class="motto">Sign in to save your journal and pick up where you left off.</p>
   </div>
 
-  <div class="auth-gate" id="auth-gate">
-    <div class="auth-gate-kicker">Access Control</div>
-    <h2>Sign In with Patreon</h2>
-    <p id="auth-message">
-      Unlock Keystone Desk and exclusive features based on your tier.
+  <!-- ── Sign-in card ── -->
+  <div class="auth-card" id="auth-gate">
+    <h2>Sign in</h2>
+    <p class="sub" id="auth-message">
+      Choose how you'd like to continue.
     </p>
 
-    <div class="role-grid">
-      <div class="role-card">
-        <strong>Free</strong>
-        <span>Explore & learn</span>
+    <div class="auth-error" id="auth-error" role="alert"></div>
+    <div class="auth-notice" id="auth-notice" role="status"></div>
+
+    <!-- OAuth provider buttons — rendered from the configured providers (ADR-0016) -->
+    <div class="auth-actions" id="provider-buttons"></div>
+
+    <!-- Local email + password -->
+    <div id="local-block" hidden>
+      <div class="auth-divider">or with email</div>
+      <form class="local-form" id="local-form" autocomplete="on">
+        <input type="text" id="local-name" name="name" placeholder="Display name" autocomplete="name" hidden>
+        <input type="email" id="local-email" name="email" placeholder="you@email.com" autocomplete="email" required>
+        <input type="password" id="local-password" name="password" placeholder="Password (min 8 characters)" autocomplete="current-password" required minlength="8">
+        <div class="field-error" id="local-error"></div>
+        <button type="submit" class="btn-local" id="local-submit">Sign in</button>
+      </form>
+      <div class="local-toggle" id="local-toggle-wrap">
+        New here? <a id="local-toggle">Create an account</a>
       </div>
-      <div class="role-card">
-        <strong>Wanderer</strong>
-        <span>$5/month</span>
-      </div>
-      <div class="role-card">
-        <strong>Deep Dreamer</strong>
-        <span>$20/month</span>
-      </div>
-      <div class="role-card">
-        <strong>Synthesasia Guild</strong>
-        <span>$200/month</span>
+      <div class="local-toggle" id="forgot-wrap">
+        <a id="forgot-link">Forgot password?</a>
       </div>
     </div>
 
-    <div class="auth-actions">
-      <button class="btn-patreon-primary" id="auth-btn" onclick="loginWithPatreon()">
-        ♥ Continue with Patreon
-      </button>
-      <a class="btn-patreon-secondary" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener noreferrer">
-        View Tiers & Support
-      </a>
-    </div>
+    <div class="auth-divider">support</div>
+    <a class="btn-ghost" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener noreferrer">
+      View Patreon Tiers &amp; Support
+    </a>
 
     <div class="auth-divider">or</div>
-
-    <div class="guest-section">
-      <p class="guest-label">Continue without an account</p>
-      <div class="guest-links">
-        <a href="/dream-chat.html" class="guest-link">
-          <span class="guest-link-icon">✦</span>
-          <div>
-            <div class="guest-link-name">Keystone Chat</div>
-            <div class="guest-link-desc">Talk to the Convergence Core — no account needed</div>
-          </div>
-        </a>
-        <a href="/explore.html" class="guest-link">
-          <span class="guest-link-icon">🗺️</span>
-          <div>
-            <div class="guest-link-name">Explore</div>
-            <div class="guest-link-desc">Kingdome, Three Doors &amp; more</div>
-          </div>
-        </a>
-        <a href="/knowledgecenter.html" class="guest-link">
-          <span class="guest-link-icon">📚</span>
-          <div>
-            <div class="guest-link-name">Help</div>
-            <div class="guest-link-desc">Docs, guides &amp; resources</div>
-          </div>
-        </a>
-      </div>
-    </div>
-
-    <div class="auth-status" id="auth-status">
-      Checking session…
-    </div>
+    <a href="/" class="btn-ghost">Continue without an account</a>
   </div>
-</div>
+</main>
 
+<!-- ── Site footer (matches index.html) ── -->
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span class="footer-brand">
+      <span class="dot" id="status-dot" title="Checking status…"></span>
+      unisona.ai
+    </span>
+    <span class="sep">·</span>
+    <a href="/">Home</a>
+    <a href="/dream-chat.html">Chat</a>
+    <a href="/explore.html">Explore</a>
+    <a href="/knowledgecenter.html">Help</a>
+    <span class="sep">·</span>
+    <span class="footer-meta"><span id="hero-edition">Orion Edition</span> · <span data-version-badge="">v—</span></span>
+  </div>
+</footer>
+
+<script src="/js/theme-toggle.js"></script>
 <script>
+  // Wire the header theme toggle (same helper the rest of the site uses).
+  (function () {
+    const t = document.getElementById('theme-toggle');
+    if (t && window.toggleTheme) t.addEventListener('click', window.toggleTheme);
+  })();
+
+  // `guest` (level 0) is the authenticated FREE tier, not an anonymous visitor
+  // (#1879) — label it "Free" to match profile.html and avoid the "logged out"
+  // misread. The role KEY stays `guest` (persisted on existing sessions).
   const LANTERN_ROLES = {
-    guest:        { label: "Guest",        canAccess: true },
+    guest:        { label: "Free",         canAccess: true },
     supporter:    { label: "Supporter",    canAccess: true },
     deep_dreamer: { label: "Deep Dreamer", canAccess: true },
     founder:      { label: "Deep Dreamer", canAccess: true }, // legacy alias (#698)
@@ -299,46 +309,243 @@
   function safeReturnTo() {
     try {
       const rt = new URLSearchParams(location.search).get("returnTo");
-      if (rt && rt.startsWith("/") && !rt.startsWith("//")) return rt;
+      // Mirror the server validator (oauth-core safeReturnTo): root-relative only,
+      // no protocol-relative "//host" and no backslash tricks.
+      if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("\\")) return rt;
     } catch (_) {}
     return "/";
   }
 
-  function loginWithPatreon() {
-    location.href = `/api/auth/patreon/start?returnTo=${encodeURIComponent(safeReturnTo())}`;
+  // Provider display metadata (icon + label). Only providers the SERVER reports as
+  // configured are actually rendered, so we never show a button that 500s (#1877).
+  // Real brand marks (inline SVG) instead of stand-in glyphs — a normie-familiar
+  // "Continue with X" row like every mainstream sign-in page.
+  const BRAND_SVG = {
+    google:
+      '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>',
+    discord:
+      '<svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.211.375-.445.865-.608 1.249a18.27 18.27 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.036A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.333-.955 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>',
+    patreon:
+      '<svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M14.82 2.41c3.96 0 7.18 3.24 7.18 7.21 0 3.96-3.22 7.18-7.18 7.18-3.97 0-7.21-3.22-7.21-7.18 0-3.97 3.24-7.21 7.21-7.21M2 21.6h3.52V2.41H2V21.6z"/></svg>',
+  };
+  const PROVIDER_META = {
+    discord: { label: "Continue with Discord", icon: BRAND_SVG.discord },
+    google:  { label: "Continue with Google",  icon: BRAND_SVG.google },
+    patreon: { label: "Continue with Patreon", icon: BRAND_SVG.patreon },
+  };
+  // Always offer these three, in this order — even if the server hasn't got the
+  // client id/secret yet. An unconfigured one simply redirects back here with a
+  // friendly "not set up on this server" notice (surfaceQueryError) rather than
+  // being hidden, so the option is always visible.
+  const OAUTH_ORDER = ["discord", "google", "patreon"];
+
+  function startOAuth(provider) {
+    location.href = `/api/auth/${provider}/start?returnTo=${encodeURIComponent(safeReturnTo())}`;
+  }
+
+  function renderProviders(providers) {
+    const wrap = document.getElementById("provider-buttons");
+    wrap.innerHTML = "";
+    // Render all three OAuth options every time, in the fixed order above.
+    OAUTH_ORDER.forEach((id) => {
+      const meta = PROVIDER_META[id];
+      const btn = document.createElement("button");
+      btn.className = "provider-btn";
+      btn.setAttribute("data-provider", id);
+      btn.innerHTML = `<span class="pi">${meta.icon}</span> ${meta.label}`;
+      btn.addEventListener("click", () => startOAuth(id));
+      wrap.appendChild(btn);
+    });
+    // Local block visibility (email form).
+    const hasLocal = (providers || []).some((p) => p.id === "local");
+    document.getElementById("local-block").hidden = !hasLocal;
+  }
+
+  // ── Error surfacing (fixes #1877: no more blank 500s) ──
+  const ERROR_TEXT = {
+    provider_unconfigured: "That sign-in method isn't set up on this server yet. Try another option below.",
+    unknown_provider: "Unknown sign-in method.",
+    oauth_failed: "Sign-in didn't complete. Please try again.",
+  };
+  function showError(msg) {
+    const el = document.getElementById("auth-error");
+    el.textContent = msg;
+    el.classList.add("show");
+  }
+  // Success/info banner. `html` may include a data-resend link.
+  function showNotice(html) {
+    const el = document.getElementById("auth-notice");
+    el.innerHTML = html;
+    el.classList.add("show");
+    const rs = el.querySelector("[data-resend]");
+    if (rs) rs.addEventListener("click", (e) => { e.preventDefault(); resendVerification(rs.getAttribute("data-resend")); });
+  }
+  function hideNotice() { document.getElementById("auth-notice").classList.remove("show"); }
+  function _safeEmail(s) { return String(s).replace(/["'<>&]/g, ""); }
+  function surfaceQueryError() {
+    try {
+      const q = new URLSearchParams(location.search);
+      // Email-confirmation result (verify-email redirects here when signed out).
+      const v = q.get("verify");
+      if (v === "1") showNotice("Email confirmed ✓ — you can sign in now.");
+      else if (v === "invalid") showError("That confirmation link is invalid or has expired. Sign in and we can resend it.");
+      const err = q.get("error");
+      if (!err) return;
+      const provider = q.get("provider");
+      const base = ERROR_TEXT[err] || "Sign-in error.";
+      showError(provider ? `${base} (${provider})` : base);
+    } catch (_) {}
+  }
+
+  async function resendVerification(email) {
+    hideNotice();
+    try {
+      await fetch("/api/auth/resend-verification", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch (_) {}
+    showNotice("Confirmation email re-sent to <strong>" + _safeEmail(email) + "</strong>. Check your inbox.");
+  }
+
+  // ── Local email + password ──
+  let localMode = "login"; // or "register"
+  function setLocalMode(mode) {
+    localMode = mode;
+    const nameInput = document.getElementById("local-name");
+    const submit = document.getElementById("local-submit");
+    const toggleWrap = document.getElementById("local-toggle-wrap");
+    const pw = document.getElementById("local-password");
+    if (mode === "register") {
+      nameInput.hidden = false;
+      pw.setAttribute("autocomplete", "new-password");
+      submit.textContent = "Create account";
+      toggleWrap.innerHTML = 'Already have an account? <a id="local-toggle">Sign in</a>';
+    } else {
+      nameInput.hidden = true;
+      pw.setAttribute("autocomplete", "current-password");
+      submit.textContent = "Sign in";
+      toggleWrap.innerHTML = 'New here? <a id="local-toggle">Create an account</a>';
+    }
+    document.getElementById("local-toggle").addEventListener("click", () =>
+      setLocalMode(localMode === "login" ? "register" : "login")
+    );
+  }
+
+  async function submitLocal(e) {
+    e.preventDefault();
+    const email = document.getElementById("local-email").value.trim();
+    const password = document.getElementById("local-password").value;
+    const name = document.getElementById("local-name").value.trim();
+    const errEl = document.getElementById("local-error");
+    const submit = document.getElementById("local-submit");
+    errEl.textContent = "";
+    submit.disabled = true;
+    const prev = submit.textContent;
+    submit.textContent = "…";
+    try {
+      const url = localMode === "register" ? "/api/auth/local/register" : "/api/auth/local/login";
+      const body = localMode === "register" ? { email, password, name } : { email, password };
+      const res = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        // Registration is gated on email confirmation — do NOT navigate; show a
+        // "check your email" notice with a resend link instead.
+        if (data.pendingVerification) {
+          const dev = data.emailDelivery === "logged"
+            ? " (No mail server is configured here, so the link was written to the server log.)"
+            : "";
+          showNotice(
+            "Almost there — we sent a confirmation link to <strong>" + _safeEmail(email) +
+            "</strong>. Click it, then sign in." + dev +
+            ' <a href="#" data-resend="' + _safeEmail(email) + '">Resend</a>'
+          );
+          setLocalMode("login");
+          return;
+        }
+        location.href = safeReturnTo();
+        return;
+      }
+      // Unconfirmed email → sign-in blocked, offer a resend.
+      if (data.error === "email_unverified") {
+        showNotice(
+          "Please confirm your email before signing in." +
+          ' <a href="#" data-resend="' + _safeEmail(email) + '">Resend confirmation</a>'
+        );
+        return;
+      }
+      const map = {
+        invalid_credentials: "Email or password is incorrect.",
+        email_taken: "An account with that email already exists. Try signing in.",
+        weak_password: "Password must be at least 8 characters.",
+        invalid_email: "That doesn't look like a valid email.",
+        too_many_attempts: "Too many attempts. Please wait a few minutes and try again.",
+        local_auth_disabled: "Email sign-up is disabled on this server.",
+      };
+      errEl.textContent = map[data.error] || "Something went wrong. Please try again.";
+    } catch (_) {
+      errEl.textContent = "Network error. Please try again.";
+    } finally {
+      submit.disabled = false;
+      submit.textContent = prev;
+    }
   }
 
   async function checkSession() {
+    surfaceQueryError();
     try {
       const res = await fetch("/api/auth/session", { credentials: "include" });
       if (!res.ok) throw new Error("No session");
-
       const session = await res.json();
-
       if (session.authenticated) {
         const role = session.role || "guest";
         const plan = LANTERN_ROLES[role];
-
         if (plan && plan.canAccess) {
-          // Already authenticated — go where they were headed (returnTo), else home.
           location.href = safeReturnTo();
           return;
         }
       }
+      renderProviders(session.providers);
     } catch (err) {
-      // Not authenticated, show login
+      // Session endpoint unreachable — fall back to fetching the provider list.
+      try {
+        const pr = await fetch("/api/auth/providers", { credentials: "include" });
+        const pj = await pr.json();
+        renderProviders(pj.providers);
+      } catch (_) {
+        renderProviders([]);
+      }
     }
-
-    updateStatus("Ready to sign in");
   }
 
-  function updateStatus(message) {
-    const el = document.getElementById("auth-status");
-    if (el) el.textContent = message;
+  async function requestPasswordReset() {
+    const email = (document.getElementById("local-email").value || "").trim()
+      || (prompt("Enter your account email to reset your password:") || "").trim();
+    if (!email) return;
+    const errEl = document.getElementById("local-error");
+    try {
+      await fetch("/api/auth/request-password-reset", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+    } catch (_) { /* swallow — response is intentionally uniform */ }
+    // Uniform response (no account enumeration).
+    errEl.style.color = "var(--accent)";
+    errEl.textContent = `If an account exists for ${email}, a reset link is on its way.`;
   }
 
-  // Check session on page load
-  document.addEventListener("DOMContentLoaded", checkSession);
+  document.addEventListener("DOMContentLoaded", () => {
+    setLocalMode("login");
+    document.getElementById("local-form").addEventListener("submit", submitLocal);
+    document.getElementById("forgot-link").addEventListener("click", requestPasswordReset);
+    checkSession();
+  });
 </script>
 </body>
 </html>
