@@ -400,6 +400,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .edge-badge .edge-mut{opacity:.6}
 .edge-badge .edge-brier{margin-left:auto;opacity:.85;font-size:10px}
 @media (max-width:820px){.edge-badge{font-size:10px;padding:5px 8px}}
+/* .ev-chip styles + logic come from /js/evidence-chip.js (shared across trader surfaces, #2252) */
 /* news → signal badge */
 .news-sig{margin-top:6px;padding:5px 8px;border:1px solid #33321c;border-radius:6px;
   background:rgba(255,213,74,.05);font-size:10px;letter-spacing:.02em;color:var(--muted);
@@ -450,26 +451,11 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <h1 class="sr-only">Kalshi Swipe — unisona.ai</h1>
 
 <!-- Global header — shared with home + chat -->
-<nav class="site-nav">
-  <a class="nav-brand" href="/">
-    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:24px;height:24px;vertical-align:middle">
-    <span style="font-size:18px;font-weight:600">unisona.ai</span>
-  </a>
-  <div class="nav-links">
-    <a href="/dream-chat.html">Chat</a>
-    <a href="/stock-trader.html">Trader</a>
-    <a href="/orchestration.html">Orchestration</a>
-    <a href="/work.html">Work</a>
-    <a href="/explore.html">Explore</a>
-  </div>
-  <div class="nav-actions">
-    <a href="/profile.html" class="nav-btn" id="profile-btn" title="Your profile" aria-label="View your profile">👤</a>
-    <button class="nav-btn" id="logout-btn" onclick="logoutUser()" title="Logout" aria-label="Logout" style="display:none;">🚪</button>
-    <button class="nav-btn" id="theme-toggle" title="Toggle light / dark mode" aria-label="Toggle light or dark mode" onclick="toggleTheme()">☀</button>
-    <button class="nav-btn" id="skin-toggle" title="Toggle terminal (Pip-Boy) skin" aria-label="Toggle terminal skin" aria-pressed="true" onclick="toggleSkin()">▚</button>
-    <button class="nav-btn" id="screenshot-btn" type="button" aria-label="Report an issue with a screenshot" title="Report an issue (screenshot → GitHub)" onclick="if(window.issueReporter)window.issueReporter.open()">📷</button>
-  </div>
-</nav>
+<!-- Header injected by the global site-chrome.js component (single source of truth). The
+     app-specific terminal-skin toggle is declared below and site-chrome injects it into the nav. -->
+<template id="nav-extra-actions">
+  <button class="nav-btn" id="skin-toggle" title="Toggle terminal (Pip-Boy) skin" aria-label="Toggle terminal skin" aria-pressed="true" onclick="toggleSkin()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></button>
+</template>
 
 <!-- Console + side column (account balance + trade history) -->
 <div class="kx-main">
@@ -515,7 +501,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 <div class="toast" id="toast" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
-
+<script src="/js/evidence-chip.js"></script>
 <script>
 const API='/api/trading/kalshi';
 const SYNC_MS=10000, DECK_TARGET=20, PREFETCH_AT=10, MAX_AGE_MS=60000, PREFETCH_COOLDOWN_MS=8000;
@@ -918,6 +904,8 @@ function edgeBadge(card){
     +(brier?`<span class="edge-sep">·</span><span class="edge-brier">${brier}</span>`:'')
     +`</div>`;
 }
+// Evidence chip (#2252) lives in /js/evidence-chip.js (shared across trader surfaces).
+// evidenceChip.fromKalshiCard(card) maps this deck's card.edge/sigma0 onto the chip.
 function cleanTitle(title,ticker){
   if(!title) return ticker||'Market';
   // Strip leading "yes " / "no " prefix from raw position labels
@@ -1134,6 +1122,7 @@ function cardInner(card){
         <div class="conv-num">${card.conviction}% ${convLabel}</div>
       </div>
       <div class="reason">${card.reason||''}</div>
+      ${window.evidenceChip.fromKalshiCard(card)}
       ${edgeBadge(card)}
       ${sigma0Badge(card)}
       ${newsBadge(card)}
@@ -1379,7 +1368,10 @@ async function act(dir,fromSwipe){
     busy=true;
     try{
       const o={ticker:card.ticker, side:card.favSide, action:'buy', type:'limit', count:1, limitCents:card.favAsk,
-        source:'kalshi-paper', pPredicted:card.pPredicted};
+        source:'kalshi-paper', pPredicted:card.pPredicted,
+        // Weather-edge distribution stamp (#2218): forward dist+ladder+heldBucket so the
+        // verifier can grade the forecast distribution once the market settles.
+        dist:card.dist, ladder:card.ladder, heldBucket:card.heldBucket};
       const res=await j('/paper-trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)});
       if(res&&res.wallet) walletState=res.wallet;
       showPaperResult(res,card);
@@ -1562,6 +1554,7 @@ document.addEventListener('DOMContentLoaded',init);
 <script src="/vendor/html2canvas/html2canvas.min.js" defer></script>
 <script src="/js/issue-reporter.js?v=20260628f-autoattach" defer></script>
 <script src="/js/theme-toggle.js"></script>
+<script src="/js/site-chrome.js" defer></script>
 <script src="/js/terminal-skin.js?v=20260630-terminal"></script>
 <script src="/js/auth-gate.js" defer></script>
 </body>

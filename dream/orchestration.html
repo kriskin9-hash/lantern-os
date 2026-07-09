@@ -236,22 +236,8 @@
 
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<nav class="site-nav">
-  <a class="nav-brand" href="/">
-    <img src="/mandala.svg" alt="" aria-hidden="true" style="width:24px;height:24px;vertical-align:middle">
-    <span style="font-size:18px;font-weight:600">unisona.ai</span>
-  </a>
-  <div class="nav-links">
-    <a href="/dream-chat.html">Chat</a>
-    <a href="/stock-trader.html">Trader</a>
-    <a href="/orchestration.html" class="active">Settings</a>
-    <a href="/work.html">Work</a>
-    <a href="/explore.html">Explore</a>
-  </div>
-  <div class="nav-actions">
-    <button class="nav-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle light / dark mode" aria-label="Toggle light or dark mode">🌙</button>
-  </div>
-</nav>
+<!-- Header injected by the global site-chrome.js component (single source of truth). -->
+
 
 <main class="orch-main" id="main-content">
 
@@ -519,6 +505,7 @@ openssl dhparam -out dhparam.pem 2048</pre>
 </footer>
 
 <script src="/js/theme-toggle.js"></script>
+<script src="/js/site-chrome.js" defer></script>
 <script src="/js/orchestration-research.js"></script>
 <script>
 (function () {
@@ -1547,7 +1534,7 @@ openssl dhparam -out dhparam.pem 2048</pre>
     const waiting=has&&!connected&&live&&live.reason==='not_activated_or_unauthorized';
     $('bdot').className='bdot '+(connected?'on':waiting?'wait':has?'off':'');
     $('bstatusText').textContent=connected
-      ? `Connected · ${s.accountId||(live&&live.accountId)||'account'} (${s.mode||'?'})`
+      ? `Connected · ${s.accountId||(live&&live.accountId)||'account'} (${(live&&live.mode)||s.mode||'?'})`
       : waiting ? 'Saved · waiting for IBKR to activate — retry later'
       : has ? 'Saved · not connected — see the message below'
       : 'Not connected';

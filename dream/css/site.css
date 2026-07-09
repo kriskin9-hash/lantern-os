@@ -4,13 +4,24 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Mobile safety net (#2255) — prevent horizontal overflow on every surface ──
+   site.css loads on all surfaces, so these defensive rules harden pages the audit
+   can't individually reach (e.g. gated dashboards). They only cap oversized content;
+   correctly-sized elements (icons, small images) are untouched. */
+html, body { max-width: 100%; overflow-x: hidden; }
+img, svg, video, canvas, iframe { max-width: 100%; height: auto; }
+table { max-width: 100%; }
+pre, code, kbd { overflow-x: auto; }                 /* long code scrolls in place, not the page */
+/* long unbreakable strings (URLs, hashes, tickers, addresses) wrap instead of forcing width */
+p, li, dd, dt, td, th, blockquote, figcaption { overflow-wrap: break-word; }
+
 /* ── Skip to content link (accessibility) ── */
 .skip-link {
   position: absolute;
   top: -40px;
   left: 0;
-  background: var(--accent);
-  color: white;
+  background: var(--accent-strong);
+  color: #fff;
   padding: 8px 16px;
   text-decoration: none;
   z-index: 100;
@@ -31,6 +42,7 @@
   --accent-dim: #cffafe;
   --accent-hover: #06b6d4;
   --accent-strong: #0369a1; /* AA-compliant (≥4.5:1) as text on --surface */
+  --accent-strong-hover: #075985; /* darker still — white text stays ≥4.5:1 (#2251) */
   --green: #10b981;
   --gold: #f59e0b;
   --danger: #ef4444;
@@ -50,6 +62,7 @@
   --accent-dim: #164e63;
   --accent-hover: #0891b2;
   --accent-strong: #06b6d4; /* AA-compliant (≥4.5:1) as text on --surface */
+  --accent-strong-hover: #0e7490; /* filled-button hover; dark text sits on it in dark theme (#2251) */
   --green: #34d399;
   --gold: #fbbf24;
   --danger: #ef4444;
@@ -122,7 +135,34 @@ html, body {
     -ms-overflow-style: none;
   }
   .nav-links::-webkit-scrollbar { display: none; }
-  .nav-links a { padding: 6px 8px; font-size: 12.5px; }
+  /* Bigger touch targets on mobile (#2255): taller nav links + larger icon buttons.
+     .site-nav prefix out-specifies the base .nav-btn rule that follows this block. */
+  .nav-links a { padding: 10px 9px; font-size: 12.5px; }
+  .site-nav .nav-btn { width: 40px; height: 40px; }
+}
+/* Mobile hamburger (#2255): the canonical nav's 5 links don't fit beside brand + actions,
+   so site-chrome.js tags it `has-menu` and collapses them into a ☰ dropdown. Bespoke app
+   navs (no has-menu) are untouched and keep their scroll row. */
+.site-nav .nav-menu-toggle { display: none; } /* out-specify the base .nav-btn display */
+@media (max-width: 580px) {
+  .site-nav.has-menu .nav-menu-toggle { display: flex; order: -1; }
+  .site-nav.has-menu .nav-links {
+    position: fixed; top: 52px; left: 0; right: 0;
+    flex-direction: column; align-items: stretch;
+    gap: 2px; padding: 8px; overflow: visible;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); z-index: 1100;
+    display: none;
+  }
+  .site-nav.has-menu.menu-open .nav-links { display: flex; }
+  .site-nav.has-menu .nav-links a { padding: 12px 14px; font-size: 15px; border-radius: 8px; }
+  /* App navs carry more action buttons than the canonical 3 (kalshi-terminal has 5), which
+     crowded over the wordmark. Keep the FULL brand (name + logo) and make the buttons fit
+     instead: slightly smaller icons, tighter gaps, and drop the redundant "Open Chat" CTA
+     (Chat is already in the hamburger dropdown). Scoped to .nav-appbar. */
+  .site-nav.nav-appbar .nav-btn { width: 36px; height: 36px; }
+  .site-nav.nav-appbar .nav-actions { gap: 5px; }
+  .site-nav.nav-appbar .nav-cta { display: none; }
 }
 .nav-actions {
   margin-left: auto;
@@ -146,12 +186,12 @@ html[data-theme="dark"] #theme-toggle .icon-sun { display: block; }
 html[data-theme="light"] #theme-toggle .icon-moon { display: block; }
 .nav-cta {
   font-size: 13px; font-weight: 600; padding: 7px 16px;
-  background: var(--accent); color: #fff; border: none;
+  background: var(--accent-strong); color: #fff; border: none;
   border-radius: 8px; cursor: pointer; text-decoration: none;
   transition: background 0.15s;
   white-space: nowrap;
 }
-.nav-cta:hover { background: var(--accent-hover); }
+.nav-cta:hover { background: var(--accent-strong-hover); }
 
 /* ── Patreon support link in nav ── */
 .nav-support {
@@ -281,7 +321,7 @@ html[data-theme="light"] #theme-toggle .icon-moon { display: block; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: var(--accent);
+  background: var(--accent-strong);
   color: #fff;
   font-weight: 600;
   font-size: 15px;
@@ -293,9 +333,14 @@ html[data-theme="light"] #theme-toggle .icon-moon { display: block; }
   transition: background 0.15s, transform 0.1s;
 }
 .btn-primary:hover {
-  background: var(--accent-hover);
+  background: var(--accent-strong-hover);
   transform: translateY(-1px);
 }
+/* Dark theme: the accent is bright cyan, so white text on filled buttons fails AA.
+   Use dark text on the accent instead (standard dark-mode pattern) — ≥8:1 (#2251). */
+[data-theme="dark"] .skip-link,
+[data-theme="dark"] .nav-cta,
+[data-theme="dark"] .btn-primary { color: var(--bg); }
 .btn-ghost {
   display: inline-flex;
   align-items: center;
