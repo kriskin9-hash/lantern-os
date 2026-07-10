@@ -123,6 +123,20 @@
     html[data-theme="dark"] .field-error { color: #f87171; }
     html[data-theme="dark"] .auth-notice { color: #bbf7d0; }
 
+    /* Terms-of-Service consent — gates every sign-in path */
+    .tos-consent {
+      display: flex; align-items: flex-start; gap: 9px;
+      margin: 2px 0 12px; font-size: 13px; color: var(--muted);
+      line-height: 1.45; cursor: pointer;
+    }
+    .tos-consent input {
+      margin-top: 1px; width: 16px; height: 16px; flex-shrink: 0;
+      accent-color: var(--accent); cursor: pointer;
+    }
+    .tos-consent a { color: var(--accent); text-decoration: underline; }
+    #tos-error { min-height: 0; margin: -8px 0 8px; transition: min-height .1s; }
+    #tos-error.show { min-height: 15px; }
+
     /* Provider (OAuth) buttons */
     .auth-actions { display: flex; flex-direction: column; gap: 7px; }
     .provider-btn {
@@ -255,6 +269,13 @@
         <input type="password" id="local-password" name="password" placeholder="Password (min 8 characters)" autocomplete="current-password" required minlength="8">
         <input type="password" id="local-confirm" name="confirm" placeholder="Confirm password" autocomplete="new-password" minlength="8" hidden>
         <div class="field-error" id="local-error"></div>
+        <!-- Terms consent — shown ONLY when creating an account (register mode),
+             immediately above the Create Account button. Default unchecked. -->
+        <label class="tos-consent" id="tos-consent-row" for="tos-agree" hidden>
+          <input type="checkbox" id="tos-agree">
+          <span>I have read and agree to the
+            <a href="/terms.html" target="_blank" rel="noopener">Terms of Service &amp; EULA</a>.</span>
+        </label>
         <button type="submit" class="btn-local" id="local-submit">Sign in</button>
       </form>
       <div class="local-toggle" id="local-toggle-wrap">
@@ -272,6 +293,16 @@
 
     <div class="auth-divider">or</div>
     <button type="button" id="continue-guest" class="btn-ghost">Continue without an account</button>
+
+    <!-- ── Dev/test role picker — shown ONLY when the server reports testMode
+         (LANTERN_TEST_AUTH_TOKEN set + direct, un-proxied hit). Signs in as the one
+         seeded test account with the chosen role. Never present in production. -->
+    <div id="test-login" hidden>
+      <div class="auth-divider">🔧 test sign-in</div>
+      <p class="sub" style="margin-top:0">Dev only — pick a role to sign in as the test account.</p>
+      <div class="auth-actions" id="test-role-buttons"></div>
+      <div class="field-error" id="test-login-error"></div>
+    </div>
     </div><!-- /#signin-view -->
 
     <!-- ── Confirm-email view — replaces the whole sign-in view until the address
@@ -459,6 +490,9 @@
     const submit = document.getElementById("local-submit");
     const toggleWrap = document.getElementById("local-toggle-wrap");
     const pw = document.getElementById("local-password");
+    // Terms consent is only relevant to account creation.
+    const tosRow = document.getElementById("tos-consent-row");
+    const tosBox = document.getElementById("tos-agree");
     if (mode === "register") {
       nameInput.hidden = false;
       // Creating an account requires confirming the password — reveal + require it.
@@ -468,6 +502,7 @@
       pw.setAttribute("placeholder", "Create a password (min 8 characters)");
       submit.textContent = "Create account";
       toggleWrap.innerHTML = 'Already have an account? <a id="local-toggle">Sign in</a>';
+      if (tosRow) tosRow.hidden = false;   // show the agreement just above "Create account"
     } else {
       nameInput.hidden = true;
       confirmInput.hidden = true;
@@ -477,6 +512,8 @@
       pw.setAttribute("placeholder", "Password (min 8 characters)");
       submit.textContent = "Sign in";
       toggleWrap.innerHTML = 'New here? <a id="local-toggle">Create an account</a>';
+      if (tosRow) tosRow.hidden = true;    // hidden for normal sign-in
+      if (tosBox) tosBox.checked = false;  // fresh, unchecked each time they enter register
     }
     document.getElementById("local-toggle").addEventListener("click", () =>
       setLocalMode(localMode === "login" ? "register" : "login")
@@ -549,6 +586,13 @@
     // Creating an account: the password and its confirmation must match EXACTLY
     // (case-sensitive — plain string comparison) before we call the server.
     if (localMode === "register") {
+      // Terms of Service must be affirmatively agreed to before an account is created.
+      const tosBox = document.getElementById("tos-agree");
+      if (!tosBox || !tosBox.checked) {
+        errEl.textContent = "Please agree to the Terms of Service to create an account.";
+        if (tosBox) tosBox.focus();
+        return;
+      }
       const confirm = document.getElementById("local-confirm").value;
       if (password.length < 8) { errEl.textContent = "Password must be at least 8 characters."; return; }
       if (password !== confirm) { errEl.textContent = "Passwords don't match."; return; }
@@ -620,6 +664,7 @@
         }
       }
       renderProviders(session.providers);
+      renderTestPanel(session);
     } catch (err) {
       // Session endpoint unreachable — fall back to fetching the provider list.
       try {
@@ -629,6 +674,49 @@
       } catch (_) {
         renderProviders([]);
       }
+    }
+  }
+
+  // Dev/test role picker: render one button per emulatable role. Clicking signs in
+  // as the seeded test account with that role via /api/auth/test-login, then lands
+  // on returnTo. Only ever rendered when the SERVER reports testMode.
+  const TEST_ROLE_LABELS = {
+    supporter: "Supporter", deep_dreamer: "Deep Dreamer", founder: "Founder",
+    admin: "Admin", tech_support: "Tech Support",
+  };
+  function renderTestPanel(session) {
+    if (!session || !session.testMode) return;
+    const panel = document.getElementById("test-login");
+    const wrap = document.getElementById("test-role-buttons");
+    if (!panel || !wrap) return;
+    wrap.innerHTML = "";
+    (session.testRoles || ["admin"]).forEach((role) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "provider-btn";
+      btn.style.background = "var(--surface, #1f2430)";
+      btn.style.color = "var(--fg, #e5e7eb)";
+      btn.textContent = "Sign in as " + (TEST_ROLE_LABELS[role] || role);
+      btn.addEventListener("click", () => testLogin(role));
+      wrap.appendChild(btn);
+    });
+    panel.hidden = false;
+  }
+
+  async function testLogin(role) {
+    const errEl = document.getElementById("test-login-error");
+    if (errEl) errEl.textContent = "";
+    try {
+      const res = await fetch("/api/auth/test-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) throw new Error("test-login failed (" + res.status + ")");
+      location.href = safeReturnTo();
+    } catch (e) {
+      if (errEl) errEl.textContent = String(e && e.message ? e.message : e);
     }
   }
 
