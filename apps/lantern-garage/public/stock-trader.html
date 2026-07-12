@@ -229,6 +229,9 @@
   /* Drag-to-reorder chart slots (multi-chart layouts) */
   .drag-handle{cursor:grab;color:var(--tv-text-secondary);font-size:14px;line-height:1;user-select:none;padding:0 2px}
   .drag-handle:active{cursor:grabbing}
+  /* #2302 (10): the ⠿ reorder handle mis-triggers while scrolling on a touchscreen, so
+     hide it on coarse pointers (touch). Card reordering stays available with a mouse. */
+  @media (pointer: coarse){ .drag-handle{ display:none; } }
   .card.dragging{opacity:.45}
   .card.drag-over{outline:2px dashed var(--blue);outline-offset:-2px}
   .card-price{font-family:var(--mono);font-size:13px;color:var(--text1)}
@@ -473,6 +476,17 @@
     /* Bigger touch targets on phones for the dense toolbar controls (#2255). */
     .nav-link, .chart-ctrl, .range-btn{ min-height:36px; }
     .chart-ctrl, .range-btn{ padding:6px 10px; }
+    /* #2302 (7): the remaining tabs/chips sat at 23–30px — below the 44px thumb target.
+       Raise the positions/orders tabs, the chart/tickers view switch, and the watchlist
+       ticker rows to a comfortable tap size on phones. */
+    .tp-tab{ min-height:44px; padding-top:10px; padding-bottom:12px; }
+    .mvt-btn{ min-height:44px; }
+    .wl-item{ min-height:44px; }
+    /* #2302 (8): the VIX / Market status blocks ran together ("VIX 16.8 CALM MARKET
+       BEARISH"). Give each header stat breathing room and a divider so the values read
+       as distinct fields on the horizontally-scrolling toolbar. */
+    .header .hstat{ padding:0 4px; }
+    .header .hstat + .hstat{ border-left:1px solid var(--border); padding-left:10px; }
   }
   .ot-header{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
   .ot-header .ot-ticker{font-size:14px;font-weight:600;flex:1}
@@ -1700,7 +1714,7 @@ function buildCard(ticker, d){
   let watchHtml = '';
   if(state==='watching'){
     const near = (d.zones||[])[0];
-    if(near) watchHtml = `<div style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
+    if(near){ const _lvl = String(near.type||'').toLowerCase(); watchHtml = `<div title="Nearest ${_lvl} level and how many times price has touched it" style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest ${_lvl}: $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'} touch${near.touches===1?'':'es'}</div>`; }
   }
 
   const badge = regimeBadgeInfo(ticker, state);
@@ -1763,7 +1777,7 @@ function updateCardMeta(ticker, d){
     let watchHtml = '';
     if(state==='watching'){
       const near = (d.zones||[])[0];
-      if(near) watchHtml = `<div style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
+      if(near){ const _lvl = String(near.type||'').toLowerCase(); watchHtml = `<div title="Nearest ${_lvl} level and how many times price has touched it" style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest ${_lvl}: $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'} touch${near.touches===1?'':'es'}</div>`; }
     }
     metaEl.innerHTML = confHtml + patternChipHtml(sig) + watchHtml;
   }
@@ -3137,12 +3151,16 @@ function renderTpSummary(a){
   const money=(v)=> v==null?'—':'$'+fmt(v,2);
   const signed=(v)=> v==null?'—':(v>=0?'+':'-')+'$'+fmt(Math.abs(v),2);
   const cls=(v)=> v>0?'pos':v<0?'neg':'';
+  // #2302 (6): one empty-state convention. Balances come back as real 0 ($0.00) while the
+  // three P&L fields can be null (—), so the panel read half "$0.00" / half "—". A flat or
+  // unfunded account genuinely has 0 P&L, so coalesce the P&L fields to 0 → the whole panel
+  // reads "$0.00" uniformly instead of mixing dashes with dollars.
   el.innerHTML =
     cell('Account balance', money(a.cash)) +
     cell('Equity', money(a.equity)) +
-    cell('Realized P&L', signed(a.realized_today), cls(a.realized_today)) +
-    cell('Unrealized P&L', signed(a.unrealized), cls(a.unrealized)) +
-    cell('Day P&L', signed(a.pnl_today), cls(a.pnl_today)) +
+    cell('Realized P&L', signed(a.realized_today ?? 0), cls(a.realized_today ?? 0)) +
+    cell('Unrealized P&L', signed(a.unrealized ?? 0), cls(a.unrealized ?? 0)) +
+    cell('Day P&L', signed(a.pnl_today ?? 0), cls(a.pnl_today ?? 0)) +
     cell('Buying power', money(a.buying_power));
 }
 function renderPositionsTable(positions){
