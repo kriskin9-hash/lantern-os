@@ -19,7 +19,7 @@
   // STATUS panels; the control panels (keys, training, auto-pull) are hidden via
   // body.is-guest and their endpoints are admin-gated server-side. So it must not
   // bounce here either.
-  const PUBLIC = ['/', '/index.html', '/auth.html', '/auth', '/explore.html', '/knowledgecenter.html', '/chat.html', '/dream-chat.html', '/stock-trader.html', '/orchestration.html', '/pricing.html', '/demo.html'];
+  const PUBLIC = ['/', '/index.html', '/auth.html', '/auth', '/explore.html', '/knowledgecenter.html', '/chat.html', '/dream-chat.html', '/stock-trader.html', '/orchestration.html', '/pricing.html', '/demo.html', '/contest.html'];
   // Pages that require the "trade" entitlement (kept in sync with routes/pages.js).
   const TRADE_PAGES = ['/kalshi-terminal.html']; // /trading.html retired → redirects to /stock-trader.html (#2488)
   // Operator surfaces hidden from the header tabs + footer links for the guest
@@ -163,9 +163,9 @@
       // guest render repurposed it into a sign-in link (SPA-style re-check).
       if (profileBtn) {
         profileBtn.style.display = '';
-        profileBtn.href = '/profile.html';
-        profileBtn.title = 'Your profile';
-        profileBtn.setAttribute('aria-label', 'View your profile');
+        profileBtn.href = '/settings.html';
+        profileBtn.title = 'Account & settings';
+        profileBtn.setAttribute('aria-label', 'Account and settings');
         profileBtn.classList.remove('nav-signin');
       }
       if (logoutBtn) logoutBtn.style.display = '';
