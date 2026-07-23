@@ -61,7 +61,7 @@
   }
 
   // ── Self-contained modal ────────────────────────────────────────────────────
-  // The modal markup ships in dream-chat.html; on pages that don't include it (e.g.
+  // The modal markup ships in chat.html; on pages that don't include it (e.g.
   // the home page) inject it + its styles once so the 📷 button works anywhere.
   var MODAL_CSS =
     ".modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;z-index:1000;opacity:0;pointer-events:none;transition:opacity .2s}" +
@@ -170,7 +170,7 @@
   // is unavailable, so a vision-down report still carries the reporter's own words
   // instead of being filed as a contentless screenshot (the #1567 noise class).
   // Injected in JS so it works for both modal sources (the copy shipped in
-  // dream-chat.html and the one this script injects elsewhere).
+  // chat.html and the one this script injects elsewhere).
   function ensureUserDescField() {
     var existing = $("issue-user-desc");
     if (existing) return existing;
@@ -197,7 +197,7 @@
 
   // The two report actions that sit under the summary — always available once a shot is
   // attached: re-run Unisona's AI report, or write the report yourself. Injected in JS so
-  // both modal sources (dream-chat.html's copy and the one injected elsewhere) get them.
+  // both modal sources (chat.html's copy and the one injected elsewhere) get them.
   function ensureReportActions() {
     var existing = $("issue-report-actions");
     if (existing) return existing;
@@ -456,6 +456,18 @@
     var MAX_H = window.innerHeight * 6;   // don't try to render an unbounded feed
     if (fullH > MAX_H) fullH = MAX_H;
     settleThen(function () {
+      // Pin the clone iframe's size. html2canvas sizes its hidden work iframe with
+      // the width/height ATTRIBUTES — presentational hints that any author CSS
+      // beats. Our responsive reset (site.css `iframe{max-width:100%;height:auto}`)
+      // collapsed that iframe to the 150px browser default, so inside the clone
+      // 100vh = 150px and full-viewport app pages (the trading terminal's vh-sized
+      // grid) captured as a blank sliver under the toolbar. Out-specify the reset
+      // for the capture's duration at the exact requested size.
+      var pin = document.createElement("style");
+      pin.textContent = "iframe.html2canvas-container{width:" + window.innerWidth + "px !important;height:" + window.innerHeight +
+        "px !important;max-width:none !important;max-height:none !important}";
+      document.head.appendChild(pin);
+      var unpin = function () { if (pin.parentNode) pin.parentNode.removeChild(pin); };
       window.html2canvas(document.body, {
         backgroundColor: bg,
         useCORS: true,
@@ -464,8 +476,11 @@
         scale: 1,
         width: fullW,
         height: fullH,
-        windowWidth: fullW,
-        windowHeight: fullH,
+        // The clone lays out at the REAL viewport size — vh units and media
+        // queries must resolve exactly as they did when the user saw the page.
+        // width/height above still shoot the full scrollable document.
+        windowWidth: window.innerWidth,
+        windowHeight: window.innerHeight,
         x: 0,
         y: 0,
         scrollX: 0,
@@ -475,11 +490,13 @@
         },
         onclone: function (clonedDoc) { sanitizeCloneColors(clonedDoc); }
       }).then(function (canvas) {
+        unpin();
         canvas.toBlob(function (blob) {
           if (blob) acceptBlob(blob);
           else setStatus("Couldn't render the page — upload an image or paste instead.", true);
         }, "image/png");
       }).catch(function (e) {
+        unpin();
         setStatus("Couldn't capture the page (" + (e && e.message ? e.message : e) + "). Upload or paste instead.", true);
       });
     });

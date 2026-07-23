@@ -54,10 +54,6 @@ function renderToolReplay(tool) {
       + `allow="encrypted-media;picture-in-picture" allowfullscreen loading="lazy"></iframe>`
       + `<a href="${esc(searchUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a>`;
   }
-  if (tool.kind === 'xenon-starship-art' && tool.url) {
-    const searchUrl = tool.url; // Assuming tool.url is the direct link to the generated art
-      + `<a href="${esc(searchUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">▶ Open these results on YouTube ↗</a>`;
-  }
   if (tool.kind === 'document' && tool.url) {
     const kb = tool.bytes ? ' · ' + Math.round(tool.bytes / 1024) + ' KB' : '';
     return `✓ Generated <b>${esc(tool.title || 'document')}</b> <span style="opacity:.6;font-size:11px">(${esc(tool.format || '')}${kb})</span><br>`
@@ -97,10 +93,9 @@ function sanitizePersonalContext(context) {
 
 async function loadPersonalCube() {
   try {
-    const resp = await fetch('/api/cubes/alex/personal');
+    const resp = await fetch('/api/cubes/alex/personal', { signal: AbortSignal.timeout(8000) });
     if (resp.ok) {
       personalContext = await resp.json();
-      updatePersonalInsights(personalContext);
     } else {
       personalContext = { error: 'API unavailable', timestamp: new Date().toISOString() };
     }
@@ -109,46 +104,7 @@ async function loadPersonalCube() {
   }
 }
 
-function updatePersonalInsights(cube) {
-  const githubBadge = document.getElementById('github-status-badge');
-  if (githubBadge && cube.github) {
-    const openIssues = cube.github.issues?.filter(i => i.state === 'open').length || 0;
-    const openPRs = cube.github.prs?.filter(p => p.state === 'open').length || 0;
-    githubBadge.textContent = `GitHub: ${openIssues} issues, ${openPRs} PRs`;
-    githubBadge.style.display = 'block';
-  }
-  if (cube.providers) {
-    for (const [provider, status] of Object.entries(cube.providers)) {
-      const indicator = document.getElementById(`provider-${provider}-status`);
-      if (indicator) {
-        indicator.className = status.configured ? 'status-indicator ok' : 'status-indicator err';
-        indicator.textContent = status.configured ? '✓' : '✗';
-      }
-    }
-  }
-  if (cube.environment) {
-    const envStatus = document.getElementById('environment-status');
-    if (envStatus) {
-      const serverStatus = cube.environment.server?.running ? 'Running' : 'Stopped';
-      const gitStatus = cube.environment.git?.isDirty ? 'Dirty' : 'Clean';
-      envStatus.textContent = `Env: ${serverStatus}, Git: ${gitStatus}`;
-    }
-  }
-  if (cube.priorities && cube.priorities.nextActions) {
-    const prioritiesPanel = document.getElementById('priorities-panel');
-    if (prioritiesPanel) {
-      prioritiesPanel.innerHTML = cube.priorities.nextActions.map(p =>
-        `<div class="priority-item">
-          <span class="priority-badge ${p.priority}">${p.priority}</span>
-          <span class="priority-title">#${p.number}: ${p.title}</span>
-        </div>`
-      ).join('');
-    }
-  }
-}
-
 loadPersonalCube();
-setInterval(loadPersonalCube, 300000);
 
 function startVoiceInput() {
   if (!window.voiceMode || !window.recognition) return;
@@ -169,119 +125,6 @@ async function writeCubeDelta(eventType, symbols, payloadRef) {
       }),
     });
   } catch (e) { /* silent — cube is best-effort */ }
-}
-
-// ── Connector sidecar ─────────────────────────────────────────────────────────
-function focusKey(inputId) {
-  const el = document.getElementById(inputId);
-  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
-}
-
-// The MCP connector talks to an MCP server on the operator's OWN machine
-// (127.0.0.1:8772), so it only makes sense when the page is served locally. On a
-// hosted deploy (cloud VM / unisona.ai) 127.0.0.1 is the visitor's box, not ours —
-// hide the card instead of firing pointless cross-origin requests at it.
-const isLocalHost = ['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname);
-
-async function updateConnectorStatuses() {
-  const mcpStatus = document.getElementById('mcp-status');
-  const mcpBtn = document.getElementById('mcp-btn');
-  if (!isLocalHost) {
-    const card = mcpBtn ? mcpBtn.closest('.connector-card') : null;
-    if (card) card.style.display = 'none';
-  } else {
-    try {
-      const r = await fetch('http://127.0.0.1:8772/health', { method: 'GET', mode: 'cors', cache: 'no-store' });
-      if (r.ok) {
-        if (mcpStatus) { mcpStatus.textContent = 'Connected'; mcpStatus.className = 'connector-card-status ok'; }
-        if (mcpBtn) { mcpBtn.textContent = 'Disconnect'; mcpBtn.onclick = disconnectMcp; mcpBtn.classList.remove('primary'); }
-      } else { throw new Error('HTTP ' + r.status); }
-    } catch (e) {
-      if (mcpStatus) { mcpStatus.textContent = 'Disconnected'; mcpStatus.className = 'connector-card-status pending'; }
-      if (mcpBtn) { mcpBtn.textContent = 'Connect'; mcpBtn.onclick = connectMcp; mcpBtn.classList.add('primary'); }
-    }
-  }
-
-  // Provider connector badges — authoritative source is server /api/settings/providers.
-  // localStorage is a fallback for offline mode only.
-  const providers = [
-    { key: 'ANTHROPIC_API_KEY', id: 'claude' },
-    { key: 'GEMINI_API_KEY', id: 'gemini' },
-    { key: 'OPENAI_API_KEY', id: 'openai' },
-    { key: 'XAI_API_KEY', id: 'grok' },
-  ];
-
-  let serverKeys = null;
-  try {
-    const pr = await fetch('/api/settings/providers', { signal: AbortSignal.timeout(3000) });
-    if (pr.ok) serverKeys = await pr.json();
-  } catch { /* fall through to localStorage */ }
-
-  for (const p of providers) {
-    const badge = document.getElementById('conn-status-' + p.id);
-    if (!badge) continue;
-
-    // Prefer server truth; fall back to input field or localStorage
-    const serverConfigured = serverKeys ? !!(serverKeys[p.key]) : null;
-    const input = document.getElementById('key-' + p.id);
-    const localConfigured = !!localStorage.getItem(p.key) || !!(input && input.value.length > 0);
-    const configured = serverConfigured !== null ? serverConfigured : localConfigured;
-
-    badge.textContent = configured ? 'Connected' : 'No key';
-    badge.className = `connector-card-status ${configured ? 'ok' : 'err'}`;
-  }
-}
-
-async function connectMcp() {
-  if (!isLocalHost) { alert('The MCP connector is a local-only feature — open this page from your own machine (http://127.0.0.1:4177) to connect.'); return; }
-  const mcpStatus = document.getElementById('mcp-status');
-  const mcpBtn = document.getElementById('mcp-btn');
-  mcpStatus.textContent = 'Connecting…';
-  mcpStatus.className = 'connector-card-status pending';
-  mcpBtn.disabled = true;
-  try {
-    const health = await fetch('http://127.0.0.1:8772/health', { method: 'GET', mode: 'cors', cache: 'no-store' });
-    if (!health.ok) throw new Error('MCP server not responding');
-    const width = 500, height = 600;
-    const left = (screen.width - width) / 2, top = (screen.height - height) / 2;
-    const popup = window.open(
-      'http://127.0.0.1:8772/oauth/register?client_name=LanternOSJournal&redirect_uri=http://127.0.0.1:4177/oauth/callback',
-      'mcpOAuth', `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no`
-    );
-    const checkClosed = setInterval(() => {
-      if (popup.closed) { clearInterval(checkClosed); updateConnectorStatuses(); mcpBtn.disabled = false; }
-    }, 500);
-  } catch (e) {
-    mcpStatus.textContent = 'Error'; mcpStatus.className = 'connector-card-status err';
-    mcpBtn.disabled = false;
-    alert('MCP connection failed: ' + e.message);
-  }
-}
-
-function disconnectMcp() {
-  localStorage.removeItem('MCP_OAUTH_TOKEN');
-  updateConnectorStatuses();
-}
-
-async function testWebSearch() {
-  if (!isLocalHost) { alert('The MCP web-search test is a local-only feature — open this page from your own machine (http://127.0.0.1:4177) to use it.'); return; }
-  const btn = event.target;
-  const original = btn.textContent;
-  btn.textContent = 'Testing…'; btn.disabled = true;
-  try {
-    const r = await fetch('http://127.0.0.1:8772/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'web_search', arguments: { query: 'unisona.ai', max_results: 3 } } }),
-    });
-    const data = await r.json();
-    if (data.result && data.result.success) {
-      alert('Web search works! Found ' + data.result.result_count + ' results.\nTop: ' + (data.result.results[0]?.title || '?'));
-    } else {
-      alert('Web search returned: ' + (data.result?.error || 'unknown error'));
-    }
-  } catch (e) { alert('Web search test failed: ' + e.message); }
-  finally { btn.textContent = original; btn.disabled = false; }
 }
 
 // Broken / hallucinated image URLs used to hide themselves with display:none.
@@ -369,15 +212,28 @@ function fillToolSlot(slot, evt) {
   slot.style.display = 'block';
 }
 function renderMarkdown(text) {
+  // The [DOORS:…] tag is a Three-Doors CONTROL marker (door chips are parsed from
+  // the raw text elsewhere) — never part of the prose. Strip it here, in the one
+  // renderer, so every path shows the same clean text: streaming, finalize, and
+  // history replay of persisted messages that still carry it (#2497).
+  text = String(text ?? '').replace(/\[DOORS:[^\]]*\]?/gi, '').trimEnd();
   // Extract tool-call blocks (closed, then a trailing unclosed one while streaming)
   // into placeholders that survive HTML-escaping; restore as cards at the very end.
   const _toolCards = [];
   text = text.replace(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi, (_, inner) => '\x00T' + (_toolCards.push(buildToolCard(inner, false)) - 1) + '\x00');
   text = text.replace(/<tool_call>\s*([\s\S]*)$/i, (_, inner) => '\x00T' + (_toolCards.push(buildToolCard(inner, true)) - 1) + '\x00');
   let h = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  h = h.replace(/```[\w]*\n?([\s\S]*?)```/g, '<pre class="code-block"><code>$1</code></pre>');
+  // Fenced code → stash as a single placeholder so its newlines survive the block/line
+  // pass below (which would otherwise split it across "lines" and mangle the code).
+  const _code = [];
+  h = h.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => '\x00C' + (_code.push('<pre class="code-block"><code>' + code + '</code></pre>') - 1) + '\x00');
   h = h.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
   h = h.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  // Italics: *text* / _text_ — but not list bullets ("* " has a space after) nor
+  // intra-word underscores (snake_case). The negative lookahead on the opener (?!\s)
+  // keeps "* item" from being read as an italic open.
+  h = h.replace(/(^|[^*\w])\*(?!\s)([^*\n]+?)\*(?![*\w])/g, '$1<em>$2</em>');
+  h = h.replace(/(^|[^_\w])_(?!\s)([^_\n]+?)_(?![_\w])/g, '$1<em>$2</em>');
 
   // Stash rich media + links as placeholders BEFORE the URL linkifiers run, so those
   // never touch a URL that's already inside an image / iframe / anchor.
@@ -425,9 +281,62 @@ function renderMarkdown(text) {
   // Restore the stashed markdown-link anchors.
   h = h.replace(/\x00L(\d+)\x00/g, (_, i) => _stash[+i]);
 
-  h = h.replace(/\n/g, '<br>');
-  h = h.replace(/\x00T(\d+)\x00/g, (_, i) => _toolCards[+i]);  // restore tool-call cards last (after <br>) so their <pre> isn't mangled
+  // Block pass: headings, lists, tables, blockquotes; remaining prose joins with <br>.
+  h = renderMdBlocks(h);
+  h = h.replace(/\x00C(\d+)\x00/g, (_, i) => _code[+i]);       // restore fenced code (newlines intact)
+  h = h.replace(/\x00T(\d+)\x00/g, (_, i) => _toolCards[+i]);  // restore tool-call cards last
   return h;
+}
+
+// Block-level markdown on already-inline-formatted, HTML-escaped text (so `>` is `&gt;`
+// and no raw `<`/`>` can inject). A line that isn't a block is prose, joined with <br>.
+// Fenced code and tool cards are single-token placeholders (\x00C / \x00T) that pass
+// through untouched. Added #dream-chat-markdown — replies used to render flat.
+function renderMdBlocks(h) {
+  const lines = h.split('\n');
+  const out = [];
+  const sep = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
+  const splitRow = (s) => s.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+  const startsBlock = (idx) => {
+    const l = lines[idx];
+    if (/^#{1,6}\s+/.test(l) || /^\s*[-*+]\s+/.test(l) || /^\s*\d+\.\s+/.test(l) || /^\s*&gt;\s?/.test(l)) return true;
+    if (/^\s*\|.*\|\s*$/.test(l) && idx + 1 < lines.length && sep.test(lines[idx + 1])) return true;   // real table (needs separator row)
+    return false;
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    let m;
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {                       // heading
+      out.push(`<h${m[1].length} class="md-h">${m[2].trim()}</h${m[1].length}>`); i++; continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && sep.test(lines[i + 1])) {   // table
+      const head = splitRow(line); i += 2; const rows = [];
+      while (i < lines.length && lines[i].includes('|') && /^\s*\|.*\|?\s*$/.test(lines[i])) { rows.push(splitRow(lines[i])); i++; }
+      let t = '<table class="md-table"><thead><tr>' + head.map((c) => `<th>${c}</th>`).join('') + '</tr></thead>';
+      if (rows.length) t += '<tbody>' + rows.map((r) => '<tr>' + r.map((c) => `<td>${c}</td>`).join('') + '</tr>').join('') + '</tbody>';
+      out.push(t + '</table>'); continue;
+    }
+    if (/^\s*[-*+]\s+/.test(line)) {                                    // unordered list
+      const items = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*[-*+]\s+/, '')); i++; }
+      out.push('<ul class="md-list">' + items.map((x) => `<li>${x}</li>`).join('') + '</ul>'); continue;
+    }
+    if (/^\s*\d+\.\s+/.test(line)) {                                    // ordered list
+      const items = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) { items.push(lines[i].replace(/^\s*\d+\.\s+/, '')); i++; }
+      out.push('<ol class="md-list">' + items.map((x) => `<li>${x}</li>`).join('') + '</ol>'); continue;
+    }
+    if (/^\s*&gt;\s?/.test(line)) {                                     // blockquote (">" escaped to "&gt;")
+      const q = [];
+      while (i < lines.length && /^\s*&gt;\s?/.test(lines[i])) { q.push(lines[i].replace(/^\s*&gt;\s?/, '')); i++; }
+      out.push('<blockquote class="md-quote">' + q.join('<br>') + '</blockquote>'); continue;
+    }
+    const prose = [];                                                  // prose → join with <br>
+    while (i < lines.length && !startsBlock(i)) { prose.push(lines[i]); i++; }
+    out.push(prose.join('<br>'));
+  }
+  return out.join('\n');
 }
 
 // ── Conversation state ────────────────────────────────────────────────────────
@@ -562,6 +471,94 @@ const AUTOWORK_PHASES = [
   ['record',      'Log record',         'appending the run to the convergence log'],
 ];
 
+// Every autowork run IS one walk of the North-Star loop (Observe → Remember →
+// Reason → Act → Verify → Converge). The strip at the top of the panel makes that
+// visible; each step row also carries its stage so the mapping is inspectable.
+// `agi-benchmark` is streamed by the server but has no step row — it still lights
+// the Converge node, which is why the stage update runs before the row lookup.
+const AW_LOOP_STAGES = [
+  ['observe',  'Observe'],
+  ['remember', 'Remember'],
+  ['reason',   'Reason'],
+  ['act',      'Act'],
+  ['verify',   'Verify'],
+  ['converge', 'Converge'],
+];
+const AW_PHASE_STAGE = {
+  create_issue: 'observe', fetch_issue: 'observe',
+  research: 'remember',
+  plan: 'reason',
+  branch: 'act', patch: 'act', apply: 'act', commit: 'act', push: 'act', pr: 'act',
+  tests: 'verify',
+  convergence: 'converge', record: 'converge', 'agi-benchmark': 'converge',
+};
+
+function awLoopStripHtml() {
+  return '<div class="aw-loop" role="list" aria-label="Convergence loop progress">'
+    + AW_LOOP_STAGES.map(([k, label]) =>
+        `<span class="aw-loop-node" role="listitem" data-stage="${k}" title="${label}"><span class="aw-loop-dot"></span><span class="aw-loop-name">${label}</span></span>`
+      ).join('<span class="aw-loop-arrow" aria-hidden="true">→</span>')
+    + '</div>';
+}
+
+function awStepRowsHtml(phases, esc) {
+  return phases.map(([k, label, desc]) => {
+    const stageKey = AW_PHASE_STAGE[k] || '';
+    const stagePair = AW_LOOP_STAGES.find(([s]) => s === stageKey);
+    const stageChip = stagePair ? `<span class="aw-stage" data-stage="${stageKey}">${stagePair[1]}</span>` : '';
+    return `<div class="aw-step" data-phase="${k}"><div class="aw-ico">○</div><div class="aw-body">`
+      + `<div class="aw-row1"><span class="aw-label">${esc(label)}</span>${stageChip}<span class="aw-desc">${esc(desc)}</span><span class="aw-extra"></span></div>`
+      + `<div class="aw-detail" style="display:none"></div></div></div>`;
+  }).join('');
+}
+
+// Recompute every node from the step rows. Order-independent on purpose: the
+// pipeline is NOT in loop order (branch — an Act phase — runs before research),
+// so "mark all earlier stages done" forward-marking lit Reason before the plan
+// step ever ran. Truth lives in the rows: a stage is active if any of its phases
+// is active/retrying, error if one errored, done once at least one finished.
+function awUpdateLoop(row, phase, status) {
+  if (!row) return;
+  const state = {};
+  const fold = (stageKey, cls) => {
+    if (!stageKey) return;
+    const st = state[stageKey] || (state[stageKey] = { active: false, error: false, done: false });
+    if (cls === 'active' || cls === 'retry') st.active = true;
+    else if (cls === 'error') st.error = true;
+    // 'skipped' deliberately does NOT count as done: a skipped Verify stage lit the
+    // strip green on a zero-tests run. Skipped stages stay unlit — honest.
+    else if (cls === 'done') st.done = true;
+  };
+  row.querySelectorAll('.aw-step').forEach((el) => {
+    const cls = el.classList.contains('is-active') ? 'active'
+      : el.classList.contains('is-retry') ? 'retry'
+      : el.classList.contains('is-error') ? 'error'
+      : el.classList.contains('is-done') ? 'done'
+      : ((el.querySelector('.aw-ico') || {}).textContent === '⊘') ? 'skipped' : null;
+    fold(AW_PHASE_STAGE[el.dataset.phase], cls);
+  });
+  // The triggering event isn't in its row yet (setStep updates the row after this),
+  // and some phases have no row at all (agi-benchmark) — fold it in directly.
+  fold(AW_PHASE_STAGE[phase], status === 'start' ? 'active' : status);
+  row.querySelectorAll('.aw-loop-node').forEach((node) => {
+    const st = state[node.dataset.stage] || { active: false, error: false, done: false };
+    node.classList.toggle('is-active', st.active);
+    node.classList.toggle('is-error', st.error && !st.active);
+    node.classList.toggle('is-done', st.done && !st.active && !st.error);
+  });
+}
+
+// On success light the whole loop; on failure freeze it where it stopped so the
+// strip itself answers "how far did the run get" — a stage still marked active at
+// the stop is where it died, so it flips to the error state rather than pulsing on.
+function awFinishLoop(row, ok) {
+  if (!row) return;
+  row.querySelectorAll('.aw-loop-node').forEach((node) => {
+    if (ok) { node.classList.remove('is-active', 'is-error'); node.classList.add('is-done'); }
+    else if (node.classList.contains('is-active')) { node.classList.remove('is-active'); node.classList.add('is-error'); }
+  });
+}
+
 // Inject the autowork panel styles once: compact rows (white-space:normal kills the
 // chat bubble's pre-wrap that was blowing each step up to ~130px tall), the mandala
 // spinner for the active step, and a responsive layout that drops descriptions on
@@ -591,15 +588,98 @@ function ensureAutoworkStyles() {
     '.aw-extra{font-size:11px;opacity:.7;margin-left:auto;white-space:nowrap}',
     '.aw-detail{font-size:11.5px;opacity:.85;line-height:1.4;margin-top:2px}',
     '@media (max-width:520px){.aw-desc{display:none}.aw-extra{margin-left:0}}',
+    '.aw-loop{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:8px;padding:6px 9px;border:1px solid var(--border,#222);border-radius:10px;background:var(--surface2,rgba(127,127,127,.05))}',
+    '.aw-loop-node{display:inline-flex;align-items:center;gap:4px;opacity:.4;transition:opacity .2s}',
+    '.aw-loop-node.is-active,.aw-loop-node.is-error{opacity:1}',
+    '.aw-loop-node.is-done{opacity:.85}',
+    '.aw-loop-dot{width:8px;height:8px;border-radius:50%;background:var(--border,#555);flex:none;transition:background .2s}',
+    '.aw-loop-node.is-active .aw-loop-dot{background:var(--accent,#06b6d4);animation:aw-pulse 1.6s ease-in-out infinite}',
+    '.aw-loop-node.is-done .aw-loop-dot{background:#4ade80}',
+    '.aw-loop-node.is-error .aw-loop-dot{background:#f87171}',
+    '.aw-loop-name{font-size:10.5px;font-weight:600;letter-spacing:.02em}',
+    '.aw-loop-arrow{opacity:.3;font-size:10px}',
+    '@keyframes aw-pulse{50%{opacity:.55}}',
+    '.aw-stage{font-size:9.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.5;border:1px solid var(--border,#333);border-radius:5px;padding:0 4px;flex:none}',
+    '.aw-conv{margin-top:8px;font-weight:400}',
+    '.aw-conv-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}',
+    '.aw-chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;border:1px solid var(--border,#333)}',
+    '.aw-chip-ok{border-color:rgba(74,222,128,.45);color:#4ade80}',
+    '.aw-chip-warn{border-color:rgba(250,204,21,.5);color:#facc15}',
+    '.aw-chip-info{border-color:rgba(96,165,250,.45);color:#60a5fa}',
+    '.aw-conf-bar{display:inline-block;width:52px;height:6px;border-radius:4px;background:var(--surface2,rgba(127,127,127,.18));overflow:hidden;vertical-align:middle}',
+    '.aw-conf-bar>span{display:block;height:100%;border-radius:4px;background:var(--accent,#06b6d4)}',
+    '.aw-conv-ev{margin-top:6px;font-size:11.5px;font-weight:400}',
+    '.aw-conv-ev summary{cursor:pointer;opacity:.75}',
+    '.aw-conv-ev ul{margin:6px 0 0 16px;padding:0;opacity:.85;line-height:1.5}',
+    '@media (max-width:520px){.aw-loop-name{display:none}.aw-loop-node.is-active .aw-loop-name{display:inline}.aw-stage{display:none}}',
   ].join('\n');
   document.head.appendChild(st);
+}
+
+// The Verify + Converge stages rendered where the decision happens: council
+// verdict, tests outcome, and the convergence record's confidence, attached to
+// the finale the Approve button lives in. The server streams all of this on the
+// `done` event (and persists it in the run log's result record for reconnects) —
+// until now the client discarded it and showed only "View PR".
+function renderConvergenceSummary(fin, d) {
+  if (!fin || !d) return;
+  if (fin.querySelector('.aw-conv')) return;   // don't double-render on reconnect
+  const conv = d.convergence || null;
+  const verdict = d.councilVerdict || null;
+  const conf = conv && conv.confidence ? conv.confidence : null;
+  const testsPassed = (typeof d.testsPassed === 'boolean') ? d.testsPassed
+    : (conf && typeof conf.testsPassed === 'number') ? (conf.testsPassed >= 0.5 ? true : (conf.testsPassed > 0 ? false : null))
+    : null;
+  if (!conv && !verdict && testsPassed == null) return;
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const chips = [];
+  if (verdict) {
+    const cls = verdict === 'grounded' ? 'ok' : verdict === 'seam_open' ? 'warn' : 'info';
+    const delta = (d.councilDelta != null) ? ` (Δ=${esc(d.councilDelta)})` : '';
+    chips.push(`<span class="aw-chip aw-chip-${cls}" title="Σ₀ council answerability verdict${delta}">${verdict === 'seam_open' ? '⚠ ' : ''}council: ${esc(verdict)}</span>`);
+  }
+  if (testsPassed != null) chips.push(`<span class="aw-chip aw-chip-${testsPassed ? 'ok' : 'warn'}">tests: ${testsPassed ? 'passed' : 'failed'}</span>`);
+  else if (conf && conf.testsPassed === 0) chips.push('<span class="aw-chip aw-chip-warn">tests: not run</span>');
+  if (conf && typeof conf.overall === 'number') {
+    const pct = Math.max(0, Math.min(100, Math.round(conf.overall * 100)));
+    const fmt = v => (typeof v === 'number' ? v.toFixed(2) : '–');
+    // #2803: don't let the meter perform calibration the record doesn't have. Master's
+    // lib-backed impl (lib/confidence-basis.js) ships confidence.basisSummary as the label
+    // and confidence.calibratedTrust as the one outcome-calibrated number — prefer them.
+    const basisNote = (conf && conf.basisSummary) ? ` · basis: ${conf.basisSummary}`
+      : (conf && conf.basis) ? ' · basis: formula priors (measured: calibratedTrust only)' : '';
+    const calNote = (conf && typeof conf.calibratedTrust === 'number')
+      ? ` · calibrated trust ${Math.round(conf.calibratedTrust * 100)}%` : '';
+    chips.push(`<span class="aw-chip" title="research ${fmt(conf.research)} · grounded ${fmt(conf.grounded)} · tests ${fmt(conf.testsPassed)}${basisNote}${calNote}">confidence <span class="aw-conf-bar"><span style="width:${pct}%"></span></span> ${pct}%</span>`);
+  }
+  const card = document.createElement('div');
+  card.className = 'aw-conv';
+  card.innerHTML = `<div class="aw-conv-chips">${chips.join('')}</div>`
+    + (conv && Array.isArray(conv.evidence) && conv.evidence.length
+        ? `<details class="aw-conv-ev"><summary>convergence record — ${esc(conv.hypothesis || 'evidence')}</summary><ul>${conv.evidence.map(e => `<li>${esc(e)}</li>`).join('')}</ul></details>`
+        : '');
+  fin.appendChild(card);
+}
+
+// Why the Approve button should warn, or null when the run is clean. seam_open
+// (contested + no passing execution check) and failed/skipped tests are the two
+// states where a one-click merge silently launders unverified work.
+function awApproveWarnReason(d) {
+  if (!d) return null;
+  if (d.councilVerdict === 'seam_open') return 'Σ₀ council: seam_open — contested, no passing execution check';
+  if (d.testsPassed === false) return 'tests failed on this change';
+  const cf = d.convergence && d.convergence.confidence;
+  if (d.testsPassed == null && cf && typeof cf.testsPassed === 'number' && cf.testsPassed <= 0) return 'tests were not run on this change';
+  return null;
 }
 
 // In-chat review actions for an autowork draft PR (#1503): Approve (mark ready +
 // squash-merge), Rework (re-run autowork on the same issue), Discard (close + delete
 // branch). Approve/Discard hit POST /api/convergence/pr-action behind a confirm;
 // Rework just re-invokes runAutowork. No-op when there's no PR to act on.
-function renderAutoworkActions(fin, prUrl, issue, btn, base) {
+// `opts.warn` + `opts.warnReason` flip Approve into an explicit "Approve anyway"
+// with the unverified-state reason in the button, the tooltip, and the confirm.
+function renderAutoworkActions(fin, prUrl, issue, btn, base, opts) {
   if (!fin || !prUrl) return;
   if (fin.querySelector('.aw-actions')) return;   // don't double-render on reconnect
   const bar = document.createElement('div');
@@ -611,7 +691,11 @@ function renderAutoworkActions(fin, prUrl, issue, btn, base) {
     b.style.cssText = `font:600 11px var(--font-sans,sans-serif);padding:4px 10px;border-radius:8px;border:1px solid ${color};background:transparent;color:${color};cursor:pointer`;
     return b;
   };
-  const approve = mk('✓ Approve', 'Mark ready for review & squash-merge', '#4ade80');
+  const warn = !!(opts && opts.warn);
+  const warnWhy = (opts && opts.warnReason) || 'verification incomplete';
+  const approve = warn
+    ? mk('⚠ Approve anyway', 'Verification incomplete — ' + warnWhy + '. Merging skips the evidence gate.', '#facc15')
+    : mk('✓ Approve', 'Mark ready for review & squash-merge', '#4ade80');
   const rework  = mk('↻ Rework',  'Re-run autowork on this issue (supersedes this attempt)', '#a78bfa');
   const discard = mk('✕ Discard', 'Close the PR & delete its branch', '#f87171');
   const all = [approve, rework, discard];
@@ -633,7 +717,7 @@ function renderAutoworkActions(fin, prUrl, issue, btn, base) {
       else { setMsg('✗ ' + ((r && r.error) || 'Failed'), '#f87171'); all.forEach(b => b.disabled = false); }
     } catch (e) { setMsg('✗ ' + (e && e.message || 'request failed'), '#f87171'); all.forEach(b => b.disabled = false); }
   }
-  approve.onclick = () => doAction('approve', `Approve and squash-merge this PR?\n\n${prUrl}`);
+  approve.onclick = () => doAction('approve', (warn ? `⚠ ${warnWhy}.\n\n` : '') + `Approve and squash-merge this PR?\n\n${prUrl}`);
   discard.onclick = () => doAction('discard', `Discard (close) this PR and delete its branch?\n\n${prUrl}`);
   rework.onclick = () => {
     if (!window.confirm(`Re-run autowork on issue #${issue}? This supersedes the current attempt.`)) return;
@@ -691,6 +775,46 @@ function renderPrReviewActions(container, prNum, base) {
   container.appendChild(bar);
 }
 
+// Convergence-agent action chips — the server may attach {label, href|command}
+// follow-up suggestions to a done event (see convergence-agent.js). Render them as a
+// chip row. NOTE: this was called at finalize but never defined, which threw a
+// ReferenceError mid-finalize and skipped the assistant history.push — the memory-loss
+// bug. Kept side-effect-free and no client-side keyword routing (a command chip only
+// drops its text into the composer for the user to review + send).
+function renderActionChips(bubble, actions, base) {
+  if (!bubble || !Array.isArray(actions) || !actions.length) return;
+  if (bubble.querySelector('.action-chips')) return;   // don't double-render
+  base = base || ((typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  const bar = document.createElement('div');
+  bar.className = 'action-chips';
+  bar.style.cssText = 'margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center';
+  const CHIP = 'font:600 11px var(--font-sans,sans-serif);padding:4px 10px;border-radius:8px;border:1px solid var(--accent,#06b6d4);background:transparent;color:var(--accent,#06b6d4);cursor:pointer;text-decoration:none';
+  actions.forEach((a) => {
+    if (!a || !a.label) return;
+    if (a.href) {
+      const link = document.createElement('a');
+      link.className = 'action-chip';
+      link.textContent = a.label;
+      link.href = (typeof safeUrl === 'function') ? safeUrl(a.href) : a.href;
+      if (/^https?:\/\//i.test(a.href)) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+      link.style.cssText = CHIP;
+      bar.appendChild(link);
+    } else {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'action-chip';
+      btn.textContent = a.label;
+      btn.style.cssText = CHIP;
+      btn.addEventListener('click', () => {
+        const input = document.getElementById('input');
+        if (input) { input.value = a.command || a.label; input.focus(); input.dispatchEvent(new Event('input', { bubbles: true })); }
+      });
+      bar.appendChild(btn);
+    }
+  });
+  if (bar.children.length) bubble.appendChild(bar);
+}
+
 // `target` is either an issue number (number/numeric string — `!work #N`) or a
 // free-form task object `{ task: "fix the intent handler" }` from the chat
 // "Run as autowork" button. Task mode files a GitHub issue first (server-side),
@@ -715,16 +839,14 @@ async function runAutowork(target, btn, base) {
   // The "File issue" step only applies to task mode; drop it for issue-number runs.
   const phases = taskMode ? AUTOWORK_PHASES : AUTOWORK_PHASES.filter(([k]) => k !== 'create_issue');
   const PHASE_INFO = Object.fromEntries(AUTOWORK_PHASES.map((p) => [p[0], { label: p[1], desc: p[2] }]));
-  const stepRowsHtml = phases.map(([k, label, desc]) =>
-    `<div class="aw-step" data-phase="${k}"><div class="aw-ico">○</div><div class="aw-body">`
-    + `<div class="aw-row1"><span class="aw-label">${esc(label)}</span><span class="aw-desc">${esc(desc)}</span><span class="aw-extra"></span></div>`
-    + `<div class="aw-detail" style="display:none"></div></div></div>`).join('');
+  const stepRowsHtml = awStepRowsHtml(phases, esc);
   // Activity line = a live, streamed-feel header: the mandala spins while a step runs
   // and the text names what's happening right now (addresses "shows little/no info").
   row.innerHTML =
     `<div class="msg-label">Unisona · Autowork ${esc(panelLabel)}</div>`
     + `<div class="bubble aw-panel">`
     + `<div class="aw-activity"><img src="/mandala.svg" class="aw-spin" alt=""><div class="aw-act-text"><b>Starting autowork…</b> <span>${esc(taskMode ? 'filing the task as an issue' : 'on issue ' + panelLabel)}</span></div></div>`
+    + awLoopStripHtml()
     + `<div class="aw-steps">${stepRowsHtml}</div>`
     + `<div class="aw-diff" style="display:none;margin-top:8px"></div>`
     + `<div class="aw-final" style="margin-top:8px;font-weight:600"></div>`
@@ -740,6 +862,7 @@ async function runAutowork(target, btn, base) {
   };
 
   const setStep = (phase, status, extra, detail) => {
+    awUpdateLoop(row, phase, status);   // before the row lookup — agi-benchmark has no row but lights Converge
     const el = row.querySelector(`.aw-step[data-phase="${phase}"]`);
     if (!el) return;
     el.classList.remove('is-active', 'is-done', 'is-error', 'is-retry');
@@ -781,7 +904,7 @@ async function runAutowork(target, btn, base) {
       if (evName === 'run') { awRunId = d.runId; AW_LOCAL_RUNS.add(d.runId); return; }
       if (evName === 'step') {
         let extra = '';
-        if (d.phase === 'tests' && d.status === 'done') extra = d.passed ? 'passed' : (d.ran ? 'failed' : 'none');
+        if (d.phase === 'tests' && d.status === 'done') extra = d.ran ? (d.passed ? 'passed' : 'failed') : 'none';
         else if (d.phase === 'research' && d.status === 'done') extra = `${d.filesFound || 0} files · ${d.webSourcesFound || 0} web`;
         else if (d.phase === 'create_issue' && d.status === 'done') extra = `#${d.issue}`;
         else if (d.phase === 'pr' && d.status === 'done') extra = 'PR opened';
@@ -830,18 +953,21 @@ async function runAutowork(target, btn, base) {
     // Render final state
     const fin = row.querySelector('.aw-final');
     if (finalDone && finalDone.ok) {
-      btn.textContent = '✓ Done';
-      btn.style.color = '#4ade80';
+      if (btn) { btn.textContent = '✓ Done'; btn.style.color = '#4ade80'; }
       fin.style.color = '#4ade80';
       fin.innerHTML = finalDone.prUrl
         ? `✓ Auto-worked #${esc(finalDone.issue || issue)} — <a href="${esc(finalDone.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a>`
         : `✓ ${esc(finalDone.message || 'Done')}`;
-      renderAutoworkActions(fin, finalDone.prUrl, finalDone.issue || issue, btn, base);
+      awFinishLoop(row, true);
+      renderConvergenceSummary(fin, finalDone);
+      const liveWarn = awApproveWarnReason(finalDone);
+      renderAutoworkActions(fin, finalDone.prUrl, finalDone.issue || issue, btn, base,
+        liveWarn ? { warn: true, warnReason: liveWarn } : undefined);
       setActivity('Complete', finalDone.prUrl ? 'opened a pull request' : 'autonomous work finished', false);
       if (actImg) actImg.src = '/mandala.svg'; // steady (no spin)
     } else {
-      btn.textContent = '✗ Failed';
-      btn.style.color = '#f87171';
+      if (btn) { btn.textContent = '✗ Failed'; btn.style.color = '#f87171'; }
+      awFinishLoop(row, false);
       if (!fin.textContent) {
         fin.style.color = '#f87171';
         fin.textContent = `✗ ${esc((finalDone && finalDone.message) || 'Auto-work failed')}`;
@@ -850,8 +976,7 @@ async function runAutowork(target, btn, base) {
     }
     if (typeof scrollToBottom === 'function') scrollToBottom();
   } catch (e) {
-    btn.textContent = '✗ Error';
-    btn.style.color = '#f87171';
+    if (btn) { btn.textContent = '✗ Error'; btn.style.color = '#f87171'; }
     // The SSE connection dropped mid-run (long plan/patch steps can outlast an idle
     // proxy). Flip the still-spinning active step to an error glyph and stop the
     // mandala — otherwise the panel spins forever with no explanation.
@@ -861,6 +986,19 @@ async function runAutowork(target, btn, base) {
       activeStep.classList.add('is-error');
       const ai = activeStep.querySelector('.aw-ico');
       if (ai) { ai.textContent = '✗'; ai.style.color = '#f87171'; }
+    }
+    // 401/403 from the stream endpoint = not an outage, an auth gate: autowork
+    // mutates the repo, so the server (correctly) refuses guest sessions. Say that,
+    // with the door to fix it — "Connection lost — stream_unavailable_403" told the
+    // user nothing actionable.
+    const mAuth = String(e && e.message || '').match(/stream_unavailable_(401|403)/);
+    if (mAuth) {
+      setActivity('Autowork needs an operator sign-in', 'this session is a guest — autowork changes the repo, so it requires an operator account', false);
+      const finAuth = row.querySelector('.aw-final');
+      finAuth.style.color = '#f87171';
+      finAuth.innerHTML = `✗ Autowork requires an operator session (HTTP ${esc(mAuth[1])}). <a href="/auth.html?returnTo=%2Fchat.html" style="color:var(--accent)">Sign in</a> and re-run \`!work #${esc(String(issue == null ? '' : issue))}\`.`;
+      if (typeof scrollToBottom === 'function') scrollToBottom();
+      return;
     }
     const isNet = /network|failed to fetch|load failed/i.test(e && e.message || '');
     const fin = row.querySelector('.aw-final');
@@ -883,7 +1021,11 @@ async function runAutowork(target, btn, base) {
             setActivity('Complete', 'recovered after a dropped connection', false);
             fin.style.color = '#4ade80';
             fin.innerHTML = `✓ Auto-worked #${esc(s.message && s.message.match(/#(\d+)/) ? RegExp.$1 : (issue || ''))} — <a href="${esc(s.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a> <span style="opacity:.6;font-size:11px">(reconnected)</span>`;
-            renderAutoworkActions(fin, s.prUrl, (s.message && s.message.match(/#(\d+)/) ? RegExp.$1 : issue), btn, base);
+            awFinishLoop(row, true);
+            renderConvergenceSummary(fin, s);
+            const reWarn = awApproveWarnReason(s);
+            renderAutoworkActions(fin, s.prUrl, (s.message && s.message.match(/#(\d+)/) ? RegExp.$1 : issue), btn, base,
+              reWarn ? { warn: true, warnReason: reWarn } : undefined);
           } else {
             setActivity('Stopped', s.message || 'run ended', false);
             fin.style.color = '#f87171';
@@ -932,10 +1074,8 @@ function attachBackgroundAutoworkPanel(run, base) {
     `<div class="msg-label">Unisona · ${esc(srcLabel)} · Autowork #${esc(issue)}</div>`
     + `<div class="bubble aw-panel">`
     + `<div class="aw-activity"><img src="/mandala.svg" class="aw-spin" alt=""><div class="aw-act-text"><b>Background autowork on #${esc(issue)}</b> <span>${esc(run.title || 'started by ' + srcLabel.toLowerCase() + ' — attaching live')}</span></div></div>`
-    + `<div class="aw-steps">${phases.map(([k, label, desc]) =>
-        `<div class="aw-step" data-phase="${k}"><div class="aw-ico">○</div><div class="aw-body">`
-        + `<div class="aw-row1"><span class="aw-label">${esc(label)}</span><span class="aw-desc">${esc(desc)}</span><span class="aw-extra"></span></div>`
-        + `<div class="aw-detail" style="display:none"></div></div></div>`).join('')}</div>`
+    + awLoopStripHtml()
+    + `<div class="aw-steps">${awStepRowsHtml(phases, esc)}</div>`
     + `<div class="aw-final" style="margin-top:8px;font-weight:600"></div>`
     + `</div>`;
   messages.appendChild(row);
@@ -948,6 +1088,7 @@ function attachBackgroundAutoworkPanel(run, base) {
     if (actImg) actImg.classList.toggle('aw-spin', spinning !== false);
   };
   const setStep = (phase, status, extra, detail) => {
+    awUpdateLoop(row, phase, status);   // before the row lookup — agi-benchmark has no row but lights Converge
     const el = row.querySelector(`.aw-step[data-phase="${phase}"]`);
     if (!el) return;
     el.classList.remove('is-active', 'is-done', 'is-error', 'is-retry');
@@ -969,7 +1110,7 @@ function attachBackgroundAutoworkPanel(run, base) {
   const applySteps = (steps) => {
     for (const s of steps || []) {
       let extra = '';
-      if (s.phase === 'tests' && s.status === 'done') extra = s.passed ? 'passed' : (s.ran ? 'failed' : 'none');
+      if (s.phase === 'tests' && s.status === 'done') extra = s.ran ? (s.passed ? 'passed' : 'failed') : 'none';
       else if (s.phase === 'research' && s.status === 'done') extra = `${s.filesFound || 0} files · ${s.webSourcesFound || 0} web`;
       else if (s.phase === 'pr' && s.status === 'done') extra = 'PR opened';
       else if (s.status === 'retry') extra = `retry ${s.attempt || ''}`.trim();
@@ -991,7 +1132,11 @@ function attachBackgroundAutoworkPanel(run, base) {
             setActivity('Complete', 'background run opened a pull request', false);
             fin.style.color = '#4ade80';
             fin.innerHTML = `✓ Auto-worked #${esc(issue)} — <a href="${esc(s.prUrl)}" target="_blank" rel="noopener" style="color:var(--accent)">View PR</a>`;
-            renderAutoworkActions(fin, s.prUrl, issue, row.querySelector('.aw-ico'), base);
+            awFinishLoop(row, true);
+            renderConvergenceSummary(fin, s);
+            const bgWarn = awApproveWarnReason(s);
+            renderAutoworkActions(fin, s.prUrl, issue, row.querySelector('.aw-ico'), base,
+              bgWarn ? { warn: true, warnReason: bgWarn } : undefined);
           } else {
             setActivity('Stopped', s.message || 'run ended', false);
             fin.style.color = '#f87171';
@@ -1072,7 +1217,7 @@ async function sendMessage(opts = {}) {
   // same forceGround path; used only to label the turn honestly.
   const autoVerify = !!(opts && opts.auto);
   // ── Single send entry ── These two checks used to be window.sendMessage WRAPPERS
-  // (gatedSendMessage in dream-chat.html + the !convergance shim in convergance-sync.js);
+  // (gatedSendMessage in chat.html + the !convergance shim in convergance-sync.js);
   // they're folded in here so there is exactly one sendMessage, no monkey-patching.
   // Auth gate: block roles without chat access (all current roles allow; the server
   // enforces real limits — this fails open to that if the role globals aren't present).
@@ -1164,9 +1309,8 @@ async function sendMessage(opts = {}) {
   const toolResults = [];  // <tool_call> events arrive mid-stream; re-applied after the final render (which rebuilds the cards empty)
   const nativeToolCalls = [];  // cloud-model (Claude/OpenAI/Gemini) tool *calls* — they emit no <tool_call> text, so we synthesize the cards at finalize
   const requestedProvider = document.getElementById('provider-select')?.value || '';
-  // Model pin (#1127): only meaningful alongside a pinned provider; the server
-  // re-validates against its allowlist, so this is a preference, not authority.
-  const requestedModel = requestedProvider ? (document.getElementById('model-select')?.value || '') : '';
+  // The #1127 model pin (`requestedModel` from #model-select) was removed (#2476):
+  // its markup was cut, so the value was always '' and no model was ever sent.
 
   try {
     const provider = requestedProvider;
@@ -1186,7 +1330,6 @@ async function sendMessage(opts = {}) {
         message: text,
         user: 'dream-chat',
         provider,
-        model: requestedModel || undefined,
         attachments: sentAttachments,
         history: history.slice(-10),
         personalContext: sanitizePersonalContext(personalContext || {}),
@@ -1335,12 +1478,21 @@ async function sendMessage(opts = {}) {
     fullText = blocks + '\n\n' + fullText;
   }
 
-  bubble.innerHTML = renderMarkdown(fullText);
+  bubble.innerHTML = renderMarkdown(fullText); // [DOORS:…] stripped inside renderMarkdown (#2497)
+
+  // Persist the assistant turn NOW — immediately after the reply renders — so a throw
+  // in any optional finalize decoration below (action chips, badges, TTS) can never
+  // drop it from the send-history. This is the memory-loss fix: renderActionChips was
+  // undefined and aborted finalize before the old tail-end push, so on a convergence
+  // reply the model "forgot what it just said" on the next turn.
+  if (!didError && fullText) history.push({ role: 'assistant', text: fullText });
 
   // Convergence-agent action chips (Stage 3): the server streamed a deterministic
   // work/ask answer + actions through the one endpoint — render the chips here.
   if (doneActions) {
-    renderActionChips(bubble, doneActions, (typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+    try {
+      renderActionChips(bubble, doneActions, (typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+    } catch (e) { console.warn('[dream-chat] action chips render failed:', e); }
   }
 
   // Re-apply tool results — the render above rebuilds the cards with empty result slots.
@@ -1495,6 +1647,45 @@ async function sendMessage(opts = {}) {
       bubble.appendChild(retry);
     }
   }
+  // Plain-language trust chip for NON-operator users (#2805). #2332 correctly hid the raw
+  // Σ₀ jargon (seam-open/pin/refuted reads as an error) — but that left the product knowing
+  // more about its own reliability than it tells the person deciding whether to trust the
+  // answer. Translate the non-healthy verdicts to plain language; grounded (the healthy case)
+  // stays quiet. The operator view above is unchanged, so #2332 is respected — this is
+  // translation, not jargon exposure.
+  else if (bubble.dataset.councilVerdict) {
+    const TRANSLATE = {
+      seam_open: ['⚠ unverified — worth double-checking', '#f5a623'],
+      refuted:   ['✗ failed a live check (see output)',    '#f87171'],
+      pin:       ['? no verifiable answer exists',          '#9ca3af'],
+    };
+    const t = TRANSLATE[bubble.dataset.councilVerdict];  // grounded / unknown → nothing (quiet)
+    if (t) {
+      const chip = document.createElement('span');
+      chip.className = 'council-trust-chip';
+      chip.dataset.verdict = bubble.dataset.councilVerdict;
+      chip.textContent = t[0];
+      chip.style.cssText = 'display:inline-block;font-size:11px;margin-left:6px;vertical-align:middle;color:'
+        + t[1] + ';opacity:0.9';
+      bubble.appendChild(chip);
+
+      // "see output": refuted carries the failing check's output — proof the answer is wrong.
+      // Surface it plainly (no Σ₀ jargon) so the user can look, without exposing operator chrome.
+      if (bubble.dataset.councilVerdict === 'refuted' && bubble.dataset.councilExecOutput) {
+        const det = document.createElement('details');
+        det.style.cssText = 'margin:6px 0 0;font-size:11px';
+        const sum = document.createElement('summary');
+        sum.textContent = 'show what failed';
+        sum.style.cssText = 'cursor:pointer;color:#f87171;list-style:none;user-select:none';
+        det.appendChild(sum);
+        const pre = document.createElement('pre');
+        pre.textContent = bubble.dataset.councilExecOutput;
+        pre.style.cssText = 'margin:6px 0 0;padding:8px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.3);border-radius:6px;white-space:pre-wrap;overflow-x:auto;color:var(--text,#ddd)';
+        det.appendChild(pre);
+        bubble.appendChild(det);
+      }
+    }
+  }
 
   // In-chat PR review (#1503 follow-up): when this turn was a `!review #N` (the server
   // tags the done event source "review"), attach Approve / Discard so the user can
@@ -1503,6 +1694,16 @@ async function sendMessage(opts = {}) {
   if (doneProvider === 'review' && !didError) {
     const _prm = String(text || '').match(/#?(\d+)/);
     if (_prm) renderPrReviewActions(bubble, parseInt(_prm[1], 10), (typeof serverBase !== 'undefined') ? serverBase : window.location.origin);
+  }
+
+  // Deterministic `!work #N` (server tags the done event source "work", mirroring
+  // !review): start the observable autowork run panel on that issue. The server route
+  // only validates + tags — the client owns the one panel path (runAutowork), so
+  // command-started and offer-started runs render identically. `btn` is null here
+  // (no offer button exists); runAutowork guards it.
+  if (doneProvider === 'work' && !didError) {
+    const _wm = String(text || '').match(/#?(\d+)/);
+    if (_wm) runAutowork(parseInt(_wm[1], 10), null, (typeof serverBase !== 'undefined') ? serverBase : window.location.origin).catch(() => {});
   }
 
   // Signature line: always show a human-readable label + time. Raw provider/model id
@@ -1738,7 +1939,8 @@ async function sendMessage(opts = {}) {
     msg.appendChild(fbRow);
   }
 
-  if (!didError) history.push({ role: 'assistant', text: fullText });
+  // (the assistant turn was pushed to history right after the reply rendered, above,
+  // so an error in any decoration between there and here can't erase it)
 }
 
 // ── Auto-expand textarea ──────────────────────────────────────────────────────
@@ -1850,368 +2052,7 @@ document.getElementById('input').addEventListener('input', e => {
   build();
 })();
 
-// ── Model dropdown (#1127 work item 1) ──────────────────────────────────────
-// Follows the provider selection: cloud providers with server-listed choices show
-// a Model select (default = the server's effective modelFor() resolution); Auto,
-// local and keystone-ft hide it. Selection persists per provider in localStorage.
-(function wireModelSelect() {
-  const providerSel = document.getElementById('provider-select');
-  const modelSel = document.getElementById('model-select');
-  const group = document.getElementById('model-select-group');
-  if (!providerSel || !modelSel || !group) return;
-  let catalog = null; // { claude: {default, options:[{id,label}]}, ... }
-
-  function storeKey(p) { return `lantern_model_pin_${p}`; }
-
-  function render() {
-    const p = providerSel.value;
-    const entry = catalog && p ? catalog[p] : null;
-    if (!entry || !entry.options || !entry.options.length) {
-      group.style.display = 'none';
-      modelSel.innerHTML = '<option value="">Default</option>';
-      return;
-    }
-    const saved = localStorage.getItem(storeKey(p)) || '';
-    modelSel.innerHTML = '';
-    const def = document.createElement('option');
-    def.value = '';
-    def.textContent = `Default (${entry.default})`;
-    modelSel.appendChild(def);
-    for (const m of entry.options) {
-      const o = document.createElement('option');
-      o.value = m.id;
-      o.textContent = m.label || m.id;
-      if (m.id === saved) o.selected = true;
-      modelSel.appendChild(o);
-    }
-    group.style.display = '';
-  }
-
-  modelSel.addEventListener('change', () => {
-    const p = providerSel.value;
-    if (!p) return;
-    if (modelSel.value) localStorage.setItem(storeKey(p), modelSel.value);
-    else localStorage.removeItem(storeKey(p));
-  });
-  providerSel.addEventListener('change', render);
-
-  fetch('/api/providers/models')
-    .then(r => (r.ok ? r.json() : null))
-    .then(data => { catalog = (data && data.providers) || null; render(); })
-    .catch(() => { /* endpoint absent → dropdown stays hidden */ });
-})();
-
-// ── Observer side panel ───────────────────────────────────────────────────────
-function toggleObserver() {
-  const panel = document.getElementById('observer-panel');
-  const btn = document.getElementById('observer-toggle-btn');
-  const collapsed = panel.classList.toggle('collapsed');
-  if (btn) btn.classList.toggle('active', !collapsed);
-  if (!collapsed) refreshObserver();
-}
-
-function refreshObserver() {
-  fetch('/api/csf/stats').then(r => r.ok ? r.json() : null).then(data => {
-    if (!data) return;
-    const symList = document.getElementById('obs-symbols');
-    if (data.top10 && data.top10.length > 0) {
-      symList.innerHTML = data.top10.slice(0, 8).map(s =>
-        `<span class="obs-symbol-chip${s.count >= 3 ? ' hot' : ''}">${s.token} ×${s.count}</span>`
-      ).join('');
-    } else { symList.textContent = 'none yet'; }
-    document.getElementById('obs-dilation').textContent =
-      data.delta_count ? `${data.delta_count} entries` : '—';
-  }).catch(() => {});
-
-  fetch('/api/csf/deltas?limit=5').then(r => r.ok ? r.json() : null).then(data => {
-    if (!data || !data.length) return;
-    const last = data[data.length - 1];
-    const moods = data.filter(d => d.mood_abs != null).map(d => d.mood_abs);
-    if (moods.length >= 2) {
-      const first = moods[0], latest = moods[moods.length - 1];
-      const diff = latest - first;
-      const label = Math.abs(diff) < 0.1 ? 'stable' : diff > 0 ? '↑ rising' : '↓ falling';
-      document.getElementById('obs-mood-arc').textContent = `${label} (${first.toFixed(1)} → ${latest.toFixed(1)})`;
-      document.getElementById('obs-mood-fill').style.width = `${Math.round(latest * 100)}%`;
-    }
-    const deltaLines = [];
-    if (last.symbols_added?.length) deltaLines.push(`+symbols: ${last.symbols_added.slice(0,3).join(', ')}`);
-    if (last.tags_added?.length) deltaLines.push(`+tags: ${last.tags_added.slice(0,3).join(', ')}`);
-    if (last.mood_delta != null && Math.abs(last.mood_delta) >= 0.05)
-      deltaLines.push(`mood ${last.mood_delta > 0 ? '+' : ''}${last.mood_delta}`);
-    document.getElementById('obs-last-delta').textContent = deltaLines.join(' · ') || 'no change';
-    if (last.convergence != null) {
-      const pct = Math.round(last.convergence * 100);
-      document.getElementById('obs-convergence').textContent = `${pct}%`;
-      document.getElementById('obs-conv-fill').style.width = `${pct}%`;
-    }
-  }).catch(() => {});
-}
-
-setInterval(() => {
-  if (!document.getElementById('observer-panel').classList.contains('collapsed')) refreshObserver();
-}, 30000);
-
-// ── Context management ────────────────────────────────────────────────────────
-let contextMode = { search: true, memory: true, trading: false };
-
-function updateContext() {
-  contextMode = {
-    search: document.getElementById('ctx-search').checked,
-    memory: document.getElementById('ctx-memory').checked,
-    trading: document.getElementById('ctx-trading').checked,
-  };
-  localStorage.setItem('contextMode', JSON.stringify(contextMode));
-}
-
-try {
-  const saved = JSON.parse(localStorage.getItem('contextMode') || '{}');
-  Object.assign(contextMode, saved);
-  document.getElementById('ctx-search').checked = contextMode.search;
-  document.getElementById('ctx-memory').checked = contextMode.memory;
-  document.getElementById('ctx-trading').checked = contextMode.trading;
-} catch (e) {}
-
-// ── Performance monitoring ────────────────────────────────────────────────────
-let perfStats = { totalTokens: 0, totalCost: 0, lastLatency: 0 };
-
-function togglePerfMonitor() {
-  const enabled = document.getElementById('ctx-perf').checked;
-  document.getElementById('perf-monitor').style.display = enabled ? 'block' : 'none';
-  localStorage.setItem('perfMonitorEnabled', enabled);
-}
-
-const perfEnabled = localStorage.getItem('perfMonitorEnabled') === 'true';
-if (perfEnabled) {
-  document.getElementById('ctx-perf').checked = true;
-  document.getElementById('perf-monitor').style.display = 'block';
-}
-
-function updatePerfStats(tokens, cost, latency) {
-  perfStats.totalTokens += tokens || 0;
-  perfStats.totalCost += cost || 0;
-  perfStats.lastLatency = latency || 0;
-  document.getElementById('perf-tokens').textContent = perfStats.totalTokens.toLocaleString();
-  document.getElementById('perf-cost').textContent = '$' + perfStats.totalCost.toFixed(3);
-  document.getElementById('perf-latency').textContent = perfStats.lastLatency + 'ms';
-}
-
-const origFetch = window.fetch;
-window.fetch = async function(...args) {
-  const startTime = Date.now();
-  const response = await origFetch.apply(this, args);
-  if (args[0] && args[0].includes('dream/chat')) {
-    const latency = Date.now() - startTime;
-    const tokens = parseInt(response.headers?.get('X-Tokens-Used') || '0');
-    const cost = parseFloat(response.headers?.get('X-Cost-Usd') || '0');
-    if (tokens || cost) updatePerfStats(tokens, cost, latency);
-  }
-  return response;
-};
-
-// ── Workspace — Sigma-0 observable autonomous coding (issue #527) ─────────────
-// Pillar 1 (A2): live step log + diff viewer
-// Pillar 2 (B1/B2/B3): approval gates before apply, commit, PR
-// Pillar 3 (C1/C2): receipt derived from what actually happened
-
-async function runWorkspace(request) {
-  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const uid = 'wks-' + Date.now();
-
-  if (!document.getElementById('wks-style')) {
-    const st = document.createElement('style');
-    st.id = 'wks-style';
-    st.textContent = `
-.wks{background:#12121e;border:1px solid rgba(124,58,237,.35);border-radius:10px;overflow:hidden;font-size:12px;margin-top:4px}
-.wks-hd{background:rgba(124,58,237,.12);padding:10px 14px;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid rgba(124,58,237,.2)}
-.wks-step{display:flex;align-items:flex-start;gap:10px;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,.05)}
-.wks-step-icon{font-size:14px;margin-top:1px;min-width:18px}
-.wks-step-info{flex:1;min-width:0}
-.wks-step-label{font-weight:500;display:flex;align-items:center;gap:6px;margin-bottom:2px}
-.wks-step-body{color:rgba(205,214,244,.55);line-height:1.55;margin-top:3px}
-.wks-badge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.04em}
-.wks-badge.run{background:rgba(245,166,35,.2);color:#f5a623}
-.wks-badge.ok{background:rgba(63,185,80,.2);color:#3fb950}
-.wks-badge.err{background:rgba(248,81,73,.2);color:#f85149}
-.wks-badge.wait{background:rgba(255,255,255,.06);color:rgba(205,214,244,.35)}
-.wks-badge.skip{background:rgba(255,255,255,.06);color:rgba(205,214,244,.35)}
-.wks-diff{background:#0d1117;padding:10px;border-radius:4px;font-family:monospace;font-size:10.5px;overflow:auto;max-height:240px;white-space:pre;margin:6px 0;line-height:1.4}
-.wks-diff .a{color:#3fb950}.wks-diff .d{color:#f85149}.wks-diff .h{color:#58a6ff}.wks-diff .m{color:#6e7681}
-.wks-actions{padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.06)}
-.wks-btn{border:none;border-radius:5px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:500;transition:opacity .15s}
-.wks-btn:disabled{opacity:.35;cursor:default}
-.wks-btn.g{background:rgba(63,185,80,.75);color:#fff}.wks-btn.g:hover:not(:disabled){background:#3fb950}
-.wks-btn.x{background:rgba(248,81,73,.1);color:#f85149;border:1px solid rgba(248,81,73,.3)}.wks-btn.x:hover:not(:disabled){background:rgba(248,81,73,.2)}
-.wks-btn.s{background:rgba(255,255,255,.07);color:rgba(205,214,244,.8);border:1px solid rgba(255,255,255,.1)}.wks-btn.s:hover:not(:disabled){background:rgba(255,255,255,.12)}
-.wks-tag{background:rgba(124,58,237,.18);border-radius:3px;padding:1px 6px;font-size:10px;color:rgba(205,214,244,.7);display:inline-block;margin:1px 2px}
-.wks-tag.risk-high{background:rgba(248,81,73,.18);color:#f85149}
-.wks-tag.risk-low{background:rgba(63,185,80,.18);color:#3fb950}
-.wks-tag.risk-medium{background:rgba(245,166,35,.18);color:#f5a623}
-.wks-receipt{padding:10px 14px;font-size:11px;border-top:1px solid rgba(63,185,80,.2);background:rgba(63,185,80,.04);color:rgba(205,214,244,.65);line-height:1.7}
-.wks-test{background:#0d1117;border-radius:4px;padding:6px 8px;font-size:10.5px;font-family:monospace;margin-top:4px}`.trim();
-    document.head.appendChild(st);
-  }
-
-  const container = document.getElementById('messages');
-  const el = document.createElement('div');
-  el.className = 'message agent';
-  el.innerHTML = `<div class="message-content"><div class="wks">
-    <div class="wks-hd">⚙&thinsp;Workspace&ensp;<span style="opacity:.5;font-weight:400;font-size:11px">${esc(request.slice(0,80))}${request.length>80?'…':''}</span></div>
-    <div id="${uid}-steps"></div>
-    <div id="${uid}-actions" class="wks-actions" style="display:none"></div>
-    <div id="${uid}-receipt" class="wks-receipt" style="display:none"></div>
-  </div></div>`;
-  container.appendChild(el);
-
-  const stEl = () => document.getElementById(uid+'-steps');
-  const actEl = () => document.getElementById(uid+'-actions');
-  const rcEl  = document.getElementById(uid+'-receipt');
-  const scroll = () => { container.scrollTop = container.scrollHeight; };
-
-  const BADGE = { run:'running…', ok:'done', err:'failed', wait:'waiting', skip:'skipped' };
-
-  function addStep(icon, label, status, body) {
-    const row = document.createElement('div');
-    row.className = 'wks-step';
-    row.innerHTML = `<div class="wks-step-icon">${icon}</div>
-      <div class="wks-step-info">
-        <div class="wks-step-label">${esc(label)}&ensp;<span class="wks-badge ${status}">${BADGE[status]||status}</span></div>
-        <div class="wks-step-body">${body||''}</div>
-      </div>`;
-    stEl().appendChild(row);
-    scroll();
-    return row;
-  }
-
-  function upStep(row, status, body) {
-    const b = row.querySelector('.wks-badge');
-    b.className = 'wks-badge '+status;
-    b.textContent = BADGE[status]||status;
-    if (body !== undefined) row.querySelector('.wks-step-body').innerHTML = body;
-    scroll();
-  }
-
-  function setAct(html) {
-    const a = actEl(); a.style.display = html ? 'flex' : 'none'; a.innerHTML = html||''; scroll();
-  }
-
-  function gate(choices) {
-    return new Promise(resolve => {
-      choices.forEach(({id, val}) => {
-        const btn = document.getElementById(id);
-        if (!btn) return;
-        btn.addEventListener('click', () => {
-          choices.forEach(({id:bid}) => { const b=document.getElementById(bid); if(b) b.disabled=true; });
-          resolve(val);
-        }, {once:true});
-      });
-    });
-  }
-
-  const receipt = { ts: new Date().toISOString(), request, plan:null, applied:false, tests:null, committed:false, pushed:false, prUrl:null, decisions:[] };
-
-  // ── Step 1: Plan (A1) ─────────────────────────────────────────────────
-  const planRow = addStep('📋','Plan','run','');
-  let plan;
-  try {
-    const r = await fetch('/api/self-edit/plan', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request})});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error||'plan_failed');
-    plan = d.plan;
-    receipt.plan = {summary:plan.summary, riskLevel:plan.riskLevel, files:plan.affectedFiles};
-    const rCls = 'risk-'+(plan.riskLevel||'medium');
-    const tags = [`<span class="wks-tag ${rCls}">⚠ ${esc(plan.riskLevel)}</span>`,
-      ...(plan.affectedFiles||[]).map(f=>`<span class="wks-tag">${esc(f)}</span>`)].join('');
-    const stepsHtml = (plan.steps||[]).map((s,i)=>`${i+1}. <b>${esc(s.action)}</b> ${esc(s.file||'')} — ${esc(s.description)}`).join('<br>');
-    upStep(planRow,'ok',`<div style="margin-bottom:4px">${esc(plan.summary)}</div><div style="margin:4px 0">${tags}</div>${stepsHtml?`<div style="margin-top:4px">${stepsHtml}</div>`:''}`);
-  } catch(e) { upStep(planRow,'err',esc(e.message)); return; }
-
-  // ── Step 2: Diff preview (A2) ─────────────────────────────────────────
-  const patchRow = addStep('📄','Diff preview','run','');
-  let diffText, changedFiles;
-  try {
-    const r = await fetch('/api/self-edit/patch', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({plan})});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error||'patch_failed');
-    diffText = d.diffText; changedFiles = d.changedFiles||[];
-    try { receipt.diffHash = btoa(diffText).slice(0,10); } catch{}
-    const lines = diffText.split('\n');
-    const diffHtml = lines.slice(0,200).map(ln=>{
-      if (ln.startsWith('+++') || ln.startsWith('---')) return `<span class="m">${esc(ln)}</span>`;
-      if (ln.startsWith('+')) return `<span class="a">${esc(ln)}</span>`;
-      if (ln.startsWith('-')) return `<span class="d">${esc(ln)}</span>`;
-      if (ln.startsWith('@@')) return `<span class="h">${esc(ln)}</span>`;
-      return esc(ln);
-    }).join('\n');
-    const trunc = lines.length>200 ? `<div style="opacity:.4;font-size:10px;margin-top:3px">…truncated (showing 200 of ${lines.length} lines)</div>` : '';
-    upStep(patchRow,'ok',`<div style="margin-bottom:4px;opacity:.7">${changedFiles.map(esc).join(', ')||'(no files)'}</div><div class="wks-diff">${diffHtml}</div>${trunc}`);
-  } catch(e) { upStep(patchRow,'err',esc(e.message)); return; }
-
-  // ── Gate B1: diff approval ─────────────────────────────────────────────
-  setAct(`<button class="wks-btn g" id="${uid}-b1y">✓ Apply changes</button><button class="wks-btn x" id="${uid}-b1n">✗ Cancel</button>`);
-  const approved = await gate([{id:uid+'-b1y',val:true},{id:uid+'-b1n',val:false}]);
-  setAct(null);
-  receipt.decisions.push({gate:'B1',choice:approved?'approve':'cancel',ts:new Date().toISOString()});
-  if (!approved) { addStep('🚫','Cancelled','skip','No files changed.'); showWksReceipt(receipt,rcEl); return; }
-
-  // ── Step 3: Apply + test (B2) ─────────────────────────────────────────
-  const applyRow = addStep('⚡','Apply + test','run','');
-  let allOk = false;
-  try {
-    const r = await fetch('/api/self-edit/apply', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({diffText, testsToRun:plan.testsToRun||[]})});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error||'apply_failed');
-    receipt.applied = true;
-    allOk = d.allTestsOk !== false;
-    const tests = d.tests||[];
-    receipt.tests = {passed:allOk, count:tests.length};
-    const applied = [...(d.applied?.changed||[]),(d.applied?.created||[])].flat();
-    const errs = d.applied?.errors||[];
-    const testsHtml = tests.length===0
-      ? '<div style="opacity:.4;margin-top:4px">No tests configured</div>'
-      : tests.map(t=>`<div class="wks-test"><span style="color:${t.ok?'#3fb950':'#f85149'}">${t.ok?'✓':'✗'} ${esc(t.cmd)}</span>${t.output?`<pre style="margin:3px 0 0;opacity:.6;font-size:10px;max-height:80px;overflow:auto">${esc(t.output.slice(0,400))}</pre>`:''}${t.error?`<pre style="margin:3px 0 0;color:#f85149;font-size:10px">${esc(String(t.error).slice(0,300))}</pre>`:''}</div>`).join('');
-    upStep(applyRow, allOk?'ok':'err', `<div style="margin-bottom:4px">${applied.map(esc).join(', ')||'applied'}</div>${errs.length?`<div style="color:#f85149;margin-bottom:4px">${errs.map(e=>esc(e.file+': '+e.error)).join('<br>')}</div>`:''}${testsHtml}`);
-  } catch(e) { upStep(applyRow,'err',esc(e.message)); showWksReceipt(receipt,rcEl); return; }
-
-  // Gate B2: block commit if tests failed
-  if (!allOk) { addStep('🧪','Tests failed — commit blocked','err','Fix failing tests before opening a PR. Working tree was modified.'); showWksReceipt(receipt,rcEl); return; }
-
-  // ── Gate B3: commit/PR confirmation ──────────────────────────────────
-  setAct(`<button class="wks-btn g" id="${uid}-b3y">🔗 Create draft PR</button><button class="wks-btn s" id="${uid}-b3n">◉ Stop here (no commit)</button>`);
-  const wantPr = await gate([{id:uid+'-b3y',val:true},{id:uid+'-b3n',val:false}]);
-  setAct(null);
-  receipt.decisions.push({gate:'B3',choice:wantPr?'create_pr':'stop',ts:new Date().toISOString()});
-  if (!wantPr) { addStep('✓','Applied — no PR','ok','Changes applied locally. No commit created.'); showWksReceipt(receipt,rcEl); return; }
-
-  // ── Step 4: PR (B3) ──────────────────────────────────────────────────
-  const prRow = addStep('🔗','Commit + PR','run','');
-  try {
-    const r = await fetch('/api/self-edit/pr', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      title: plan.summary||'auto: '+request.slice(0,60),
-      body: `Auto-generated via Workspace\n\n**Request:** ${request}\n\n**Plan:** ${plan.summary}`,
-      branch: plan.branchHint||'auto-change'
-    })});
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error||'pr_failed');
-    receipt.committed = true; receipt.pushed = d.pushed||false; receipt.prUrl = d.prUrl;
-    upStep(prRow,'ok',`Branch: <code style="opacity:.8">${esc(d.branch)}</code><br>${d.prUrl?`<a href="${esc(d.prUrl)}" target="_blank" style="color:#58a6ff">${esc(d.prUrl)}</a>`:'(no URL returned)'}${d.prError?`<br><span style="color:#f5a623;font-size:10px">${esc(d.prError)}</span>`:''}`);
-  } catch(e) { upStep(prRow,'err',esc(e.message)); }
-
-  showWksReceipt(receipt,rcEl);
-}
-
-// C1/C2: receipt derived only from what actually happened — no templated success
-function showWksReceipt(receipt, el) {
-  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const ts = receipt.ts.slice(0,16).replace('T',' ');
-  const dec = receipt.decisions.map(d=>`<b>${d.gate}</b>:${d.choice}`).join(' · ')||'none';
-  const testStr = receipt.tests ? `${receipt.tests.passed?'✓':'✗'} tests (${receipt.tests.count})` : 'no tests';
-  const prStr = receipt.prUrl ? `<a href="${esc(receipt.prUrl)}" target="_blank" style="color:#58a6ff">PR open →</a>` : receipt.committed ? 'committed (no PR URL)' : '—';
-  el.style.display = 'block';
-  el.innerHTML = `<b style="color:#3fb950">Receipt</b> · ${ts}<br>${testStr} · committed:${receipt.committed?'✓':'✗'} · pushed:${receipt.pushed?'✓':'✗'} · ${prStr}<br>Gates: ${dec}`;
-  try {
-    const log = JSON.parse(sessionStorage.getItem('wks-receipts')||'[]');
-    log.push(receipt);
-    sessionStorage.setItem('wks-receipts', JSON.stringify(log.slice(-20)));
-  } catch {}
-}
+// The model sub-picker (wireModelSelect, #1127) and the Observer side panel
+// (toggleObserver/refreshObserver + its 30s poll) were removed (#2476): their
+// markup was cut long ago, so the picker IIFE early-returned forever and the
+// observer JS polled /api/csf/* into a permanently hidden, opener-less panel.

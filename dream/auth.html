@@ -9,7 +9,7 @@
   <title>unisona.ai — Sign In</title>
   <script>
     /* Theme bootstrap — set before first paint to avoid a flash of wrong theme
-       (mirrors index.html / dream-chat.html). */
+       (mirrors index.html / chat.html). */
     (function () {
       try {
         var stored = localStorage.getItem('lantern-theme');
@@ -154,8 +154,6 @@
     }
     .provider-btn:hover { transform: translateY(-1px); filter: brightness(1.02); box-shadow: 0 6px 18px rgba(0,0,0,.12); }
     .provider-btn[data-provider="google"]  { background: #fff; color: #1f2937; border-color: #dadce0; }
-    .provider-btn[data-provider="discord"] { background: #5865F2; border-color: transparent; }
-    .provider-btn[data-provider="patreon"] { background: #f96854; border-color: transparent; }
     .provider-btn .pi { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .provider-btn .pi svg { width: 100%; height: 100%; display: block; }
 
@@ -182,7 +180,7 @@
     .local-toggle { text-align: center; font-size: 13px; color: var(--muted); margin-top: 3px; }
     .local-toggle a { color: var(--accent); cursor: pointer; text-decoration: underline; }
 
-    /* Secondary / ghost button (Patreon support, continue as guest) */
+    /* Secondary / ghost button (continue as guest) */
     .btn-ghost {
       display: flex; align-items: center; justify-content: center;
       width: 100%; border: 1px solid var(--border); border-radius: 12px;
@@ -286,20 +284,21 @@
         <button type="submit" class="btn-local" id="local-submit">Sign in</button>
       </form>
       <div class="local-toggle" id="local-toggle-wrap">
-        New here? <a id="local-toggle">Create an account</a>
+        New here? <a id="local-toggle" href="#" role="button">Create an account</a>
       </div>
       <div class="local-toggle" id="forgot-wrap">
-        <a id="forgot-link">Forgot password?</a>
+        <a id="forgot-link" href="#" role="button">Forgot password?</a>
       </div>
     </div>
 
-    <div class="auth-divider">support</div>
-    <a class="btn-ghost" href="https://www.patreon.com/c/lanterndreamjournal" target="_blank" rel="noopener noreferrer">
-      View Patreon Tiers &amp; Support
-    </a>
-
     <div class="auth-divider">or</div>
     <button type="button" id="continue-guest" class="btn-ghost">Continue without an account</button>
+
+    <!-- Trading on-ramp (ADR-0027): sign in, then land on the broker connect page
+         so a new trader can link Alpaca in one click right after auth. -->
+    <p class="local-toggle" id="trade-onramp" style="margin-top:14px">
+      💹 Here to trade? <a id="trade-onramp-link">Sign in and connect your broker →</a>
+    </p>
 
     <!-- ── Dev/test role picker — shown ONLY when the server reports testMode
          (LANTERN_TEST_AUTH_TOKEN set + direct, un-proxied hit). Signs in as the one
@@ -342,7 +341,7 @@
     </span>
     <span class="sep">·</span>
     <a href="/">Home</a>
-    <a href="/dream-chat.html">Chat</a>
+    <a href="/chat.html">Chat</a>
     <a href="/explore.html">Explore</a>
     <a href="/knowledgecenter.html">Help</a>
     <span class="sep">·</span>
@@ -363,22 +362,31 @@
   // misread. The role KEY stays `guest` (persisted on existing sessions).
   const LANTERN_ROLES = {
     guest:        { label: "Free",         canAccess: true },
-    supporter:    { label: "Supporter",    canAccess: true },
-    deep_dreamer: { label: "Deep Dreamer", canAccess: true },
-    founder:      { label: "Deep Dreamer", canAccess: true }, // legacy alias (#698)
+    supporter:    { label: "Free",         canAccess: true },
+    deep_dreamer: { label: "Pro",          canAccess: true },
+    founder:      { label: "Pro",          canAccess: true }, // legacy alias (#698)
+    pilot:        { label: "Pilot",        canAccess: true }, // #2612: a signed-in Pilot must not be treated as logged out
+    tech_support: { label: "Staff",        canAccess: true },
     admin:        { label: "Admin",        canAccess: true }
   };
 
   // Honor the page the guest was trying to reach — auth-gate.js redirects with
-  // ?returnTo=/dream-chat.html, so after sign-in they land on the chat they came
+  // ?returnTo=/chat.html, so after sign-in they land on the chat they came
   // for instead of always bouncing to the home page. Only same-origin absolute
   // paths are allowed (no "//host" protocol-relative open redirects).
   function safeReturnTo() {
     try {
       const rt = new URLSearchParams(location.search).get("returnTo");
       // Mirror the server validator (oauth-core safeReturnTo): root-relative only,
-      // no protocol-relative "//host" and no backslash tricks.
-      if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("\\")) return rt;
+      // no protocol-relative "//host" and no backslash tricks. Resolve against our
+      // OWN origin and confirm the result stays same-origin before returning only
+      // the path+query — so a redirect sink can never receive an off-site URL even
+      // if a new bypass slips past the string checks (clears CodeQL
+      // js/client-side-unvalidated-url-redirection by construction).
+      if (rt && rt.startsWith("/") && !rt.startsWith("//") && !rt.includes("\\")) {
+        const u = new URL(rt, location.origin);
+        if (u.origin === location.origin) return u.pathname + u.search;
+      }
     } catch (_) {}
     return "/";
   }
@@ -390,21 +398,13 @@
   const BRAND_SVG = {
     google:
       '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>',
-    discord:
-      '<svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.211.375-.445.865-.608 1.249a18.27 18.27 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.036A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.055c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.333-.955 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>',
-    patreon:
-      '<svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M14.82 2.41c3.96 0 7.18 3.24 7.18 7.21 0 3.96-3.22 7.18-7.18 7.18-3.97 0-7.21-3.22-7.21-7.18 0-3.97 3.24-7.21 7.21-7.21M2 21.6h3.52V2.41H2V21.6z"/></svg>',
   };
   const PROVIDER_META = {
-    discord: { label: "Continue with Discord", icon: BRAND_SVG.discord },
     google:  { label: "Continue with Google",  icon: BRAND_SVG.google },
-    patreon: { label: "Continue with Patreon", icon: BRAND_SVG.patreon },
   };
-  // Always offer these three, in this order — even if the server hasn't got the
-  // client id/secret yet. An unconfigured one simply redirects back here with a
-  // friendly "not set up on this server" notice (surfaceQueryError) rather than
-  // being hidden, so the option is always visible.
-  const OAUTH_ORDER = ["discord", "google", "patreon"];
+  // Google is the only OAuth provider offered (Discord + Patreon sign-in were
+  // removed). Email/password (the "local" provider) is the other way in.
+  const OAUTH_ORDER = ["google"];
 
   function startOAuth(provider) {
     location.href = `/api/auth/${provider}/start?returnTo=${encodeURIComponent(safeReturnTo())}`;
@@ -413,12 +413,20 @@
   // "Continue without an account": record the choice (ln_guest cookie, 1yr) so the
   // first-visit gate in auth-gate.js won't send them back here, then go where they came
   // from. They stay a signed-OUT guest — this only remembers that they've decided.
+  // A guest can't reach auth-gated pages, so "continue without an account" must not
+  // send them to a protected returnTo (e.g. /profile.html after "Switch account") —
+  // they'd just bounce straight back here. Fall back to home for those (#2639).
+  const GUEST_BLOCKED = ["/profile.html", "/create.html", "/work.html", "/accounts.html", "/accounts", "/admin-flags.html", "/kalshi-terminal.html"];
+  function guestDestination() {
+    const rt = safeReturnTo();
+    return GUEST_BLOCKED.includes(rt.split("?")[0]) ? "/" : rt;
+  }
   (function wireGuest() {
     const btn = document.getElementById("continue-guest");
     if (!btn) return;
     btn.addEventListener("click", () => {
       document.cookie = "ln_guest=1; path=/; max-age=" + 60 * 60 * 24 * 365 + "; samesite=lax";
-      location.href = safeReturnTo();
+      location.href = guestDestination();
     });
   })();
 
@@ -508,7 +516,7 @@
       pw.setAttribute("autocomplete", "new-password");
       pw.setAttribute("placeholder", "Create a password (min 8 characters)");
       submit.textContent = "Create account";
-      toggleWrap.innerHTML = 'Already have an account? <a id="local-toggle">Sign in</a>';
+      toggleWrap.innerHTML = 'Already have an account? <a id="local-toggle" href="#" role="button">Sign in</a>';
       if (tosRow) tosRow.hidden = false;   // show the agreement just above "Create account"
     } else {
       nameInput.hidden = true;
@@ -518,13 +526,14 @@
       pw.setAttribute("autocomplete", "current-password");
       pw.setAttribute("placeholder", "Password (min 8 characters)");
       submit.textContent = "Sign in";
-      toggleWrap.innerHTML = 'New here? <a id="local-toggle">Create an account</a>';
+      toggleWrap.innerHTML = 'New here? <a id="local-toggle" href="#" role="button">Create an account</a>';
       if (tosRow) tosRow.hidden = true;    // hidden for normal sign-in
       if (tosBox) tosBox.checked = false;  // fresh, unchecked each time they enter register
     }
-    document.getElementById("local-toggle").addEventListener("click", () =>
-      setLocalMode(localMode === "login" ? "register" : "login")
-    );
+    document.getElementById("local-toggle").addEventListener("click", (e) => {
+      e.preventDefault();
+      setLocalMode(localMode === "login" ? "register" : "login");
+    });
   }
 
   // ── Confirm-email screen — swaps out the entire sign-in view until the address
@@ -610,7 +619,13 @@
     submit.textContent = "…";
     try {
       const url = localMode === "register" ? "/api/auth/local/register" : "/api/auth/local/login";
-      const body = localMode === "register" ? { email, password, name } : { email, password };
+      // #2554: forward a stored referral code on register (captured from ?ref= on
+      // any landing page). Best-effort — absent/invalid codes are simply ignored.
+      let ref = null;
+      try { ref = localStorage.getItem("unisona_ref") || null; } catch (e) {}
+      const body = localMode === "register"
+        ? (ref ? { email, password, name, ref } : { email, password, name })
+        : { email, password };
       const res = await fetch(url, {
         method: "POST",
         credentials: "include",
@@ -629,7 +644,14 @@
         // Signed in — confirm with a success banner, then continue to the app.
         signedIn = true;
         showSignedIn();
-        setTimeout(() => { location.href = safeReturnTo(); }, 1200);
+        // Best-effort: claim a card subscription bought with this (verified) email
+        // before entering the app, so a Stripe subscriber's sign-in lands with the
+        // right tier already applied. The server no-ops fast when billing is off or
+        // there's nothing to link; a slow/failed probe never blocks the redirect.
+        const link = await attemptBillingLink(2500);
+        const freshlyLinked = !!(link && link.linked && !link.already);
+        if (freshlyLinked) showNotice("Signed in ✓ — found your card subscription and linked it to this account. Taking you in…");
+        setTimeout(() => { location.href = safeReturnTo(); }, freshlyLinked ? 1800 : 1200);
         return;
       }
       // Unconfirmed email → sign-in blocked. Show the dedicated confirm screen
@@ -654,6 +676,20 @@
       // brief success banner shows and we redirect — don't re-enable it.
       if (!signedIn) { submit.disabled = false; submit.textContent = prev; }
     }
+  }
+
+  // POST /api/billing/link with a hard client timeout. Returns the parsed result
+  // ({ linked, already, role, … }) or null on any failure/timeout — callers treat
+  // null as "nothing linked" and move on.
+  async function attemptBillingLink(timeoutMs) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const r = await fetch("/api/billing/link", { method: "POST", credentials: "include", signal: ctrl.signal });
+      clearTimeout(t);
+      if (!r.ok) return null;
+      return await r.json().catch(() => null);
+    } catch (_) { return null; }
   }
 
   async function checkSession() {
@@ -688,7 +724,7 @@
   // as the seeded test account with that role via /api/auth/test-login, then lands
   // on returnTo. Only ever rendered when the SERVER reports testMode.
   const TEST_ROLE_LABELS = {
-    supporter: "Supporter", deep_dreamer: "Deep Dreamer", founder: "Founder",
+    supporter: "Free", deep_dreamer: "Pro", founder: "Pro",
     admin: "Admin", tech_support: "Tech Support",
   };
   function renderTestPanel(session) {
@@ -727,11 +763,19 @@
     }
   }
 
-  async function requestPasswordReset() {
-    const email = (document.getElementById("local-email").value || "").trim()
-      || (prompt("Enter your account email to reset your password:") || "").trim();
-    if (!email) return;
+  async function requestPasswordReset(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const emailEl = document.getElementById("local-email");
     const errEl = document.getElementById("local-error");
+    const email = (emailEl.value || "").trim();
+    // No prompt() — it's inaccessible (blocks the whole page, invisible to screen
+    // readers) and can't be styled. Ask for the address inline instead (#2640).
+    if (!email) {
+      errEl.style.color = "var(--accent)";
+      errEl.textContent = "Enter your account email above, then choose ‘Forgot password?’ again.";
+      emailEl.focus();
+      return;
+    }
     try {
       await fetch("/api/auth/request-password-reset", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -747,6 +791,16 @@
     setLocalMode("login");
     document.getElementById("local-form").addEventListener("submit", submitLocal);
     document.getElementById("forgot-link").addEventListener("click", requestPasswordReset);
+
+    // Trading on-ramp (ADR-0027): reload sign-in with returnTo=/work.html so the
+    // existing safeReturnTo() flow lands the user on the broker connect after auth.
+    const onramp = document.getElementById("trade-onramp-link");
+    if (onramp) onramp.addEventListener("click", (e) => {
+      e.preventDefault();
+      const u = new URL(location.href);
+      u.searchParams.set("returnTo", "/work.html");
+      location.href = u.toString();
+    });
 
     // ── Confirm-email screen controls ──
     // Go back to the previous (sign-in) screen without confirming.
