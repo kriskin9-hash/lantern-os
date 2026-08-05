@@ -52,6 +52,19 @@
     --tv-text-primary:#1a1d24;--tv-text-secondary:#4a5160;
     --tv-grid:rgba(0,0,0,.08);--tv-axis:rgba(0,0,0,.55);
   }
+
+  /* De-boxing pass (#3049): the terminal read as a grid of hard same-weight
+     rectangles. Soften radii and borders, add faint elevation so surfaces have
+     depth order, and give the BUY/SELL strip breathing room. Pure skin — no
+     layout metrics change. */
+  .card{border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.22)}
+  .card:hover{box-shadow:0 4px 18px rgba(0,0,0,.3)}
+  .chart-ctrl,.wl-add-btn,.wl-sort{border-radius:7px}
+  .btn-buy,.btn-sell{border-radius:8px;padding-top:7px;padding-bottom:7px}
+  .tp-tab{border-radius:6px 6px 0 0}
+  .hstat{border-radius:7px}
+  .trade-lock .tl-card{border-radius:16px}
+  .footer,.sidebar{border-color:color-mix(in srgb, var(--border) 80%, transparent)}
   /* A handful of surfaces/borders in this terminal are hardcoded dark
      (rgba(15,18,28,…) / white-translucent borders). Remap them for light mode
      so cards, panels and dividers stay legible (#1577). */
@@ -83,7 +96,7 @@
   ::-webkit-scrollbar-corner{background:transparent}
   html[data-theme="light"] *{scrollbar-color:rgba(0,0,0,.22) transparent}
   html[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.22);background-clip:padding-box}
-  .layout{display:grid;grid-template-columns:var(--sidebar-w,210px) 1fr;grid-template-rows:52px minmax(0,1fr) var(--footer-h, clamp(220px,34vh,460px));height:calc(100vh - 52px)}
+  .layout{display:grid;grid-template-columns:var(--sidebar-w,296px) 1fr;grid-template-rows:52px minmax(0,1fr) var(--footer-h, clamp(220px,34vh,460px));height:calc(100vh - 52px)}
   /* Vertical drag dividers for the left (watchlist) and right (order ticket) columns.
      A thin ew-resize strip with a centred grip; min/max are enforced in
      initColumnResizers() and the chosen widths persist. #trader-cols */
@@ -138,7 +151,7 @@
   /* Sidebar spans the full content height (rows 2–3) so the watchlist + info panel
      run all the way to the bottom; the footer trading panel sits under the charts. */
   .sidebar{grid-column:1;grid-row:2 / 4;background:var(--bg1);border-right:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;min-height:0;position:relative}
-  #wlList{flex:1 1 auto;overflow-y:auto;min-height:0;padding:8px 0}
+  #wlList{flex:0 1 auto;overflow-y:auto;min-height:0;padding:8px 0}  /* 0-grow: the symbol-info panel docks to the LIST BOTTOM, not the sidebar floor — a short list otherwise left a dead gap between the two (operator, 2026-07-28) */
   .main{grid-column:2;grid-row:2;overflow-y:auto;padding:12px;background:var(--bg0)}
   /* #1712: TradingView-style trading panel — summary row + tabs + table body */
   .footer{position:relative;grid-column:2;grid-row:3;background:var(--bg1);border-top:1px solid var(--border);display:flex;flex-direction:column;min-height:0;height:100%;box-sizing:border-box;padding:0}
@@ -201,12 +214,12 @@
   .logo span{color:var(--text1);font-weight:400}
   /* #2431: stats are single-line inline pills (`VIX 17.33 CALM`), not stacked
      label-over-value pairs — halves the toolbar's height footprint. */
-  .hstat{font-family:var(--mono);font-size:11px;display:flex;flex-direction:row;align-items:center;gap:5px;min-width:0;
+  .hstat{font-family:var(--mono);font-size:12px;display:flex;flex-direction:row;align-items:center;gap:5px;min-width:0;
     padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg0)}
   .hstat .l{color:var(--text2);font-size:9.5px;text-transform:uppercase;letter-spacing:.09em}
   .hstat .v{color:var(--text0)}
   .hstat .pos{color:var(--green)}.hstat .neg{color:var(--red)}
-  .badge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:3px;letter-spacing:.1em}
+  .badge{font-family:var(--mono);font-size:12px;padding:3px 8px;border-radius:6px;letter-spacing:.1em}
   .badge-paper{background:rgba(245,166,35,.15);color:var(--amber);border:1px solid rgba(245,166,35,.3)}
   .badge-demo{background:rgba(74,158,255,.15);color:var(--blue);border:1px solid rgba(74,158,255,.3)}
   .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease-in-out infinite;margin-left:auto}
@@ -230,33 +243,39 @@
   .alert-toast{position:fixed;top:112px;left:50%;transform:translateX(-50%);z-index:1400;background:var(--bg1);border:1px solid var(--amber);color:var(--text0);font-family:var(--mono);font-size:13px;padding:10px 16px;border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
   /* #2439: watchlist sort control */
   .wl-sort{flex:0 0 auto;margin-left:6px;background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:11px;border-radius:4px;padding:0 4px;cursor:pointer}
-  .nav-link{font-family:var(--mono);font-size:11px;padding:6px 12px;border-radius:3px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;transition:background .15s,color .15s}
+  .nav-link{font-family:var(--mono);font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--border);background:var(--bg2);color:var(--text1);text-decoration:none;cursor:pointer;transition:background .15s,color .15s}
   .nav-link:hover{color:var(--accent);background:var(--bg3);border-color:var(--accent)}
   .ovn-toggle{cursor:pointer}
   .ovn-toggle.ovn-on{background:rgba(0,212,170,.22);border-color:var(--green);color:var(--green)}
   /* ── Sidebar watchlist ── */
   /* Denser, TradingView-style rows (#1631): symbol + price on one line, change +
      signal on a tight second line. */
-  .wl-item{padding:5px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s;line-height:1.25;display:flex;align-items:center;gap:8px}
-  .wl-content{flex:1;min-width:0}
+  .wl-item{position:relative;display:grid;grid-template-columns:22px minmax(34px,1fr) auto auto auto;align-items:center;gap:6px;padding:10px 26px 10px 10px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.03);transition:background .15s;line-height:1.3}
   /* Circular brand badge (TradingView-style). Background is chosen adaptively per
      logo (adaptLogoBg): dark by default so colour logos pop, light only for
      dark-monochrome marks (e.g. Intel) that would vanish on dark. */
   .wl-logo{width:24px;height:24px;border-radius:50%;flex:0 0 auto;object-fit:contain;padding:3px;box-sizing:border-box;background:#11161d;border:1px solid rgba(255,255,255,.10);image-rendering:auto}
   .wl-logo.on-light{background:#eef1f4;border-color:rgba(0,0,0,.12)}
   .wl-logo.ph{display:flex;align-items:center;justify-content:center;object-fit:none;padding:0;background:linear-gradient(135deg,#2b3340,#1a2029);color:var(--text1);font-family:var(--mono);font-size:10px;font-weight:700;border-color:rgba(255,255,255,.08)}
+  .tb-badge{width:24px;height:24px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.02em;border:1px solid rgba(255,255,255,.14);text-shadow:0 1px 2px rgba(0,0,0,.35);overflow:hidden}
+  .tb-badge svg{width:15px;height:15px;display:block}
+  .tb-badge.tb-glyph{font-size:12px;font-weight:600;text-shadow:none}
+  .wl-logo.mono{display:flex;align-items:center;justify-content:center;padding:0;color:#fff;font-family:var(--mono);font-size:8.5px;font-weight:700;letter-spacing:.02em;border:1px solid rgba(255,255,255,.14);text-shadow:0 1px 2px rgba(0,0,0,.35)}
   .wl-item:hover,.wl-item.active{background:var(--bg2)}
   .wl-item.active{box-shadow:inset 3px 0 0 var(--accent)}   /* accent selection cue (matches site .active) */
   .wl-item.active{box-shadow:inset 2px 0 0 var(--blue)}
-  .wl-sym{font-family:var(--mono);font-size:10.5px;font-weight:600;color:var(--text0)}
-  .wl-row{display:flex;justify-content:space-between;align-items:center;gap:6px}
-  .wl-price{font-family:var(--mono);font-size:9.5px;color:var(--text1)}
-  .wl-chg{font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap}
+  .wl-sym{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text0);overflow:hidden;text-overflow:ellipsis}
+  /* Two aligned columns, not space-between: left holds symbol/change, right holds
+     price/signal, so every row forms a real column instead of drifting with each
+     value's width. */
+  .wl-right{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+  .wl-price{font-family:var(--mono);font-size:12px;color:var(--text0);text-align:right;font-variant-numeric:tabular-nums}
+  .wl-chg{font-family:var(--mono);font-size:12px;font-weight:600;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
   .up{color:var(--green)}.dn{color:var(--red)}.flat{color:var(--text2)}
-  .wl-signal{font-family:var(--mono);font-size:10px}
+  .wl-signal{font-family:var(--mono);font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums}
   /* Selected-symbol info panel (#1631) — name, exchange, day stats, regime/signal.
      Height is user-resizable via the .wl-resize grabber above it (desktop + mobile). */
-  .wl-info{display:none;flex:0 0 auto;height:var(--wlinfo-h,42%);min-height:96px;max-height:80%;overflow-y:auto;padding:9px 12px 12px;border-top:1px solid var(--border);background:var(--bg2)}
+  .wl-info{display:none;flex:0 0 auto;height:var(--wlinfo-h,42%);min-height:96px;max-height:80%;overflow-y:auto;padding:10px 12px 12px;border-top:1px solid var(--border);background:var(--bg1)}
   .wl-info.show{display:block}
   /* Drag handle to resize the symbol-info panel — only visible while the panel is shown. */
   .wl-resize{display:none;position:relative;flex:0 0 auto;height:11px;cursor:ns-resize;background:var(--bg1);touch-action:none}
@@ -264,35 +283,35 @@
   .wl-resize:hover::before{background:var(--tv-text-secondary)}
   .sidebar:has(.wl-info.show) .wl-resize{display:block}
   body.resizing-wlinfo{user-select:none;cursor:ns-resize}
-  .wi-sym{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text0)}
-  .wi-name{font-size:11px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .wi-px{font-family:var(--mono);font-size:14px;font-weight:600;margin-top:5px}
+  .wi-sym{font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--text0);display:inline}
+  .wi-name{font-size:10.5px;color:var(--text2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wi-px{font-family:var(--mono);font-size:13px;font-weight:700;margin-top:6px}
   .wi-meta{font-family:var(--mono);font-size:11px;color:var(--text2);margin-top:4px;display:flex;flex-wrap:wrap;gap:3px 12px}
   .wi-meta b{color:var(--text1);font-weight:600}
   /* #1711: expanded info — Technicals / Returns / Key stats sections */
-  .wi-sect{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--text2);margin:10px 0 5px;border-top:1px solid var(--border);padding-top:8px}
-  .wi-tech{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--text1)}
+  .wi-sect{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--text2);margin:9px 0 5px;border-top:1px solid color-mix(in srgb, var(--border) 70%, transparent);padding-top:7px}
+  .wi-tech{font-family:var(--mono);font-size:12.5px;font-weight:700;color:var(--text1)}
   .wi-tech.up{color:var(--green)} .wi-tech.dn{color:var(--red)}
-  .wi-rets{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
-  .wi-ret{background:var(--bg0);border:1px solid var(--border);border-radius:4px;padding:5px 4px;text-align:center}
-  .wi-ret-v{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text2)}
+  .wi-rets{display:grid;grid-template-columns:repeat(auto-fit,minmax(54px,1fr));gap:5px}
+  .wi-ret{background:var(--bg2);border:1px solid color-mix(in srgb, var(--border) 70%, transparent);border-radius:6px;padding:6px 4px;text-align:center;min-width:0}
+  .wi-ret-v{font-family:var(--mono);font-size:11.5px;font-weight:700;color:var(--text2)}
   .wi-ret.up .wi-ret-v{color:var(--green)} .wi-ret.dn .wi-ret-v{color:var(--red)}
   .wi-ret-l{font-family:var(--mono);font-size:10px;color:var(--text2);margin-top:1px}
   .wl-add{display:flex;padding:8px 12px;border-bottom:1px solid var(--border)}
   /* #1709: single full-width "Add symbol" button → opens the search popup */
   .wl-add-btn{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text1);font-family:var(--mono);font-size:12px;padding:7px 8px;border-radius:4px;cursor:pointer;letter-spacing:.03em}
   .wl-add-btn:hover{color:var(--text0);background:var(--bg3);border-color:var(--blue)}
-  .wl-remove{font-family:var(--mono);font-size:11px;color:var(--text2);cursor:pointer;padding:0 4px;background:none;border:0;line-height:1}
+  .wl-remove{position:absolute;right:5px;top:50%;transform:translateY(-50%);opacity:0;background:none;border:none;color:var(--text2);font-size:13px;line-height:1;padding:2px 4px;cursor:pointer;transition:opacity .12s} .wl-item:hover .wl-remove,.wl-item:focus-within .wl-remove{opacity:1}
   .wl-remove:hover{color:var(--red)}
   /* ── Ticker cards grid ── */
   /* #2435: columns never exceed the pane (min(340px,100%)) and rows scale with the
      viewport height instead of a fixed 352px, so charts stay usable on tablets,
      portrait screens, and desktops with the chat rail open. */
-  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px;grid-auto-rows:clamp(260px,38vh,400px)}
+  .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(340px,100%),1fr));gap:12px;grid-auto-rows:auto}
   /* Every card is a flex column of the SAME height (grid-auto-rows); the chart
      flexes to fill, so watching/quiet/breakout cards no longer render at
      different heights with shorter charts. */
-  .card{background:rgba(15,18,28,.95);border:1px solid rgba(255,255,255,.06);border-radius:12px;overflow:hidden;transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;display:flex;flex-direction:column;min-height:0;cursor:pointer}
+  .card{background:rgba(15,18,28,.92);border:1px solid rgba(255,255,255,.05);border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.25);overflow:hidden;transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;display:flex;flex-direction:column;min-height:0;cursor:pointer;aspect-ratio:1/1}
   /* #2433: hover lift — the deck responds to the pointer like the site's chips do. */
   .card:hover{border-color:color-mix(in srgb, var(--accent) 45%, var(--border));box-shadow:var(--shadow-hover);transform:translateY(-2px)}
   /* Focused/selected chart (#focus-chart): a slightly darker grey with a clearer
@@ -300,7 +319,10 @@
      tracks. Theme-aware. */
   .card.active{background:rgba(32,38,52,.98);border-color:var(--accent);box-shadow:0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent)}
   html[data-theme="light"] .card.active{background:#e5eaf2;border-color:var(--accent)}
-  .card.state-open{border-color:rgba(0,212,170,.35);grid-column:span 2}
+  /* An open position changes the card's BORDER, never its footprint. This used to be
+     `grid-column:span 2`, so opening a position silently doubled that card's width and
+     re-flowed every other chart on the deck (#3139). */
+  .card.state-open{border-color:rgba(0,212,170,.35)}
   .card.state-watching{border-color:color-mix(in srgb, var(--accent) 28%, var(--border))}
   .card.state-quiet{opacity:.75}
   .card-header{padding:10px 14px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -313,7 +335,14 @@
      space below, and no chart bleeding under the footer. Rows/cols set in JS. */
   .main.main-fixed{overflow:hidden}
   .cards-grid.grid-fixed{height:100%;gap:8px}
-  .cards-grid.grid-fixed .card{display:flex;flex-direction:column;min-height:0;grid-column:auto!important;opacity:1}
+  /* Square in the fixed layouts too (#3138). The tracks are sized in JS to the largest
+     square that fits the deck (see applyGridCols), so aspect-ratio here is the guarantee
+     rather than the mechanism — and every panel in a layout is identically sized (#3139). */
+  .cards-grid.grid-fixed .card{display:flex;flex-direction:column;min-height:0;grid-column:auto!important;opacity:1;aspect-ratio:1/1}
+  .cards-grid.grid-fixed{justify-content:center;align-content:center}
+  /* Phones keep the stacked, height-filling layout: a square panel in a single narrow
+     column wastes the little vertical room a phone has. */
+  .cards-grid.grid-fixed.grid-narrow .card{aspect-ratio:auto}
   .cards-grid.grid-fixed .card .zone-ladder{flex:1 1 auto;height:auto!important;min-height:0;margin-bottom:6px}
   /* Drag-to-reorder chart slots (multi-chart layouts) */
   .drag-handle{cursor:grab;color:var(--tv-text-secondary);font-size:14px;line-height:1;user-select:none;padding:0 2px}
@@ -357,7 +386,6 @@
      Dashed border distinguishes a "read" from the solid conviction badge; only shown
      when Patterns is ON and a pattern is genuinely detected. Bias-coloured. */
   .pat-chip{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:10px;display:inline-flex;align-items:center;gap:4px;margin:0 14px 5px;width:fit-content;max-width:calc(100% - 28px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px dashed var(--border);background:var(--bg2);cursor:help}
-  .pat-chip .pat-type{color:var(--text2);text-transform:uppercase;letter-spacing:.06em;font-size:10px}
   .pat-chip.bull{border-color:rgba(0,212,170,.45);color:var(--green)}
   .pat-chip.bear{border-color:rgba(255,95,109,.45);color:var(--red)}
   .pat-chip.neut{border-color:var(--border);color:var(--text1)}
@@ -418,6 +446,7 @@
   .sym-logo{width:28px;height:28px;border-radius:50%;object-fit:contain;padding:3px;box-sizing:border-box;background:#11161d;border:1px solid rgba(255,255,255,.10);flex:0 0 auto}
   .sym-logo.on-light{background:#eef1f4;border-color:rgba(0,0,0,.12)}
   .sym-logo.ph{display:flex;align-items:center;justify-content:center;object-fit:none;padding:0;background:linear-gradient(135deg,#2b3340,#1a2029);color:var(--text1);font-family:var(--mono);font-size:11px;font-weight:700}
+  .sym-logo.mono{display:flex;align-items:center;justify-content:center;padding:0;color:#fff;font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.02em;border:1px solid rgba(255,255,255,.14);text-shadow:0 1px 2px rgba(0,0,0,.35);object-fit:none}
   .sym-sym{font-family:var(--mono);font-weight:700;font-size:14px;color:var(--text0);min-width:62px}
   .sym-name{flex:1;color:var(--text1);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sym-ex{font-family:var(--mono);font-size:11px;color:var(--text2);letter-spacing:.05em}
@@ -523,7 +552,7 @@
      Priority: chart controls + sign-in/chat > stats > cross-links. The toolbar's
      horizontal scroll stays as the last resort, not the first. ── */
   @media (max-width:1024px){
-    .layout{grid-template-columns:var(--sidebar-w,170px) 1fr}   /* narrower watchlist on tablets */
+    .layout{grid-template-columns:var(--sidebar-w,296px) 1fr}   /* narrower watchlist on tablets */
     .cards-grid{grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:10px}
     .header{gap:8px;padding:0 10px}
   }
@@ -859,7 +888,7 @@
   <div class="badge guest-badge" id="guestBadge" style="display:none" title="Read-only guest view — sign in to trade" aria-label="Read-only guest view">READ-ONLY</div>
   <div class="hstat" title="CBOE Volatility Index — the market's fear gauge (higher = choppier)"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
   <div class="hstat" id="mktClockWrap" title="US equities session, Eastern Time"><div class="l" id="mktClockLabel">Closed</div><div class="v" id="mktClock">—</div></div>
-  <button id="zoomBackBtn" class="chart-ctrl" style="display:none;cursor:pointer" onclick="closeFullscreenChart()" title="Back to the chart grid">← Back to grid</button>
+  <button id="zoomBackBtn" class="chart-ctrl" style="display:none;cursor:pointer" onclick="setSlotCount(0)" title="Back to the chart grid">← Back to grid</button>
   <div class="hgroup" role="group" aria-label="Chart controls">
   <select id="chartLayoutSelect" class="chart-ctrl" aria-label="Number of charts to show" onchange="setSlotCount(this.value)" title="How many charts to show — fewer = bigger">
     <option value="0">⊞ All</option>
@@ -941,7 +970,6 @@
 <!-- Sidebar -->
 <div class="sidebar" role="complementary" aria-label="AI tradelist">
   <div class="col-resize col-resize-left" id="sidebarResize" role="separator" aria-orientation="vertical" aria-label="Resize the watchlist column" tabindex="0" title="Drag to resize the watchlist"></div>
-  <div style="padding:6px 10px 4px;font-size:10.5px;line-height:1.45;color:var(--text2,#8b8b95);border-bottom:1px solid var(--border,#22242e)" title="The autopilot enters ONLY symbols on this list. Your watchlist (Watch page) is tracking-only; manual buy/sell works on any symbol via search.">🤖 AI tradelist — the autopilot trades <b>only</b> these</div>
   <div class="wl-add">
     <button class="wl-add-btn" onclick="openSymbolSearch(addWatchlistSymbol,{})" aria-label="Search and add a symbol" title="Search symbols">+ Add symbol</button>
     <select class="wl-sort" aria-label="Sort watchlist" title="Sort the watchlist" onchange="setWlSort(this.value)">
@@ -1032,7 +1060,7 @@
 </div>
 
 <!-- Fullscreen ticker chart -->
-<div class="fs-bg hidden" id="fsBg" onclick="if(event.target===this)closeFullscreenChart()">
+<div class="fs-bg hidden" id="fsBg" onclick="if(event.target===this)setSlotCount(0)">
   <div class="fs-chart">
     <div class="fs-header">
       <span class="fs-ticker" id="fsTicker">—</span>
@@ -1069,7 +1097,7 @@
         <button class="btn-buy" onclick="openOrderTicket(fullscreenTicker,'buy')" title="Open a buy order ticket for this symbol (paper trade)">BUY</button>
         <button class="btn-sell" onclick="openOrderTicket(fullscreenTicker,'sell')" title="Open a sell order ticket for this symbol (paper trade)">SELL</button>
       </div>
-      <span class="fs-close" onclick="closeFullscreenChart()">✕ Close</span>
+      <span class="fs-close" onclick="setSlotCount(0)">✕ Close</span>
     </div>
     <div class="fs-body">
       <div class="zone-ladder" id="ladder-fs">
@@ -1252,6 +1280,26 @@ const TICK_SIZE = 0.01;
 // height reserved for time labels. Shared by renderChart() and the
 // wheel/drag handlers so hit-testing matches what's actually drawn.
 const AXIS_W = 52, AXIS_H = 16;
+// Price axis consistency (#3141): every chart renders EXACTLY this many
+// gridline intervals. The rendered range is snapped outward to clean 1/2/5
+// step boundaries (see _snapPriceRange), so labels always land on
+// .00/.10/.20/.50-style values and the count never varies chart-to-chart
+// or while zooming.
+const PRICE_AXIS_INTERVALS = 6;
+function _snapPriceRange(min, max){
+  const K = PRICE_AXIS_INTERVALS, R = max - min;
+  if(!(R > 0) || !isFinite(R)) return [min, max];
+  let mag = Math.pow(10, Math.floor(Math.log10(R/K)));
+  for(let guard = 0; guard < 12; guard++, mag *= 10){
+    for(const L of [1, 2, 5]){
+      const step = L * mag;
+      if(step * K < R) continue;                       // window too small to cover
+      const lo = Math.floor(min/step) * step;
+      if(lo + K*step >= max - step*1e-9) return [lo, lo + K*step];
+    }
+  }
+  return [min, max];
+}
 const MIN_VISIBLE_BARS = 10;
 
 // TradingView-style chart colors (canvas can't read CSS custom properties,
@@ -1334,8 +1382,10 @@ function sigBadge(d){
     return `<div class="conf-badge ${dirCls}" title="${dir} signals like this resolved ${Math.round(hit*100)}% of the time over ${n} settled trades.">`
       + `${icon} ${cc}%<span class="cb-hit">hit ${Math.round(hit*100)}% · n=${n}</span>${cat}</div>`;
   }
-  return `<div class="conf-badge uncal" title="Raw model confidence — not yet backed by a settled-trade hit-rate for this signal type. Shown, not acted on.">`
-    + `${icon} <span class="cb-model">model ${conf}%</span><span class="cb-uncal">uncalibrated</span>${cat}</div>`;
+  // Uncalibrated → show NOTHING (operator, 2026-07-28). The neutral "model 47%
+  // · uncalibrated" chip still read as a signal at a glance; until a signal type
+  // carries a settled-trade hit-rate (n>=20), the honest render is silence.
+  return '';
 }
 
 // ── Live market-regime classification ───────────────────────────────────────
@@ -1464,9 +1514,11 @@ function niceTicks(min, max, targetCount){
   const rawStep = range / Math.max(1, targetCount);
   const mag  = Math.pow(10, Math.floor(Math.log10(rawStep)));
   const norm = rawStep / mag;
-  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  // 1/2/5 ladder only (no 2.5 rung): every label lands on a clean
+  // .00/.10/.20/.50-style value, never .25/.75.
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
   const ticks = [];
-  for(let v = Math.ceil(min/step)*step; v <= max + step*1e-6; v += step) ticks.push(v);
+  for(let v = Math.ceil((min - step*1e-6)/step)*step; v <= max + step*1e-6; v += step) ticks.push(v);
   return { ticks, step };
 }
 // Decimals needed to render `step` exactly (2.5→1, 0.25→2, 5→0), capped at 6.
@@ -1587,16 +1639,14 @@ function renderChart(canvas, bars, rMin, rMax, type, timeframe){
   const rng = rMax - rMin;
   const y   = p => ((rMax-p)/rng)*ph;
 
-  // Price axis: nice-number gridlines across the plot + labels in the right
-  // gutter. Tick count scales with plot height (~one per 38px) so even the small
-  // cards get 3-5 gridlines, and the fullscreen / price-zoomed chart get more —
-  // the count naturally grows/shrinks as the price scale is zoomed. Labels show
-  // at least cents (2 dp), e.g. 380.50 / 381.00, and more decimals only when the
-  // step is sub-cent.
+  // Price axis, TradingView-style: fit nice 1/2/5-ladder ticks inside the
+  // visible range (labels only ever land on clean .00/.10/.20/.50 values).
+  // The DEFAULT auto-fit range is pre-snapped to step boundaries upstream
+  // (_snapPriceRange), so every chart enters with the same 7 labels; once
+  // the user zooms, ticks re-fit naturally and the count may vary.
   ctx.font = CHART_AXIS_FONT;
   ctx.lineWidth = 1;
-  const priceTargetTicks = Math.max(4, Math.min(16, Math.round(ph / 30)));
-  const { ticks: priceTicks, step: priceStep } = niceTicks(rMin, rMax, priceTargetTicks);
+  const { ticks: priceTicks, step: priceStep } = niceTicks(rMin, rMax, PRICE_AXIS_INTERVALS);
   const priceDec = Math.max(2, decimalsFor(priceStep));
   for(const price of priceTicks){
     if(price < rMin || price > rMax) continue;
@@ -1975,6 +2025,11 @@ function _renderLadder(ticker, d, currentPrice, canvas, overlay, bars, viewKey){
     }
     const pad = (hi - lo) * 0.08 || hi * 0.001;   // breathing room top/bottom
     rMin = lo - pad; rMax = hi + pad;
+    // Default (auto-fit) view only: snap the range outward to clean 1/2/5
+    // step boundaries so every chart ENTERS with the same 7 evenly-spaced
+    // labels (#3141). Zoomed/panned ranges are left alone — the axis then
+    // re-fits ticks TradingView-style.
+    [rMin, rMax] = _snapPriceRange(rMin, rMax);
   }
   const rng = rMax - rMin; if(rng<=0) return;
   view.lastRMin = rMin; view.lastRMax = rMax;
@@ -1994,19 +2049,20 @@ function _renderLadder(ticker, d, currentPrice, canvas, overlay, bars, viewKey){
     const z=zones[i]; if(!z.mid) continue;
     const sup  = z.type==='SUPPORT';
     const today= z.tier==='today'||z.tier==='weekly';
-    const op   = Math.max(0.07, Math.min(0.75, (z.strength||40)/100*0.9));
+    // #3050: fills capped LOW — at the old ceiling (0.75) a strong zone was a
+    // near-solid slab that buried the candles inside it. Strength still maps to
+    // opacity, but as background context (0.05-0.20); the always-on edge line
+    // below carries the precise level.
+    const op   = Math.max(0.05, Math.min(0.20, (z.strength||40)/100*0.24));
     const zTop = Math.min(rMax, z.top    || z.mid*1.001);
     const zBot = Math.max(rMin, z.bottom || z.mid*0.999);
     if(zTop<=rMin||zBot>=rMax) continue;
     const bgColor  = sup ? `rgba(0,212,170,${op})` : `rgba(255,95,109,${op})`;
-    const bdColor  = z.triggered_entry ? '#f5a623' : (today ? (sup?'rgba(0,212,170,.6)':'rgba(255,95,109,.6)') : 'transparent');
-    const bdWidth  = (today||z.triggered_entry) ? '1px' : '0';
+    const bdColor  = z.triggered_entry ? '#f5a623' : (sup?`rgba(0,212,170,${today?'.65':'.35'})`:`rgba(255,95,109,${today?'.65':'.35'})`);
+    const bdWidth  = '1px';   // every zone keeps a visible edge now that fills are faint
     html += `<div style="position:absolute;left:0;right:64px;top:${pct(zTop)};height:${hpct(zTop,zBot)};
       background:${bgColor};border-top:${bdWidth} solid ${bdColor};border-bottom:${bdWidth} solid ${bdColor};
       box-sizing:border-box;min-height:3px;"></div>`;
-    html += `<div style="position:absolute;right:0;width:62px;top:${pct(z.mid)};transform:translateY(-50%);
-      font-family:var(--mono);font-size:10px;line-height:1.3;padding:1px 3px;white-space:nowrap;
-      color:${sup?'rgba(0,212,170,.85)':'rgba(255,95,109,.85)'}">${sup?'S':'R'} ${z.strength||'?'} · ${z.touches||'?'}T</div>`;
   }
   } // end patternPrefs.zones (S/R bands)
 
@@ -2132,6 +2188,11 @@ const PATTERN_MENU = [
 // genuinely detected a named pattern AND that pattern's family is opted-in via the
 // Patterns menu — so nothing is invented and the default clean view is untouched.
 // The engine's own `reasons` string rides along as the tooltip (the evidence).
+//
+// The chip shows the pattern NAME only (#3140). It used to lead with the category —
+// "REVERSAL Double Top" — which read as a second, louder claim about what the market
+// was about to do, on top of the name. The category still rides in the tooltip, so the
+// classification is one hover away rather than gone.
 function patternChipHtml(sig){
   if(!sig || !sig.candle) return '';
   const meta = PATTERN_META[sig.candle];
@@ -2141,7 +2202,7 @@ function patternChipHtml(sig){
   const struct = (sig.structure && sig.structure !== 'NEUTRAL')
     ? ` · structure ${sig.structure.toLowerCase()}` : '';
   return `<div class="pat-chip ${cls}" title="Detected by the deterministic signal engine — ${meta.type}. ${why}${struct}">`
-    + `<span class="pat-type">${meta.type}</span>${meta.label}</div>`;
+    + `${meta.label}</div>`;
 }
 
 function buildCard(ticker, d){
@@ -2161,16 +2222,12 @@ function buildCard(ticker, d){
   if(pos){ const cl=pos.pnl_pct>=0?'pnl-pos':'pnl-neg'; pnlHtml=`<span class="pnl-badge ${cl}">${fmtPct(pos.pnl_pct)}</span>`; }
 
   let watchHtml = '';
-  if(state==='watching'){
-    const near = (d.zones||[])[0];
-    if(near) watchHtml = `<div style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
-  }
 
   const badge = regimeBadgeInfo(ticker, state);
   const emph = emphasisAttrs(dir, conf);
 
   return `
-<div class="card state-${state}${activeTicker===ticker?' active':''}" id="card-${ticker}" data-ticker="${ticker}" onclick="selectChart('${ticker}', event)">
+<div class="card state-${state}" id="card-${ticker}" data-ticker="${ticker}" onclick="selectChart('${ticker}', event)">
   <div class="card-header">
     <div style="display:flex;align-items:center;gap:8px">
       ${slotCount ? `<span class="drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder ${ticker}">⠿</span>` : ''}<span class="card-ticker" role="button" tabindex="0" aria-label="Change symbol, currently ${ticker}" onclick="editSlot('${ticker}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();editSlot('${ticker}')}" title="Click to change symbol">${ticker}</span><span id="pnl-${ticker}">${pnlHtml}</span>
@@ -2181,7 +2238,7 @@ function buildCard(ticker, d){
       <span class="card-state${badge.cls}" id="state-${ticker}">${badge.text}</span>
     </div>
   </div>
-  <div id="meta-${ticker}">${confHtml}${patternChipHtml(sig)}${watchHtml}</div>
+  <div id="meta-${ticker}">${confHtml}${watchHtml}</div>
   <div class="zone-ladder" id="ladder-${ticker}">
     <canvas class="chart-canvas" id="chart-${ticker}" aria-hidden="true"></canvas>
     <div class="ladder-overlay" id="overlay-${ticker}"></div>
@@ -2236,12 +2293,7 @@ function updateCardMeta(ticker, d){
   const metaEl = document.getElementById('meta-'+ticker);
   if(metaEl){
     const confHtml = sigBadge(d);
-    let watchHtml = '';
-    if(state==='watching'){
-      const near = (d.zones||[])[0];
-      if(near) watchHtml = `<div style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
-    }
-    metaEl.innerHTML = confHtml + patternChipHtml(sig) + watchHtml;
+    metaEl.innerHTML = confHtml;
   }
 
   // Σ₀-grounded button emphasis tracks the live signal (#1578).
@@ -2296,15 +2348,31 @@ function applyGridCols(){
     const narrow = isNarrowTrader();
     const cols = narrow ? 1 : (SLOT_COLS[shown] || Math.ceil(Math.sqrt(shown)));
     const rows = Math.ceil(shown / cols);
-    grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
-    grid.style.gridTemplateRows    = narrow ? `repeat(${rows},minmax(0,1fr))` : `repeat(${rows},1fr)`;
+    grid.classList.toggle('grid-narrow', narrow);
+    if(narrow){
+      // Phone: stack and fill the height. A square panel in one narrow column would
+      // waste the little vertical room a phone has.
+      grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+      grid.style.gridTemplateRows    = `repeat(${rows},minmax(0,1fr))`;
+    } else {
+      // Square panels, all identical (#3138/#3139). `1fr` tracks stretched each cell to
+      // whatever shape the deck happened to be, so panels were wide rectangles that
+      // changed shape with the window, the chat rail, and the order panel. Size the
+      // track to the largest square that fits instead, and centre the block.
+      const gap = parseFloat(getComputedStyle(grid).gap) || 8;
+      const availW = grid.clientWidth  - gap * (cols - 1);
+      const availH = grid.clientHeight - gap * (rows - 1);
+      const cell = Math.max(180, Math.floor(Math.min(availW / cols, availH / rows)));
+      grid.style.gridTemplateColumns = `repeat(${cols},${cell}px)`;
+      grid.style.gridTemplateRows    = `repeat(${rows},${cell}px)`;
+    }
     grid.classList.add('grid-fixed');
     grid.classList.toggle('grid-single', shown === 1);
     if(main) main.classList.add('main-fixed');
   } else {
     grid.style.gridTemplateColumns = 'repeat(auto-fill,minmax(340px,1fr))';
     grid.style.gridTemplateRows    = '';
-    grid.classList.remove('grid-fixed','grid-single');
+    grid.classList.remove('grid-fixed','grid-single','grid-narrow');
     if(main) main.classList.remove('main-fixed');
   }
 }
@@ -2339,9 +2407,11 @@ function buildLayoutOptions(){
   // Migrate phones off a persisted "All" (slotCount 0) — that option is retired
   // there, and existing users would otherwise land on a value the select no
   // longer offers. Default to 1 full-size chart.
-  if(phone && !slotCount) setSlotCount(1);
-  if(slotCount > cap) setSlotCount(cap);                             // shrank the window with a big grid selected → clamp down
-  else if(!opts.some(([v])=> v===slotCount)) setSlotCount(Math.min(10, cap));  // drop a retired layout to the max available
+  // DISABLED: Prevent automatic fullscreen zoom on narrow screens
+  // if(phone && !slotCount) setSlotCount(1);
+  // DISABLED: Prevent automatic layout changes that trigger fullscreen zoom
+  // if(slotCount > cap) setSlotCount(cap);                             // shrank the window with a big grid selected → clamp down
+  // else if(!opts.some(([v])=> v===slotCount)) setSlotCount(Math.min(10, cap));  // drop a retired layout to the max available
   sel.value = String(slotCount);
 }
 
@@ -2393,22 +2463,135 @@ function onSymSearchInput(){ clearTimeout(_symDebounce); _symDebounce=setTimeout
 // Popular symbols shown when the search box is empty (the backend returns nothing
 // for an empty query), so the "Add symbol" popup shows clickable tickers on open
 // instead of "No matching symbols". Filtered by the active class chip. #sym-defaults
+// Curated browsable universe for the symbol-search popup. Shown on an EMPTY
+// query so the popup opens on something useful and scrollable — the server's
+// empty-query fallback returns arbitrary tickers (HVMCW, HVIIU...), which is
+// unbrowsable. Typing still queries the broker's full asset universe.
 const SYM_POPULAR = [
-  { symbol:'SPY',   name:'SPDR S&P 500 ETF',      class:'us_equity', exchange:'NYSEArca'  },
-  { symbol:'QQQ',   name:'Invesco QQQ Trust',     class:'us_equity', exchange:'NasdaqGM'  },
-  { symbol:'AAPL',  name:'Apple Inc.',            class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'NVDA',  name:'NVIDIA Corporation',    class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'TSLA',  name:'Tesla, Inc.',           class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'MSFT',  name:'Microsoft Corporation', class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'AMZN',  name:'Amazon.com, Inc.',      class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'META',  name:'Meta Platforms, Inc.',  class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'GOOGL', name:'Alphabet Inc.',         class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'AMD',   name:'Advanced Micro Devices',class:'us_equity', exchange:'NasdaqGS'  },
-  { symbol:'BTCUSD',name:'Bitcoin',               class:'crypto',    exchange:'CRYPTO'    },
-  { symbol:'ETHUSD',name:'Ethereum',              class:'crypto',    exchange:'CRYPTO'    },
-  { symbol:'SOLUSD',name:'Solana',                class:'crypto',    exchange:'CRYPTO'    },
-  { symbol:'XRPUSD',name:'XRP',                   class:'crypto',    exchange:'CRYPTO'    },
-  { symbol:'DOGEUSD',name:'Dogecoin',             class:'crypto',    exchange:'CRYPTO'    },
+  { symbol:'AAPL', name:'Apple Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'MSFT', name:'Microsoft Corporation', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'NVDA', name:'NVIDIA Corporation', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'AMZN', name:'Amazon.com, Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'GOOGL', name:'Alphabet Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'META', name:'Meta Platforms, Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'TSLA', name:'Tesla, Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'AVGO', name:'Broadcom Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'AMD', name:'Advanced Micro Devices', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'NFLX', name:'Netflix, Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'COST', name:'Costco Wholesale', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'ADBE', name:'Adobe Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'INTC', name:'Intel Corporation', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'CSCO', name:'Cisco Systems', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'QCOM', name:'QUALCOMM', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'TXN', name:'Texas Instruments', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'AMAT', name:'Applied Materials', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'MU', name:'Micron Technology', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'PLTR', name:'Palantir Technologies', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'SHOP', name:'Shopify Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'ASML', name:'ASML Holding', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'ARM', name:'Arm Holdings', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'SMCI', name:'Super Micro Computer', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'MRVL', name:'Marvell Technology', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'PANW', name:'Palo Alto Networks', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'CRWD', name:'CrowdStrike Holdings', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'SNOW', name:'Snowflake Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'UBER', name:'Uber Technologies', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'ABNB', name:'Airbnb, Inc.', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'COIN', name:'Coinbase Global', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'MSTR', name:'MicroStrategy', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'SOFI', name:'SoFi Technologies', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'RIVN', name:'Rivian Automotive', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'LCID', name:'Lucid Group', class:'us_equity', exchange:'NasdaqGS' },
+  { symbol:'JPM', name:'JPMorgan Chase', class:'us_equity', exchange:'NYSE' },
+  { symbol:'BAC', name:'Bank of America', class:'us_equity', exchange:'NYSE' },
+  { symbol:'WFC', name:'Wells Fargo', class:'us_equity', exchange:'NYSE' },
+  { symbol:'GS', name:'Goldman Sachs', class:'us_equity', exchange:'NYSE' },
+  { symbol:'MS', name:'Morgan Stanley', class:'us_equity', exchange:'NYSE' },
+  { symbol:'V', name:'Visa Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'MA', name:'Mastercard', class:'us_equity', exchange:'NYSE' },
+  { symbol:'UNH', name:'UnitedHealth Group', class:'us_equity', exchange:'NYSE' },
+  { symbol:'JNJ', name:'Johnson and Johnson', class:'us_equity', exchange:'NYSE' },
+  { symbol:'LLY', name:'Eli Lilly', class:'us_equity', exchange:'NYSE' },
+  { symbol:'PFE', name:'Pfizer Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'MRK', name:'Merck and Co.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'ABBV', name:'AbbVie Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'XOM', name:'Exxon Mobil', class:'us_equity', exchange:'NYSE' },
+  { symbol:'CVX', name:'Chevron Corporation', class:'us_equity', exchange:'NYSE' },
+  { symbol:'WMT', name:'Walmart Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'HD', name:'Home Depot', class:'us_equity', exchange:'NYSE' },
+  { symbol:'PG', name:'Procter and Gamble', class:'us_equity', exchange:'NYSE' },
+  { symbol:'KO', name:'Coca-Cola Company', class:'us_equity', exchange:'NYSE' },
+  { symbol:'PEP', name:'PepsiCo, Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'MCD', name:'McDonalds Corporation', class:'us_equity', exchange:'NYSE' },
+  { symbol:'NKE', name:'NIKE, Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'DIS', name:'Walt Disney Company', class:'us_equity', exchange:'NYSE' },
+  { symbol:'BA', name:'Boeing Company', class:'us_equity', exchange:'NYSE' },
+  { symbol:'CAT', name:'Caterpillar Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'GE', name:'GE Aerospace', class:'us_equity', exchange:'NYSE' },
+  { symbol:'F', name:'Ford Motor Company', class:'us_equity', exchange:'NYSE' },
+  { symbol:'GM', name:'General Motors', class:'us_equity', exchange:'NYSE' },
+  { symbol:'T', name:'AT and T Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'VZ', name:'Verizon Communications', class:'us_equity', exchange:'NYSE' },
+  { symbol:'PYPL', name:'PayPal Holdings', class:'us_equity', exchange:'NYSE' },
+  { symbol:'C', name:'Citigroup Inc.', class:'us_equity', exchange:'NYSE' },
+  { symbol:'SPY', name:'SPDR S&P 500 ETF', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'QQQ', name:'Invesco QQQ Trust', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'IWM', name:'iShares Russell 2000 ETF', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'DIA', name:'SPDR Dow Jones Industrial', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'VOO', name:'Vanguard S&P 500 ETF', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'VTI', name:'Vanguard Total Stock Market', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'GLD', name:'SPDR Gold Shares', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SLV', name:'iShares Silver Trust', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'TLT', name:'iShares 20+ Year Treasury', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'IEF', name:'iShares 7-10 Year Treasury', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'HYG', name:'iShares High Yield Corp', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'EFA', name:'iShares MSCI EAFE ETF', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'EEM', name:'iShares MSCI Emerging Mkts', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SMH', name:'VanEck Semiconductor ETF', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'SOXX', name:'iShares Semiconductor ETF', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'XLK', name:'Technology Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLF', name:'Financial Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLE', name:'Energy Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLV', name:'Health Care Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLI', name:'Industrial Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLY', name:'Consumer Discretionary Sel', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLP', name:'Consumer Staples Select', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLU', name:'Utilities Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLB', name:'Materials Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLRE', name:'Real Estate Select Sector', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XLC', name:'Communication Svcs Select', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SPMO', name:'Invesco S&P 500 Momentum', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'XMMO', name:'Invesco S&P MidCap Momentum', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'ARKK', name:'ARK Innovation ETF', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'VXX', name:'iPath Series B VIX Futures', class:'us_equity', exchange:'BATS' },
+  { symbol:'TQQQ', name:'ProShares UltraPro QQQ', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'SQQQ', name:'ProShares UltraPro Short QQQ', class:'us_equity', exchange:'NasdaqGM' },
+  { symbol:'SOXL', name:'Direxion Semis Bull 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SOXS', name:'Direxion Semis Bear 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SPXL', name:'Direxion S&P 500 Bull 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SPXS', name:'Direxion S&P 500 Bear 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'TNA', name:'Direxion Small Cap Bull 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'TZA', name:'Direxion Small Cap Bear 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SSO', name:'ProShares Ultra S&P500', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SDS', name:'ProShares UltraShort S&P500', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'QLD', name:'ProShares Ultra QQQ', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'SH', name:'ProShares Short S&P500', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'UPRO', name:'ProShares UltraPro S&P500', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'LABU', name:'Direxion Biotech Bull 3X', class:'us_equity', exchange:'NYSEArca' },
+  { symbol:'BTCUSD', name:'Bitcoin', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'ETHUSD', name:'Ethereum', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'SOLUSD', name:'Solana', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'XRPUSD', name:'XRP', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'DOGEUSD', name:'Dogecoin', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'LTCUSD', name:'Litecoin', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'ADAUSD', name:'Cardano', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'AVAXUSD', name:'Avalanche', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'LINKUSD', name:'Chainlink', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'DOTUSD', name:'Polkadot', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'UNIUSD', name:'Uniswap', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'AAVEUSD', name:'Aave', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'BCHUSD', name:'Bitcoin Cash', class:'crypto', exchange:'CRYPTO' },
+  { symbol:'SHIBUSD', name:'Shiba Inu', class:'crypto', exchange:'CRYPTO' },
 ];
 async function runSymSearch(q){
   const query = (q||'').trim();
@@ -2416,12 +2599,12 @@ async function runSymSearch(q){
   // Empty box → curated popular list (filtered by class chip), so the popup is
   // never blank / "No matching symbols" on open.
   if(!query){
-    _symRows = SYM_POPULAR.filter(a => !_symClass || a.class===_symClass).slice(0,40);
+    _symRows = SYM_POPULAR.filter(a => !_symClass || a.class===_symClass);   // full set — the list scrolls
     _symSel = 0; renderSymResults();
     return;
   }
   try{
-    const url='/api/trading/symbols/search?limit=40&q='+encodeURIComponent(query)+(_symClass?'&class='+_symClass:'');
+    const url='/api/trading/symbols/search?limit=120&q='+encodeURIComponent(query)+(_symClass?'&class='+_symClass:'');
     const r=await fetch(url); const d=await r.json();
     if(ep!==_symEpoch) return;
     _symRows=d.results||[]; _symSel=0; renderSymResults();
@@ -2433,9 +2616,8 @@ function renderSymResults(){
   el.innerHTML=_symRows.map((a,i)=>{
     const cr=a.class==='crypto';
     const esc=s=>String(s||'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
-    const ph=`<div class='sym-logo ph'>${esc(a.symbol).slice(0,3)}</div>`;
-    const logo = cr ? ph
-      : `<img class="sym-logo${_logoBg[a.symbol]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${esc(a.symbol)}" src="/api/trading/logo?symbol=${encodeURIComponent(a.symbol)}" alt="" onload="window.adaptLogoBg&&adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph.replace(/"/g,'&quot;')}&quot;">`;
+    // Shared badge library: issuer glyphs / crypto signs / monogram fallback.
+    const logo = window.tickerBadgeOrLogoHtml ? tickerBadgeOrLogoHtml(a.symbol, {assetClass:a.class}) : `<div class='sym-logo ph'>${esc(a.symbol).slice(0,3)}</div>`;
     return `<div class="sym-row${i===_symSel?' sel':''}" data-i="${i}" onclick="pickSym(${i})">
       ${logo}<span class="sym-sym">${esc(a.symbol)}</span>
       <span class="sym-name">${esc(a.name)}</span>
@@ -2502,8 +2684,9 @@ function openOrderPanel(){
   otUserClosed = false;
   document.getElementById('otBg').classList.remove('hidden');
   document.body.classList.add('ot-open');
-  // The chart area just got narrower — re-fit visible charts to the new width.
-  requestAnimationFrame(()=>{ renderTicker(fullscreenTicker); wlPrices.forEach(t=>renderTicker(t.ticker)); });
+  // The chart area just got narrower — re-tile (square tracks depend on the width) and
+  // re-fit the visible charts.
+  requestAnimationFrame(()=>{ applyGridCols(); renderTicker(fullscreenTicker); wlPrices.forEach(t=>renderTicker(t.ticker)); });
 }
 function openOrderTicket(ticker, side){
   if(window.GUEST){ location.href='/auth.html?returnTo=%2Fstock-trader.html'; return; }   // read-only view → send to sign-in
@@ -2519,7 +2702,7 @@ function closeOrderTicket(){
   // Disarm any pending two-step confirm so a reopened ticket starts clean.
   _otArmed=false; clearTimeout(_otArmTimer);
   const sub=document.getElementById('otSubmit'); if(sub) sub.classList.remove('armed');
-  requestAnimationFrame(()=>{ renderTicker(fullscreenTicker); wlPrices.forEach(t=>renderTicker(t.ticker)); });
+  requestAnimationFrame(()=>{ applyGridCols(); renderTicker(fullscreenTicker); wlPrices.forEach(t=>renderTicker(t.ticker)); });
 }
 
 function setOtSide(side){
@@ -2830,13 +3013,17 @@ let _otArmed=false, _otArmTimer=null;
 // ── Watchlist sidebar ─────────────────────────────────────────────────────────
 const _symNames = {};   // ticker → "Company Name · EXCHANGE", lazily fetched (#1631)
 const _wlIsCrypto = (tk)=> /USD$/.test(tk) && tk.length>=6;
-// Brand logo for a ticker (FMP) with a symbol-initials placeholder fallback.
+// Monogram badge — replaces fetched brand logos (operator, 2026-07-28): the ETF
+// universe all shares a handful of issuer marks (SPDR/Direxion squares shrunk
+// inside a circle at poor resolution), so rows read samey and blurry. A
+// deterministic per-symbol gradient monogram is vector-crisp at any size and
+// gives every ticker its own color identity. Hue = hash of the symbol, so it is
+// stable across sessions and pages with no network fetch at all.
 function tickerLogoHtml(ticker){
-  const ph = `<span class='wl-logo ph'>${(ticker||'').slice(0,3)}</span>`;
-  if(_wlIsCrypto(ticker)) return ph;
-  return `<img class="wl-logo${_logoBg[ticker]==='l'?' on-light':''}" crossorigin="anonymous" data-sym="${ticker}" src="/api/trading/logo?symbol=${encodeURIComponent(ticker)}" alt="" onload="window.adaptLogoBg&&adaptLogoBg(this)" onerror="this.outerHTML=&quot;${ph}&quot;">`;
-}
-// Pick the badge background per logo by sampling its luminance (FMP sends CORS, so
+  // Delegates to the shared badge library (/js/ticker-badges.js): designed
+  // issuer/asset-class glyphs, monogram fallback. One source of truth.
+  return window.tickerBadgeOrLogoHtml ? tickerBadgeOrLogoHtml(ticker, {assetClass:_wlIsCrypto(ticker)?'crypto':undefined}) : `<span class='wl-logo ph'>${(ticker||'').slice(0,3)}</span>`;
+}// Pick the badge background per logo by sampling its luminance (FMP sends CORS, so
 // the canvas isn't tainted). Dark-monochrome marks (Intel) get a light badge;
 // everything else keeps the dark badge so colour logos pop. Cached in localStorage.
 // The inline onload callers guard with `window.adaptLogoBg&&` — the issue reporter's
@@ -2860,7 +3047,11 @@ function adaptLogoBg(img){
     img.classList.toggle('on-light', dark);
   }catch(e){ /* tainted or decode error → leave dark badge */ }
 }
-const _wlPx = (p)=> p>100 ? p.toLocaleString() : (p!=null ? p.toFixed(4) : '—');
+// One decimal convention so the price column actually lines up. Mixed 4dp/locale
+// formatting put $171 beside $84.2250 and $675.805 — a ragged column. Sub-$1
+// names still need 4dp to say anything at all.
+const _wlPx = (p)=> p==null ? '—' : (p < 1 ? p.toFixed(4)
+  : p.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
 
 function renderWatchlist(){
   document.getElementById('wlList').innerHTML = _sortedWlPrices().map(t=>{
@@ -2868,13 +3059,14 @@ function renderWatchlist(){
     const sig= d.last_signal||{};
     const dir= d.direction||sig.direction||'';
     const cl = t.chg_pct>0?'up':t.chg_pct<0?'dn':'flat';
-    const sigTxt = dir ? `<span class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'}${d.confidence||sig.confidence||0}%</span>` : '<span></span>';
+    const sigTxt = dir ? `<span class="wl-signal" style="color:${dir==='BULLISH'?'var(--green)':dir==='BEARISH'?'var(--red)':'var(--text2)'}">${dir==='BULLISH'?'▲':dir==='BEARISH'?'▼':'·'}${d.confidence||sig.confidence||0}%</span>` : '<span class="wl-signal"></span>';
     return `<div class="wl-item${activeTicker===t.ticker?' active':''}" role="button" tabindex="0" draggable="true" data-wl-ticker="${t.ticker}" aria-label="View ${t.ticker} chart"${activeTicker===t.ticker?' aria-current="true"':''} onclick="focusTicker('${t.ticker}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();focusTicker('${t.ticker}')}">
       ${tickerLogoHtml(t.ticker)}
-      <div class="wl-content">
-        <div class="wl-row"><span class="wl-sym">${t.ticker}</span><span class="wl-price">$${_wlPx(t.price)}</span></div>
-        <div class="wl-row"><span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span>${sigTxt}<button class="wl-remove" aria-label="Remove ${t.ticker} from watchlist" onclick="removeWatchlistTicker('${t.ticker}',event)">×</button></div>
-      </div>
+      <span class="wl-sym">${t.ticker}</span>
+      <span class="wl-price">$${_wlPx(t.price)}</span>
+      <span class="wl-chg ${cl}">${t.chg_pct>=0?'+':''}${t.chg_pct}%</span>
+      ${sigTxt}
+      <button class="wl-remove" aria-label="Remove ${t.ticker} from watchlist" onclick="removeWatchlistTicker('${t.ticker}',event)">×</button>
     </div>`;
   }).join('');
   if(activeTicker) renderSymbolInfo(activeTicker);
@@ -2965,9 +3157,8 @@ function focusTicker(t){
     setOrderSymbol(t);                    // #1695: order panel follows the selected symbol
     // Desktop: keep the docked panel open unless the user dismissed it (Esc). Phone:
     // don't auto-open — it's a bottom sheet that would cover the chart we're about to show.
-    if(!otUserClosed && !isNarrowTrader()) openOrderPanel();
+    // opening is reserved for the explicit BUY/SELL affordances (operator UI pass 2026-07-28)
   }
-  openFullscreenChart(t);
 }
 
 // Click a chart in the grid to FOCUS it (#focus-chart): mark that card selected
@@ -2976,70 +3167,44 @@ function focusTicker(t){
 // the watchlist click / expand control do). Desktop-oriented; harmless on mobile
 // (single chart, order panel stays closed via the isNarrowTrader guard).
 function selectChart(t, ev){
+  // DISABLED: All click-based fullscreen removed per #3141 - do nothing
+  return;
+  /*
   if(!t) return;
   // Clicks that land on a control inside the card (buy/sell, change-symbol, drag
   // handle) do their own thing — never focus or fullscreen from those.
   if(ev && ev.target && ev.target.closest &&
      ev.target.closest('button, a, input, select, .drag-handle, .card-ticker, .order-ticket')) return;
-  // Phone: ONE tap = focus. Zoom the chart tall with the technicals + buy/sell
-  // right below it (focusTicker does all of that) — no two-tap dance.
-  if(isNarrowTrader()){ focusTicker(t); return; }
-  const card = document.getElementById('card-'+t);
-  // Second click on the ALREADY-focused chart → open it fullscreen.
-  if(card && activeTicker === t && card.classList.contains('active')){
-    openFullscreenChart(t);
-    return;
-  }
-  // First click → focus it in the grid (darker grey) + point the peripherals at it.
+  // Click → focus it in the grid (darker grey) + point the peripherals at it.
+  // (removed fullscreen behavior entirely per #3141)
   activeTicker = t;
   try{ localStorage.setItem('trader.ticker', t); }catch(e){}
   document.querySelectorAll('#cardsGrid .card.active').forEach(c=>c.classList.remove('active'));
+  const card = document.getElementById('card-'+t);
   if(card) card.classList.add('active');
   renderWatchlist();                       // sidebar highlight follows the selection
   renderSymbolInfo(t);                      // detail panel follows the selection
   if(!document.body.classList.contains('guest')){
     setOrderSymbol(t);                       // order ticket follows the selection
-    if(!otUserClosed && !isNarrowTrader()) openOrderPanel();
+    // opening is reserved for the explicit BUY/SELL affordances (operator UI pass 2026-07-28)
   }
+  */
 }
 
 // ── Zoom a ticker (#1629) ─────────────────────────────────────────────────────
 // Inline zoom: instead of a full-screen popup, expand the chart into the grid as a
 // single tall chart (reusing the 1-slot layout, #1628). A "← Back to grid" button
 // restores the previous layout.
-let _preZoomSlot = null;
-function openFullscreenChart(t){
-  if(_preZoomSlot===null) _preZoomSlot = slotCount;   // remember layout to restore
-  fullscreenTicker = t;
-  chartSlots = [t]; slotCount = 1;
-  const ls=document.getElementById('chartLayoutSelect'); if(ls) ls.value='1';
-  const bb=document.getElementById('zoomBackBtn'); if(bb) bb.style.display='';
-  persistSlots(); lastCardOrder=''; applyGridCols(); renderCards();
-  try{ document.querySelector('.main').scrollTop = 0; }catch(e){}
-}
+// Fullscreen zoom feature completely removed per #3141
 
-function closeFullscreenChart(){
-  fullscreenTicker = null;
-  slotCount = (_preZoomSlot!=null ? _preZoomSlot : 0); _preZoomSlot = null;
-  const ls=document.getElementById('chartLayoutSelect'); if(ls) ls.value=String(slotCount);
-  const bb=document.getElementById('zoomBackBtn'); if(bb) bb.style.display='none';
-  document.getElementById('fsBg').classList.add('hidden');   // legacy popup (now unused)
-  persistSlots(); lastCardOrder=''; applyGridCols(); renderCards();
-}
-
-function renderFullscreenChart(){
-  if(!fullscreenTicker) return;
-  const price = getCurrentPrice(fullscreenTicker);
-  document.getElementById('fsPrice').textContent = price ? '$'+fmt(price, price>=100?2:4) : '—';
-  renderZoneLadder(fullscreenTicker, zonesData[fullscreenTicker]||{}, price,
-    document.getElementById('chart-fs'), document.getElementById('overlay-fs'));
-}
+// Fullscreen chart rendering disabled per #3141
+function renderFullscreenChart(){}  // no-op
 
 document.addEventListener('keydown', e=>{
   if(e.key!=='Escape') return;
   if(_drawTool || _drawPending){ setDrawTool(''); return; }   // #2444: Esc disarms drawing first
   if(!document.getElementById('otBg').classList.contains('hidden')) closeOrderTicket();
-  else closeFullscreenChart();
+  // Fullscreen zoom removed per #3141
 });
 
 // ── Keyboard-first trading (#2438) ───────────────────────────────────────────
@@ -3339,7 +3504,7 @@ document.addEventListener('mouseup', function(e){
     setOrderSymbol(drag.dataTicker);
     // Phone: a chart tap just retargets the (closed) ticket — don't pop the bottom
     // sheet over the chart. The BUY/SELL buttons open it explicitly.
-    if(!isNarrowTrader()) openOrderPanel();
+    // a chart tap retargets only — BUY/SELL opens the ticket
   }
 });
 
@@ -3373,25 +3538,52 @@ function _endXhTouch(){ if(_xhTouch){ _hideXh(_xhTouch.ladder); _xhTouch = null;
 document.addEventListener('touchend', _endXhTouch);
 document.addEventListener('touchcancel', _endXhTouch);
 
-// Double-click anywhere on a chart resets zoom/pan to the default auto-fit view.
+
+
+// Axis reset (#3141): DOUBLE-click an axis strip to reset that axis.
+//  - time axis (bottom strip)  → reset the pan/x position back to live
+//  - price axis (right strip)  → reset the y-range back to auto-fit
+// Delegated at the document level so it survives card rebuilds (the grid
+// re-creates canvases on every layout/order change).
 document.addEventListener('dblclick', function(e){
-  const ladder = e.target.closest('.zone-ladder');
+  const canvas = e.target.closest && e.target.closest('canvas.chart-canvas');
+  if(!canvas) return;
+  const ladder = canvas.closest('.zone-ladder');
   if(!ladder) return;
   const target = _ladderTarget(ladder);
   if(!target) return;
-  const { dataTicker, viewKey, canvas } = target;
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX-rect.left, y = e.clientY-rect.top;
-  if(x < 0 || x > rect.width || y < 0 || y > rect.height) return;
-  e.preventDefault();
+
+  const { dataTicker, viewKey } = target;
   const view = chartView[viewKey];
-  if(view){
+  if(!view) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  const pw = rect.width  - AXIS_W;   // price axis = right AXIS_W px
+  const ph = rect.height - AXIS_H;   // time axis  = bottom AXIS_H px
+
+  // Double-click on the time axis (bottom strip) → reset x pan + zoom (clear
+  // the live values AND the animation goals, or zoomTick chases the old goal).
+  if(y > ph && x <= pw){
+    e.stopPropagation(); e.preventDefault();
     if(view._raf){ cancelAnimationFrame(view._raf); view._raf = null; }
-    view.visibleBars = null; view.barOffset = 0; view.yMin = null; view.yMax = null;
-    view.gVis = null; view.gOff = null; view.gYMin = null; view.gYMax = null;
+    view.barOffset = 0; view.visibleBars = null;
+    view.gOff = null;   view.gVis = null;
+    renderTicker(dataTicker);
+    return;
   }
-  renderTicker(dataTicker);
-});
+
+  // Double-click on the price axis (right strip) → reset y-range to auto-fit
+  if(x > pw && y <= ph){
+    e.stopPropagation(); e.preventDefault();
+    if(view._raf){ cancelAnimationFrame(view._raf); view._raf = null; }
+    view.yMin = null;  view.yMax = null;
+    view.gYMin = null; view.gYMax = null;
+    renderTicker(dataTicker);
+    return;
+  }
+}, true);
 
 // ── Page list (TRADELIST): the AI's per-user trading universe drives this page's
 // sidebar + cards. /api/trading/watchlist-prices returns the UNION (watchlists +
@@ -3764,6 +3956,19 @@ function _animateLastBar(tk, fromClose, toClose){
   };
   _liveAnims[tk] = requestAnimationFrame(step);
 }
+// #3014: a believable intraday tick sits within TICK_MAX_DEV of the bar it belongs to; a value
+// further out is a stale re-emitted quote, not a real move (a >5% single-tick jump on an
+// intraday bar is circuit-breaker / LULD-halt territory). Compared against the NEARER of the
+// bar's open/close so a legitimately trending bar isn't clipped. Fails OPEN (splice as before)
+// when no positive anchor exists, so it can only ever REMOVE bad ticks, never invent behavior.
+const TICK_MAX_DEV = 0.05;
+function _plausibleTick(px, open, close){
+  if(!(px > 0)) return false;
+  const refs = [open, close].filter((r) => r > 0);
+  if(!refs.length) return true;
+  const nearest = refs.reduce((a, r) => (Math.abs(px - r) < Math.abs(px - a) ? r : a));
+  return Math.abs(px - nearest) <= nearest * TICK_MAX_DEV;
+}
 function _tickLastBar(tk, px){
   const bars = barsData[tk];
   const dur = _TF_MS[chartTimeframe];
@@ -3772,6 +3977,14 @@ function _tickLastBar(tk, px){
   const t0 = +new Date(last.timestamp);
   const now = Date.now();
   if(now < t0 + dur){                                        // tick belongs to the open bar
+    // #3014: reject a physically-impossible quote before it permanently deforms the bar.
+    // high/low use an unbounded monotonic min/max that never recovers and is persisted to
+    // localStorage, so ONE stale re-emitted price (watchlist-prices occasionally re-sends a
+    // past quote) leaves a wick that survives reloads — every audited bad SPY 5m tick was a
+    // $44–52 (≈6–7%) spike, which inflated the regime engine's ATR ~3.4×. A >TICK_MAX_DEV
+    // intraday move in a single tick is circuit-breaker / LULD-halt territory, far outside
+    // real noise; drop it and let the next real server bar re-anchor truth.
+    if(!_plausibleTick(px, last.open, last.close)) return;
     if(px > last.high) last.high = px;
     if(px < last.low)  last.low  = px;
     if(px !== last.close) _animateLastBar(tk, last.close, px);
@@ -3779,9 +3992,12 @@ function _tickLastBar(tk, px){
     // New candle opens at the PREVIOUS close (standard synthesis) and glides to
     // the tick, so the boundary reads as continuous motion, not a teleport.
     const prevClose = last.close;
+    // Same guard (#3014): a stale tick at the boundary must not seed the fresh bar with a
+    // bogus wick. If implausible vs the prior close, open the bar flat and wait for real data.
+    const p = _plausibleTick(px, prevClose, prevClose) ? px : prevClose;
     bars.push({ timestamp:new Date(t0+dur).toISOString(), open:prevClose,
-                high:Math.max(prevClose,px), low:Math.min(prevClose,px), close:prevClose, volume:0 });
-    _animateLastBar(tk, prevClose, px);
+                high:Math.max(prevClose,p), low:Math.min(prevClose,p), close:prevClose, volume:0 });
+    if(p !== prevClose) _animateLastBar(tk, prevClose, px);
   }                                                          // older gap → wait for real server bars
 }
 
@@ -4585,7 +4801,7 @@ function initWlInfoResize(){
 // throttled) as you drag. Arrow keys nudge the focused divider. #trader-cols
 function initColumnResizers(){
   const root = document.documentElement;
-  const SIDEBAR = { cssVar:'--sidebar-w', key:'trader.sidebarW', min:160, max:420, def:210 };
+  const SIDEBAR = { cssVar:'--sidebar-w', key:'trader.sidebarW', min:248, max:460, def:296 };
   const TICKET  = { cssVar:'--ticket-w',  key:'trader.ticketW',  min:300, max:560, def:340 };
   [SIDEBAR, TICKET].forEach(c=>{ const v=parseInt(localStorage.getItem(c.key)||'',10); if(v>0) root.style.setProperty(c.cssVar, Math.max(c.min,Math.min(c.max,v))+'px'); });
   let raf=0;
@@ -4695,8 +4911,15 @@ async function applyTierGate(){
     // watchlist, news, signals): go there, and say why, with the upgrade path.
     // ?stay=1 escapes the redirect so the CTA is still reachable deliberately
     // (e.g. from pricing), and we never bounce a page opened from Watch itself.
+    // Show the WHY, don't just teleport (operator 2026-07-30: "it just dosent
+    // let me open it" — the silent bounce reads as a broken page). Only the
+    // global nav auto-redirects to Watch, and even then it lands with a banner.
+    // Any DELIBERATE arrival — the in-page Trade tab (?stay=1), a pricing link,
+    // a direct URL with a referrer from this app — gets the explanatory CTA.
     const params = new URLSearchParams(location.search);
-    if (params.get('stay') === '1') {
+    const deliberate = params.get('stay') === '1' ||
+      (document.referrer && /\/(watch|options|pricing)\.html/.test(document.referrer));
+    if (deliberate) {
       const el = document.getElementById('tradeLock'); if (el) el.style.display='flex';
       return;
     }
@@ -4731,7 +4954,11 @@ function startDashboard(){
       renderSymbolInfo(activeTicker);
       renderWatchlist();
     }
-    if(!window.GUEST && !otUserClosed && !isNarrowTrader() && wlPrices.length){ setOrderSymbol(activeTicker || wlPrices[0].ticker); openOrderPanel(); }
+    if(!window.GUEST && wlPrices.length){
+      setOrderSymbol(activeTicker || wlPrices[0].ticker);
+      // Open the order panel by default for desktop (not on narrow/mobile views)
+      if(!isNarrowTrader()) { openOrderPanel(); }
+    }
   }, 1600);
   // Restore the saved chart-grid layout (#1628), limiting the options to single/double
   // on phones.
@@ -4746,9 +4973,14 @@ function startDashboard(){
   // Re-tile when crossing the phone breakpoint (rotate / resize) so 2–4 chart grids
   // switch between the desktop tiling and the single-column phone stack.
   let _lastNarrow = isNarrowTrader();
+  let _retileTimer = null;
   window.addEventListener('resize', function(){
     const n = isNarrowTrader();
-    if(n !== _lastNarrow){ _lastNarrow = n; buildLayoutOptions(); applyGridCols(); renderCards(); }
+    if(n !== _lastNarrow){ _lastNarrow = n; buildLayoutOptions(); applyGridCols(); renderCards(); return; }
+    // Square tracks are sized in PIXELS, so every resize has to recompute them — not
+    // just crossing the phone breakpoint. Debounced so a drag doesn't re-tile per frame.
+    clearTimeout(_retileTimer);
+    _retileTimer = setTimeout(()=>{ applyGridCols(); renderCards(); }, 120);
   });
   fullRefresh();
   loadBars();
@@ -4927,12 +5159,12 @@ document.addEventListener('DOMContentLoaded', async ()=>{ await detectGuestMode(
   // arrives with #2443) simply joins the menu once it exists. Its sibling pulse
   // dot deliberately STAYS inline — the stale-feed signal must remain glanceable.
   const picks=[
-    // Header diet (operator, 2026-07-25): layout + timeframe + range stay inline
-    // (the most-used controls); chart type, patterns, and draw live in the ☰ at
-    // every width alongside the other secondary toggles.
-    {sel:'#chartTypeSelect',           narrowOnly:false},
-    {sel:'#patternsToggle',            narrowOnly:false},
-    {sel:'#drawToolSel',               narrowOnly:false},
+    // Chart type, patterns, and draw live INLINE in the toolbar on desktop
+    // (operator, 2026-08-01) and collapse into the ☰ only when the toolbar is
+    // too tight; layout + timeframe + range stay inline at every width.
+    {sel:'#chartTypeSelect',           narrowOnly:true},
+    {sel:'#patternsToggle',            narrowOnly:true},
+    {sel:'#drawToolSel',               narrowOnly:true},
     {sel:'#feedStamp',                 narrowOnly:false},
     {sel:'#ovnToggle',                 narrowOnly:false},
     {sel:'.header a[href*="kalshi"]',  narrowOnly:false},
@@ -5119,6 +5351,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{ await detectGuestMode(
   window.setMobileView = setMobileView;
 </script>
 <script src="/js/theme-toggle.js" defer></script>
+<script src="/js/ticker-badges.js"></script>
 <script src="/js/site-chrome.js" defer></script>
 <script src="/js/auth-gate.js" defer></script>
 </body>
