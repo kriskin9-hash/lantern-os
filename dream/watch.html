@@ -862,7 +862,7 @@
 <div class="header" role="region" aria-label="Watch toolbar">
   <div class="logo" title="Unisona Trader — watch, trade, options">Unisona<span>Trader</span></div>
   <div class="page-tabs" role="navigation" aria-label="Trading pages">
-    <a class="pt on" href="/watch.html" aria-current="page">Watch</a><a class="pt" href="/stock-trader.html?stay=1">Trade</a><a class="pt" href="/options.html">Options</a>
+    <a class="pt on" href="/watch.html" aria-current="page">Watch</a><a class="pt" href="/stock-trader.html?stay=1">Trade</a><a class="pt" href="/options.html">Options</a><a class="pt" href="/stock-trader.html?stay=1#journal" title="The trading journal — realized results, the equity curve, and every declined trade">Journal</a>
   </div>
   <div class="badge guest-badge" id="guestBadge" style="display:none" title="Read-only guest view — sign in to trade" aria-label="Read-only guest view">READ-ONLY</div>
   <div class="hstat" title="CBOE Volatility Index — the market's fear gauge (higher = choppier)"><div class="l">VIX</div><div class="v" id="hVix">—</div></div>
@@ -2050,11 +2050,6 @@ function buildCard(ticker, d){
   let pnlHtml = '';
   if(pos){ const cl=pos.pnl_pct>=0?'pnl-pos':'pnl-neg'; pnlHtml=`<span class="pnl-badge ${cl}">${fmtPct(pos.pnl_pct)}</span>`; }
 
-  let watchHtml = '';
-  if(state==='watching'){
-    const near = (d.zones||[])[0];
-    if(near) watchHtml = `<div style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
-  }
 
   const badge = regimeBadgeInfo(ticker, state);
   const emph = emphasisAttrs(dir, conf);
@@ -2071,7 +2066,7 @@ function buildCard(ticker, d){
       <span class="card-state${badge.cls}" id="state-${ticker}">${badge.text}</span>
     </div>
   </div>
-  <div id="meta-${ticker}">${confHtml}${patternChipHtml(sig)}${watchHtml}</div>
+  <div id="meta-${ticker}">${confHtml}${patternChipHtml(sig)}</div>
   <div class="zone-ladder" id="ladder-${ticker}">
     <canvas class="chart-canvas" id="chart-${ticker}" aria-hidden="true"></canvas>
     <div class="ladder-overlay" id="overlay-${ticker}"></div>
@@ -2126,12 +2121,7 @@ function updateCardMeta(ticker, d){
   const metaEl = document.getElementById('meta-'+ticker);
   if(metaEl){
     const confHtml = sigBadge(d);
-    let watchHtml = '';
-    if(state==='watching'){
-      const near = (d.zones||[])[0];
-      if(near) watchHtml = `<div style="font-family:var(--mono);font-size:10px;color:var(--text2);padding:0 14px 4px">Nearest: ${near.type[0]} $${fmt(near.mid,near.mid>=100?2:4)} · ${near.touches||'?'}T</div>`;
-    }
-    metaEl.innerHTML = confHtml + patternChipHtml(sig) + watchHtml;
+    metaEl.innerHTML = confHtml + patternChipHtml(sig);
   }
 
   // Σ₀-grounded button emphasis tracks the live signal (#1578).
@@ -4221,7 +4211,7 @@ function renderOrders(orders){
     <td style="color:${o.status==='filled'?'var(--green)':o.status==='canceled'?'var(--red)':'var(--amber)'}">${o.status||''}</td>
     <td style="color:var(--text2)">${_fmtOrderTime(o.filled_at||o.created_at)}</td></tr>`;
   const tbl=(rows)=> rows.length ? `<table class="tp-table"><thead><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Limit</th><th>Status</th><th>Time</th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="tp-empty">None</div>';
-  const isOpen=(o)=>['new','accepted','pending','open','partially_filled'].includes((o.status||'').toLowerCase());
+  const isOpen=(o)=>['new','accepted','pending','open','partially_filled','submitted','presubmitted','pending_new','working','held'].includes((o.status||'').toLowerCase());   // parity with stock-trader _isWorkingOrder (2026-08-14: 'submitted' rows are WORKING, not history)
   if(openEl) openEl.innerHTML = tbl(arr.filter(isOpen).map(row).join(''));
   // Show the full fetched history (up to the 500 the API returns), not just the
   // 30 most recent — capping here was the visible half of "not all trades saved":
