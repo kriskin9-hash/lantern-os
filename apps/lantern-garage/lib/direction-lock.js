@@ -114,7 +114,7 @@ const EQUITY_FAMILIES = new Set([
   'XLK', 'XLF', 'XLE', 'XLV', 'XLI', 'XLU', 'XLY', 'XLP',             // sectors
   'EEM', 'EFA',                                                        // international
 ]);
-const METALS = new Set(['GLD', 'SLV', 'GDX']);
+const METALS = new Set(['GLD', 'SLV', 'GDX', 'NUGT', 'JNUG', 'GDXJ', 'SIL']);   // lab 2026-09-26: the 2x/3x miners and juniors share the metals bucket for TRADER_MAX_PER_BUCKET
 
 /** Which correlated risk bucket an instrument belongs to. */
 function riskBucket(sym) {
