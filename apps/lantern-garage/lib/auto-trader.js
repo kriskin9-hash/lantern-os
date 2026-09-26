@@ -147,6 +147,7 @@ function cfg() {
     exitMinPwin: n('TRADER_EXIT_MIN_PWIN', DEFAULTS.exitMinPwin),        // anti-churn: exit only on strong bearish
     exitMinSessionMin: n('TRADER_EXIT_MIN_SESSION_MIN', 30),             // 2026-08-24: no signal exit until the session range is this old
     ibsExit: n('TRADER_IBS_EXIT', DEFAULTS.ibsExit),                    // fidelity lab 2026-08-22: hold the washout to its bounce
+    signalExitMinPnlPct: (process.env.TRADER_SIGNAL_EXIT_MIN_PNL_PCT === undefined || process.env.TRADER_SIGNAL_EXIT_MIN_PNL_PCT === '') ? null : Number(process.env.TRADER_SIGNAL_EXIT_MIN_PNL_PCT),   // lab 2026-09-26: hold the signal exit while the position sits below this P&L % (stop/floor protect); unset = off
     persistScans: n('TRADER_PERSIST_SCANS', DEFAULTS.persistScans),      // anti-churn: N consecutive scans
     persistWindowMs: n('TRADER_PERSIST_WINDOW_MS', DEFAULTS.persistWindowMs),
     requirePersist: process.env.TRADER_REQUIRE_PERSIST !== '0',          // on by default
@@ -2600,6 +2601,16 @@ async function _runAutoTradeInner(scan, { bridge, userId, now = Date.now(), caps
         // order rests unfilled (NVDA re-exited 179× in one session). Wait for the
         // resting order / next fill before re-attempting.
         const exitAt = _exitAt.get(sym) || 0;
+        if (c.signalExitMinPnlPct != null && Number.isFinite(c.signalExitMinPnlPct)) {
+          // LAB KNOB (2026-09-26): a losing signal exit is the one exit class the live forensics flagged (7 of 31 on stable, Sept 8-25,
+          // 5 of 7 back above entry within a session). Below the floor the bounce exit waits; the stop, ratchet and floor still protect.
+          const _hpx = heldPos[sym] || {};
+          const _basis = Number(_hpx.avg_entry_price || _hpx.avg_fill_price) || 0;
+          if (_basis > 0 && price > 0) {
+            const _pnlPct = (price / _basis - 1) * 100;
+            if (_pnlPct < c.signalExitMinPnlPct) { out.skipped.push({ ...record, why: `signal exit held: P&L ${_pnlPct.toFixed(2)}% < ${c.signalExitMinPnlPct}% floor (TRADER_SIGNAL_EXIT_MIN_PNL_PCT) — stop/floor protect` }); continue; }
+          }
+        }
         if (exitAt && (now - exitAt) < c.exitReattemptMs) { out.skipped.push({ ...record, why: `exit already fired ${Math.round((now - exitAt) / 60000)}min ago — waiting for it to fill` }); continue; }
         // acceptWarnings: this sell CLOSES an existing long — a risk-reducing order.
         // Leaving it on needs_confirmation is strictly worse than clearing the warning
